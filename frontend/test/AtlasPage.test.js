@@ -62,7 +62,7 @@ describe('AtlasPage lazy cloud loading', () => {
       removeEventListener() {},
       matchMedia: () => ({ matches: false }),
     };
-    const mod = await import('../src/plugins/tags-atlas/index.js');
+    const mod = await import('../src/plugins/tags-atlas/index.ts');
     AtlasPage = mod.default;
     ({ setRoute } = await import('../src/store.ts'));
   });
@@ -165,7 +165,7 @@ describe('AtlasPage timeline filtering', () => {
   };
 
   before(async () => {
-    const mod = await import('../src/plugins/tags-atlas/index.js');
+    const mod = await import('../src/plugins/tags-atlas/index.ts');
     AtlasPage = mod.default;
     ({ setRoute } = await import('../src/store.ts'));
   });
@@ -303,7 +303,7 @@ describe('AtlasPage owner-only marking', () => {
       removeItem: (k) => mem.delete(k),
     };
     global.window.localStorage = global.localStorage;
-    const mod = await import('../src/plugins/tags-atlas/index.js');
+    const mod = await import('../src/plugins/tags-atlas/index.ts');
     ({ isConcealed, concealedTitle } = mod);
     AtlasPage = mod.default;
     ({ setRevelio } = await import('../src/utils/revelio.ts'));
@@ -373,7 +373,7 @@ describe('AtlasPage hidden-node filter', () => {
   };
 
   before(async () => {
-    const mod = await import('../src/plugins/tags-atlas/index.js');
+    const mod = await import('../src/plugins/tags-atlas/index.ts');
     AtlasPage = mod.default;
     ({ isConcealed } = mod);
     ({ setUser } = await import('../src/store.ts'));
@@ -450,7 +450,7 @@ describe('AtlasPage desktop side panel', () => {
   };
 
   before(async () => {
-    const mod = await import('../src/plugins/tags-atlas/index.js');
+    const mod = await import('../src/plugins/tags-atlas/index.ts');
     AtlasPage = mod.default;
     panelHtml = mod.panelHtml;
     ({ setRoute } = await import('../src/store.ts'));

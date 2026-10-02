@@ -1,16 +1,16 @@
 /**
- * tagGraph.js — a small, dependency-free force-directed graph renderer for the
+ * tagGraph.ts — a small, dependency-free force-directed graph renderer for the
  * public /tags page, drawn on a <canvas>.
  *
  * This is the controller: it holds the graph, the view transform and the
  * interaction state, runs the animation loop, and hands the work to four
  * collaborators —
  *
- *   graphModel.js       payload → nodes/links/adjacency, and the focus walks
- *   forceLayout.js      one step of the simulation
- *   viewport.js         bounds, fit, screen↔world, hit-testing, zoom
- *   graphRenderer.js    the paint
- *   pointerControls.js  drag / pan / pinch / tap / wheel
+ *   graphModel.ts       payload → nodes/links/adjacency, and the focus walks
+ *   forceLayout.ts      one step of the simulation
+ *   viewport.ts         bounds, fit, screen↔world, hit-testing, zoom
+ *   graphRenderer.ts    the paint
+ *   pointerControls.ts  drag / pan / pinch / tap / wheel
  *
  * The graph has four node kinds and two edge kinds:
  *   - nodes:  plain tag | year-tag (kind='year') | geo-tag (has lat/long) | post
@@ -38,30 +38,61 @@
  *   g.destroy();                  // stop the sim + remove listeners
  */
 
-import { buildGraph, expandFocus, visibleSets } from './graphModel.js';
-import { ALPHA_DECAY, ALPHA_MIN, tick } from './forceLayout.js';
-import { GraphRenderer } from './graphRenderer.js';
-import { PointerControls } from './pointerControls.js';
-import { bounds, fitScale, fitTransform, pickNode, screenToWorld, zoomAt } from './viewport.js';
+import { buildGraph, expandFocus, visibleSets } from './graphModel.ts';
+import type { Graph, GraphData, GraphLink, GraphNode } from './graphModel.ts';
+import { ALPHA_DECAY, ALPHA_MIN, tick } from './forceLayout.ts';
+import { GraphRenderer } from './graphRenderer.ts';
+import { PointerControls } from './pointerControls.ts';
+import { bounds, fitScale, fitTransform, pickNode, screenToWorld, zoomAt } from './viewport.ts';
+import type { Bounds, Size, View } from './viewport.ts';
 
 /** Frames the reduced-motion path settles the layout over, off-screen. */
 const SETTLE_STEPS = 400;
 
-/** @typedef {import('./graphModel.js').GraphNode} GraphNode */
+/** Callbacks the host page passes to {@link TagGraph}. */
+export interface TagGraphHandlers {
+  onNavigate?: (href: string) => void;
+  onHover?: (node: GraphNode | null) => void;
+  onSelect?: (node: GraphNode | null) => void;
+}
 
 export class TagGraph {
+  canvas: HTMLCanvasElement;
+  onNavigate: (href: string) => void;
+  onHover: (node: GraphNode | null) => void;
+  onSelect: (node: GraphNode | null) => void;
+  alpha: number;
+  scale: number;
+  tx: number;
+  ty: number;
+  dpr: number;
+  hovered: GraphNode | null;
+  selected: GraphNode | null;
+  dragNode: GraphNode | null;
+  panning: boolean;
+  filterSet: Set<string> | null;
+  hiddenTypes: Set<string>;
+  _aNodes: GraphNode[];
+  _aLinks: GraphLink[];
+  _needFit: boolean;
+  _userView: boolean;
+  _rafId: number;
+  _running: boolean;
+  _destroyed: boolean;
+  _renderer: GraphRenderer;
+  _model: Graph;
+  _controls: PointerControls;
+
   /**
    * The handler defaults are no-ops, so their signatures are written out here —
    * an inferred `() => {}` says the graph calls them with nothing, while every
    * call site below passes a node or an href.
-   *
-   * @param {HTMLCanvasElement} canvas
-   * @param {import('./graphModel.js').GraphData} data
-   * @param {{ onNavigate?: (href: string) => void,
-   *           onHover?: (node: GraphNode|null) => void,
-   *           onSelect?: (node: GraphNode|null) => void }} [handlers]
    */
-  constructor(canvas, data, { onNavigate = () => {}, onHover = () => {}, onSelect = () => {} } = {}) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    data: GraphData,
+    { onNavigate = () => {}, onHover = () => {}, onSelect = () => {} }: TagGraphHandlers = {},
+  ) {
     this.canvas = canvas;
     this.onNavigate = onNavigate;
     this.onHover = onHover;
@@ -95,15 +126,15 @@ export class TagGraph {
     this._controls = new PointerControls(canvas, this);
   }
 
-  // The graph itself lives in _model (see graphModel.js); these read it.
-  get nodes() { return this._model.nodes; }
-  get links() { return this._model.links; }
-  get nodeById() { return this._model.nodeById; }
-  get neighbors() { return this._model.neighbors; }
+  // The graph itself lives in _model (see graphModel.ts); these read it.
+  get nodes(): GraphNode[] { return this._model.nodes; }
+  get links(): GraphLink[] { return this._model.links; }
+  get nodeById(): Map<string, GraphNode> { return this._model.nodeById; }
+  get neighbors(): Map<string, Set<string>> { return this._model.neighbors; }
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  start() {
+  start(): void {
     this.resize();
     this.alpha = 1;
     // Respect reduced-motion: settle the layout off-screen, then paint once.
@@ -121,7 +152,7 @@ export class TagGraph {
     this._kick();
   }
 
-  setFilter(query) {
+  setFilter(query: string | null | undefined): void {
     const q = (query || '').trim().toLowerCase();
     if (!q) {
       this.filterSet = null;
@@ -136,7 +167,7 @@ export class TagGraph {
     this._draw();
   }
 
-  setTypeHidden(type, hidden) {
+  setTypeHidden(type: string, hidden: boolean): void {
     if (hidden) this.hiddenTypes.add(type);
     else this.hiddenTypes.delete(type);
     // Clear interaction state pointing at a now-hidden node.
@@ -150,7 +181,7 @@ export class TagGraph {
     this._kick();
   }
 
-  selectNodeBySlug(slug) {
+  selectNodeBySlug(slug: string | null | undefined): GraphNode | null {
     if (!slug) {
       if (this.selected) {
         this.selected = null;
@@ -166,7 +197,7 @@ export class TagGraph {
     return node;
   }
 
-  getSelectionStats() {
+  getSelectionStats(): { tagCount: number; postCount: number } | null {
     if (!this.selected) return null;
     const { focus } = this._expandFocus([this.selected.id]);
     let tagCount = 0;
@@ -181,12 +212,12 @@ export class TagGraph {
     return { tagCount, postCount };
   }
 
-  zoomBy(factor) {
+  zoomBy(factor: number): void {
     const { width, height } = this._cssSize();
     this._zoomAt(width / 2, height / 2, factor);
   }
 
-  resetView() {
+  resetView(): void {
     this.alpha = Math.max(this.alpha, 0.3);
     this._needFit = true; // re-fit once it settles again
     this._userView = false; // resume auto-framing
@@ -194,19 +225,19 @@ export class TagGraph {
     this._kick();
   }
 
-  resize() {
+  resize(): void {
     this._renderer.resize(this._cssSize(), this.dpr);
     // Keep everything framed across viewport changes until the user takes over.
     if (this._userView) this._draw();
     else this._fitToView();
   }
 
-  refreshTheme() {
+  refreshTheme(): void {
     this._renderer.refreshTheme();
     this._draw();
   }
 
-  destroy() {
+  destroy(): void {
     this._destroyed = true;
     this._running = false;
     cancelAnimationFrame(this._rafId);
@@ -215,7 +246,7 @@ export class TagGraph {
 
   // ── Simulation loop ──────────────────────────────────────────────────────────
 
-  _kick() {
+  _kick(): void {
     if (this._running || this._destroyed) return;
     this._running = true;
     const loop = () => {
@@ -240,7 +271,7 @@ export class TagGraph {
     this._rafId = requestAnimationFrame(loop);
   }
 
-  _tick() {
+  _tick(): void {
     const { width, height } = this._cssSize();
     tick(this._aNodes, this._aLinks, {
       alpha: this.alpha,
@@ -252,34 +283,34 @@ export class TagGraph {
 
   // ── Visible set, view transform ──────────────────────────────────────────────
 
-  _recomputeActive() {
+  _recomputeActive(): void {
     const active = visibleSets(this._model, this.hiddenTypes);
     this._aNodes = active.nodes;
     this._aLinks = active.links;
   }
 
-  _cssSize() {
+  _cssSize(): Size {
     return {
       width: this.canvas.clientWidth || this.canvas.parentElement?.clientWidth || 800,
       height: this.canvas.clientHeight || 520,
     };
   }
 
-  /** The current transform, in the shape viewport.js takes. */
-  _view() {
+  /** The current transform, in the shape viewport.ts takes. */
+  _view(): View {
     return { scale: this.scale, tx: this.tx, ty: this.ty };
   }
 
-  _bounds() {
+  _bounds(): Bounds | null {
     return bounds(this._aNodes);
   }
 
-  _fitScale() {
+  _fitScale(): number {
     return fitScale(this._aNodes, this._cssSize());
   }
 
   /** Center + scale so all visible nodes fit the viewport. */
-  _fitToView() {
+  _fitToView(): void {
     const fit = fitTransform(this._aNodes, this._cssSize());
     if (fit) {
       this.scale = fit.scale;
@@ -289,15 +320,15 @@ export class TagGraph {
     this._draw();
   }
 
-  _screenToWorld(sx, sy) {
+  _screenToWorld(sx: number, sy: number): { x: number; y: number } {
     return screenToWorld(this._view(), sx, sy);
   }
 
-  _pickNode(sx, sy) {
+  _pickNode(sx: number, sy: number): GraphNode | null {
     return pickNode(this._aNodes, this._view(), sx, sy);
   }
 
-  _zoomAt(sx, sy, factor) {
+  _zoomAt(sx: number, sy: number, factor: number): void {
     this._needFit = false;
     this._userView = true;
     // Min zoom = "everything visible"; zooming out past that is pointless.
@@ -310,7 +341,7 @@ export class TagGraph {
 
   // ── Highlighting + paint ─────────────────────────────────────────────────────
 
-  _expandFocus(seedIds) {
+  _expandFocus(seedIds: Iterable<string>): { focus: Set<string>; related: Set<string> } {
     return expandFocus(this._model, seedIds);
   }
 
@@ -319,14 +350,14 @@ export class TagGraph {
    * selection locks it (so you can move to a related node and click it);
    * otherwise the live mouse hover drives it, and the search filter last.
    */
-  _focusSets() {
+  _focusSets(): { focus: Set<string>; related: Set<string> } | null {
     const active = this.selected || this.hovered;
     if (active) return this._expandFocus([active.id]);
     if (this.filterSet && this.filterSet.size) return this._expandFocus([...this.filterSet]);
     return null;
   }
 
-  _draw() {
+  _draw(): void {
     const focusData = this._focusSets();
     const active = this.selected || this.hovered; // node with the solid ring
     this._renderer.draw({
@@ -343,7 +374,7 @@ export class TagGraph {
   // ── Host interface for PointerControls ───────────────────────────────────────
 
   /** Move a held node under the pointer, and reheat the layout around it. */
-  _dragTo(node, sx, sy) {
+  _dragTo(node: GraphNode, sx: number, sy: number): void {
     const w = this._screenToWorld(sx, sy);
     node.x = w.x;
     node.y = w.y;
@@ -353,7 +384,7 @@ export class TagGraph {
     this._kick();
   }
 
-  _setHover(node) {
+  _setHover(node: GraphNode | null): void {
     if (node === this.hovered) return;
     this.hovered = node;
     this.canvas.style.cursor = node ? 'pointer' : 'grab';
@@ -362,7 +393,7 @@ export class TagGraph {
   }
 
   /** First tap on a node selects it, a second opens it; empty space clears. */
-  _handleTap(node) {
+  _handleTap(node: GraphNode | null): void {
     if (node) {
       if (this.selected && this.selected.id === node.id) {
         this._navigateTo(node);
@@ -382,7 +413,7 @@ export class TagGraph {
     }
   }
 
-  _navigateTo(node) {
+  _navigateTo(node: GraphNode): void {
     const href = node.type === 'post' ? `/posts/${node.slug}` : `/tags/${node.slug}`;
     this.onNavigate(href);
   }

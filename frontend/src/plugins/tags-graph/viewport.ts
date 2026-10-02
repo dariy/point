@@ -1,5 +1,5 @@
 /**
- * viewport.js — the view maths for the /tags graph.
+ * viewport.ts — the view maths for the /tags graph.
  *
  * One transform maps the layout's world coordinates to the canvas:
  *
@@ -13,7 +13,30 @@
  * px. Pure functions throughout — no canvas, no DOM, nothing mutated.
  */
 
-export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+import type { GraphNode } from './graphModel.ts';
+
+/** World → screen transform: screen = world * scale + t. */
+export interface View {
+  scale: number;
+  tx: number;
+  ty: number;
+}
+
+/** A viewport size in CSS px. */
+export interface Size {
+  width: number;
+  height: number;
+}
+
+/** A bounding box in world coordinates. */
+export interface Bounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
 
 export const MAX_SCALE = 6; // hard zoom-in cap
 const FIT_MIN_SCALE = 0.05;
@@ -23,7 +46,7 @@ const FIT_MARGIN = 28; // breathing room + label space (screen px)
 const PICK_SLOP = 3; // forgiving margin around a node's rim (world px)
 
 /** Bounding box (world coords) of `nodes`, radii included, or null if empty. */
-export function bounds(nodes) {
+export function bounds(nodes: GraphNode[]): Bounds | null {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of nodes) {
     if (n.x - n.r < minX) minX = n.x - n.r;
@@ -35,7 +58,7 @@ export function bounds(nodes) {
   return { minX, minY, maxX, maxY };
 }
 
-function scaleFor(b, { width, height }) {
+function scaleFor(b: Bounds | null, { width, height }: Size): number {
   if (!b) return EMPTY_SCALE;
   const bw = Math.max(b.maxX - b.minX, 1);
   const bh = Math.max(b.maxY - b.minY, 1);
@@ -47,12 +70,12 @@ function scaleFor(b, { width, height }) {
  * Smallest scale at which every node fits the viewport — this is the minimum
  * zoom, since zooming out past "everything visible" is pointless.
  */
-export function fitScale(nodes, size) {
+export function fitScale(nodes: GraphNode[], size: Size): number {
   return scaleFor(bounds(nodes), size);
 }
 
 /** The view that centres `nodes` and scales them to fit, or null if empty. */
-export function fitTransform(nodes, size) {
+export function fitTransform(nodes: GraphNode[], size: Size): View | null {
   const b = bounds(nodes);
   if (!b) return null;
   const scale = scaleFor(b, size);
@@ -65,7 +88,7 @@ export function fitTransform(nodes, size) {
   };
 }
 
-export function screenToWorld({ scale, tx, ty }, sx, sy) {
+export function screenToWorld({ scale, tx, ty }: View, sx: number, sy: number): { x: number; y: number } {
   return { x: (sx - tx) / scale, y: (sy - ty) / scale };
 }
 
@@ -75,9 +98,9 @@ export function screenToWorld({ scale, tx, ty }, sx, sy) {
  * the nearer centre wins, so the node whose middle you aimed at is the one you
  * get.
  */
-export function pickNode(nodes, view, sx, sy) {
+export function pickNode(nodes: GraphNode[], view: View, sx: number, sy: number): GraphNode | null {
   const w = screenToWorld(view, sx, sy);
-  let best = null;
+  let best: GraphNode | null = null;
   let bestD = Infinity;
   for (const n of nodes) {
     const dx = n.x - w.x;
@@ -96,7 +119,7 @@ export function pickNode(nodes, view, sx, sy) {
  * Zoom by `factor` about a screen point, keeping whatever is under it fixed.
  * `minScale` is the caller's floor — normally {@link fitScale}.
  */
-export function zoomAt(view, sx, sy, factor, minScale) {
+export function zoomAt(view: View, sx: number, sy: number, factor: number, minScale: number): View {
   const scale = clamp(view.scale * factor, minScale, MAX_SCALE);
   const w = screenToWorld(view, sx, sy);
   return { scale, tx: sx - w.x * scale, ty: sy - w.y * scale };

@@ -71,7 +71,7 @@ describe('Timeline Component', () => {
     global.requestAnimationFrame = (cb) => setTimeout(cb, 16);
     global.cancelAnimationFrame = (id) => clearTimeout(id);
 
-    const mod = await import('../src/plugins/timeline/index.js');
+    const mod = await import('../src/plugins/timeline/index.ts');
     Timeline = mod.Timeline;
   });
 

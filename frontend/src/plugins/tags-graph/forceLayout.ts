@@ -1,5 +1,5 @@
 /**
- * forceLayout.js — one step of the /tags graph's force simulation.
+ * forceLayout.ts — one step of the /tags graph's force simulation.
  *
  * Four forces act per tick: pairwise repulsion (distance-cut off, bucketed
  * through a spatial grid so it stays O(n)), springs along the links, gravity
@@ -11,8 +11,7 @@
  * Nothing here touches a canvas or the DOM.
  */
 
-/** @typedef {import('./graphModel.js').GraphNode} GraphNode */
-/** @typedef {import('./graphModel.js').GraphLink} GraphLink */
+import type { GraphLink, GraphNode } from './graphModel.ts';
 
 // ── Layout / physics constants ───────────────────────────────────────────────
 export const ALPHA_MIN = 0.001;
@@ -28,24 +27,29 @@ const MEMB_K = 0.09;
 const COLLIDE_PAD = 8; // extra gap kept between node rims (world px)
 const COLLIDE_ITERS = 2;
 
+export interface TickOptions {
+  /** cooling factor; 0 leaves only the collision pass */
+  alpha: number;
+  /** gravity centre, world x */
+  cx: number;
+  /** gravity centre, world y */
+  cy: number;
+  /** node held by the pointer — follows the finger, not the physics */
+  pinned?: GraphNode | null;
+}
+
 /**
  * Advance the layout by one frame.
  *
- * @param {GraphNode[]} nodes  visible nodes, mutated in place
- * @param {GraphLink[]} links  visible links (endpoints are node objects)
- * @param {object}   opts
- * @param {number}   opts.alpha   cooling factor; 0 leaves only the collision pass
- * @param {number}   opts.cx      gravity centre, world x
- * @param {number}   opts.cy      gravity centre, world y
- * @param {GraphNode|null} [opts.pinned] node held by the pointer — follows the
- *                                 finger, not the physics
+ * @param nodes - visible nodes, mutated in place
+ * @param links - visible links (endpoints are node objects)
+ * @param opts
  */
-export function tick(nodes, links, { alpha, cx, cy, pinned = null }) {
+export function tick(nodes: GraphNode[], links: GraphLink[], { alpha, cx, cy, pinned = null }: TickOptions): void {
   // Spatial grid for O(n) repulsion + collision.
   const cell = REPULSION_CUTOFF;
-  /** @type {Map<string, GraphNode[]>} */
-  const grid = new Map();
-  const key = (gx, gy) => gx + ',' + gy;
+  const grid: Map<string, GraphNode[]> = new Map();
+  const key = (gx: number, gy: number) => gx + ',' + gy;
   for (const n of nodes) {
     const gx = Math.floor(n.x / cell);
     const gy = Math.floor(n.y / cell);

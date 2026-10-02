@@ -1,5 +1,5 @@
 /**
- * graphRenderer.js — everything the /tags graph puts on the canvas.
+ * graphRenderer.ts — everything the /tags graph puts on the canvas.
  *
  * One paint per frame, in three passes: edges and node circles under the world
  * transform, then labels back in screen space so they stay a constant size and
@@ -10,14 +10,44 @@
  * hard-coding one.
  */
 
-import { clamp } from './viewport.js';
+import type { GraphLink, GraphNode } from './graphModel.ts';
+import { clamp } from './viewport.ts';
+import type { Size, View } from './viewport.ts';
 
-/** @typedef {import('./graphModel.js').GraphNode} GraphNode */
-/** @typedef {import('./graphModel.js').GraphLink} GraphLink */
+/** The palette, read from CSS custom properties on the canvas. */
+export interface GraphColors {
+  tag: string;
+  year: string;
+  geo: string;
+  post: string;
+  hierEdge: string;
+  membEdge: string;
+  nodeStroke: string;
+  primary: string;
+  text: string;
+  labelHalo: string;
+}
 
-function readColors(canvas) {
+/** One frame for {@link GraphRenderer.draw}. */
+export interface GraphFrame {
+  /** visible nodes */
+  nodes: GraphNode[];
+  /** visible links */
+  links: GraphLink[];
+  view: View & { dpr: number };
+  /** in CSS px */
+  size: Size;
+  /** highlighted ids; null means "nothing dimmed" */
+  focus: Set<string> | null;
+  /** second-wave tags, drawn with a dashed ring */
+  related: Set<string> | null;
+  /** the hovered/selected node, with a solid ring */
+  activeId: string | null;
+}
+
+function readColors(canvas: HTMLCanvasElement): GraphColors {
   const cs = window.getComputedStyle(canvas);
-  const v = (name, fallback) => {
+  const v = (name: string, fallback: string) => {
     const got = cs.getPropertyValue(name).trim();
     return got || fallback;
   };
@@ -36,37 +66,31 @@ function readColors(canvas) {
 }
 
 export class GraphRenderer {
-  constructor(canvas) {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  colors: GraphColors;
+
+  constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.colors = readColors(canvas);
   }
 
-  refreshTheme() {
+  refreshTheme(): void {
     this.colors = readColors(this.canvas);
   }
 
   /** Size the backing store for the device pixel ratio. */
-  resize({ width, height }, dpr) {
+  resize({ width, height }: Size, dpr: number): void {
     this.canvas.width = Math.round(width * dpr);
     this.canvas.height = Math.round(height * dpr);
   }
 
-  /**
-   * @param {object}   frame
-   * @param {GraphNode[]} frame.nodes  visible nodes
-   * @param {GraphLink[]} frame.links  visible links
-   * @param {{scale:number, tx:number, ty:number, dpr:number}} frame.view
-   * @param {{width:number, height:number}} frame.size  in CSS px
-   * @param {Set<string>|null} frame.focus  highlighted ids; null means "nothing dimmed"
-   * @param {Set<string>|null} frame.related  second-wave tags, drawn with a dashed ring
-   * @param {?string}  frame.activeId the hovered/selected node, with a solid ring
-   */
-  draw({ nodes, links, view, size, focus, related, activeId }) {
+  draw({ nodes, links, view, size, focus, related, activeId }: GraphFrame): void {
     const ctx = this.ctx;
     const c = this.colors;
     const { scale, tx, ty, dpr } = view;
-    const dim = (id) => (focus ? (focus.has(id) ? 1 : 0.12) : 1);
+    const dim = (id: string) => (focus ? (focus.has(id) ? 1 : 0.12) : 1);
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.width, size.height);
@@ -149,7 +173,7 @@ export class GraphRenderer {
     ctx.globalAlpha = 1;
   }
 
-  _nodeFill(n) {
+  _nodeFill(n: GraphNode): string {
     const c = this.colors;
     if (n.type === 'year') return c.year;
     if (n.type === 'geo') return c.geo;

@@ -45,7 +45,7 @@ arrangement.
 `sourceMappingURL`), so no browser loads it; the patch shifts column offsets on
 the minified line, which makes it wrong as well as unused.
 
-Notably *not* used: no D3 — the Tags Graph (`frontend/src/plugins/tags-graph/tagGraph.js`)
+Notably *not* used: no D3 — the Tags Graph (`frontend/src/plugins/tags-graph/tagGraph.ts`)
 is a dependency-free force-directed layout renderer on `<canvas>`; no
 lightbox/carousel library — `MediaLightbox`/`MediaViewer`/immersive mode are
 custom components; no Markdown-it/marked on the client (Markdown is rendered

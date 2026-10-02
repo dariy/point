@@ -8,7 +8,7 @@ import {
   pickNode,
   screenToWorld,
   zoomAt,
-} from '../src/plugins/tags-graph/viewport.js';
+} from '../src/plugins/tags-graph/viewport.ts';
 
 /**
  * The /tags graph's view maths. world→screen is `s * scale + t`, and every

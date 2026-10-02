@@ -100,7 +100,7 @@ second graph viz cannot silently double-claim the path.
 
 ### `tags-graph` (force graph)
 
-Canvas force-directed graph (`frontend/src/plugins/tags-graph/tagGraph.js`) making two
+Canvas force-directed graph (`frontend/src/plugins/tags-graph/tagGraph.ts`) making two
 relationship types explicit:
 
 1. **Parent/child** — hierarchy edges (solid/accent).

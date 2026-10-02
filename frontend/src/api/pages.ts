@@ -134,7 +134,7 @@ export function getTagsPage(): Promise<{
  * lazily fetches each place's recent posts on tap via getTagCloud, so the whole
  * post set never loads up front.
  */
-export function getTagsGraph(params: { posts?: 0 } = {}): Promise<{
+export function getTagsGraph(params: { posts?: 0, year_from?: number, year_to?: number } = {}): Promise<{
   tags: Array<{
     id: number;
     name: string;

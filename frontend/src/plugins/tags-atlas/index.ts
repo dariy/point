@@ -43,16 +43,102 @@ import {
   TILE_MAX_NATIVE_ZOOM,
   loadLeaflet,
 } from "../../utils/leaflet.ts";
+import type { LeafletRef } from "../../utils/leaflet.ts";
+import type { PageProps } from "../../router.ts";
+import type { Post } from "../../api/posts.ts";
+import type { TimelineHandle, TimelineRange } from "../../pages/public/HomePage.ts";
 
-/** @typedef {import('../../router.ts').PageProps} PageProps */
+/** A geo-tag node from GET /api/pages/graph, with the owner-only marks. */
+export type AtlasTag = Awaited<ReturnType<typeof getTagsGraph>>["tags"][number] & ConcealMarks;
+
+/** A place's cloud payload: GET /api/pages/graph/tag/{id}. */
+export type CloudData = Awaited<ReturnType<typeof getTagCloud>>;
+
+/** The owner-only fields the backend sends only when the viewer may see hidden items. */
+export interface ConcealMarks {
+  is_hidden?: boolean;
+  status?: string;
+}
+
+/** The side panel content that {@link panelHtml} renders. */
+export interface PanelView {
+  tag: { name: string };
+  posts: Post[];
+  page: number;
+  pages: number;
+  total: number | null;
+  loading: boolean;
+  error: string | null;
+}
+
+/** The open side panel: the selected place and the pages loaded so far. */
+interface AtlasPanel extends PanelView {
+  tag: AtlasTag;
+}
+
+/** A pixel offset from the cloud's anchor. */
+interface Offset {
+  dx: number;
+  dy: number;
+}
+
+/** How to reselect a place without a click: where it is and how to light it. */
+interface PlaceActivator {
+  latLng: LeafletRef;
+  setActive: (on: boolean) => void;
+  key: string;
+}
+
+/** One satellite chip, before it is placed on the map. */
+interface CloudNode {
+  key: string;
+  kind: string;
+  label: string;
+  href: string;
+  max: number;
+  concealed: boolean;
+  title: string;
+  thumb?: string | null;
+}
+
+/** One connector line between two cloud chips. */
+interface CloudEdge {
+  a: string;
+  b: string;
+  line: LeafletRef;
+  baseOpacity: number;
+}
+
+/** The open on-map cloud. */
+interface Cloud {
+  anchorLatLng: LeafletRef;
+  nodePos: Map<string, Offset>;
+  sats: Array<{ key: string; marker: LeafletRef }>;
+  edges: CloudEdge[];
+  cloudNeighbors: Map<string, Set<string>>;
+  centerKey: string;
+  centerMarker: LeafletRef;
+  focusKey: string | null;
+}
+
+/** Options for a place selection. */
+interface SelectOptions {
+  /** false keeps the map still (a restore, not a user selection) */
+  pan?: boolean;
+  /** focus this post's chip once the cloud is built */
+  focusPostSlug?: string;
+}
+
+/** The fields that hold a cached boundary file. */
+type GeojsonCacheKey = "_geojson" | "_caProvinces" | "_usStates";
 
 /** Marker radius in px for a geo-tag, scaled by post count. */
-function markerRadius(postCount) {
+function markerRadius(postCount: number): number {
   return Math.min(30, Math.max(12, 10 + Math.sqrt(postCount || 1) * 2));
 }
 
 /** Stable fill colour for a country shape, derived from its name (HSL). */
-function getCountryColor(name) {
+function getCountryColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -60,7 +146,7 @@ function getCountryColor(name) {
   return `hsl(${Math.abs(hash % 360)}, 60%, 48%)`;
 }
 
-function isDarkTheme() {
+function isDarkTheme(): boolean {
   const t = document.documentElement.dataset.theme;
   return (
     t === "dark" ||
@@ -68,7 +154,7 @@ function isDarkTheme() {
   );
 }
 
-function truncate(s, n) {
+function truncate(s: string, n: number): string {
   s = s || "";
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
@@ -82,12 +168,12 @@ function truncate(s, n) {
  * along with the nodes themselves. Without it, concealing drops a handful of
  * markers out of hundreds and the map looks unchanged.
  */
-export function isConcealed(node) {
+export function isConcealed(node: ConcealMarks): boolean {
   return !!node.is_hidden || (!!node.status && node.status !== "published");
 }
 
 /** Tooltip naming why a node is owner-only: "(hidden)", "(draft)", "(scheduled)". */
-export function concealedTitle(node, name) {
+export function concealedTitle(node: ConcealMarks, name: string): string {
   if (!isConcealed(node)) return name;
   return `${name} (${node.status || "hidden"})`;
 }
@@ -99,11 +185,10 @@ const DESKTOP_QUERY = "(min-width: 64em)";
  * Markup for the side panel's content: the place name, its post count, one row
  * per post that the active filters keep, and a "more" button while pages remain.
  *
- * @param {{tag: {name: string}, posts: import("../../api/posts.ts").Post[], page: number, pages: number,
- *   total: number|null, loading: boolean, error: string|null}} panel
- * @param {(post: import("../../api/posts.ts").Post) => boolean} skip  true for a post the filters drop
+ * @param panel
+ * @param skip - true for a post the filters drop
  */
-export function panelHtml(panel, skip = () => false) {
+export function panelHtml(panel: PanelView, skip: (post: Post) => boolean = () => false) {
   const rows = panel.posts.filter((p) => !skip(p));
   const count = panel.total == null ? "" : `${panel.total} post${panel.total === 1 ? "" : "s"}`;
   return html`
@@ -129,8 +214,11 @@ export function panelHtml(panel, skip = () => false) {
  * Place `count` chips on concentric rings around the origin (pixel space).
  * Inner rings fill first; arc spacing keeps pills from colliding.
  */
-function ringLayout(count, { startR = 66, ringGap = 46, minArc = 92 } = {}) {
-  const out = [];
+function ringLayout(
+  count: number,
+  { startR = 66, ringGap = 46, minArc = 92 }: { startR?: number; ringGap?: number; minArc?: number } = {},
+): Offset[] {
+  const out: Offset[] = [];
   let i = 0;
   let ring = 0;
   while (i < count) {
@@ -148,13 +236,37 @@ function ringLayout(count, { startR = 66, ringGap = 46, minArc = 92 } = {}) {
   return out;
 }
 
-/** @extends {Component<PageProps>} */
-export default class AtlasPage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {PageProps} [props]
-   */
-  constructor(container, props) {
+export default class AtlasPage extends Component<PageProps> {
+  _map: LeafletRef | null;
+  _tileLayer: LeafletRef | null;
+  _countryLayer: LeafletRef | null;
+  _markerLayer: LeafletRef | null;
+  _cloudMarkers: LeafletRef | null;
+  _cloudLines: LeafletRef | null;
+  _themeListener: (() => void) | null;
+  _geojson: unknown;
+  _caProvinces: unknown;
+  _usStates: unknown;
+  _activeTag: AtlasTag | null;
+  _activeAnchor: LeafletRef | null;
+  _activeSetActive: ((on: boolean) => void) | null;
+  _activeKey: string | null;
+  _cloud: Cloud | null;
+  _cloudData: CloudData | null;
+  _cloudReq: number;
+  _cloudCache: Map<string, CloudData>;
+  _placeActivators: Map<number, PlaceActivator>;
+  _hiddenTypes: Set<string>;
+  _reposition: () => void;
+  _graphReq: number;
+  _drawSeq: number;
+  _didFitBounds: boolean;
+  _timeline: TimelineHandle | null;
+  _panel: AtlasPanel | null;
+  _panelReq: number;
+  _tagsById: Map<number, AtlasTag>;
+
+  constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
     this.state = { loading: true, data: null, error: null };
 
@@ -270,10 +382,10 @@ export default class AtlasPage extends Component {
       pluginHost.fill("timeline", this.$("#timeline-mount"), {
         mode: "filter",
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
-        onRangeChange: (range) => this._onTimelineRangeChange(range),
+        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
       }).then((comps) => {
         if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0];
+          this._timeline = comps[0] as TimelineHandle;
           this._children.push(comps[0]);
         }
       });
@@ -295,7 +407,7 @@ export default class AtlasPage extends Component {
    * query param). Re-filter the existing map in place instead of re-rendering —
    * rebuilding would tear down and reflow both the Leaflet map and the timeline.
    */
-  onRouteUpdate(params, query) {
+  onRouteUpdate(params: Record<string, string>, query: Record<string, string>): void {
     this.props.params = params;
     this.props.query = query;
     if (this._map && !this.state.error) {
@@ -311,12 +423,9 @@ export default class AtlasPage extends Component {
 
   /**
    * Timeline emitted a new range — push it to the URL (drives onRouteUpdate).
-   *
-   * @param {{from: number, to: number, source?: string, isFullExtent?: boolean}} range
    */
-  _onTimelineRangeChange({ from, to, isFullExtent }) {
-    /** @type {[number, number]|null} */
-    const years = isFullExtent ? null : [from, to];
+  _onTimelineRangeChange({ from, to, isFullExtent }: TimelineRange): void {
+    const years: [number, number] | null = isFullExtent ? null : [from, to];
     const vc = ViewContext.current();
     const same = years
       ? vc.years && vc.years[0] === years[0] && vc.years[1] === years[1]
@@ -326,7 +435,7 @@ export default class AtlasPage extends Component {
   }
 
   /** Query params carrying the active timeline scope, if any. */
-  _scopeParams() {
+  _scopeParams(): { year_from?: number; year_to?: number } {
     const vc = ViewContext.current();
     return vc.years ? { year_from: vc.years[0], year_to: vc.years[1] } : {};
   }
@@ -341,7 +450,7 @@ export default class AtlasPage extends Component {
    * re-render would tear down and rebuild the Leaflet map and the timeline,
    * which reads as a blink on every drag of the timeline handle.
    */
-  async _applyYearScope() {
+  async _applyYearScope(): Promise<void> {
     const token = ++this._graphReq;
     let data;
     try {
@@ -361,7 +470,7 @@ export default class AtlasPage extends Component {
    * markers, and the activators closing over them — is dropped first, so no
    * handler is left holding a layer that has been removed from the map.
    */
-  async _redrawPlaces() {
+  async _redrawPlaces(): Promise<void> {
     const keepTagId = this._activeTag?.id ?? null;
 
     // Drop the highlight callback before its layer goes: it closes over the old
@@ -391,12 +500,12 @@ export default class AtlasPage extends Component {
    * off — receives a payload with nothing hidden in it, where the toggle would
    * be a control that does nothing.
    */
-  _canFilterHidden() {
+  _canFilterHidden(): boolean {
     return !!getUser() && isRevelioOn();
   }
 
   /** Legend toggles hide/show a node type (tag/year/post) like the /tags page. */
-  _wireToggles() {
+  _wireToggles(): void {
     this.$$(".atlas-toggle").forEach((btn) => {
       btn.addEventListener("click", () => {
         const type = btn.dataset.type;
@@ -421,11 +530,11 @@ export default class AtlasPage extends Component {
   }
 
   /** True when the legend's "Hidden" filter is off and this node is owner-only. */
-  _filteredOut(node) {
+  _filteredOut(node: ConcealMarks): boolean {
     return this._hiddenTypes.has("concealed") && isConcealed(node);
   }
 
-  async _load() {
+  async _load(): Promise<void> {
     try {
       // posts=0: the Atlas only needs markers + hierarchy up front; each place's
       // posts are fetched lazily on tap (getTagCloud), so skip the full post set.
@@ -453,7 +562,7 @@ export default class AtlasPage extends Component {
    * "tags not found" reads as a broken page to the owner who just flipped the
    * switch. Name what actually happened instead.
    */
-  _loadErrorMessage(err) {
+  _loadErrorMessage(err: { status?: number; message?: string } | null | undefined): string {
     if (err?.status === 404 && !isRevelioOn()) {
       return "The Atlas is not public — a guest sees nothing here. Turn off guest view to bring it back.";
     }
@@ -461,17 +570,17 @@ export default class AtlasPage extends Component {
   }
 
   /** Index the tag (marker) nodes; the graph payload no longer carries posts. */
-  _buildIndexes(data) {
+  _buildIndexes(data: { tags?: AtlasTag[] }): void {
     (data.tags || []).forEach((t) => this._tagsById.set(t.id, t));
   }
 
   // ── Map ────────────────────────────────────────────────────────────────────
 
-  async _initMap() {
+  async _initMap(): Promise<void> {
     const mapEl = this.$("#atlas-map-el");
     if (!mapEl) return;
 
-    let L;
+    let L: LeafletRef;
     try {
       L = await loadLeaflet();
     } catch {
@@ -556,7 +665,7 @@ export default class AtlasPage extends Component {
    *   3. Matched subdivisions — above the country and clickable, so a tagged
    *      province/state wins the click within its own borders.
    */
-  async _drawLayers(L) {
+  async _drawLayers(L: LeafletRef): Promise<void> {
     // A timeline change can start a redraw while the opening pass is still
     // awaiting its boundary files. Both would then add to the same layers,
     // leaving the map holding two scopes at once — so only the newest pass draws.
@@ -566,22 +675,22 @@ export default class AtlasPage extends Component {
     // marker with it and, because the boundary features match on this set, its
     // country shape reverts to a plain untagged outline.
     const geoTags = (this.state.data.tags || []).filter(
-      (t) =>
+      (t: AtlasTag) =>
         typeof t.latitude === "number" &&
         typeof t.longitude === "number" &&
         !this._filteredOut(t),
     );
 
     // name (lowercased) → geo-tag, for matching against GeoJSON features.
-    const geoTagByName = {};
-    geoTags.forEach((t) => {
+    const geoTagByName: Record<string, AtlasTag> = {};
+    geoTags.forEach((t: AtlasTag) => {
       geoTagByName[t.name.toLowerCase()] = t;
     });
 
     // Fetch + cache the boundary files in parallel. Each is independent and
     // non-fatal: a missing/failed file just drops that layer's shapes (geo-tags
     // still fall back to circle markers below).
-    const fetchGeojson = async (cacheKey, url) => {
+    const fetchGeojson = async (cacheKey: GeojsonCacheKey, url: string) => {
       if (this[cacheKey]) return; // already cached (a prior failure retries)
       try {
         const resp = await fetch(url);
@@ -597,8 +706,8 @@ export default class AtlasPage extends Component {
     ]);
     if (this._unmounted || !this._map || seq !== this._drawSeq) return;
 
-    const shapeTagIds = new Set();
-    const bounds = [];
+    const shapeTagIds: Set<number> = new Set();
+    const bounds: Array<[number, number]> = [];
 
     // Draw one boundary FeatureCollection, matching each feature to a geo-tag by
     // any of `nameProps` (lowercased). Matched features get the highlighted,
@@ -607,9 +716,13 @@ export default class AtlasPage extends Component {
     // opts.only: null → all features; true → only matched; false → only
     //   unmatched (used to split subdivisions across the country in z-order).
     // opts.interactive: false → decorative path that never intercepts clicks.
-    const drawShapeLayer = (geojson, nameProps, opts = {}) => {
+    const drawShapeLayer = (
+      geojson: unknown,
+      nameProps: string[],
+      opts: { only?: boolean | null; interactive?: boolean } = {},
+    ) => {
       const { only = null, interactive = true } = opts;
-      const matchTag = (props) => {
+      const matchTag = (props: Record<string, unknown>): AtlasTag | null => {
         for (const key of nameProps) {
           const v = props?.[key];
           if (v && geoTagByName[String(v).toLowerCase()]) {
@@ -619,7 +732,7 @@ export default class AtlasPage extends Component {
         return null;
       };
 
-      const baseStyle = (feature) => {
+      const baseStyle = (feature: LeafletRef) => {
         const props = feature.properties || {};
         const fill = getCountryColor(props.name || "");
         const tag = matchTag(props);
@@ -659,15 +772,15 @@ export default class AtlasPage extends Component {
         filter:
           only === null
             ? undefined
-            : (feature) => !!matchTag(feature.properties || {}) === only,
+            : (feature: LeafletRef) => !!matchTag(feature.properties || {}) === only,
         style: baseStyle,
-        onEachFeature: (feature, layer) => {
+        onEachFeature: (feature: LeafletRef, layer: LeafletRef) => {
           const tag = matchTag(feature.properties || {});
           if (!tag) return;
           shapeTagIds.add(tag.id);
           bounds.push([tag.latitude, tag.longitude]);
 
-          const setActive = (on) =>
+          const setActive = (on: boolean) =>
             layer.setStyle(
               on
                 ? { weight: 2.5, fillOpacity: 0.6, opacity: 1 }
@@ -683,7 +796,7 @@ export default class AtlasPage extends Component {
             key: "c" + tag.id,
           });
 
-          layer.on("click", (e) => {
+          layer.on("click", (e: LeafletRef) => {
             L.DomEvent.stop(e);
             // Anchor the cloud where the user actually clicked: a polygon's
             // bounding-box centre can sit far from the click (or outside the
@@ -720,7 +833,7 @@ export default class AtlasPage extends Component {
     }
 
     // Circle markers for every geo-tag that isn't drawn as a country shape.
-    geoTags.forEach((tag) => {
+    geoTags.forEach((tag: AtlasTag) => {
       if (shapeTagIds.has(tag.id)) return;
       const r = markerRadius(tag.post_count);
       const concealed = isConcealed(tag);
@@ -735,7 +848,7 @@ export default class AtlasPage extends Component {
         title: concealedTitle(tag, tag.name),
       }).addTo(this._markerLayer);
 
-      const setActive = (on) =>
+      const setActive = (on: boolean) =>
         marker._icon?.classList.toggle("atlas-marker--active", on);
 
       this._placeActivators.set(tag.id, {
@@ -744,7 +857,7 @@ export default class AtlasPage extends Component {
         key: "m" + tag.id,
       });
 
-      marker.on("click", (e) => {
+      marker.on("click", (e: LeafletRef) => {
         L.DomEvent.stop(e); // don't let the map's click handler clear it
         this._select(tag, marker.getLatLng(), setActive, "m" + tag.id);
       });
@@ -770,7 +883,7 @@ export default class AtlasPage extends Component {
    * The idle hint doubles as the empty state: a timeline range can leave the map
    * with no places at all, which otherwise reads as a failed load.
    */
-  _updateHint(placeCount) {
+  _updateHint(placeCount: number): void {
     const hint = this.$("#atlas-hint");
     if (!hint) return;
     hint.textContent = placeCount
@@ -794,7 +907,13 @@ export default class AtlasPage extends Component {
    * itself never navigates; only its centre title chip opens the tag page
    * (see the centre marker handler in _spawnCloud). Empty-map clicks dismiss.
    */
-  _select(tag, anchorLatLng, setActive, key, opts = {}) {
+  _select(
+    tag: AtlasTag,
+    anchorLatLng: LeafletRef,
+    setActive: (on: boolean) => void,
+    key: string,
+    opts: SelectOptions = {},
+  ): Promise<void> | undefined {
     if (this._activeKey === key) {
       // Re-clicking the active place recentres its already-loaded cloud on the
       // new click point (redraw from the new centre) instead of opening its tag
@@ -840,12 +959,12 @@ export default class AtlasPage extends Component {
    * has since selected a different place. `opts.focusPostSlug` focuses a post
    * chip once the cloud is built (used when returning from an opened post).
    */
-  async _loadAndSpawnCloud(tag, anchorLatLng, opts = {}) {
+  async _loadAndSpawnCloud(tag: AtlasTag, anchorLatLng: LeafletRef, opts: SelectOptions = {}): Promise<void> {
     const vc = ViewContext.current();
     const yearParams = vc.years ? { year_from: vc.years[0], year_to: vc.years[1] } : {};
     const cacheKey = tag.id + "|" + (vc.years ? vc.years.join("-") : "");
 
-    const spawnFrom = (data) => {
+    const spawnFrom = (data: CloudData) => {
       // Ignore a stale response: the user moved on to another place meanwhile.
       if (this._unmounted || this._activeTag !== tag || this._activeKey == null) return;
       this._cloudData = data;
@@ -875,7 +994,7 @@ export default class AtlasPage extends Component {
   }
 
   /** Focus a post chip in the open cloud by its slug, if it's among the loaded posts. */
-  _focusPostBySlug(slug) {
+  _focusPostBySlug(slug: string): void {
     if (!this._cloud || !this._cloudData) return;
     const post = (this._cloudData.posts || []).find((p) => p.slug === slug);
     if (!post) return;
@@ -887,14 +1006,14 @@ export default class AtlasPage extends Component {
   }
 
   /** Rebuild the active cloud in place (e.g. after a legend filter change). */
-  _refreshCloud() {
+  _refreshCloud(): void {
     if (!this._activeTag || !this._activeAnchor || !this._cloudData) return;
     this._clearCloud();
     this._spawnCloud(this._activeTag, this._activeAnchor, this._cloudData);
   }
 
   /** Node-type bucket used for colouring + the legend filters. */
-  _kindOf(tag) {
+  _kindOf(tag: { kind?: string; latitude?: number; longitude?: number }): string {
     return tagKind(tag); // year / geo / tag — shared with the pills + tags graph
   }
 
@@ -905,7 +1024,7 @@ export default class AtlasPage extends Component {
    * the centre (the marker / polygon itself); everything else fans out on rings
    * around it. Legend-hidden node types are dropped.
    */
-  _spawnCloud(tag, anchorLatLng, cloudData) {
+  _spawnCloud(tag: AtlasTag, anchorLatLng: LeafletRef, cloudData: CloudData | null): void {
     const L = window.L;
     if (!cloudData) return;
     const hidden = this._hiddenTypes;
@@ -914,8 +1033,8 @@ export default class AtlasPage extends Component {
     // Satellite tag chips (the popular co-tags; the centre is excluded by the
     // backend). The "Place" toggle hides geo chips here (via _hiddenTypes) while
     // leaving the map markers — and the selected place's own centre chip — untouched.
-    const tagSats = [];
-    (cloudData.tags || []).forEach((t) => {
+    const tagSats: CloudNode[] = [];
+    (cloudData.tags || []).forEach((t: CloudData["tags"][number] & ConcealMarks) => {
       if (t.id === tag.id) return;
       const kind = this._kindOf(t);
       if (hidden.has(kind) || this._filteredOut(t)) return;
@@ -930,9 +1049,9 @@ export default class AtlasPage extends Component {
       });
     });
 
-    const postSats = [];
+    const postSats: CloudNode[] = [];
     if (!hidden.has("post")) {
-      (cloudData.posts || []).forEach((p) => {
+      (cloudData.posts || []).forEach((p: CloudData["posts"][number] & ConcealMarks) => {
         if (this._filteredOut(p)) return;
         postSats.push({
           key: "p" + p.id,
@@ -955,23 +1074,23 @@ export default class AtlasPage extends Component {
     const otherTags = tagSats.filter((n) => n.kind !== "geo");
     const ordered = [...places, ...otherTags, ...postSats];
 
-    const nodePos = new Map([[centerKey, { dx: 0, dy: 0 }]]);
+    const nodePos: Map<string, Offset> = new Map([[centerKey, { dx: 0, dy: 0 }]]);
     const placed = ringLayout(ordered.length || 1);
     ordered.forEach((n, i) => nodePos.set(n.key, placed[i]));
 
     const anchorPt = this._map.latLngToContainerPoint(anchorLatLng);
-    const llOf = (pos) =>
+    const llOf = (pos: Offset) =>
       this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy]));
 
     // Edges first so they render beneath the chips. We also record adjacency so
     // a chip click can light up its connections (see _expandCloudFocus).
-    const edges = [];
-    const cloudNeighbors = new Map();
-    const link = (a, b) => {
+    const edges: CloudEdge[] = [];
+    const cloudNeighbors: Map<string, Set<string>> = new Map();
+    const link = (a: string, b: string) => {
       if (!cloudNeighbors.has(a)) cloudNeighbors.set(a, new Set());
       cloudNeighbors.get(a).add(b);
     };
-    const addEdge = (a, b, kind) => {
+    const addEdge = (a: string, b: string, kind: "hier" | "memb") => {
       if (!nodePos.has(a) || !nodePos.has(b)) return;
       link(a, b);
       link(b, a);
@@ -1016,7 +1135,7 @@ export default class AtlasPage extends Component {
         iconSize: [0, 0],
       });
       const marker = L.marker(ll, { icon, keyboard: false, riseOnHover: true });
-      marker.on("click", (e) => {
+      marker.on("click", (e: LeafletRef) => {
         L.DomEvent.stop(e);
         this._focusCloudNode(node.key, node.href);
       });
@@ -1045,7 +1164,7 @@ export default class AtlasPage extends Component {
     // the same two-click model as the satellite chips: the first click focuses
     // it (lighting its connections), a second click on the focused centre opens
     // the tag page.
-    centerMarker.on("click", (e) => {
+    centerMarker.on("click", (e: LeafletRef) => {
       L.DomEvent.stop(e);
       this._focusCloudNode(centerKey, `/tags/${tag.slug}`);
     });
@@ -1072,7 +1191,7 @@ export default class AtlasPage extends Component {
    * chip highlights its connections (dimming the rest), a second click on the
    * same chip opens it. Clicking a different chip moves the highlight.
    */
-  _focusCloudNode(key, href) {
+  _focusCloudNode(key: string, href: string): void {
     if (!this._cloud) return;
     if (this._cloud.focusKey === key) {
       // Opening a post: leave a marker so closing it returns to the Atlas with
@@ -1097,7 +1216,7 @@ export default class AtlasPage extends Component {
    * Activate a place by its tag id (programmatic equivalent of a map click).
    * `opts` is forwarded to _select (e.g. focusPostSlug for post returns).
    */
-  _selectPlaceById(tagId, opts = {}) {
+  _selectPlaceById(tagId: number, opts: SelectOptions = {}): boolean {
     const a = this._placeActivators.get(tagId);
     const tag = this._tagsById.get(tagId);
     if (!a || !tag) return false;
@@ -1111,8 +1230,8 @@ export default class AtlasPage extends Component {
    * `placeTagId`) and focus the post's chip once its cloud loads. Without global
    * post data there's no fallback — if the place is gone, we simply don't restore.
    */
-  _restoreFromPost() {
-    let ctx = null;
+  _restoreFromPost(): void {
+    let ctx: { postSlug?: string; placeTagId?: number } | null = null;
     try {
       const raw = sessionStorage.getItem("atlasReturn");
       if (!raw) return;
@@ -1125,7 +1244,7 @@ export default class AtlasPage extends Component {
   }
 
   /** Nudge the map so a cloud chip (or the anchor) sits comfortably in view. */
-  _panToCloudNode(key) {
+  _panToCloudNode(key: string): void {
     if (!this._cloud || typeof this._map.panInside !== "function") return;
     const sat = this._cloud.sats.find((s) => s.key === key);
     const ll = sat ? sat.marker.getLatLng() : this._cloud.anchorLatLng;
@@ -1138,10 +1257,10 @@ export default class AtlasPage extends Component {
    * other tags sharing it (those get a distinct dashed ring) — the same "two
    * joints through a shared post" reveal the /tags graph uses.
    */
-  _expandCloudFocus(seedKey) {
+  _expandCloudFocus(seedKey: string): { focus: Set<string>; related: Set<string> } {
     const nb = this._cloud.cloudNeighbors;
     const focus = new Set([seedKey]);
-    const related = new Set();
+    const related: Set<string> = new Set();
     const seedIsTag = seedKey[0] === "t";
     const neighbors = nb.get(seedKey);
     if (neighbors) {
@@ -1168,7 +1287,7 @@ export default class AtlasPage extends Component {
    * ring) engages only once a satellite chip is focused, narrowing to that
    * chip's direct + tag→post→tag connections.
    */
-  _applyCloudFocus() {
+  _applyCloudFocus(): void {
     if (!this._cloud) return;
     const { sats, edges, focusKey, centerKey, centerMarker } = this._cloud;
     // Focusing the centre re-shows the full overview — every chip lit, exactly
@@ -1214,14 +1333,14 @@ export default class AtlasPage extends Component {
     }
   }
 
-  _repositionCloud() {
+  _repositionCloud(): void {
     if (!this._cloud || !this._map) return;
     const { anchorLatLng, nodePos, sats, edges } = this._cloud;
     const anchorPt = this._map.latLngToContainerPoint(anchorLatLng);
     // Pass the offset as an [x, y] array — Leaflet's Point.add() doesn't
     // understand a {dx, dy} object and would yield NaN coordinates, flinging
     // the whole cloud across the map on the first zoom.
-    const llOf = (key) => {
+    const llOf = (key: string) => {
       const pos = nodePos.get(key);
       return this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy]));
     };
@@ -1229,13 +1348,13 @@ export default class AtlasPage extends Component {
     edges.forEach((e) => e.line.setLatLngs([llOf(e.a), llOf(e.b)]));
   }
 
-  _clearCloud() {
+  _clearCloud(): void {
     this._cloudMarkers?.clearLayers();
     this._cloudLines?.clearLayers();
     this._cloud = null;
   }
 
-  _clearSelection() {
+  _clearSelection(): void {
     this._clearCloud();
     this._cloudData = null;
     this._cloudReq++; // invalidate any in-flight cloud fetch for the cleared place
@@ -1250,7 +1369,7 @@ export default class AtlasPage extends Component {
 
   // ── Desktop side panel ──────────────────────────────────────────────────────
 
-  _isDesktop() {
+  _isDesktop(): boolean {
     return !!window.matchMedia?.(DESKTOP_QUERY).matches;
   }
 
@@ -1260,7 +1379,7 @@ export default class AtlasPage extends Component {
    * scoped to the timeline range at open time; a range change redraws the
    * places, which reselects the place and so reopens the panel on the new range.
    */
-  _openPanel(tag) {
+  _openPanel(tag: AtlasTag): Promise<void> | undefined {
     if (!this._isDesktop()) return;
     this._panelReq++;
     this._panel = { tag, posts: [], page: 0, pages: 1, total: null, loading: false, error: null };
@@ -1269,7 +1388,7 @@ export default class AtlasPage extends Component {
   }
 
   /** Fetch the next page of the open panel's place and append its posts. */
-  async _loadPanelPage() {
+  async _loadPanelPage(): Promise<void> {
     const panel = this._panel;
     if (!panel || panel.loading || panel.page >= panel.pages) return;
     const token = this._panelReq;
@@ -1296,14 +1415,14 @@ export default class AtlasPage extends Component {
     this._renderPanel();
   }
 
-  _closePanel() {
+  _closePanel(): void {
     if (!this._panel) return;
     this._panelReq++;
     this._panel = null;
     this._renderPanel();
   }
 
-  _renderPanel() {
+  _renderPanel(): void {
     const el = this.$("#atlas-panel");
     if (!el) return;
     el.hidden = !this._panel;
@@ -1311,9 +1430,9 @@ export default class AtlasPage extends Component {
   }
 
   /** One delegated listener: close, "more", and a post row (opens the post). */
-  _wirePanel() {
+  _wirePanel(): void {
     this.$("#atlas-panel")?.addEventListener("click", (e) => {
-      const target = /** @type {HTMLElement} */ (e.target);
+      const target = e.target as HTMLElement;
       const action = target.closest?.("[data-action]")?.getAttribute("data-action");
       if (action === "close") return this._closePanel();
       if (action === "more") return this._loadPanelPage();
@@ -1325,7 +1444,7 @@ export default class AtlasPage extends Component {
   }
 
   /** Open a post from the panel and leave the same return marker a cloud post chip leaves. */
-  _openPanelPost(slug) {
+  _openPanelPost(slug: string): void {
     if (this._activeTag) {
       try {
         sessionStorage.setItem(
@@ -1337,7 +1456,7 @@ export default class AtlasPage extends Component {
     navigate(`/posts/${slug}`);
   }
 
-  beforeUnmount() {
+  beforeUnmount(): void {
     this._unmounted = true;
     if (this._map) {
       this._map.off("zoomend viewreset", this._reposition);

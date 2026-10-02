@@ -3,7 +3,7 @@
 **Type:** route · **Slot:** `tags-route` (cardinality `0-1`) · **Routes:** `/tags` · **Default:** disabled
 
 A canvas force-directed graph on the public `/tags` route
-(`frontend/src/plugins/tags-graph/tagGraph.js`). Makes two relationship types
+(`frontend/src/plugins/tags-graph/tagGraph.ts`). Makes two relationship types
 explicit: parent/child hierarchy edges, and "related-through-post" edges, where every
 post is a small shadow node linking each tag it carries — two tags read as related
 because a shared post node sits between them. Node radius scales with degree; supports

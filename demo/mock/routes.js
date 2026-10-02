@@ -471,7 +471,7 @@ function atlasCloud(state, tag, query) {
     };
     // The owner's marking for what a guest would not get: the Atlas draws a
     // node as concealed when it carries a non-public status or `is_hidden`
-    // (isConcealed, frontend/src/plugins/tags-atlas/index.js), and the backend
+    // (isConcealed, frontend/src/plugins/tags-atlas/index.ts), and the backend
     // only sends either to a viewer allowed to see hidden items.
     if (state.authenticated) {
       node.status = p.status;

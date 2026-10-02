@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { tick } from '../src/plugins/tags-graph/forceLayout.js';
+import { tick } from '../src/plugins/tags-graph/forceLayout.ts';
 
 /**
  * One step of the /tags graph's force simulation. Four forces act per tick:

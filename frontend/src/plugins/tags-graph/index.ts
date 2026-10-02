@@ -20,19 +20,23 @@ import { getNavTags, getSettings } from '../../store.ts';
 import { html, navigate, raw, setCanonical, removeCanonical } from '../../utils/helpers.ts';
 import { SEARCH_SVG } from '../../utils/icons.ts';
 import { setPageTitle } from '../../utils/documentTitle.ts';
-import { TagGraph } from "./tagGraph.js";
+import { TagGraph } from './tagGraph.ts';
+import type { GraphNode } from './graphModel.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
+import type { PageProps } from '../../router.ts';
+import type { HeaderCrumb } from '../public-header/PublicHeader.ts';
+import type { TimelineHandle, TimelineRange } from '../../pages/public/HomePage.ts';
 
-/** @typedef {import('../../router.ts').PageProps} PageProps */
+export default class TagsPage extends Component<PageProps> {
+  _graph: TagGraph | null;
+  _resizeObs: ResizeObserver | null;
+  _themeListener: (() => void) | null;
+  _canShowTimeline: boolean;
+  _timeline: TimelineHandle | undefined;
+  _headerChild: Component | undefined;
 
-/** @extends {Component<PageProps>} */
-export default class TagsPage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {PageProps} [props]
-   */
-  constructor(container, props) {
+  constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
     this.state = { loading: true, data: null, total: 0, error: null, filter: '' };
     this._graph = null;
@@ -129,11 +133,11 @@ export default class TagsPage extends Component {
       pluginHost.fill('timeline', this.$('#timeline-mount'), {
         mode: 'filter',
         initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
-        onRangeChange: (range) => this._onTimelineRangeChange(range),
+        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
         total: this.state.total,
       }).then((comps) => {
         if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0];
+          this._timeline = comps[0] as TimelineHandle;
           this._children.push(comps[0]);
         }
       });
@@ -143,7 +147,7 @@ export default class TagsPage extends Component {
 
     this._initGraph();
 
-    const filterInput = /** @type {HTMLInputElement|null} */ (this.$('#tag-filter-input'));
+    const filterInput = this.$('#tag-filter-input') as HTMLInputElement | null;
     if (filterInput) {
       filterInput.addEventListener('input', () => {
         this.state.filter = filterInput.value;
@@ -174,7 +178,7 @@ export default class TagsPage extends Component {
     this._applyUrlSelection();
   }
 
-  onRouteUpdate(params, query) {
+  onRouteUpdate(params: Record<string, string>, query: Record<string, string>): void {
     const oldQuery = this.props.query || {};
     this.props.query = query || {};
     if (oldQuery.timeline !== query.timeline) {
@@ -184,7 +188,7 @@ export default class TagsPage extends Component {
     }
   }
 
-  _onTimelineRangeChange({ from, to, isFullExtent }) {
+  _onTimelineRangeChange({ from, to, isFullExtent }: TimelineRange): void {
     const years = isFullExtent ? null : [from, to];
     const vc = ViewContext.current();
     const same = years
@@ -205,7 +209,7 @@ export default class TagsPage extends Component {
     navigate(url);
   }
 
-  _onGraphSelect(node) {
+  _onGraphSelect(node: GraphNode | null): void {
     if (node && node.type !== 'post') {
       navigate('/tags?' + node.slug);
     } else {
@@ -213,22 +217,22 @@ export default class TagsPage extends Component {
     }
   }
 
-  _applyUrlSelection() {
+  _applyUrlSelection(): void {
     if (!this._graph) return;
     const slug = Object.keys(this.props.query || {}).find(k => k !== 'timeline') || null;
     const node = this._graph.selectNodeBySlug(slug);
     this._updateBreadcrumb(node);
   }
 
-  _updateBreadcrumb(node) {
+  _updateBreadcrumb(node: GraphNode | null): void {
     const loaded = !this.state.loading && this.state.data && !this.state.error;
     
-    let breadcrumb = loaded ? [{ name: `All tags (${this.state.total})` }] : [];
+    let breadcrumb: HeaderCrumb[] = loaded ? [{ name: `All tags (${this.state.total})` }] : [];
     if (loaded && node) {
       const stats = this._graph?.getSelectionStats();
       if (stats) {
         breadcrumb = [
-          { name: 'All tags', url: '/tags' },
+          { name: 'All tags', href: '/tags' },
           { name: `${node.name} (${stats.tagCount} tags, ${stats.postCount} posts)` }
         ];
       }
@@ -261,8 +265,8 @@ export default class TagsPage extends Component {
     });
   }
 
-  _initGraph() {
-    const canvas = /** @type {HTMLCanvasElement|null} */ (this.$('#tag-graph-canvas'));
+  _initGraph(): void {
+    const canvas = this.$('#tag-graph-canvas') as HTMLCanvasElement | null;
     if (!canvas) return;
 
     this._graph = new TagGraph(canvas, this.state.data, {
@@ -278,7 +282,7 @@ export default class TagsPage extends Component {
     document.addEventListener('themechange', this._themeListener);
   }
 
-  _teardownGraph() {
+  _teardownGraph(): void {
     this._resizeObs?.disconnect();
     this._resizeObs = null;
     if (this._themeListener) {
@@ -299,10 +303,10 @@ export default class TagsPage extends Component {
     removeCanonical();
   }
 
-  async _load() {
+  async _load(): Promise<void> {
     try {
       const vc = ViewContext.current();
-      const params = {};
+      const params: { year_from?: number; year_to?: number } = {};
       if (vc.years) {
         params.year_from = vc.years[0];
         params.year_to = vc.years[1];

@@ -25,16 +25,26 @@ import {
   TILE_MAX_NATIVE_ZOOM,
   loadLeaflet,
 } from "../../utils/leaflet.ts";
+import type { LeafletRef } from "../../utils/leaflet.ts";
+import type { PageProps } from "../../router.ts";
+import type { TimelineHandle, TimelineRange } from "../../pages/public/HomePage.ts";
+import type { HeaderCrumb } from "../public-header/PublicHeader.ts";
 
-/** @typedef {import('../../router.ts').PageProps} PageProps */
+type MapPageTag = Awaited<ReturnType<typeof getMapPage>>["tags"][number];
+
+/** A map tag, with the fields the popups read that the API type omits. */
+interface MapTag extends MapPageTag {
+  is_hidden?: boolean;
+  years?: Array<{ name: string; slug: string }>;
+}
 
 /** Marker radius in px, scaled by post count. */
-function markerRadius(postCount) {
+function markerRadius(postCount: number): number {
   return Math.min(30, Math.max(12, 10 + Math.sqrt(postCount || 1) * 2));
 }
 
 /** Stable color based on name (HSL) */
-function getCountryColor(name) {
+function getCountryColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -43,13 +53,20 @@ function getCountryColor(name) {
   return `hsl(${h}, 65%, 45%)`;
 }
 
-/** @extends {Component<PageProps>} */
-export default class MapPage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {PageProps} [props]
-   */
-  constructor(container, props) {
+export default class MapPage extends Component<PageProps> {
+  _map: LeafletRef | null;
+  _tileLayer: LeafletRef | null;
+  _themeListener: (() => void) | null;
+  _markerLayer: LeafletRef | null;
+  _tagMarkers: Map<string, LeafletRef>;
+  _allTagsCount: number;
+  _headerChild: Component | null;
+  _canShowTimeline: boolean;
+  _timeline: TimelineHandle | undefined;
+  /** The countries GeoJSON, fetched once on the first redraw. */
+  _geojson: unknown;
+
+  constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
     this.state = { loading: true, tags: [], error: null };
     this._map = null;
@@ -61,7 +78,7 @@ export default class MapPage extends Component {
     this._headerChild = null;
   }
 
-  onRouteUpdate(params, query) {
+  onRouteUpdate(params: Record<string, string>, query: Record<string, string>): void {
     this.props.params = params;
     this.props.query = query;
     // A timeline-scope change only re-filters the markers. Update them on the
@@ -74,9 +91,9 @@ export default class MapPage extends Component {
     }
   }
 
-  async _refreshMap() {
+  async _refreshMap(): Promise<void> {
     const vc = ViewContext.current();
-    const params = {};
+    const params: { year_from?: number; year_to?: number } = {};
     if (vc.years) {
       params.year_from = vc.years[0];
       params.year_to = vc.years[1];
@@ -177,10 +194,10 @@ export default class MapPage extends Component {
       pluginHost.fill("timeline", this.$("#timeline-mount"), {
         mode: "filter",
         initialRange,
-        onRangeChange: (range) => this._onTimelineRangeChange(range),
+        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
       }).then((comps) => {
         if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0];
+          this._timeline = comps[0] as TimelineHandle;
           this._children.push(comps[0]);
         }
       });
@@ -200,10 +217,10 @@ export default class MapPage extends Component {
     }
   }
 
-  async _loadData() {
+  async _loadData(): Promise<void> {
     try {
       const vc = ViewContext.current();
-      const params = {};
+      const params: { year_from?: number; year_to?: number } = {};
       if (vc.years) {
         params.year_from = vc.years[0];
         params.year_to = vc.years[1];
@@ -221,7 +238,7 @@ export default class MapPage extends Component {
     }
   }
 
-  _buildBreadcrumb() {
+  _buildBreadcrumb(): HeaderCrumb[] {
     const vc = ViewContext.current();
     if (!vc.years) {
       return [{ name: "map" }];
@@ -232,9 +249,8 @@ export default class MapPage extends Component {
     return [{ name: "map", href: "/map" }, { name: label }];
   }
 
-  async _onTimelineRangeChange({ from, to, isFullExtent }) {
-    /** @type {[number, number]|null} */
-    const years = isFullExtent ? null : [from, to];
+  async _onTimelineRangeChange({ from, to, isFullExtent }: TimelineRange): Promise<void> {
+    const years: [number, number] | null = isFullExtent ? null : [from, to];
     const vc = ViewContext.current();
     const same = years
       ? vc.years && vc.years[0] === years[0] && vc.years[1] === years[1]
@@ -243,7 +259,7 @@ export default class MapPage extends Component {
     ViewContext.update({ years }, { replace: true });
   }
 
-  _updateStats() {
+  _updateStats(): void {
     const statsEl = this.$("#map-stats");
     if (!statsEl) return;
     const count = this.state.tags.length;
@@ -251,11 +267,11 @@ export default class MapPage extends Component {
     statsEl.textContent = `Showing ${count} of ${total} locations`;
   }
 
-  async _initMap() {
+  async _initMap(): Promise<void> {
     const mapEl = this.$("#map");
     if (!mapEl) return;
 
-    let L;
+    let L: LeafletRef;
     try {
       L = await loadLeaflet();
     } catch {
@@ -307,7 +323,7 @@ export default class MapPage extends Component {
     this._updateStats();
   }
 
-  async _redrawMarkers() {
+  async _redrawMarkers(): Promise<void> {
     if (!this._map || !this._markerLayer) return;
     const L = window.L;
     this._markerLayer.clearLayers();
@@ -316,7 +332,7 @@ export default class MapPage extends Component {
     const { tags } = this.state;
 
     // Build lookup: lowercased tag name → tag (for country polygon matching)
-    const countryTagMap = {};
+    const countryTagMap: Record<string, MapTag> = {};
     tags.forEach((t) => {
       if (t.type === "country" || t.type === "city") {
         countryTagMap[t.name.toLowerCase()] = t;
@@ -401,7 +417,7 @@ export default class MapPage extends Component {
     }
 
     // Render circle markers for city / other tags (not countries)
-    const bounds = [];
+    const bounds: Array<[number, number]> = [];
     tags.forEach((tag) => {
       if (tag.type === "country") return;
       const r = markerRadius(tag.post_count);
@@ -459,7 +475,7 @@ export default class MapPage extends Component {
     }
   }
 
-  _openTagPopup(tagSlug) {
+  _openTagPopup(tagSlug: string): void {
     const marker = this._tagMarkers.get(tagSlug);
     if (marker && this._map) {
       // For GeoJSON layers, the popup might need a location.
@@ -476,7 +492,7 @@ export default class MapPage extends Component {
     }
   }
 
-  beforeUnmount() {
+  beforeUnmount(): void {
     if (this._themeListener) {
       document.removeEventListener("themechange", this._themeListener);
     }

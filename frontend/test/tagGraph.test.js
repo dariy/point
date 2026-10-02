@@ -20,7 +20,7 @@ let TagGraph;
 
 before(async () => {
   installDomStubs();
-  ({ TagGraph } = await import('../src/plugins/tags-graph/tagGraph.js'));
+  ({ TagGraph } = await import('../src/plugins/tags-graph/tagGraph.ts'));
 });
 
 // ── Harness ──────────────────────────────────────────────────────────────────

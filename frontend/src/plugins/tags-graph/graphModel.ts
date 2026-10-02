@@ -1,5 +1,5 @@
 /**
- * graphModel.js — the data layer behind the public /tags graph.
+ * graphModel.ts — the data layer behind the public /tags graph.
  *
  * Turns the GET /api/pages/graph payload into nodes, links and an adjacency
  * index, and owns the two walks over that index which drive highlighting. It is
@@ -16,52 +16,69 @@ import { tagKind } from '../../utils/tagLinks.ts';
  * The payload the graph is built from — GET /api/pages/graph, or the Atlas's
  * per-place subset of it. Every list is optional: the Atlas asks for no posts,
  * and so gets no membership edges either.
- *
- * @typedef {object} GraphData
- * @property {Array<{id:number, name:string, slug:string, kind?:string,
- *   latitude?:number, longitude?:number, post_count?:number}>} [tags]
- * @property {Array<{id:number, slug:string, title?:string, media_url?:string}>} [posts]
- * @property {Array<{parent:number, child:number}>} [hierarchyEdges]
- * @property {Array<{post:number, tag:number}>} [membershipEdges]
  */
+export interface GraphData {
+  tags?: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    kind?: string;
+    latitude?: number;
+    longitude?: number;
+    post_count?: number;
+  }>;
+  posts?: Array<{ id: number; slug: string; title?: string; media_url?: string }>;
+  hierarchyEdges?: Array<{ parent: number; child: number }>;
+  membershipEdges?: Array<{ post: number; tag: number }>;
+}
 
 /**
  * One node on the canvas. x/y/vx/vy are the force layout's working state,
  * rewritten in place every tick; `r` is fixed once the degree is known.
- *
- * @typedef {object} GraphNode
- * @property {string} id  't<tag id>' or 'p<post id>' — one shared namespace.
- * @property {string} type  'post', or the tag's kind: 'tag' | 'year' | 'geo'.
- * @property {number} [tagId]  Tag nodes only.
- * @property {number} [postId]  Post nodes only.
- * @property {string} name
- * @property {string} slug
- * @property {number} [postCount]  Tag nodes only.
- * @property {number} x
- * @property {number} y
- * @property {number} vx
- * @property {number} vy
- * @property {number} degree
- * @property {number} r  Radius, from the degree — see nodeRadius().
  */
+export interface GraphNode {
+  /** 't<tag id>' or 'p<post id>' — one shared namespace. */
+  id: string;
+  /** 'post', or the tag's kind: 'tag' | 'year' | 'geo'. */
+  type: string;
+  /** Tag nodes only. */
+  tagId?: number;
+  /** Post nodes only. */
+  postId?: number;
+  name: string;
+  slug: string;
+  /** Tag nodes only. */
+  postCount?: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  degree: number;
+  /** Radius, from the degree — see nodeRadius(). */
+  r: number;
+}
 
-/**
- * @typedef {object} GraphLink
- * @property {GraphNode} source
- * @property {GraphNode} target
- * @property {'hierarchy'|'membership'} kind
- */
+/** A node before place() gives it a position. */
+type NewNode = Omit<GraphNode, 'x' | 'y' | 'vx' | 'vy' | 'degree' | 'r'>;
 
-/**
- * @typedef {object} Graph
- * @property {GraphNode[]} nodes
- * @property {GraphLink[]} links
- * @property {Map<string, GraphNode>} nodeById
- * @property {Map<string, Set<string>>} neighbors  node id -> adjacent node ids
- */
+export type LinkKind = 'hierarchy' | 'membership';
+
+export interface GraphLink {
+  source: GraphNode;
+  target: GraphNode;
+  kind: LinkKind;
+}
+
+export interface Graph {
+  nodes: GraphNode[];
+  links: GraphLink[];
+  nodeById: Map<string, GraphNode>;
+  /** node id -> adjacent node ids */
+  neighbors: Map<string, Set<string>>;
+}
 
 // Deterministic PRNG so the initial layout is stable across reloads.
-function mulberry32(seed) {
+function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return function () {
     a |= 0;
@@ -77,7 +94,7 @@ function mulberry32(seed) {
  * ends: an isolated node still has to be clickable, and a tag on every post
  * must not swallow the canvas.
  */
-export function nodeRadius(type, degree) {
+export function nodeRadius(type: string, degree: number): number {
   const d = Math.sqrt(degree);
   if (type === 'post') return Math.max(3, Math.min(11, 2.5 + 1.4 * d));
   // tag / year / geo
@@ -91,26 +108,21 @@ export function nodeRadius(type, degree) {
  * ('t1', 'p1') — without that a tag and a post with the same database id would
  * collide in nodeById and one would silently vanish.
  *
- * @param {GraphData} data
- * @param {{width:number,height:number}} size  viewport, for the initial scatter
- * @returns {Graph}
+ * @param data
+ * @param size - viewport, for the initial scatter
  */
-export function buildGraph(data, { width, height }) {
-  /** @type {GraphNode[]} */
-  const nodes = [];
-  /** @type {GraphLink[]} */
-  const links = [];
-  /** @type {Map<string, GraphNode>} */
-  const nodeById = new Map();
-  /** @type {Map<string, Set<string>>} */
-  const neighbors = new Map();
+export function buildGraph(data: GraphData, { width, height }: { width: number; height: number }): Graph {
+  const nodes: GraphNode[] = [];
+  const links: GraphLink[] = [];
+  const nodeById: Map<string, GraphNode> = new Map();
+  const neighbors: Map<string, Set<string>> = new Map();
 
   const rng = mulberry32(0x9e3779b9);
   const cx = width / 2;
   const cy = height / 2;
   const spread = Math.min(width, height) * 0.42 || 300;
 
-  const place = (node) => {
+  const place = (node: GraphNode) => {
     // Phyllotaxis-ish initial scatter for a calm starting state.
     const a = rng() * Math.PI * 2;
     const r = Math.sqrt(rng()) * spread;
@@ -121,7 +133,8 @@ export function buildGraph(data, { width, height }) {
     node.degree = 0;
   };
 
-  const add = (node) => {
+  const add = (newNode: NewNode) => {
+    const node = newNode as GraphNode;
     place(node);
     nodes.push(node);
     nodeById.set(node.id, node);
@@ -148,7 +161,7 @@ export function buildGraph(data, { width, height }) {
     });
   });
 
-  const addLink = (aId, bId, kind) => {
+  const addLink = (aId: string, bId: string, kind: LinkKind) => {
     const a = nodeById.get(aId);
     const b = nodeById.get(bId);
     if (!a || !b) return;
@@ -177,7 +190,10 @@ export function buildGraph(data, { width, height }) {
  * too — a link with one hidden endpoint would otherwise be drawn running to
  * nothing. Returns the originals untouched when nothing is hidden.
  */
-export function visibleSets({ nodes, links }, hiddenTypes) {
+export function visibleSets(
+  { nodes, links }: { nodes: GraphNode[]; links: GraphLink[] },
+  hiddenTypes: Set<string>,
+): { nodes: GraphNode[]; links: GraphLink[] } {
   if (!hiddenTypes.size) return { nodes, links };
   return {
     nodes: nodes.filter((n) => !hiddenTypes.has(n.type)),
@@ -191,14 +207,16 @@ export function visibleSets({ nodes, links }, hiddenTypes) {
  * each adjacent post to the other tags that share it — surfacing related tags
  * and the two-segment path that connects them.
  *
- * @returns {{focus:Set<string>, related:Set<string>}}
- *   focus   — every highlighted node (faded peers are dimmed)
+ * @returns focus   — every highlighted node (faded peers are dimmed)
  *   related — the second-wave tags, ringed distinctly so "reached through a
  *             post" reads differently from a direct neighbour.
  */
-export function expandFocus({ nodeById, neighbors }, seedIds) {
+export function expandFocus(
+  { nodeById, neighbors }: Pick<Graph, 'nodeById' | 'neighbors'>,
+  seedIds: Iterable<string>,
+): { focus: Set<string>; related: Set<string> } {
   const focus = new Set(seedIds);
-  const related = new Set();
+  const related: Set<string> = new Set();
   for (const id of seedIds) {
     const seed = nodeById.get(id);
     const nbrs = neighbors.get(id);

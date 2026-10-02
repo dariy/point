@@ -1,5 +1,5 @@
 /**
- * pointerControls.js — the /tags graph's gestures.
+ * pointerControls.ts — the /tags graph's gestures.
  *
  * One pointer on a node drags it; one on empty space pans the view; two pinch.
  * A press that neither travels far nor lasts long is a tap, and taps are the
@@ -24,13 +24,40 @@
  *   _draw(), _kick()
  */
 
-import { clamp, MAX_SCALE } from './viewport.js';
+import type { GraphNode } from './graphModel.ts';
+import type { TagGraph } from './tagGraph.ts';
+import { clamp, MAX_SCALE } from './viewport.ts';
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface PinchState {
+  startDist: number;
+  startScale: number;
+  world: Point;
+}
 
 const TAP_SLOP = 10; // max screen-px drift still counted as a tap (not a drag)
 const TAP_MS = 400; // and the longest press that still counts
 
 export class PointerControls {
-  constructor(canvas, host) {
+  canvas: HTMLCanvasElement;
+  host: TagGraph;
+  _pointers: Map<number, Point>;
+  _pinch: PinchState | null;
+  _downPos: Point | null;
+  _downTime: number;
+  _moved: boolean;
+  _panStart: Point | null;
+  _onDown: (e: PointerEvent) => void;
+  _onMove: (e: PointerEvent) => void;
+  _onUp: (e: PointerEvent) => void;
+  _onWheel: (e: WheelEvent) => void;
+  _onLeave: (e: PointerEvent) => void;
+
+  constructor(canvas: HTMLCanvasElement, host: TagGraph) {
     this.canvas = canvas;
     this.host = host;
 
@@ -41,11 +68,11 @@ export class PointerControls {
     this._moved = false;
     this._panStart = null;
 
-    this._onDown = (e) => this.pointerDown(e);
-    this._onMove = (e) => this.pointerMove(e);
-    this._onUp = (e) => this.pointerUp(e);
-    this._onWheel = (e) => this.wheel(e);
-    this._onLeave = (e) => {
+    this._onDown = (e: PointerEvent) => this.pointerDown(e);
+    this._onMove = (e: PointerEvent) => this.pointerMove(e);
+    this._onUp = (e: PointerEvent) => this.pointerUp(e);
+    this._onWheel = (e: WheelEvent) => this.wheel(e);
+    this._onLeave = (e: PointerEvent) => {
       // On touch, lifting a finger fires pointerleave — don't wipe the
       // tap-selected node (that highlight must persist until the next tap).
       if (e && e.pointerType === 'touch') return;
@@ -60,7 +87,7 @@ export class PointerControls {
     canvas.addEventListener('pointerleave', this._onLeave);
   }
 
-  destroy() {
+  destroy(): void {
     this.canvas.removeEventListener('pointerdown', this._onDown);
     this.canvas.removeEventListener('pointermove', this._onMove);
     window.removeEventListener('pointerup', this._onUp);
@@ -69,12 +96,12 @@ export class PointerControls {
     this.canvas.removeEventListener('pointerleave', this._onLeave);
   }
 
-  _pos(e) {
+  _pos(e: MouseEvent): Point {
     const rect = this.canvas.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
-  _capture(pointerId) {
+  _capture(pointerId: number): void {
     try {
       this.canvas.setPointerCapture(pointerId);
     } catch {
@@ -83,7 +110,7 @@ export class PointerControls {
   }
 
   /** Mark the gesture a drag once it clears the slop, so it is no longer a tap. */
-  _trackTravel(p) {
+  _trackTravel(p: Point): boolean {
     if (this._downPos && Math.hypot(p.x - this._downPos.x, p.y - this._downPos.y) > TAP_SLOP) {
       this._moved = true;
       return true;
@@ -91,7 +118,7 @@ export class PointerControls {
     return false;
   }
 
-  pointerDown(e) {
+  pointerDown(e: PointerEvent): void {
     const host = this.host;
     const p = this._pos(e);
     this._pointers.set(e.pointerId, p);
@@ -122,7 +149,7 @@ export class PointerControls {
     this._capture(e.pointerId);
   }
 
-  _beginPinch() {
+  _beginPinch(): void {
     const [a, b] = [...this._pointers.values()];
     this._pinch = {
       startDist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
@@ -133,7 +160,7 @@ export class PointerControls {
     this._moved = true; // suppress tap-navigation when the gesture ends
   }
 
-  pointerMove(e) {
+  pointerMove(e: PointerEvent): void {
     const host = this.host;
     const p = this._pos(e);
     if (this._pointers.has(e.pointerId)) this._pointers.set(e.pointerId, p);
@@ -169,7 +196,7 @@ export class PointerControls {
     host._setHover(host._pickNode(p.x, p.y));
   }
 
-  pointerUp(e) {
+  pointerUp(e: PointerEvent): void {
     const host = this.host;
     this._pointers.delete(e.pointerId);
     try {
@@ -193,7 +220,7 @@ export class PointerControls {
       return;
     }
 
-    const wasDrag = host.dragNode;
+    const wasDrag: GraphNode | null = host.dragNode;
     const wasPan = host.panning;
     host.dragNode = null;
     host.panning = false;
@@ -206,7 +233,7 @@ export class PointerControls {
     if (wasDrag || wasPan) host._draw();
   }
 
-  wheel(e) {
+  wheel(e: WheelEvent): void {
     e.preventDefault();
     const p = this._pos(e);
     const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;

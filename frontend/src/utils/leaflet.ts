@@ -22,8 +22,14 @@ export const TILE_MAX_NATIVE_ZOOM = 16;
 export const TILE_ATTR =
   'Tiles &copy; <a href="https://www.esri.com">Esri</a> &mdash; Esri, DeLorme, NAVTEQ';
 
+/**
+ * A Leaflet object: the L namespace, a map, a layer or a marker. The vendored
+ * Leaflet ships no type declarations, so this is the type of `window.L`.
+ */
+export type LeafletRef = NonNullable<Window['L']>;
+
 /** Load Leaflet once; return the L global. */
-export async function loadLeaflet() {
+export async function loadLeaflet(): Promise<LeafletRef> {
   if (window.L) return window.L;
 
   if (!document.querySelector(`link[href="${LEAFLET_CSS}"]`)) {
