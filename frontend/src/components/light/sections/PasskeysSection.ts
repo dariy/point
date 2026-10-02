@@ -72,8 +72,8 @@ export class PasskeysSection extends Component {
       setToast({ message: "Passkey registered.", type: "success" });
       this._load();
     } catch (err) {
-      if (err.name !== "NotAllowedError") {
-        setToast({ message: err.message || "Failed to register passkey.", type: "error" });
+      if ((err as Error).name !== "NotAllowedError") {
+        setToast({ message: (err as Error).message || "Failed to register passkey.", type: "error" });
       }
     } finally {
       this.setState({ working: false });
@@ -93,7 +93,7 @@ export class PasskeysSection extends Component {
           setToast({ message: "Passkey removed.", type: "success" });
           this._load();
         } catch (err) {
-          setToast({ message: err.message || "Failed to remove passkey.", type: "error" });
+          setToast({ message: (err as Error).message || "Failed to remove passkey.", type: "error" });
         } finally {
           this.setState({ working: false });
         }

@@ -23,6 +23,8 @@ import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts'
 
 import { getPhotoLibraryContents, importSelectedPhotos, getPhotoLibraryFileUrl } from '../../api/system.ts';
 
+type LibraryFile = Awaited<ReturnType<typeof getPhotoLibraryContents>>["files"][number];
+
 export interface PhotoLibraryPickerDialogProps {
   /** Called with the import summary. */
   onImport?: (result: Awaited<ReturnType<typeof importSelectedPhotos>>) => void;
@@ -80,22 +82,22 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
       </div>`;
   }
   afterRender() {
-    this.$('#plpd-close-btn').addEventListener('click', () => this.close());
-    this.$('#plpd-cancel-btn').addEventListener('click', () => this.close());
-    this.$('#plpd-import-btn').addEventListener('click', () => this._handleImport());
+    this.$('#plpd-close-btn')!.addEventListener('click', () => this.close());
+    this.$('#plpd-cancel-btn')!.addEventListener('click', () => this.close());
+    this.$('#plpd-import-btn')!.addEventListener('click', () => this._handleImport());
 
     // Event delegation on stable region containers — handles dynamically replaced content
-    this.$('#plpd-breadcrumb').addEventListener('click', e => {
+    this.$('#plpd-breadcrumb')!.addEventListener('click', e => {
       const btn = (e.target as HTMLElement).closest('.breadcrumb-btn') as HTMLElement;
-      if (btn) this._navigateToBreadcrumb(parseInt(btn.dataset.index, 10));
+      if (btn) this._navigateToBreadcrumb(parseInt(btn.dataset.index!, 10));
     });
-    this.$('#plpd-sidebar').addEventListener('click', e => {
+    this.$('#plpd-sidebar')!.addEventListener('click', e => {
       const btn = (e.target as HTMLElement).closest('.photo-library-folder-btn') as HTMLElement;
-      if (btn) this._navigateInto(btn.dataset.folder);
+      if (btn) this._navigateInto(btn.dataset.folder!);
     });
-    this.$('#plpd-content').addEventListener('click', e => {
+    this.$('#plpd-content')!.addEventListener('click', e => {
       const item = (e.target as HTMLElement).closest('.photo-library-item') as HTMLElement;
-      if (item) this._toggleFile(item.dataset.path);
+      if (item) this._toggleFile(item.dataset.path!);
     });
     this.container.addEventListener('click', e => {
       if (e.target === this.container) this.close();
@@ -164,7 +166,7 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
-  async _loadContents(path) {
+  async _loadContents(path: string) {
     this.state.loading = true;
     this._patchSidebar(null);
     this._patchContent(null, this.state.selected);
@@ -179,16 +181,16 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
     } catch (err) {
       this.state.loading = false;
       setToast({
-        message: err.message || 'Failed to load photo library.',
+        message: (err as Error).message || 'Failed to load photo library.',
         type: 'error'
       });
     }
   }
-  _navigateInto(folderName) {
+  _navigateInto(folderName: string) {
     const newPath = this.state.currentPath ? `${this.state.currentPath}/${folderName}` : folderName;
     this._loadContents(newPath);
   }
-  _navigateToBreadcrumb(index) {
+  _navigateToBreadcrumb(index: number) {
     if (index === -1) {
       this._loadContents('');
       return;
@@ -199,7 +201,7 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
 
   // ── Selection ─────────────────────────────────────────────────────────────
 
-  _toggleFile(path) {
+  _toggleFile(path: string) {
     const {
       selected
     } = this.state;
@@ -230,14 +232,14 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
 
   // ── DOM patch helpers ─────────────────────────────────────────────────────
 
-  _patchBreadcrumb(currentPath) {
+  _patchBreadcrumb(currentPath: string) {
     const el = this.$('#plpd-breadcrumb');
     if (!el) return;
     const parts = currentPath ? currentPath.split('/').filter(Boolean) : [];
     const crumbs = [{
       label: '/',
       index: -1
-    }, ...parts.map((p, i) => ({
+    }, ...parts.map((p: string, i: number) => ({
       label: p,
       index: i
     }))];
@@ -247,7 +249,7 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
            <span class="breadcrumb-sep">/</span>`;
     })}`);
   }
-  _patchSidebar(folders) {
+  _patchSidebar(folders: string[] | null) {
     const el = this.$('#plpd-sidebar');
     if (!el) return;
     if (folders === null) {
@@ -260,7 +262,7 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
             <span class="photo-library-item-label">${name}</span>
           </button>`) : html`<span class="photo-library-sidebar-empty">No subfolders</span>`}`);
   }
-  _patchContent(files, selected) {
+  _patchContent(files: LibraryFile[] | null, selected: Set<string>) {
     const el = this.$('#plpd-content');
     if (!el) return;
     if (files === null) {
@@ -283,7 +285,7 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
         </button>`;
     })}</div>`);
   }
-  _patchImportBtn(count, importing) {
+  _patchImportBtn(count: number, importing: boolean) {
     const btn = (this.$('#plpd-import-btn') as HTMLButtonElement|null);
     if (!btn) return;
     btn.disabled = count === 0 || importing;
@@ -313,7 +315,7 @@ export class PhotoLibraryPickerDialog extends Component<PhotoLibraryPickerDialog
       this.state.importing = false;
       this._patchImportBtn(selected.size, false);
       setToast({
-        message: err.message || 'Import failed.',
+        message: (err as Error).message || 'Import failed.',
         type: 'error'
       });
     }

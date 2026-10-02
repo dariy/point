@@ -23,11 +23,11 @@ import type { Settings } from '../../../api/settings.ts';
 import type { Backup } from '../../../api/system.ts';
 
 export class BackupsSection extends Component {
-  _itemGestures: GestureController[];
-  _pollTimer: ReturnType<typeof setInterval> | null;
-  _awaitingBackupStart: boolean;
-  _backupInitiatedAt: number;
-  _restartOverlay: HTMLDivElement | null;
+  _itemGestures: GestureController[] = [];
+  _pollTimer: ReturnType<typeof setInterval> | null = null;
+  _awaitingBackupStart = false;
+  _backupInitiatedAt = 0;
+  _restartOverlay: HTMLDivElement | null = null;
 
   constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
@@ -124,8 +124,8 @@ export class BackupsSection extends Component {
       uploading,
       uploadPct
     } = this.state;
-    const backupInProgress = backups.some(b => b.in_progress);
-    const items = loading ? html`<li class="backup-empty">Loading…</li>` : backups.length ? backups.map(b => this._renderItem(b)) : html`<li class="backup-empty">No backups found.</li>`;
+    const backupInProgress = backups.some((b: Backup) => b.in_progress);
+    const items = loading ? html`<li class="backup-empty">Loading…</li>` : backups.length ? backups.map((b: Backup) => this._renderItem(b)) : html`<li class="backup-empty">No backups found.</li>`;
     const creating = creatingBackup || backupInProgress;
     // Rendered flush inside the plugin drawer, which supplies the "Backups" title.
     return html`
@@ -166,11 +166,11 @@ export class BackupsSection extends Component {
     this._bindSettings();
     this._bindSwipe();
     this.$$(".download-backup-btn").forEach(btn => {
-      btn.addEventListener("click", () => this._handleDownload(btn.dataset.filename));
+      btn.addEventListener("click", () => this._handleDownload(btn.dataset.filename!));
     });
     this.$$(".restore-backup-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        const file = btn.dataset.filename;
+        const file = btn.dataset.filename!;
         showPrompt({
           title: "Restore backup",
           message: `Apply "${file}"? This replaces ALL current data — posts, media, settings, ` + `and your login password — with the contents of the archive, then restarts the ` + `server to take effect. This cannot be undone.\n` + `Enter your password to confirm:`,
@@ -185,7 +185,7 @@ export class BackupsSection extends Component {
     });
     this.$$(".delete-backup-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        const file = btn.dataset.filename;
+        const file = btn.dataset.filename!;
         showConfirm({
           title: "Delete backup",
           message: `Delete backup "${file}"? This cannot be undone.`,
@@ -300,8 +300,8 @@ export class BackupsSection extends Component {
     const enable = els.enable?.checked ?? true;
     const freq = els.freq?.value;
     const freqDays = els.freqDays?.value;
-    const interval = freq === "custom" ? Math.max(1, parseInt(freqDays, 10) || 1) : parseInt(freq, 10) || 1;
-    const keep = Math.max(0, parseInt(els.keep?.value, 10) || 0);
+    const interval = freq === "custom" ? Math.max(1, parseInt(freqDays ?? "", 10) || 1) : parseInt(freq ?? "", 10) || 1;
+    const keep = Math.max(0, parseInt(els.keep?.value ?? "", 10) || 0);
 
     // Keep local state in sync so a later re-render shows the saved values.
     this.state.enableBackup = enable;
@@ -319,7 +319,7 @@ export class BackupsSection extends Component {
       });
     } catch (err) {
       setToast({
-        message: err.message || "Could not save settings.",
+        message: (err as Error).message || "Could not save settings.",
         type: "error"
       });
     }
@@ -354,7 +354,7 @@ export class BackupsSection extends Component {
         loading: false
       });
       setToast({
-        message: err.message || "Could not load backups.",
+        message: (err as Error).message || "Could not load backups.",
         type: "error"
       });
     }
@@ -380,7 +380,7 @@ export class BackupsSection extends Component {
   // a grace window — the background job writes the .partial file a moment after the
   // request returns, so a single immediate refresh can miss it.
   _syncPoll() {
-    const active = this.state.backups.some(b => b.in_progress);
+    const active = this.state.backups.some((b: Backup) => b.in_progress);
     if (active) this._awaitingBackupStart = false; // now tracked by its in-progress row
     const awaitingStart = this._awaitingBackupStart && Date.now() - this._backupInitiatedAt < 30000;
     const shouldPoll = active || awaitingStart;
@@ -413,7 +413,7 @@ export class BackupsSection extends Component {
       this._awaitingBackupStart = true;
       await this._refreshBackups();
     } catch (err) {
-      const msg = err?.status === 409 ? "A backup is already in progress." : err.message || "Backup failed.";
+      const msg = (err as { status?: number } | null)?.status === 409 ? "A backup is already in progress." : (err as Error).message || "Backup failed.";
       setToast({
         message: msg,
         type: "error"
@@ -437,7 +437,7 @@ export class BackupsSection extends Component {
       await restoreBackup(filename, hashed);
     } catch (err) {
       this._unmountRestartOverlay();
-      const msg = err?.status === 403 ? "Incorrect password." : err.message || "Restore failed.";
+      const msg = (err as { status?: number } | null)?.status === 403 ? "Incorrect password." : (err as Error).message || "Restore failed.";
       setToast({
         message: msg,
         type: "error"
@@ -468,7 +468,7 @@ export class BackupsSection extends Component {
     } catch (err) {
       this._unmountRestartOverlay();
       setToast({
-        message: err.message || "Restart failed.",
+        message: (err as Error).message || "Restart failed.",
         type: "error"
       });
       return;
@@ -490,7 +490,7 @@ export class BackupsSection extends Component {
     const card = document.createElement("div");
     card.className = "restart-overlay-card";
     setHTML(card, html`<span class="restart-overlay-spinner" aria-hidden="true"></span><p class="restart-overlay-text"></p><p class="restart-overlay-sub">This will only take a moment.</p>`);
-    card.querySelector(".restart-overlay-text").textContent = text;
+    card.querySelector(".restart-overlay-text")!.textContent = text;
     el.appendChild(card);
     document.body.appendChild(el);
     this._restartOverlay = el;
@@ -535,7 +535,7 @@ export class BackupsSection extends Component {
       this._load();
     } catch (err) {
       setToast({
-        message: err.message || "Delete failed.",
+        message: (err as Error).message || "Delete failed.",
         type: "error"
       });
     }
@@ -564,7 +564,7 @@ export class BackupsSection extends Component {
           a.remove();
         } catch (err) {
           setToast({
-            message: err.message || "Download failed.",
+            message: (err as Error).message || "Download failed.",
             type: "error"
           });
         }
@@ -598,7 +598,7 @@ export class BackupsSection extends Component {
           await this._load();
         } catch (err) {
           setToast({
-            message: err.message || "Upload failed.",
+            message: (err as Error).message || "Upload failed.",
             type: "error"
           });
         } finally {

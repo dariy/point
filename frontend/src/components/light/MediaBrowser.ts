@@ -27,6 +27,7 @@ import { formatFileSize, formatDateShort } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../../utils/icons.ts";
 import type { Media } from "../../api/media.ts";
+import type { Post } from "../../api/posts.ts";
 import type { Slot } from "../../utils/helpers.ts";
 
 // What a grid card paints at. The grid is auto-fill minmax(180px, 1fr), dropping
@@ -43,10 +44,10 @@ export interface MediaBrowserProps {
 
 export class MediaBrowser extends Component<MediaBrowserProps> {
   _dragCount: number;
-  _internalDrag: boolean;
-  _lastPerPage: number;
-  _measuredPerPage: number;
-  _searchTimeout: ReturnType<typeof setTimeout>;
+  _internalDrag = false;
+  _lastPerPage?: number;
+  _measuredPerPage?: number;
+  _searchTimeout?: ReturnType<typeof setTimeout>;
   _lightbox: MediaLightbox | null;
   _pager: MediaPager | null;
   /** Picker mode: persists selected media objects across page/folder changes. */
@@ -121,7 +122,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
    * that slides in is the real page, not a placeholder) but with no listeners
    * bound: nothing in a ghost is ever clicked.
    */
-  async _pageMarkup(page) {
+  async _pageMarkup(page: number) {
     const params: Parameters<typeof listMedia>[0] = {
       page,
       per_page: this._lastPerPage || 24
@@ -132,7 +133,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     const data = await listMedia(params);
     const items = data.media || [];
     if (!items.length) return html`<p class="empty-state">No media files.</p>`;
-    const none = new Set();
+    const none = new Set<number>();
     return html`<div class="media-grid">${items.map(m => this._renderItem(m, none))}</div>`;
   }
 
@@ -164,7 +165,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       const grid = loading
           ? html`<div class="loading-spinner" aria-label="Loading media…"></div>`: error
               ? html`<p class="error-state" role="alert">${error}</p>`: !media.length
-                  ? html`<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`: html`<div class="media-grid">${media.map(m => this._renderItem(m, selectedIds))}</div>`;
+                  ? html`<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`: html`<div class="media-grid">${media.map((m: Media) => this._renderItem(m, selectedIds))}</div>`;
       const dropOverlay = pickerMode
           ? html`<div class="media-browser-drop-overlay${draggingOver? " visible": ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
@@ -211,7 +212,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
   }
 
   /** Media type filter — first control on the folder (media/year/month) line. */
-  _renderTypeFilter(typeFilter) {
+  _renderTypeFilter(typeFilter: string) {
     const typeOptions = ["", "image", "video", "audio", "file"].map(t => {
       const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
       return html`<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
@@ -226,7 +227,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
    * In picker mode it also carries the breadcrumbs; the standalone page puts
    * those in the header <h1> instead (see afterRender).
    */
-  _renderMobileBar(typeFilter) {
+  _renderMobileBar(typeFilter: string) {
     const chips = folderChips(this.state.folders, this.state.selectedFolder).map(c => html`<button class="mb-folder-chip${c.active ? " active" : ""}" data-folder="${c.folder}">${c.label}</button>`);
     // .trim() drops back to a primitive string, so the markup goes in raw();
     // the emptiness test is what the trim is for.
@@ -257,7 +258,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
 
   /** Videos on the current page that were never given a poster frame. */
   _posterlessVideos() {
-    return this.state.media.filter(m => (m.file_type || "").toLowerCase() === "video" && !m.thumbnail_path);
+    return this.state.media.filter((m: Media) => (m.file_type || "").toLowerCase() === "video" && !m.thumbnail_path);
   }
 
   /**
@@ -325,7 +326,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     const rootLabel = this.props.pickerMode ? "All Media" : "Media";
     const crumbs = [html`<button class="mb-breadcrumb-item" data-folder="">${rootLabel}</button>`];
     let currentPath = "";
-    parts.forEach((p, i) => {
+    parts.forEach((p: string, i: number) => {
       currentPath += (currentPath ? "/" : "") + p;
       const label = i === 1 ? monthLabel(p) : p;
       crumbs.push(html` <span class="mb-breadcrumb-separator">/</span> <button class="mb-breadcrumb-item" data-folder="${currentPath}">${label}</button>`);
@@ -348,7 +349,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         <button id="mb-sel-cancel" class="btn btn-sm btn-secondary" title="Exit selection mode">✕ Cancel</button>
       </div>`;
   }
-  _renderItem(m, selectedIds) {
+  _renderItem(m: Media, selectedIds: Set<number>) {
     const pickerMode = this.props.pickerMode;
     const fileType = (m.file_type || "").toLowerCase();
     const isImage = fileType === "image";
@@ -367,10 +368,10 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     //
     // A video's dimensions describe the video, and its poster is fitted into the
     // same box the ladder caps at, so they are only handed over for an image.
-    const preview = hasStill ? html`<img ${thumbAttrs(m.path || m.thumbnail_path, {
+    const preview = hasStill ? html`<img ${thumbAttrs(m.path || m.thumbnail_path || "", {
       sizes: GRID_THUMB_SIZES,
-      width: isImage ? m.width : 0,
-      height: isImage ? m.height : 0
+      width: isImage ? m.width ?? undefined : 0,
+      height: isImage ? m.height ?? undefined : 0
     })} alt="${m.filename}" loading="lazy" decoding="async" draggable="false">${isVideo ? html`<div class="file-icon file-icon--overlay" aria-hidden="true">▶</div>` : ""}` : html`<div class="file-icon" aria-label="${fileType || "file"}">${isVideo ? "▶" : fileType === "audio" ? "♫" : "📄"}</div>`;
     const publicStatus = m.is_public ? "" : html`
       <div class="media-item-status" title="Private (hidden from guests)">
@@ -423,7 +424,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         ${refPanel}
       </div>`;
   }
-  _renderReferringPostsInline(m) {
+  _renderReferringPostsInline(m: Media) {
     const st = (this.state.referringPostsState || {})[m.id];
     if (!st) return "";
     let body: Slot = "";
@@ -434,7 +435,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     } else if (!st.posts || st.posts.length === 0) {
       return "";
     } else {
-      body = html`<ul class="referring-posts-list">${st.posts.map(p => html`
+      body = html`<ul class="referring-posts-list">${st.posts.map((p: Post) => html`
         <li>
           <a href="/light/posts/${String(p.id)}/edit" class="referring-post-link">
             <span class="referring-post-title">${p.title || "(Untitled)"}</span>
@@ -450,7 +451,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         ${body}
       </div>`;
   }
-  _renderExifPanel(m) {
+  _renderExifPanel(m: Media) {
     const metadata = m.metadata || {};
     const rows = Object.entries(metadata).map(([k, v]) => html`<tr>
         <td><input class="exif-key" value="${String(k)}" placeholder="Field name" aria-label="EXIF field name"></td>
@@ -485,9 +486,9 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     });
 
     // Delete a row
-    const bindDeleteBtns = scope => {
-      scope.querySelectorAll(".exif-delete-btn").forEach(btn => {
-        btn.addEventListener("click", () => btn.closest("tr").remove());
+    const bindDeleteBtns = (scope: ParentNode) => {
+      scope.querySelectorAll(".exif-delete-btn").forEach((btn: Element) => {
+        btn.addEventListener("click", () => btn.closest("tr")!.remove());
       });
     };
     bindDeleteBtns(this.container);
@@ -495,7 +496,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     // Add a new blank row using DOM API (no innerHTML with user data)
     this.$$(".exif-add-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        const tbody = btn.closest(".exif-panel").querySelector(".exif-rows");
+        const tbody = btn.closest(".exif-panel")!.querySelector(".exif-rows")!;
         const tr = document.createElement("tr");
         const tdKey = document.createElement("td");
         const inputKey = document.createElement("input");
@@ -528,10 +529,10 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     // Save EXIF — validates alphanumeric+space, writes to file via PUT /exif
     this.$$(".exif-save-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
-        const id = parseInt(btn.dataset.id, 10);
-        const panel = btn.closest(".exif-panel");
+        const id = parseInt(btn.dataset.id!, 10);
+        const panel = btn.closest(".exif-panel")!;
         const fields: Record<string,string> = {};
-        const invalid = [];
+        const invalid: string[] = [];
         panel.querySelectorAll(".exif-rows tr").forEach(tr => {
           const key = (tr.querySelector(".exif-key") as HTMLInputElement)?.value.trim();
           const val = (tr.querySelector(".exif-val") as HTMLInputElement)?.value.trim();
@@ -557,7 +558,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
           });
         } catch (err) {
           setToast({
-            message: err.message || "Save failed.",
+            message: (err as Error).message || "Save failed.",
             type: "error"
           });
         }
@@ -577,12 +578,12 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
           onConfirm: async () => {
             dialog.unmount();
             mountEl.remove();
-            const id = parseInt(btn.dataset.id, 10);
+            const id = parseInt(btn.dataset.id!, 10);
             try {
               const updated = await revertMediaEXIF(id);
               const metadata = updated.metadata || {};
-              const panel = btn.closest(".exif-panel");
-              const tbody = panel.querySelector(".exif-rows");
+              const panel = btn.closest(".exif-panel")!;
+              const tbody = panel.querySelector(".exif-rows")!;
               while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
               Object.entries(metadata).forEach(([k, v]) => {
                 const tr = document.createElement("tr");
@@ -619,7 +620,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
               });
             } catch (err) {
               setToast({
-                message: err.message || "Revert failed.",
+                message: (err as Error).message || "Revert failed.",
                 type: "error"
               });
             }
@@ -646,12 +647,12 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
           onConfirm: async () => {
             dialog.unmount();
             mountEl.remove();
-            const id = parseInt(btn.dataset.id, 10);
+            const id = parseInt(btn.dataset.id!, 10);
             try {
               const updated = await reextractMediaEXIF(id);
               const metadata = updated.metadata || {};
-              const panel = btn.closest(".exif-panel");
-              const tbody = panel.querySelector(".exif-rows");
+              const panel = btn.closest(".exif-panel")!;
+              const tbody = panel.querySelector(".exif-rows")!;
 
               // Clear existing rows
               while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
@@ -694,7 +695,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
               });
             } catch (err) {
               setToast({
-                message: err.message || "Re-extract failed.",
+                message: (err as Error).message || "Re-extract failed.",
                 type: "error"
               });
             }
@@ -731,9 +732,10 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     // Mobile capture buttons
     this.$("#mb-capture-camera-btn")?.addEventListener("click", () => this.$("#mb-capture-camera-input")?.click());
     this.$("#mb-capture-video-btn")?.addEventListener("click", () => this.$("#mb-capture-video-input")?.click());
-    const onCapture = e => {
-      this._uploadFiles(Array.from(e.target.files));
-      e.target.value = "";
+    const onCapture = (e: Event) => {
+      const input = e.target as HTMLInputElement;
+      this._uploadFiles(Array.from(input.files ?? []));
+      input.value = "";
     };
     this.$("#mb-capture-camera-input")?.addEventListener("change", onCapture);
     this.$("#mb-capture-video-input")?.addEventListener("change", onCapture);
@@ -766,7 +768,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       }
     }
     fileInput?.addEventListener("change", () => {
-      this._uploadFiles(Array.from(fileInput.files));
+      this._uploadFiles(Array.from(fileInput.files ?? []));
       fileInput.value = "";
     });
     this._wireDragDrop(fileInput, pickerMode);
@@ -815,13 +817,13 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         item.addEventListener("click", e => {
           // Don't trigger if clicking directly on checkbox label (it handles its own state)
           if ((e.target as HTMLElement).closest(".media-item-checkbox")) return;
-          const id = parseInt(item.dataset.id, 10);
+          const id = parseInt(item.dataset.id!, 10);
           this._toggleSelection(id);
         });
       });
       this.$$(".media-item-check").forEach(checkbox => {
         checkbox.addEventListener("change", () => {
-          const id = parseInt(checkbox.dataset.id, 10);
+          const id = parseInt(checkbox.dataset.id!, 10);
           this._toggleSelection(id);
         });
       });
@@ -843,15 +845,15 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
 
       // Long-press to enter select mode (standalone only)
       this.$$(".media-item").forEach(item => {
-        let timer = null;
+        let timer: ReturnType<typeof setTimeout> | null = null;
         let originX = 0;
         let originY = 0;
-        const start = e => {
+        const start = (e: PointerEvent) => {
           originX = e.clientX;
           originY = e.clientY;
           timer = setTimeout(() => {
             if (!this.state.selectMode) {
-              const id = parseInt(item.dataset.id, 10);
+              const id = parseInt(item.dataset.id!, 10);
               this.setState({
                 selectMode: true,
                 selectedIds: new Set([id])
@@ -866,7 +868,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         // A drag is a page swipe (or a scroll), not a long press — a slow one
         // would otherwise sit still long enough to open select mode under the
         // moving grid.
-        const moved = e => {
+        const moved = (e: PointerEvent) => {
           if (!timer) return;
           if (Math.hypot(e.clientX - originX, e.clientY - originY) > 10) cancel();
         };
@@ -881,8 +883,8 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       this.$$(".delete-media-btn").forEach(btn => {
         btn.addEventListener("click", e => {
           e.stopPropagation();
-          const id = parseInt(btn.dataset.id, 10);
-          this._showDeleteConfirm(id, btn.dataset.name);
+          const id = parseInt(btn.dataset.id!, 10);
+          this._showDeleteConfirm(id, btn.dataset.name!);
         });
       });
 
@@ -890,14 +892,14 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       this.$$(".create-post-btn").forEach(btn => {
         btn.addEventListener("click", e => {
           e.stopPropagation();
-          const path = btn.dataset.path;
+          const path = btn.dataset.path!;
           this._createPostWithImage(path);
         });
       });
       this.$$(".copy-path-btn").forEach(btn => {
         btn.addEventListener("click", e => {
           e.stopPropagation();
-          const path = btn.dataset.path;
+          const path = btn.dataset.path!;
           if (navigator.clipboard) {
             navigator.clipboard.writeText(path).then(() => {
               setToast({
@@ -921,8 +923,8 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       this.$$(".rename-media-btn").forEach(btn => {
         btn.addEventListener("click", e => {
           e.stopPropagation();
-          const id = parseInt(btn.dataset.id, 10);
-          const oldName = btn.dataset.name;
+          const id = parseInt(btn.dataset.id!, 10);
+          const oldName = btn.dataset.name!;
           this._showRenamePrompt(id, oldName);
         });
       });
@@ -930,6 +932,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         el.addEventListener("click", e => {
           e.stopPropagation(); // Don't trigger item selection or lightbox
           const selection = window.getSelection();
+          if (!selection) return;
           const range = document.createRange();
           range.selectNodeContents(el);
           selection.removeAllRanges();
@@ -939,12 +942,12 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       const imageItems = Array.from(this.$$(".media-item[data-src]"));
       if (imageItems.length > 0) {
         const images = imageItems.map(el => ({
-          src: el.dataset.src,
+          src: el.dataset.src!,
           alt: el.dataset.alt || ""
         }));
         imageItems.forEach((el, index) => {
           el.querySelector(".media-item-preview")?.addEventListener("click", () => {
-            this._lightbox.open(images, index);
+            this._lightbox?.open(images, index);
           });
         });
       }
@@ -958,14 +961,14 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       this._pager.arm(this.state.pagination, this._listingKey());
     }
   }
-  _toggleSelection(id) {
+  _toggleSelection(id: number) {
     const selectedIds = new Set(this.state.selectedIds);
     if (selectedIds.has(id)) {
       selectedIds.delete(id);
       delete this._selectedItemsById[id];
     } else {
       selectedIds.add(id);
-      const item = this.state.media.find(m => m.id === id);
+      const item = this.state.media.find((m: Media) => m.id === id);
       if (item) this._selectedItemsById[id] = item;
     }
     this.setState({
@@ -974,7 +977,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
   }
 
   /** Navigate to a new post pre-seeded with one image path in content. */
-  _createPostWithImage(imagePath) {
+  _createPostWithImage(imagePath: string) {
     // Store the initial content in sessionStorage so PostEditPage can pick it up.
     if (imagePath) {
       sessionStorage.setItem("newPostInitialContent", imagePath);
@@ -1003,11 +1006,11 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
 
   /** Show a confirm and then delete all selected files. */
   _deleteSelected() {
-    const ids = Array.from(this.state.selectedIds);
+    const ids = Array.from(this.state.selectedIds as Set<number>);
     if (ids.length === 0) return;
     this._showBulkDeleteConfirm(ids);
   }
-  _showBulkDeleteConfirm(ids) {
+  _showBulkDeleteConfirm(ids: number[]) {
     const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
     import("../shared/ConfirmDialog.ts").then(({
@@ -1031,7 +1034,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       dialog.mount();
     });
   }
-  async _bulkDelete(ids) {
+  async _bulkDelete(ids: number[]) {
     let deleted = 0;
     let failed = 0;
     for (const id of ids) {
@@ -1054,7 +1057,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     this._load();
     this._loadFolders();
   }
-  async _loadReferringPosts(id, imagePath) {
+  async _loadReferringPosts(id: number, imagePath: string) {
     const rps = {
       ...this.state.referringPostsState
     };
@@ -1090,7 +1093,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       rps2[id] = {
         loading: false,
         posts: null,
-        error: err.message || "Search failed."
+        error: (err as Error).message || "Search failed."
       };
       this.setState({
         referringPostsState: rps2
@@ -1137,7 +1140,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       if (overlay) overlay.classList.remove("file-icon--overlay");
     }, true);
   }
-  _wireDragDrop(fileInput, pickerMode) {
+  _wireDragDrop(fileInput: HTMLInputElement | null, pickerMode: boolean | undefined) {
     // this.on() releases each of these at the next render boundary, which is
     // what afterRender() firing on every setState re-render requires — the
     // document-level ones would otherwise accumulate a set per render.
@@ -1151,7 +1154,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     const onDragEnd = () => {
       this._internalDrag = false;
     };
-    const onEnter = e => {
+    const onEnter = (e: DragEvent) => {
       if (this._internalDrag) return;
       if (!e.dataTransfer?.types?.includes("Files")) return;
       this._dragCount++;
@@ -1159,7 +1162,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         draggingOver: true
       });
     };
-    const onLeave = e => {
+    const onLeave = (e: DragEvent) => {
       if (this._internalDrag) return;
       if (!e.dataTransfer?.types?.includes("Files")) return;
       this._dragCount = Math.max(0, this._dragCount - 1);
@@ -1167,10 +1170,10 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         draggingOver: false
       });
     };
-    const onOver = e => {
+    const onOver = (e: DragEvent) => {
       if (!this._internalDrag) e.preventDefault();
     };
-    const onDrop = e => {
+    const onDrop = (e: DragEvent) => {
       if (this._internalDrag) return;
       e.preventDefault();
       this._dragCount = 0;
@@ -1225,7 +1228,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     const area = this.$("#mb-media-area");
     const grid = this.$(".media-grid");
     const item = (grid?.firstElementChild as HTMLElement);
-    if (!area || !item || !area.clientHeight) return null; // nothing to measure yet
+    if (!area || !grid || !item || !area.clientHeight) return null; // nothing to measure yet
 
     const cs = getComputedStyle(grid);
     const cols = Math.max(1, cs.gridTemplateColumns.split(/\s+/).filter(Boolean).length);
@@ -1233,7 +1236,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     const rows = Math.max(1, Math.floor((area.clientHeight + gap) / (item.offsetHeight + gap)));
     return Math.min(MAX, Math.max(BASE, cols * rows));
   }
-  setFilenameFilter(query) {
+  setFilenameFilter(query: string) {
     this.setState({ filenameFilter: query });
     this._load({ page: 1 });
   }
@@ -1290,11 +1293,11 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     } catch (err) {
       this.setState({
         loading: false,
-        error: err.message || "Failed to load media."
+        error: (err as Error).message || "Failed to load media."
       });
     }
   }
-  async _uploadFiles(files) {
+  async _uploadFiles(files: File[]) {
     if (!files.length) return;
     this.setState({
       uploading: true
@@ -1331,7 +1334,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       });
     }
   }
-  _showDeleteConfirm(id, name) {
+  _showDeleteConfirm(id: number, name: string) {
     const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
     const dialog = new ConfirmDialog(mountEl, {
@@ -1351,7 +1354,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     });
     dialog.mount();
   }
-  _showRenamePrompt(id, oldName) {
+  _showRenamePrompt(id: number, oldName: string) {
     const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
     const dialog = new PromptDialog(mountEl, {
@@ -1382,7 +1385,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     });
     dialog.mount();
   }
-  async _deleteMedia(id) {
+  async _deleteMedia(id: number) {
     try {
       await deleteMedia(id);
       setToast({
@@ -1393,12 +1396,12 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       this._loadFolders();
     } catch (err) {
       setToast({
-        message: err.message || "Delete failed.",
+        message: (err as Error).message || "Delete failed.",
         type: "error"
       });
     }
   }
-  async _renameMedia(id, newFilename) {
+  async _renameMedia(id: number, newFilename: string) {
     try {
       await renameMedia(id, newFilename);
       setToast({
@@ -1409,7 +1412,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       this._loadFolders();
     } catch (err) {
       setToast({
-        message: err.message || "Rename failed.",
+        message: (err as Error).message || "Rename failed.",
         type: "error"
       });
     }

@@ -20,7 +20,7 @@ import { formatDateShort } from "../../../utils/formatters.ts";
 type ImportStatus = Awaited<ReturnType<typeof getInstagramImportStatus>>;
 
 export class InstagramImportSection extends Component {
-  _pollTimer: ReturnType<typeof setInterval> | null;
+  _pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
@@ -97,7 +97,7 @@ export class InstagramImportSection extends Component {
 
   beforeUnmount() {
     if (this._pollTimer) {
-      clearInterval(this._pollTimer);
+      clearInterval(this._pollTimer!);
       this._pollTimer = null;
     }
   }
@@ -127,7 +127,7 @@ export class InstagramImportSection extends Component {
       this._startPoll();
     } catch (err) {
       this.setState({ importing: false });
-      setToast({ message: err.message || "Import failed to start.", type: "error" });
+      setToast({ message: (err as Error).message || "Import failed to start.", type: "error" });
     }
   }
 
@@ -138,7 +138,7 @@ export class InstagramImportSection extends Component {
         const status = await getInstagramImportStatus();
         this.setState({ importStatus: status, importing: status.running });
         if (!status.running) {
-          clearInterval(this._pollTimer);
+          clearInterval(this._pollTimer!);
           this._pollTimer = null;
           if (status.imported > 0) {
             setToast({

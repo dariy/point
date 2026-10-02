@@ -6,6 +6,7 @@
 
 import { Component } from "../../Component.ts";
 import { getQueue, resetFailedOps, updateStatus } from "../../../utils/mutationQueue.ts";
+import type { QueuedOp } from "../../../utils/mutationQueue.ts";
 import { syncQueue } from "../../../utils/sync.ts";
 import { setToast } from "../../../store.ts";
 import { html, raw } from "../../../utils/helpers.ts";
@@ -20,8 +21,8 @@ export class SyncQueueSection extends Component {
 
   render() {
     const { loading, queue } = this.state;
-    const failedCount = queue.filter((op) => op.failed).length;
-    const pendingCount = queue.filter((op) => !op.failed).length;
+    const failedCount = queue.filter((op: QueuedOp) => op.status === "failed").length;
+    const pendingCount = queue.filter((op: QueuedOp) => op.status !== "failed").length;
 
     let rows;
     if (loading) {
@@ -30,9 +31,9 @@ export class SyncQueueSection extends Component {
       rows = html`<p class="empty-state">No pending operations.</p>`;
     } else {
       rows = queue
-        .map((op) => {
-          const icon = op.failed ? raw(WARNING_SVG) : "●";
-          const statusCls = op.failed ? "status-failed" : "status-pending";
+        .map((op: QueuedOp) => {
+          const icon = op.status === "failed" ? raw(WARNING_SVG) : "●";
+          const statusCls = op.status === "failed" ? "status-failed" : "status-pending";
           return html`
           <div class="sync-queue-item ${statusCls}">
             <span class="sync-icon">${icon}</span>
@@ -40,7 +41,7 @@ export class SyncQueueSection extends Component {
               <div class="sync-op"><strong>${op.method}</strong> ${op.url}</div>
               ${op.error ? html`<div class="sync-error">${op.error}</div>` : ""}
             </div>
-            <div class="sync-meta">${formatDateShort(op.timestamp)}</div>
+            <div class="sync-meta">${formatDateShort(new Date(op.timestamp).toISOString())}</div>
           </div>`;
         });
     }

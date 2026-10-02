@@ -58,7 +58,7 @@ export class VisualEditor extends Component<VisualEditorProps> {
 
   // ── Cards ──────────────────────────────────────────────────────────────
 
-  _renderInsertZone(index) {
+  _renderInsertZone(index: number) {
     return html`<div class="ve-insert-zone" data-insert-at="${index}">
        <div class="ve-insert-actions">
          <button class="ve-insert-btn ve-insert-text" type="button" title="Insert text node">+ Text</button>
@@ -67,10 +67,11 @@ export class VisualEditor extends Component<VisualEditorProps> {
      </div>`;
   }
 
-  _renderImageCard(node, i) {
-    const filename = node.path.split("/").pop();
+  _renderImageCard(node: EditorNode, i: number) {
+    const path = node.path ?? "";
+    const filename = path.split("/").pop();
     const mediaByPath = this.props.mediaByPath || {};
-    const media = mediaByPath[node.path];
+    const media = mediaByPath[path];
     const mediaId = media ? String(media.id) : "";
 
     const exifBtn = mediaId
@@ -93,10 +94,10 @@ export class VisualEditor extends Component<VisualEditorProps> {
       <div class="ve-handle" title="Drag to reorder">
         <span class="ve-handle-dots"></span>
       </div>
-      <img class="ve-thumb" ${thumbAttrs(node.path, {
+      <img class="ve-thumb" ${thumbAttrs(path, {
         sizes: VE_THUMB_SIZES,
-        width: media?.width,
-        height: media?.height,
+        width: media?.width ?? undefined,
+        height: media?.height ?? undefined,
       })}
            alt="${filename}"
            data-full="${node.path}"
@@ -111,7 +112,7 @@ export class VisualEditor extends Component<VisualEditorProps> {
     </div>`;
   }
 
-  _renderTextCard(node, i) {
+  _renderTextCard(node: EditorNode, i: number) {
     return html`
     ${this._renderInsertZone(i)}
     <div class="ve-card ve-card--text" data-index="${i}">
@@ -140,7 +141,7 @@ export class VisualEditor extends Component<VisualEditorProps> {
     setupTextareaMaximizer(this.container);
   }
 
-  _renderVeExifRows(media) {
+  _renderVeExifRows(media: Media | undefined) {
     const metadata = (media && media.metadata) || {};
     const rows = Object.entries(metadata)
       .map(
@@ -158,21 +159,21 @@ export class VisualEditor extends Component<VisualEditorProps> {
     this.$$(".ve-exif-toggle").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const panel = btn.closest(".ve-card").querySelector(".ve-exif-panel") as HTMLElement;
+        const panel = btn.closest(".ve-card")!.querySelector(".ve-exif-panel") as HTMLElement;
         if (panel) panel.hidden = !panel.hidden;
       });
     });
 
-    const bindDelete = (scope) => {
+    const bindDelete = (scope: ParentNode) => {
       scope.querySelectorAll(".exif-delete-btn").forEach((b) => {
-        b.addEventListener("click", () => b.closest("tr").remove());
+        b.addEventListener("click", () => b.closest("tr")!.remove());
       });
     };
     bindDelete(this.container);
 
     this.$$(".ve-exif-add-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const tbody = btn.closest(".ve-exif-panel").querySelector(".exif-rows");
+        const tbody = btn.closest(".ve-exif-panel")!.querySelector(".exif-rows")!;
         const tr = document.createElement("tr");
         ["Field name", "Value"].forEach((placeholder, colIdx) => {
           const td = document.createElement("td");
@@ -198,9 +199,9 @@ export class VisualEditor extends Component<VisualEditorProps> {
 
     this.$$(".ve-exif-save-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        const id = parseInt(btn.dataset.mediaId, 10);
-        const panel = btn.closest(".ve-exif-panel");
-        const metadata = {};
+        const id = parseInt(btn.dataset.mediaId!, 10);
+        const panel = btn.closest(".ve-exif-panel")!;
+        const metadata: Record<string, string> = {};
         panel.querySelectorAll(".exif-rows tr").forEach((tr) => {
           const key = (tr.querySelector(".exif-key") as HTMLInputElement)?.value.trim();
           const val = (tr.querySelector(".exif-val") as HTMLInputElement)?.value.trim();
@@ -211,7 +212,7 @@ export class VisualEditor extends Component<VisualEditorProps> {
           setToast({ message: "EXIF saved.", type: "success" });
         } catch (err) {
           setToast({
-            message: err.message || "Save failed.",
+            message: (err as Error).message || "Save failed.",
             type: "error",
           });
         }
@@ -230,12 +231,12 @@ export class VisualEditor extends Component<VisualEditorProps> {
           onConfirm: async () => {
             dialog.unmount();
             mountEl.remove();
-            const id = parseInt(btn.dataset.mediaId, 10);
+            const id = parseInt(btn.dataset.mediaId!, 10);
             try {
               const updated = await reextractMediaEXIF(id);
               const metadata = updated.metadata || {};
-              const panel = btn.closest(".ve-exif-panel");
-              const tbody = panel.querySelector(".exif-rows");
+              const panel = btn.closest(".ve-exif-panel")!;
+              const tbody = panel.querySelector(".exif-rows")!;
               while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
               Object.entries(metadata).forEach(([k, v]) => {
                 const tr = document.createElement("tr");
@@ -265,7 +266,7 @@ export class VisualEditor extends Component<VisualEditorProps> {
               setToast({ message: msg, type: "success" });
             } catch (err) {
               setToast({
-                message: err.message || "Re-extract failed.",
+                message: (err as Error).message || "Re-extract failed.",
                 type: "error",
               });
             }
@@ -312,10 +313,10 @@ export class VisualEditor extends Component<VisualEditorProps> {
       btn.addEventListener("click", () => {
         const zone = (btn.closest(".ve-insert-zone") as HTMLElement);
         if (!zone) return;
-        const at = parseInt(zone.dataset.insertAt, 10);
-        const next = [...this.props.nodes];
+        const at = parseInt(zone.dataset.insertAt!, 10);
+        const next = [...(this.props.nodes ?? [])];
         next.splice(at, 0, { type: "text", text: "" });
-        this.props.onChange(next);
+        this.props.onChange?.(next);
         // After parent re-renders via setProps, focus the new textarea
         requestAnimationFrame(() => {
           const cards = this.$$(".ve-card");
@@ -328,7 +329,7 @@ export class VisualEditor extends Component<VisualEditorProps> {
       btn.addEventListener("click", () => {
         const zone = (btn.closest(".ve-insert-zone") as HTMLElement);
         if (!zone) return;
-        const at = parseInt(zone.dataset.insertAt, 10);
+        const at = parseInt(zone.dataset.insertAt!, 10);
         if (this.props.onAddMedia) {
           this.props.onAddMedia(at);
         }
@@ -347,9 +348,10 @@ export class VisualEditor extends Component<VisualEditorProps> {
         resize();
         const card = (ta.closest(".ve-card") as HTMLElement);
         if (card) {
-          const idx = parseInt(card.dataset.index, 10);
-          if (this.props.nodes[idx]) {
-            this.props.nodes[idx].text = ta.value;
+          const idx = parseInt(card.dataset.index!, 10);
+          const node = this.props.nodes?.[idx];
+          if (node) {
+            node.text = ta.value;
           }
         }
         if (this.props.onInput) {
@@ -362,9 +364,10 @@ export class VisualEditor extends Component<VisualEditorProps> {
       input.addEventListener("input", () => {
         const card = (input.closest(".ve-card") as HTMLElement);
         if (card) {
-          const idx = parseInt(card.dataset.index, 10);
-          if (this.props.nodes[idx]) {
-            this.props.nodes[idx].blockClass = input.value;
+          const idx = parseInt(card.dataset.index!, 10);
+          const node = this.props.nodes?.[idx];
+          if (node) {
+            node.blockClass = input.value;
           }
         }
         if (this.props.onInput) this.props.onInput();
@@ -375,10 +378,10 @@ export class VisualEditor extends Component<VisualEditorProps> {
   _bindRemove() {
     this.$$(".ve-remove").forEach((btn) => {
       btn.addEventListener("click", (e) => {
-        const idx = parseInt((e.currentTarget as HTMLElement).dataset.index, 10);
-        const next = [...this.props.nodes];
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.index!, 10);
+        const next = [...(this.props.nodes ?? [])];
         next.splice(idx, 1);
-        this.props.onChange(next);
+        this.props.onChange?.(next);
       });
     });
   }
@@ -388,17 +391,17 @@ export class VisualEditor extends Component<VisualEditorProps> {
     const list = this.$("#ve-list");
     if (!list) return;
 
-    let dragIdx = null;
-    let indicator = null;
+    let dragIdx: number | null = null;
+    let indicator: HTMLDivElement | null = null;
 
-    const getCards = () => [...list.querySelectorAll(".ve-card")];
+    const getCards = () => [...list.querySelectorAll<HTMLElement>(".ve-card")];
 
     const removeIndicator = () => {
       indicator?.remove();
       indicator = null;
     };
 
-    const insertIndicator = (referenceCard, before) => {
+    const insertIndicator = (referenceCard: HTMLElement, before: boolean) => {
       removeIndicator();
       indicator = document.createElement("div");
       indicator.className = "ve-drop-indicator";
@@ -410,7 +413,7 @@ export class VisualEditor extends Component<VisualEditorProps> {
     };
 
     // Compute drop slot index (0 = before first card, n = after last card)
-    const slotFromEvent = (e) => {
+    const slotFromEvent = (e: DragEvent) => {
       const cards = getCards();
       for (let i = 0; i < cards.length; i++) {
         const rect = cards[i].getBoundingClientRect();
@@ -431,15 +434,15 @@ export class VisualEditor extends Component<VisualEditorProps> {
     list.addEventListener("dragstart", (e) => {
       const card = (e.target as HTMLElement).closest(".ve-card") as HTMLElement;
       if (!card || card.getAttribute("draggable") !== "true") return;
-      dragIdx = parseInt(card.dataset.index, 10);
+      dragIdx = parseInt(card.dataset.index!, 10);
       card.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
     });
 
     list.addEventListener("dragover", (e) => {
       if (dragIdx === null) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
 
       const cards = getCards();
       const slot = slotFromEvent(e);
@@ -464,14 +467,14 @@ export class VisualEditor extends Component<VisualEditorProps> {
       removeIndicator();
 
       const slot = slotFromEvent(e);
-      const next = [...this.props.nodes];
+      const next = [...(this.props.nodes ?? [])];
       const [moved] = next.splice(dragIdx, 1);
       // Adjust insertion index after removal
       const insertAt = slot > dragIdx ? slot - 1 : slot;
       next.splice(insertAt, 0, moved);
 
       dragIdx = null;
-      this.props.onChange(next);
+      this.props.onChange?.(next);
     });
 
     list.addEventListener("dragend", () => {
@@ -488,15 +491,15 @@ export class VisualEditor extends Component<VisualEditorProps> {
       span.addEventListener("click", () => {
         const card = (span.closest(".ve-card") as HTMLElement);
         if (!card) return;
-        const idx = parseInt(card.dataset.index, 10);
-        const node = this.props.nodes[idx];
-        if (!node || node.type !== "image") return;
+        const idx = parseInt(card.dataset.index!, 10);
+        const node = this.props.nodes?.[idx];
+        if (!node || node.type !== "image" || !node.path) return;
         this._startRename(span, node.path);
       });
     });
   }
 
-  _startRename(span, path) {
+  _startRename(span: HTMLElement, path: string) {
     const lastSlash = path.lastIndexOf("/");
     const prefix = path.slice(0, lastSlash + 1); // e.g. "/2026/02/"
     const fullName = path.slice(lastSlash + 1); // e.g. "photo.jpg"
@@ -588,7 +591,7 @@ export class VisualEditor extends Component<VisualEditorProps> {
           document.removeEventListener("keydown", onKey);
         };
         overlay.addEventListener("click", close);
-        const onKey = (e) => {
+        const onKey = (e: KeyboardEvent) => {
           if (e.key === "Escape") close();
         };
         document.addEventListener("keydown", onKey);
