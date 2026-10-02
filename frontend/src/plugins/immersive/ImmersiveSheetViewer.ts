@@ -224,7 +224,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     }, true);
     const actions = this.$('.immersive-sheet-actions');
     this.on(actions, 'click', e => {
-      const el = e.target.closest('[data-action]');
+      const el = (e.target as Element).closest<HTMLElement>('[data-action]');
       if (!el) return;
       const action = el.dataset.action;
       if (action === 'edit') return; // let the link navigate

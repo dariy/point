@@ -21,7 +21,7 @@ export interface ModalProps {
 }
 
 export class Modal extends Component<ModalProps> {
-  _onKeyDown: (e: KeyboardEvent) => void;
+  _onKeyDown?: (e: KeyboardEvent) => void;
 
   render() {
     const { title = '', footer = '', maxWidth = '500px' } = this.props;
@@ -60,7 +60,7 @@ export class Modal extends Component<ModalProps> {
   }
 
   beforeUnmount() {
-    window.removeEventListener('keydown', this._onKeyDown);
+    if (this._onKeyDown) window.removeEventListener('keydown', this._onKeyDown);
   }
 
   /**

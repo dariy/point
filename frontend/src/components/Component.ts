@@ -344,18 +344,22 @@ export class Component<P extends object = object> {
    * A missing target is a no-op rather than a throw, so the `this.$('.x')` of
    * a conditionally rendered element can be passed straight in.
    *
+   * The handler may name the event subtype it expects (`(e: KeyboardEvent)`);
+   * matching it to `type` is the caller's job, as with addEventListener.
+   *
    * @param options - Passed to both add and
    *                                    remove, so a capture listener detaches
    *                                    correctly.
    * @returns target, for chaining; null when there was none.
    */
-  on(
+  on<E extends Event = Event>(
     target: EventTarget | null | undefined,
     type: string,
-    handler: EventListenerOrEventListenerObject,
+    typedHandler: ((event: E) => void) | EventListenerObject,
     options?: boolean | AddEventListenerOptions,
   ): EventTarget | null {
     if (!target?.addEventListener) return null;
+    const handler = typedHandler as EventListenerOrEventListenerObject;
     target.addEventListener(type, handler, options);
     this.registerCleanup(() => target.removeEventListener(type, handler, options));
     return target;
@@ -500,7 +504,7 @@ export class Component<P extends object = object> {
       types.add(sep > 0 ? key.slice(0, sep) : 'click');
     }
 
-    const dispatch = event => this._dispatchAction(event);
+    const dispatch = (event: Event) => this._dispatchAction(event);
     for (const type of types) {
       this.container.addEventListener(type, dispatch);
       this._actionTeardowns.push(
@@ -538,7 +542,7 @@ export class Component<P extends object = object> {
 
     const name = el.getAttribute('data-action');
     const handler = actions[`${event.type}:${name}`]
-      ?? (event.type === 'click' ? actions[name] : undefined);
+      ?? (event.type === 'click' && name !== null ? actions[name] : undefined);
     if (typeof handler !== 'function') return;
 
     handler.call(this, event, el);

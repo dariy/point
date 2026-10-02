@@ -56,12 +56,12 @@ export class NotificationLogButton extends Component {
   }
   afterRender() {
     this.$('.notification-log-btn')?.addEventListener('click', () => this._openModal());
-    this.subscribeStore(onToastLog, entries => {
+    this.subscribeStore(onToastLog, (entries: ToastLogEntry[] | null) => {
       this._updateVisibility(entries, getRoute());
       this._schedulePruneTimer(entries);
       if (this._isOpen) this._refreshModalContent();
     });
-    this.subscribeStore(onRoute, route => {
+    this.subscribeStore(onRoute, (route: { pathname?: string } | null) => {
       this._updateVisibility(getToastLog(), route);
     });
 

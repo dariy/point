@@ -71,7 +71,7 @@ export interface Crumb {
 const _pageCache = new Map();           // key -> { t, data }
 const PAGE_CACHE_TTL_MS = 60000;        // 1 min — long enough to linger before swiping
 
-function _cachedPage(key, fetcher) {
+function _cachedPage<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
   const hit = _pageCache.get(key);
   if (hit && Date.now() - hit.t < PAGE_CACHE_TTL_MS) return hit.data;
   const data = fetcher();           // a promise; cached so concurrent callers share it

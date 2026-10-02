@@ -130,7 +130,7 @@ export interface PostInput {
 const _readCache = new Map();           // key -> { t, data }
 const READ_CACHE_TTL_MS = 120000;       // 2 min — long enough to linger on a photo before swiping
 
-function _cachedRead(key, fetcher) {
+function _cachedRead<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
   const hit = _readCache.get(key);
   if (hit && Date.now() - hit.t < READ_CACHE_TTL_MS) return hit.data;
   const data = fetcher();           // a promise; cached so concurrent callers share it

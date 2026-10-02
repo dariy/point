@@ -47,7 +47,8 @@ class ApiClient {
         // Owner browsing as a guest — see utils/revelio.ts. Merged before the
         // caller's own headers so an explicit one still wins.
         ...revelioHeaders(),
-        ...init.headers,
+        // Callers pass a plain object; a Headers or tuple list would not spread.
+        ...(init.headers as Record<string, string> | undefined),
       },
       ...init,
     };
@@ -60,7 +61,7 @@ class ApiClient {
     }
 
     if (response.status === 204) {
-      return null;
+      return null as T;
     }
 
     // Try to parse JSON body for both success and error responses.

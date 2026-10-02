@@ -62,11 +62,12 @@ export async function sha256(value: string): Promise<string> {
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
   // Pure-JS fallback for non-secure contexts (plain HTTP, non-localhost)
-  function rightRotate(v, n) { return (v >>> n) | (v << (32 - n)); }
+  function rightRotate(v: number, n: number) { return (v >>> n) | (v << (32 - n)); }
   const mp = Math.pow, mw = mp(2, 32);
-  let ascii = value, result = '', words = [];
-  const h = []; const k = [];
-  let pc = 0; const ic = {};
+  let ascii = value, result = '';
+  const words: number[] = [];
+  const h: number[] = []; const k: number[] = [];
+  let pc = 0; const ic: Record<number, number> = {};
   for (let c = 2; pc < 64; c++) {
     if (!ic[c]) {
       for (let i = 0; i < 313; i += c) ic[i] = c;
@@ -126,7 +127,7 @@ export async function getMe(): Promise<User | null> {
   try {
     return await api.get('/api/auth/me');
   } catch (err) {
-    if (err.status === 401) return null;
+    if ((err as { status?: number }).status === 401) return null;
     throw err;
   }
 }
@@ -186,26 +187,53 @@ function bufferToBase64url(buffer: ArrayBuffer): string {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-function prepareCreationOptions(json) {
-  const pk = json.publicKey;
-  pk.challenge = base64urlToBuffer(pk.challenge);
-  pk.user.id = base64urlToBuffer(pk.user.id);
-  if (pk.excludeCredentials) {
-    pk.excludeCredentials = pk.excludeCredentials.map(c => ({ ...c, id: base64urlToBuffer(c.id) }));
-  }
-  return pk;
+// The begin endpoints send the WebAuthn options with every binary field as a
+// base64url string. These name the wire shape; the prepare* functions decode it.
+type WireDescriptor = Omit<PublicKeyCredentialDescriptor, 'id'> & { id: string };
+interface WireCreationOptions {
+  publicKey: Omit<PublicKeyCredentialCreationOptions, 'challenge' | 'user' | 'excludeCredentials'> & {
+    challenge: string;
+    user: Omit<PublicKeyCredentialUserEntity, 'id'> & { id: string };
+    excludeCredentials?: WireDescriptor[];
+  };
+}
+interface WireRequestOptions {
+  publicKey: Omit<PublicKeyCredentialRequestOptions, 'challenge' | 'allowCredentials'> & {
+    challenge: string;
+    allowCredentials?: WireDescriptor[];
+  };
 }
 
-function prepareRequestOptions(json) {
-  const pk = json.publicKey;
-  pk.challenge = base64urlToBuffer(pk.challenge);
-  if (pk.allowCredentials) {
-    pk.allowCredentials = pk.allowCredentials.map(c => ({ ...c, id: base64urlToBuffer(c.id) }));
-  }
-  return pk;
+function decodeDescriptor(c: WireDescriptor): PublicKeyCredentialDescriptor {
+  return { ...c, id: base64urlToBuffer(c.id) };
 }
 
-function serializeCredential(cred) {
+function prepareCreationOptions(json: WireCreationOptions): PublicKeyCredentialCreationOptions {
+  const { excludeCredentials, ...pk } = json.publicKey;
+  return {
+    ...pk,
+    challenge: base64urlToBuffer(pk.challenge),
+    user: { ...pk.user, id: base64urlToBuffer(pk.user.id) },
+    ...(excludeCredentials && { excludeCredentials: excludeCredentials.map(decodeDescriptor) }),
+  };
+}
+
+function prepareRequestOptions(json: WireRequestOptions): PublicKeyCredentialRequestOptions {
+  const { allowCredentials, ...pk } = json.publicKey;
+  return {
+    ...pk,
+    challenge: base64urlToBuffer(pk.challenge),
+    ...(allowCredentials && { allowCredentials: allowCredentials.map(decodeDescriptor) }),
+  };
+}
+
+// create() resolves an attestation, get() an assertion; each carries only its
+// own optional fields.
+type CredentialResponse = AuthenticatorResponse &
+  Partial<Pick<AuthenticatorAttestationResponse, 'attestationObject'>> &
+  Partial<Pick<AuthenticatorAssertionResponse, 'authenticatorData' | 'signature' | 'userHandle'>>;
+
+function serializeCredential(cred: PublicKeyCredential & { response: CredentialResponse }) {
   const res: {
     id: string;
     rawId: string;
@@ -240,18 +268,18 @@ export function getPasskeyStatus(): Promise<{ has_passkey: boolean, configured: 
 
 /** Full registration ceremony: begin → browser → finish. */
 export async function registerPasskey(): Promise<void> {
-  const options = await api.post('/api/auth/webauthn/register/begin');
+  const options = await api.post<WireCreationOptions>('/api/auth/webauthn/register/begin');
   const publicKey = prepareCreationOptions(options);
   const credential = await navigator.credentials.create({ publicKey });
-  await api.post('/api/auth/webauthn/register/finish', serializeCredential(credential));
+  await api.post('/api/auth/webauthn/register/finish', serializeCredential(credential as PublicKeyCredential));
 }
 
 /** Full login ceremony: begin → browser → finish. */
 export async function loginWithPasskey(): Promise<{ message: string, user: User }> {
-  const options = await api.post('/api/auth/webauthn/login/begin');
+  const options = await api.post<WireRequestOptions>('/api/auth/webauthn/login/begin');
   const publicKey = prepareRequestOptions(options);
   const assertion = await navigator.credentials.get({ publicKey });
-  return api.post('/api/auth/webauthn/login/finish', serializeCredential(assertion));
+  return api.post('/api/auth/webauthn/login/finish', serializeCredential(assertion as PublicKeyCredential));
 }
 
 /** Remove the registered passkey for the current user. */

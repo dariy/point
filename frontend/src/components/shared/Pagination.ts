@@ -7,7 +7,7 @@ import { html } from '../../utils/helpers.ts';
 
 export interface PaginationProps {
   /** Current page. */
-  page?: number;
+  page: number;
   /** Last page. */
   pages?: number;
   /**
@@ -77,9 +77,10 @@ export class Pagination extends Component<PaginationProps> {
   actions = {
     page(this: Pagination, _e: Event, el: HTMLButtonElement) {
       if (el.disabled) return;
-      const p = parseInt(el.dataset.page, 10);
-      if (p >= this._minPage() && p <= this.props.pages && this.props.onPage) {
-        this.props.onPage(p);
+      const p = parseInt(el.dataset.page ?? '', 10);
+      const { pages, onPage } = this.props;
+      if (p >= this._minPage() && pages !== undefined && p <= pages && onPage) {
+        onPage(p);
       }
     },
   };
@@ -87,7 +88,7 @@ export class Pagination extends Component<PaginationProps> {
   /** First reachable page — 1 unless a caller opened the feed to the left. */
   _minPage() {
     const m = this.props.minPage;
-    return Number.isInteger(m) && m < 1 ? m : 1;
+    return m !== undefined && Number.isInteger(m) && m < 1 ? m : 1;
   }
 
   /**

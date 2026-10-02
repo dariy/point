@@ -29,7 +29,7 @@ export interface PostGridProps {
 }
 
 export class PostGrid extends Component<PostGridProps> {
-  _cards: (PostCard | null)[];
+  _cards?: (PostCard | null)[];
 
   render() {
     const { posts = [], emptyMessage = 'No posts yet.', reversed = false } = this.props;
@@ -108,7 +108,8 @@ export class PostGrid extends Component<PostGridProps> {
    */
   update(prevProps: PostGridProps): boolean {
     for (const key of new Set([...Object.keys(prevProps), ...Object.keys(this.props)])) {
-      if (key !== 'posts' && prevProps[key] !== this.props[key]) return false;
+      const k = key as keyof PostGridProps;
+      if (k !== 'posts' && prevProps[k] !== this.props[k]) return false;
     }
     return this._reconcileTo(this.props.posts || [], prevProps.posts || []);
   }
@@ -164,9 +165,11 @@ export class PostGrid extends Component<PostGridProps> {
     // arrivals read it.
     measureCardImageSizes(grid);
 
+    const mounted = this._cards;
     const cards = new Map<string, PostCard>();
     current.forEach((post, i) => {
-      if (this._cards[i]) cards.set(String(post.id), this._cards[i]);
+      const card = mounted[i];
+      if (card) cards.set(String(post.id), card);
     });
 
     const { nodes } = reconcileList(grid, posts, (p) => p.id, {
