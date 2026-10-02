@@ -1,5 +1,5 @@
 /**
- * carousel/studio/bounds.js — the studio's slide-count range.
+ * carousel/studio/bounds.ts — the studio's slide-count range.
  *
  * The whole point of the module is that the state owner and the markup agree
  * on one range, so these pin the numbers themselves (a silent widening would
@@ -16,7 +16,7 @@ import {
   MAX_SLIDES,
   DEFAULT_SLIDES,
   clampSlides,
-} from '../src/plugins/carousel/studio/bounds.js';
+} from '../src/plugins/carousel/studio/bounds.ts';
 
 describe('carousel studio bounds', () => {
   test('the range is 2..20, defaulting to 3', () => {

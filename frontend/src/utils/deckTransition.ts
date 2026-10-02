@@ -25,12 +25,11 @@ export function imgEl(slideEl) {
  * Guard + geometry for a same-deck step between two slide boxes. Returns null
  * (caller falls back to the legacy full-viewport pan) when either slide has no
  * rendered image, or the two images' rendered widths differ by more than 1px.
- *
- * @param {HTMLElement} oldSlide
- * @param {HTMLElement} newSlide
- * @returns {{imgW: number, marginW: number, viewportW: number}|null}
  */
-export function computeDeckGeometry(oldSlide, newSlide) {
+export function computeDeckGeometry(
+  oldSlide: HTMLElement,
+  newSlide: HTMLElement,
+): {imgW: number, marginW: number, viewportW: number} | null {
   const imgA = imgEl(oldSlide);
   const imgB = imgEl(newSlide);
   if (!imgA || !imgB) return null;

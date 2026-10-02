@@ -33,9 +33,9 @@ import {
   safeAreaRect,
   slideCountOptions,
   spanLayerCoverage,
-} from "../geometry.js";
-import { IMPORT_ACCEPT, IMPORTERS } from "../import/index.js";
-import { MAX_SLIDES, MIN_SLIDES } from "./bounds.js";
+} from "../geometry.ts";
+import { IMPORT_ACCEPT, IMPORTERS } from "../import/index.ts";
+import { MAX_SLIDES, MIN_SLIDES } from "./bounds.ts";
 
 /** Fit-panel radio: the two `cover` variants (free count vs. width-filling
  *  count) plus the two pixel-exact strategies. `fill` stores `strategy: 'cover'`
@@ -112,10 +112,12 @@ export function colorInputValue(color) {
  * is read straight off the ring rather than tracked in the page's state.
  * Both go dark mid-render: the document a render is uploading from must not
  * move under it.
- *
- * @param {{canUndo: boolean, canRedo: boolean, busy: boolean}} o
  */
-export function historyButtons({ canUndo, canRedo, busy }) {
+export function historyButtons({ canUndo, canRedo, busy }: {
+  canUndo: boolean;
+  canRedo: boolean;
+  busy: boolean;
+}) {
   const step = (action, glyph, label, hint, enabled) => html`
     <button
       type="button"
@@ -159,13 +161,18 @@ export function historyButtons({ canUndo, canRedo, busy }) {
  * takes — the ring's own depth, and dark through a render. The burger does
  * not: it opens a panel, which stays a fair thing to do while the render runs.
  *
- * @param {{canUndo: boolean, canRedo: boolean, busy: boolean,
- *   selected?: number, n?: number,
- *   inkSession?: {i: number, mode: "draw"|"erase"}|null}} o  `selected` is the
+ * @param o - `selected` is the
  *   clamped slide index (`_selectedIndex` in `index.js`), `n` the slide count,
  *   `inkSession` the ink tool's live session or null while the tool is off.
  */
-export function dock({ canUndo, canRedo, busy, selected = 0, n = 1, inkSession = null }) {
+export function dock({ canUndo, canRedo, busy, selected = 0, n = 1, inkSession = null }: {
+  canUndo: boolean;
+  canRedo: boolean;
+  busy: boolean;
+  selected?: number;
+  n?: number;
+  inkSession?: {i: number, mode: "draw" | "erase"} | null;
+}) {
   const button = (action, glyph, label, enabled) => html`
     <button
       type="button"
@@ -213,10 +220,6 @@ export function dock({ canUndo, canRedo, busy, selected = 0, n = 1, inkSession =
 /**
  * The header actions: back, undo/redo, the render button and its progress, the
  * dirty badge, and Remove once a carousel exists.
- *
- * @param {{busy: boolean, renderProgress: {done: number, total: number}|null,
- *   hasCarousel: boolean, dirty: boolean, hasSource: boolean,
- *   canUndo?: boolean, canRedo?: boolean}} o
  */
 export function actionsBar({
   busy,
@@ -226,6 +229,14 @@ export function actionsBar({
   hasSource,
   canUndo = false,
   canRedo = false,
+}: {
+  busy: boolean;
+  renderProgress: {done: number, total: number} | null;
+  hasCarousel: boolean;
+  dirty: boolean;
+  hasSource: boolean;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }) {
   const label = busy
     ? renderProgress
@@ -306,13 +317,11 @@ function deckLayers() {
 
 /**
  * One empty positioned element per layer of `slide`, in paint (array) order so
- * DOM source order is the stacking order. `preview.js` (`paintDeckLayers`)
+ * DOM source order is the stacking order. `preview.ts` (`paintDeckLayers`)
  * fills them from `layerCSS`; an element whose `data-layer` outruns the list —
  * a layer deleted since the last paint — is hidden there.
- *
- * @param {import('../document.js').CarouselSlide} slide
  */
-function layerNodes(slide) {
+function layerNodes(slide: import('../document.ts').CarouselSlide) {
   return (slide.layers || []).map(
     (_, j) => html`<span class="carousel-studio__layer" data-layer="${String(j)}"></span>`,
   );
@@ -320,22 +329,20 @@ function layerNodes(slide) {
 
 /**
  * One empty positioned element per span layer, inside every stage column.
- * `preview.js` (`paintSpanLayers`) positions each from `spanLayerRect` — a
+ * `preview.ts` (`paintSpanLayers`) positions each from `spanLayerRect` — a
  * slide-local rect that starts off-frame and overflows where the layer crosses a
  * seam, which the host's `overflow: hidden` then clips, so the preview shows the
  * same discontinuity the JPEG will. A node whose `data-span-layer` outruns the
  * list is hidden there.
- *
- * @param {import('../document.js').CarouselDoc} doc
  */
-function spanLayerNodes(doc) {
+function spanLayerNodes(doc: import('../document.ts').CarouselDoc) {
   return (doc.spanLayers || []).map(
     (_, j) =>
       html`<span class="carousel-studio__span-layer" data-span-layer="${String(j)}"></span>`,
   );
 }
 
-/** The eight resize-handle anchors, in DOM order. `hitLayer` in `gestures.js`
+/** The eight resize-handle anchors, in DOM order. `hitLayer` in `gestures.ts`
  *  derives the same set geometrically — these are the visible affordance, not
  *  the hit target. */
 const HANDLE_ANCHORS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
@@ -353,9 +360,9 @@ const HANDLE_ANCHORS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
  * `paintChrome`'s `rotate()` on the outline box carries the handle around with
  * it for free, the same way a layer's own rotation carries its node.
  *
- * @param {boolean} active  this column can show the selected layer
+ * @param active - this column can show the selected layer
  */
-function layerChrome(active) {
+function layerChrome(active: boolean) {
   if (!active) return "";
   return html`
     <span class="carousel-studio__chrome">
@@ -399,47 +406,45 @@ function layerLabel(layer) {
  * around this) lays the three out as a fixed-viewport grid at 48em+
  * (`carousel.css`); below that they simply stack in document flow.
  *
- * @param {object} o
- * @param {import('../document.js').CarouselDoc} o.doc
- * @param {boolean} o.showGuides
- * @param {number} o.selected      the raw selection, for the strip's highlight
- * @param {number} o.deckIndex     the selection pinned inside the deck
- * @param {number|null} o.srcW
- * @param {number|null} o.srcH
- * @param {boolean} o.busy
- * @param {string} o.fitMode       which `FIT_MODES` radio the document reads as
- * @param {boolean} o.hasPad       whether the deck's selected slide letterboxes
- * @param {number|null} o.selectedLayer  index into the active list (a slide's
+ * @param o.doc
+ * @param o.showGuides
+ * @param o.selected - the raw selection, for the strip's highlight
+ * @param o.deckIndex - the selection pinned inside the deck
+ * @param o.srcW
+ * @param o.srcH
+ * @param o.busy
+ * @param o.fitMode - which `FIT_MODES` radio the document reads as
+ * @param o.hasPad - whether the deck's selected slide letterboxes
+ * @param o.selectedLayer - index into the active list (a slide's
  *   `layers`, or `doc.spanLayers` when `layerScope` is `"span"`)
- * @param {"slide"|"span"} o.layerScope  which list `selectedLayer` indexes
- * @param {string} o.logoUrl       the `logo_url` setting, the image layer default
- * @param {string[]} o.renderedPaths
- * @param {boolean} [o.propsOpen]  is the properties card's body expanded? The
+ * @param o.layerScope - which list `selectedLayer` indexes
+ * @param o.logoUrl - the `logo_url` setting, the image layer default
+ * @param o.renderedPaths
+ * @param o.propsOpen - is the properties card's body expanded? The
  *   same collapsible `.card`/`.card-header`/`.card-body` pattern the plugins
  *   page's group cards use, rather than a separate open/close control.
- * @param {boolean} [o.docControlsOpen]  is the toolbar's "Document" popover
+ * @param o.docControlsOpen - is the toolbar's "Document" popover
  *   open? Same disclosure idea as `propsOpen`, floated instead of inline.
- * @param {number} [o.stageZoom]   multiplier on the stage's CSS height budget,
+ * @param o.stageZoom - multiplier on the stage's CSS height budget,
  *   emitted as the one custom property the stylesheet reads.
- * @param {string} [o.error]      a load/save failure, shown in the toolbar row
+ * @param o.error - a load/save failure, shown in the toolbar row
  *   rather than pushed above it — the page has one error slot regardless of
  *   whether a source is picked yet (see `_renderStudio` in `index.js`).
- * @param {import('../../../utils/helpers.ts').Slot} [o.tray]  extra markup for
+ * @param o.tray - extra markup for
  *   the tray row, appended after the rendered strip — `index.js` hands in the
  *   template gallery and the import report, which have to reach the tray
  *   whether or not a source is picked (`pickPrompt` takes the body row instead
  *   of this function then, but the tray is shared).
- * @param {{i: number, mode: "draw"|"erase", color: string, width: number,
- *   opacity: number}|null} [o.inkSession]  the ink tool's live session
+ * @param o.inkSession - the ink tool's live session
  *   (`index.js`), or null while the tool is off — armed column, dock state
  *   and the properties panel swap all read this one value.
- * @param {boolean} [o.canUndo]  can the document's history ring step back? The
+ * @param o.canUndo - can the document's history ring step back? The
  *   dock carries its own undo/redo pair, because the header's pair
  *   (`actionsBar`) is out of a thumb's reach on a phone. The dock's stepper
  *   reads `deckIndex` for the same reason the deck panel does — it is the
  *   selection pinned inside the deck, in both modes.
- * @param {boolean} [o.canRedo]  can it step forward?
- * @param {boolean} [o.touch]  is this the touch layout — a coarse pointer?
+ * @param o.canRedo - can it step forward?
+ * @param o.touch - is this the touch layout — a coarse pointer?
  *   The one pointer question this function takes, because it is the one the
  *   stylesheet cannot answer: the tray's contents move *into* the properties
  *   sheet there, and no media query moves a node between two parents. Every
@@ -447,7 +452,7 @@ function layerLabel(layer) {
  *   and the dock, the toolbar's controls and `propsTools`); this one cannot
  *   be, because a second copy of the tray is a second `#carousel-render-btn`
  *   and a second set of the same delegated actions. The page reads the query
- *   (`isTouchLayout`, studio/layout.js) and hands the answer down.
+ *   (`isTouchLayout`, studio/layout.ts) and hands the answer down.
  */
 export function builder({
   doc,
@@ -472,6 +477,35 @@ export function builder({
   canUndo = false,
   canRedo = false,
   touch = false,
+}: {
+  doc: import('../document.ts').CarouselDoc;
+  showGuides: boolean;
+  selected: number;
+  deckIndex: number;
+  srcW: number | null;
+  srcH: number | null;
+  busy: boolean;
+  fitMode: string;
+  hasPad: boolean;
+  selectedLayer: number | null;
+  layerScope: "slide" | "span";
+  logoUrl: string;
+  renderedPaths: string[];
+  propsOpen?: boolean;
+  docControlsOpen?: boolean;
+  stageZoom?: number;
+  error?: string;
+  tray?: import('../../../utils/helpers.ts').Slot;
+  inkSession?: {
+    i: number;
+    mode: "draw" | "erase";
+    color: string;
+    width: number;
+    opacity: number;
+  } | null;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  touch?: boolean;
 }) {
   const deck = doc.mode === "deck";
   const n = doc.slides.length;
@@ -510,10 +544,10 @@ export function builder({
 
   // The stage is the one stripe, in either mode. In deck mode it is n
   // independently framed slides laid side by side, and each column is the
-  // editing surface: `gestures.js` binds these, so a pan, a zoom, a layer drag
+  // editing surface: `gestures.ts` binds these, so a pan, a zoom, a layer drag
   // and an arrow nudge all happen at the size the user is actually looking
   // at. Selection lives here too, already — a tap or a focus on a column
-  // calls `select` (see `createDeckGestures` in `studio/gestures.js`).
+  // calls `select` (see `createDeckGestures` in `studio/gestures.ts`).
   //
   // The slide number, the drag handle and the duplicate/delete actions used
   // to live layered over the column itself; they moved out to the management
@@ -854,10 +888,11 @@ export function builder({
  * sit in the tray row even when there is no source yet to hand `builder` a
  * document worth building (`pickPrompt` takes the body row then) — `index.js`
  * calls this straight from `_renderStudio` in both branches.
- *
- * @param {{doc: import('../document.js').CarouselDoc, renderedPaths: string[]}} o
  */
-export function renderedStrip({ doc, renderedPaths }) {
+export function renderedStrip({ doc, renderedPaths }: {
+  doc: import('../document.ts').CarouselDoc;
+  renderedPaths: string[];
+}) {
   if (!renderedPaths.length) return "";
   const [w, h] = canvasSize(doc.aspect);
   // The aspect select's current label doubles as the caption's "active export
@@ -908,10 +943,8 @@ export function renderedStrip({ doc, renderedPaths }) {
  * id make `document.getElementById` pick a winner and leave the other stale.
  * `withIds: false` is the copy that gives the id up; the page writes both
  * through the class they share (`_setStageZoom`, index.js).
- *
- * @param {{stageZoom: number, withIds?: boolean}} o
  */
-export function stageBar({ stageZoom, withIds = true }) {
+export function stageBar({ stageZoom, withIds = true }: {stageZoom: number, withIds?: boolean}) {
   return html`
     <div class="carousel-studio__stage-bar">
       <div class="carousel-studio__zoom" role="group" aria-label="Stage zoom">
@@ -963,7 +996,7 @@ export function stageBar({ stageZoom, withIds = true }) {
 /**
  * **Panorama** / **Slides** — the choice the user is actually making: one wide
  * photo cut across every slide, or a photo per slide. The stored `doc.mode`
- * values stay `split` and `deck` (`MODES` in `document.js`), so this is naming
+ * values stay `split` and `deck` (`MODES` in `document.ts`), so this is naming
  * at the view layer only: no migration, and the code and the docs keep one
  * vocabulary while the chips speak the user's.
  *
@@ -976,10 +1009,12 @@ export function stageBar({ stageZoom, withIds = true }) {
  *
  * Slides is unavailable until the source pixel size is known — there would be
  * nothing to derive the per-slide crops from.
- *
- * @param {{mode: string, canDeck: boolean, busy: boolean}} o
  */
-export function modeToggle({ mode, canDeck, busy }) {
+export function modeToggle({ mode, canDeck, busy }: {
+  mode: string;
+  canDeck: boolean;
+  busy: boolean;
+}) {
   const panoramaHint =
     mode === "deck"
       ? "One wide photo cut across every slide. Going back keeps only the first slide's photo and discards the framing."
@@ -1022,11 +1057,14 @@ export function modeToggle({ mode, canDeck, busy }) {
  * is not shown here at all — none of those controls drives a deck slide, and
  * leaving them live would be a lie.
  *
- * @param {{doc: import('../document.js').CarouselDoc, index: number,
- *   hasPad: boolean}} o  `hasPad` is the selected slide's own answer: the
+ * @param o - `hasPad` is the selected slide's own answer: the
  *   caller owns the source pixels the question needs.
  */
-export function deckPanel({ doc, index, hasPad }) {
+export function deckPanel({ doc, index, hasPad }: {
+  doc: import('../document.ts').CarouselDoc;
+  index: number;
+  hasPad: boolean;
+}) {
   const slide = doc.slides[index];
   if (!slide) return "";
 
@@ -1097,10 +1135,11 @@ export function deckPanel({ doc, index, hasPad }) {
  * `solid` adds a colour input; `gradient` adds an angle and its two ends. Both
  * are committed through `_setSlideFraming` in `index.js`, so `normalizeBg` is
  * the only thing that decides what a value means.
- *
- * @param {{index: number, slide: import('../document.js').CarouselSlide}} o
  */
-export function bgControl({ index, slide }) {
+export function bgControl({ index, slide }: {
+  index: number;
+  slide: import('../document.ts').CarouselSlide;
+}) {
   const bg = slide.bg;
   const type = bg?.type || "blur";
   const solid = bg?.type === "solid" ? bg : null;
@@ -1208,16 +1247,23 @@ function spanRangeLabel(covered) {
  * buttons — it is a layer switched off, not a deleted one — and only dims
  * (`is-hidden`).
  *
- * @param {import('../document.js').CarouselLayer[]} layers
- * @param {{scope: "slide"|"span", selectedLayer: number|null,
- *   meta?: (j: number) => string, labelledBy: string, formHtml?: import('../../../utils/helpers.ts').Slot}} o
+ * @param o
  *   `formHtml`, when given, is the selected layer's property form — spliced
  *   in as its own `<li>` right after the row it belongs to, rather than
  *   after both lists, so the form and the object it edits stay adjacent. It
  *   is not `.carousel-studio__layer-row` — `_setupLayerReorder` (`index.js`)
  *   and its `itemSelector` must not pick it up as a draggable item.
  */
-function layerRows(layers, { scope, selectedLayer, meta, labelledBy, formHtml }) {
+function layerRows(
+  layers: import('../document.ts').CarouselLayer[],
+  { scope, selectedLayer, meta, labelledBy, formHtml }: {
+    scope: "slide" | "span";
+    selectedLayer: number | null;
+    meta?: (j: number) => string;
+    labelledBy: string;
+    formHtml?: import('../../../utils/helpers.ts').Slot;
+  },
+) {
   const rows = layers
     .map((layer, j) => ({ layer, j }))
     .reverse()
@@ -1300,11 +1346,14 @@ function layerRows(layers, { scope, selectedLayer, meta, labelledBy, formHtml })
  * far end where a commit belongs. One function so the two hosts cannot drift
  * apart on the `aria-pressed` the mode drives.
  *
- * @param {{mode: "draw"|"erase"}} session  the mode is all either button reads
- * @returns {{erase: import('../../../utils/helpers.ts').Slot,
- *   done: import('../../../utils/helpers.ts').Slot}}
+ * @param session - the mode is all either button reads
  */
-export function inkActions(session) {
+export function inkActions(session: {
+  mode: "draw" | "erase";
+}): {
+  erase: import('../../../utils/helpers.ts').Slot;
+  done: import('../../../utils/helpers.ts').Slot;
+} {
   return {
     erase: html`
       <button
@@ -1340,10 +1389,13 @@ export function inkActions(session) {
  * Erase and Done sit at the top, where the panel is always visible — the
  * fine-pointer path. The coarse one reaches the same two buttons from the
  * dock, because this panel is behind a burger there.
- *
- * @param {{mode: "draw"|"erase", color: string, width: number, opacity: number}} session
  */
-export function inkToolPanel(session) {
+export function inkToolPanel(session: {
+  mode: "draw" | "erase";
+  color: string;
+  width: number;
+  opacity: number;
+}) {
   const { erase, done } = inkActions(session);
   return html`
     <div class="carousel-studio__layers">
@@ -1454,14 +1506,17 @@ function addLayerChips(scope) {
  * reuse the same five types and the same form — a second family of editors for
  * one schema is the failure mode. The studio never constructs a layer literal:
  * an add goes through `addLayer` and every edit through `updateLayer`
- * (`document.js`), the same rule framing keeps. The form is one of two ways in:
+ * (`document.ts`), the same rule framing keeps. The form is one of two ways in:
  * a span layer is dragged, resized and snapped on the stage as well, in deck
- * coordinates (`gestures.js`), and both routes commit through `updateLayer`.
- *
- * @param {{doc: import('../document.js').CarouselDoc, index: number,
- *   selectedLayer: number|null, layerScope: "slide"|"span", logoUrl: string}} o
+ * coordinates (`gestures.ts`), and both routes commit through `updateLayer`.
  */
-export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", logoUrl }) {
+export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", logoUrl }: {
+  doc: import('../document.ts').CarouselDoc;
+  index: number;
+  selectedLayer: number | null;
+  layerScope: "slide" | "span";
+  logoUrl: string;
+}) {
   const slide = doc.slides[index];
   if (!slide) return "";
   const slideLayers = slide.layers || [];
@@ -1514,11 +1569,11 @@ export function layerPanel({ doc, index, selectedLayer, layerScope = "slide", lo
  * the fields that layer's `type` has, each with a `#carousel-layer-*` id
  * `index.js` wires for a live-preview `input` and a commit-on-`change`.
  *
- * @param {import('../document.js').CarouselLayer} layer a normalized layer
- * @param {string} logoUrl the `logo_url` setting — shown as an `image` layer's
+ * @param layer - a normalized layer
+ * @param logoUrl - the `logo_url` setting — shown as an `image` layer's
  *   default source when it carries none of its own
  */
-export function layerForm(layer, logoUrl) {
+export function layerForm(layer: import('../document.ts').CarouselLayer, logoUrl: string) {
   const t = layer.type;
   // Narrowed views, the same shape `bgControl` uses for `bg`: a field is only
   // read on the branch whose type actually has it.
@@ -1614,8 +1669,7 @@ export function layerForm(layer, logoUrl) {
         : "none picked"
     : "";
 
-  /** @type {import('../../../utils/helpers.ts').Slot} */
-  let body = "";
+  let body: import('../../../utils/helpers.ts').Slot = "";
   if (text) {
     body = html`
       <label class="carousel-studio__bg-field carousel-studio__bg-field--wide">
@@ -1712,20 +1766,21 @@ export function layerForm(layer, logoUrl) {
  * same condition the slider in `fitPanel` appears under, because they are two
  * faces of one control. `aria-hidden`, deliberately: the slider is the labelled
  * assistive path, and a second announced copy of the same number would only be
- * noise. `paintAnchorRail` (`studio/preview.js`) moves it during a drag; the
+ * noise. `paintAnchorRail` (`studio/preview.ts`) moves it during a drag; the
  * stylesheet fades it in with the stage's `is-anchoring` class.
- *
- * @param {{doc: import('../document.js').CarouselDoc, srcW: number|null,
- *   srcH: number|null}} o
  */
-export function anchorRail({ doc, srcW, srcH }) {
+export function anchorRail({ doc, srcW, srcH }: {
+  doc: import('../document.ts').CarouselDoc;
+  srcW: number | null;
+  srcH: number | null;
+}) {
   if (!srcW || !srcH || doc.mode === "deck") return "";
   const report = fitReport(
     srcW,
     srcH,
     doc.slides.length,
     doc.aspect,
-    /** @type {'cover'|'exact'|'pad'} */ (doc.strategy),
+    (doc.strategy as 'cover' | 'exact' | 'pad'),
   );
   if (!(report.trimmedH > 1)) return "";
   const pos = Math.min(100, Math.max(0, doc.anchorY * 100));
@@ -1751,16 +1806,18 @@ export function anchorRail({ doc, srcW, srcH }) {
  * The slider is the keyboard and assistive path, not the primary one: a
  * left-to-right control for an up-and-down quantity is the wrong gesture, so
  * the band itself is dragged on the stage (`anchorRail` above,
- * `createAnchorGesture` in `studio/gestures.js`) and the two write the same
+ * `createAnchorGesture` in `studio/gestures.ts`) and the two write the same
  * field through the same `_setSplit({ anchorY })`.
- *
- * @param {{doc: import('../document.js').CarouselDoc, srcW: number|null,
- *   srcH: number|null, fitMode: string}} o
  */
-export function fitPanel({ doc, srcW, srcH, fitMode }) {
+export function fitPanel({ doc, srcW, srcH, fitMode }: {
+  doc: import('../document.ts').CarouselDoc;
+  srcW: number | null;
+  srcH: number | null;
+  fitMode: string;
+}) {
   const { anchorY } = doc;
   const n = doc.slides.length;
-  const strategy = /** @type {'cover'|'exact'|'pad'} */ (doc.strategy);
+  const strategy = (doc.strategy as 'cover' | 'exact' | 'pad');
   if (!srcW || !srcH) return "";
 
   const [dstW, dstH] = canvasSize(doc.aspect);
@@ -1864,7 +1921,7 @@ export function fitPanel({ doc, srcW, srcH, fitMode }) {
 // instead of a builder, and "import a deck to start" is exactly the state where
 // a person needs them most.
 
-/** Megabytes, one decimal — `import/adapter.js`'s spelling, so a size in the
+/** Megabytes, one decimal — `import/adapter.ts`'s spelling, so a size in the
  *  report reads the same as the refusal that quoted one. */
 const mbLabel = (n) => `${(n / (1024 * 1024)).toFixed(1)} MB`;
 
@@ -1881,11 +1938,14 @@ const dropScope = (slide) => (slide == null ? "The deck" : `Slide ${slide + 1}`)
  *
  * Empty is the normal first state — v1 ships no built-ins — so it says what to
  * do rather than showing an empty box.
- *
- * @param {{templates: Array<{slug: string, name: string}>, loading: boolean,
- *   error: string, busy: boolean, canSave: boolean}} o
  */
-export function templateGallery({ templates, loading, error, busy, canSave }) {
+export function templateGallery({ templates, loading, error, busy, canSave }: {
+  templates: Array<{slug: string, name: string}>;
+  loading: boolean;
+  error: string;
+  busy: boolean;
+  canSave: boolean;
+}) {
   const rows = templates.map(
     (t) => html`
       <li class="carousel-studio__template">
@@ -1962,10 +2022,14 @@ export function templateGallery({ templates, loading, error, busy, canSave }) {
  * The overlay carries `close`, but the handler compares `event.target` against
  * it — a click on the panel bubbles to the overlay, and closing on that would
  * throw away what the user just typed.
- *
- * @param {{action: string, title: string, id: string, body: *, footer: *}} o
  */
-function studioDialog({ action, title, id, body, footer }) {
+function studioDialog({ action, title, id, body, footer }: {
+  action: string;
+  title: string;
+  id: string;
+  body: any;
+  footer: any;
+}) {
   return html`
     <div class="modal-overlay active carousel-studio__dialog" data-action="${action}">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="${id}">
@@ -1993,10 +2057,8 @@ function studioDialog({ action, title, id, body, footer }) {
  * The accepted formats are listed from `IMPORTERS` rather than written out, so
  * adding an adapter adds a line here — which is the reason that registry
  * exists (`import/index.js`).
- *
- * @param {{busy: boolean, error: string}} o
  */
-export function importDialog({ busy, error }) {
+export function importDialog({ busy, error }: {busy: boolean, error: string}) {
   return studioDialog({
     action: "close-import",
     title: "Import a template",
@@ -2046,10 +2108,13 @@ export function importDialog({ busy, error }) {
  *
  * Both fields are wired by id in `index.js` (`_wireTemplateDialog`) and read on
  * submit; neither drives a re-render, so typing is not interrupted.
- *
- * @param {{name: string, slug: string, busy: boolean, error: string}} o
  */
-export function saveTemplateDialog({ name, slug, busy, error }) {
+export function saveTemplateDialog({ name, slug, busy, error }: {
+  name: string;
+  slug: string;
+  busy: boolean;
+  error: string;
+}) {
   return studioDialog({
     action: "close-save-template",
     title: "Save as template",
@@ -2113,10 +2178,8 @@ export function saveTemplateDialog({ name, slug, busy, error }) {
  * The fonts line is not decoration. A template names typefaces the site does
  * not have, and Point renders type in the active theme's family; saying so
  * once, plainly, is what stops the author hunting for a font picker.
- *
- * @param {import('../import/adapter.js').ImportReport} report
  */
-export function importReportPanel(report) {
+export function importReportPanel(report: import('../import/adapter.ts').ImportReport) {
   if (!report) return "";
   const { shapes, aspect, assets, dropped, failed, warnings, fonts, order } = report;
   const unread = Math.max(0, report.sourceSlides - report.slides);

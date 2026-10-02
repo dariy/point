@@ -24,7 +24,7 @@ export const SHEET_BREAKPOINT = "(min-width: 64em)";
 
 /** The touch layout's gate: a pointer that cannot hit a small target. The
  *  stylesheet selects the whole layout with it — the fixed shell below 48em,
- *  the locked strip, the dock — and `studio/gestures.js` reads the same
+ *  the locked strip, the dock — and `studio/gestures.ts` reads the same
  *  `isTouchLayout` below once per press, to widen its grab targets and to send
  *  a plain drag to the crop rather than to a scroller that no longer moves.
  *
@@ -56,10 +56,10 @@ export function clampZoom(z) {
  * Is this viewport wide enough for the panel to be a sticky rail rather than
  * a stacked card? True where there is no `matchMedia` to ask (a test, or
  * SSR): the rail is the layout that works without JS.
- *
- * @param {{matchMedia?: (q: string) => {matches: boolean}}} [win]
  */
-export function isWideViewport(win = globalThis.window) {
+export function isWideViewport(win: {
+  matchMedia?: (q: string) => {matches: boolean};
+} = globalThis.window) {
   if (!win || typeof win.matchMedia !== "function") return true;
   return win.matchMedia(SHEET_BREAKPOINT).matches;
 }
@@ -72,10 +72,10 @@ export function isWideViewport(win = globalThis.window) {
  * rail is the layout that works without JS, and the touch layout is not. It
  * locks the strip, docks the toolbar and steps the active slide, and all three
  * need JS. So an unanswered question falls back to the rail, never to touch.
- *
- * @param {{matchMedia?: (q: string) => {matches: boolean}}} [win]
  */
-export function isTouchLayout(win = globalThis.window) {
+export function isTouchLayout(win: {
+  matchMedia?: (q: string) => {matches: boolean};
+} = globalThis.window) {
   if (!win || typeof win.matchMedia !== "function") return false;
   return win.matchMedia(TOUCH_LAYOUT).matches;
 }
@@ -90,11 +90,11 @@ export function isTouchLayout(win = globalThis.window) {
  * the narrow one is: there the card is a sheet over the stage, and a sheet
  * that opens on arrival hides the thing it edits. A wide tablet passes
  * `isWideViewport` and still gets a closed card.
- *
- * @param {{matchMedia?: (q: string) => {matches: boolean}}} [win]
- * @param {{getItem: (k: string) => string|null}} [store]
  */
-export function readPropsPref(win = globalThis.window, store = globalThis.localStorage) {
+export function readPropsPref(
+  win: {matchMedia?: (q: string) => {matches: boolean}} = globalThis.window,
+  store: {getItem: (k: string) => string | null} = globalThis.localStorage,
+) {
   if (!isWideViewport(win) || isTouchLayout(win)) return false;
   let pref = null;
   try {

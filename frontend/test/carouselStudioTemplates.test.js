@@ -1,5 +1,5 @@
 /**
- * carousel/studio/templates.js — the template gallery's arithmetic.
+ * carousel/studio/templates.ts — the template gallery's arithmetic.
  *
  * The module is pure, so these tests are the whole contract: which strings in a
  * document are inlined assets, what replaces them, and why a template is
@@ -17,8 +17,8 @@ import {
   replaceAssets,
   templateLimitError,
   templateSlug,
-} from '../src/plugins/carousel/studio/templates.js';
-import { normalizeDocument, toTemplate } from '../src/plugins/carousel/document.js';
+} from '../src/plugins/carousel/studio/templates.ts';
+import { normalizeDocument, toTemplate } from '../src/plugins/carousel/document.ts';
 
 /** A tiny `data:` image URL — the shape an importer inlines. */
 function inlined(bytes, mime = 'image/png') {

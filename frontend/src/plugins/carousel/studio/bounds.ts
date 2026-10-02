@@ -2,7 +2,7 @@
  * The studio's slide-count bounds.
  *
  * Shared by the state owner (`index.js`, which clamps every count it writes
- * into a document) and the markup (`studio/panels.js`, whose count slider and
+ * into a document) and the markup (`studio/panels.ts`, whose count slider and
  * suggestion chips have to offer exactly that range) — one definition, so the
  * control cannot offer a count the document would refuse.
  */

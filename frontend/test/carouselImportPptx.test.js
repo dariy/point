@@ -1,5 +1,5 @@
 /**
- * carousel/import/pptx.js — OOXML into a carousel template.
+ * carousel/import/pptx.ts — OOXML into a carousel template.
  *
  * The fixtures are hand-written OOXML packages built by
  * `fixtures/make-pptx.sh`, one per thing worth proving: a plain deck, a 16:9
@@ -10,7 +10,7 @@
  * `DOMParser` comes from linkedom, because `node --test` has none. That is not
  * a stub: it parses the same bytes a browser would, and the two DOMs' known
  * disagreements — `localName` keeping its prefix, no `parsererror` document —
- * are exactly what `xml.js` is written around.
+ * are exactly what `xml.ts` is written around.
  */
 
 import { test, describe } from 'node:test';
@@ -19,9 +19,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DOMParser } from 'linkedom';
 
-import { normalizeDocument, applyTemplate } from '../src/plugins/carousel/document.js';
-import { importPptx } from '../src/plugins/carousel/import/pptx.js';
-import { ImportError, IMPORT_ACCEPT, IMPORTERS, adapterFor } from '../src/plugins/carousel/import/index.js';
+import { normalizeDocument, applyTemplate } from '../src/plugins/carousel/document.ts';
+import { importPptx } from '../src/plugins/carousel/import/pptx.ts';
+import { ImportError, IMPORT_ACCEPT, IMPORTERS, adapterFor } from '../src/plugins/carousel/import/index.ts';
 
 globalThis.DOMParser = DOMParser;
 

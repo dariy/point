@@ -1,5 +1,5 @@
 /**
- * carousel/document.js — the carousel document model.
+ * carousel/document.ts — the carousel document model.
  *
  * The stored JSON is the source of truth; the `:::{.carousel-block}` in post
  * content is regenerated output. These tests pin normalization (defaults,
@@ -43,15 +43,15 @@ import {
   TEMPLATE_VERSION,
   applyTemplate,
   toTemplate,
-} from '../src/plugins/carousel/document.js';
-import { MIN_SLIDES, MAX_SLIDES } from '../src/plugins/carousel/studio/bounds.js';
+} from '../src/plugins/carousel/document.ts';
+import { MIN_SLIDES, MAX_SLIDES } from '../src/plugins/carousel/studio/bounds.ts';
 import { carouselFence } from '../src/utils/postNodes.ts';
 import {
   canvasSize,
   sliceRects,
   deckSlideRects,
   spanLayerCoverage,
-} from '../src/plugins/carousel/geometry.js';
+} from '../src/plugins/carousel/geometry.ts';
 
 describe('normalizeDocument', () => {
   test('an empty input becomes the default document', () => {

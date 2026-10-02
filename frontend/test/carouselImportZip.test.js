@@ -1,5 +1,5 @@
 /**
- * carousel/import/zip.js — the dependency-free ZIP reader.
+ * carousel/import/zip.ts — the dependency-free ZIP reader.
  *
  * Two kinds of archive are read here, deliberately:
  *
@@ -24,7 +24,7 @@ import {
   ZipError,
   openZip,
   readZip,
-} from '../src/plugins/carousel/import/zip.js';
+} from '../src/plugins/carousel/import/zip.ts';
 
 const FIXTURE = readFileSync(fileURLToPath(new URL('./fixtures/zip-shape.pptx', import.meta.url)));
 

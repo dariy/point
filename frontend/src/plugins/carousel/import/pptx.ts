@@ -1,5 +1,5 @@
 /**
- * carousel/import/pptx.js — a `.pptx` deck into a carousel template.
+ * carousel/import/pptx.ts — a `.pptx` deck into a carousel template.
  *
  * This is the main import path, and it is one importer for what looks like two
  * jobs: PPTX is what a PowerPoint template already is, and it is also what
@@ -10,12 +10,12 @@
  *
  * OOXML is ECMA-376 and openly specified, a `.pptx` is a ZIP of XML, and
  * `docs/vendors.md` allows the frontend no npm runtime dependency — so this
- * reads one with `./zip.js` and `DOMParser` and nothing else.
+ * reads one with `./zip.ts` and `DOMParser` and nothing else.
  *
  * ## What it is not
  *
  * Not a renderer, and not a PowerPoint. The carousel layer schema has five
- * types (`document.js`), and the honest translation of a deck is: take what
+ * types (`document.ts`), and the honest translation of a deck is: take what
  * maps, **count what does not**, and say so. An import that silently lost half
  * a design is worse than one that reports keeping 14 of 22 shapes, so every
  * unmappable shape, effect and rotation lands in `report.dropped` with its
@@ -27,7 +27,7 @@
  *   assembles its own layer objects is a second way to author a layer, and that
  *   is how a schema grows two dialects. A shape the schema rejects is counted,
  *   not repaired.
- * - **The fit is uniform and centred** (`adapter.js` `centreFit`). 16:9 is the
+ * - **The fit is uniform and centred** (`adapter.ts` `centreFit`). 16:9 is the
  *   common PowerPoint case against Point's widest 1.91:1; the deck arrives with
  *   a margin each side and the report names it, rather than arriving squashed.
  * - **Fonts are recorded, not applied.** `<a:latin typeface>` values go into
@@ -43,9 +43,9 @@
  * S3. Schema: `docs/features/carousel-studio.md`.
  */
 
-import { normalizeDocument, normalizeLayer, toTemplate } from '../document.js';
-import { MAX_SLIDES } from '../studio/bounds.js';
-import { openZip, ZipError } from './zip.js';
+import { normalizeDocument, normalizeLayer, toTemplate } from '../document.ts';
+import { MAX_SLIDES } from '../studio/bounds.ts';
+import { openZip, ZipError } from './zip.ts';
 import {
   ImportError,
   centreFit,
@@ -53,7 +53,8 @@ import {
   createAssets,
   createReport,
   metaFromFilename,
-} from './adapter.js';
+} from './adapter.ts';
+import type { ImportOptions } from './adapter.ts';
 import {
   attr,
   attrBool,
@@ -64,7 +65,7 @@ import {
   local,
   parseXml,
   path,
-} from './xml.js';
+} from './xml.ts';
 
 /** English Metric Units, the unit every OOXML coordinate is in: 914400 to the
  *  inch, so 9525 to a CSS pixel at 96 dpi and 12700 to a point. */
@@ -113,57 +114,63 @@ const TEXT_ANCHOR = { t: 'top', ctr: 'middle', b: 'bottom' };
 
 const utf8 = new TextDecoder('utf-8');
 
-/**
- * @typedef {object} PptxContext
- * @property {import('./zip.js').ZipReader} zip
- * @property {typeof DOMParser|undefined} parser
- * @property {Map<string, string>} theme scheme colour name → `#rrggbb`
- * @property {import('./adapter.js').ImportFit} fit
- * @property {ReturnType<typeof createReport>} report
- * @property {import('./adapter.js').ImportAssets} assets
- * @property {{kept: number, total: number}} shapes
- * @property {number} srcW source canvas width, EMU
- * @property {number} srcH source canvas height, EMU
- */
+export interface PptxContext {
+  zip: import('./zip.ts').ZipReader;
+  parser: typeof DOMParser | undefined;
+  /** scheme colour name → `#rrggbb` */
+  theme: Map<string, string>;
+  fit: import('./adapter.ts').ImportFit;
+  report: ReturnType<typeof createReport>;
+  assets: import('./adapter.ts').ImportAssets;
+  shapes: {kept: number, total: number};
+  /** source canvas width, EMU */
+  srcW: number;
+  /** source canvas height, EMU */
+  srcH: number;
+}
 
 /**
  * One slide under construction: the slide itself, its index in the deck (which
  * every report entry needs) and its relationships (which every image needs).
  * Bundled because all three travel together through every shape handler.
- *
- * @typedef {object} PptxPage
- * @property {*} slide the document slide taking shape
- * @property {number} index
- * @property {Map<string, string>} rels
  */
+export interface PptxPage {
+  /** the document slide taking shape */
+  slide: any;
+  index: number;
+  rels: Map<string, string>;
+}
 
 /**
  * Read a `.pptx` into a storable template.
  *
  * Pure apart from `DOMParser`: no upload, no network, no canvas. The images it
- * finds are inlined as `data:` URLs inside the envelope under `adapter.js`'s
+ * finds are inlined as `data:` URLs inside the envelope under `adapter.ts`'s
  * budget; turning those into real post-owned media is the apply path's job, and
  * nothing on the render path ever learns about `data:`.
  *
- * @param {Uint8Array|ArrayBuffer} bytes the `.pptx` file
- * @param {object} [options]
- * @param {string} [options.filename] what the user called it — the template's
+ * @param bytes - the `.pptx` file
+ * @param options.filename - what the user called it — the template's
  *   name and slug come from this, and the report quotes it
- * @param {string} [options.aspect] force a target aspect instead of the nearest
- * @param {typeof DOMParser} [options.parser] the seam `zip.js` has for
+ * @param options.aspect - force a target aspect instead of the nearest
+ * @param options.parser - the seam `zip.ts` has for
  *   `DecompressionStream`, for the same reason: a runtime with no `DOMParser`
  *   should be testable rather than skipped
- * @param {number} [options.maxAssetBytes]
- * @param {number} [options.maxTotalBytes]
- * @returns {Promise<{template: import('../document.js').CarouselTemplate,
- *   report: import('./adapter.js').ImportReport}>}
+ * @param options.maxAssetBytes
+ * @param options.maxTotalBytes
  * @throws {ImportError} when the file is not a deck this can read at all
  */
-export async function importPptx(bytes, options = {}) {
+export async function importPptx(
+  bytes: Uint8Array | ArrayBuffer,
+  options: ImportOptions = {},
+): Promise<{
+  template: import('../document.ts').CarouselTemplate;
+  report: import('./adapter.ts').ImportReport;
+}> {
   const file = typeof options.filename === 'string' ? options.filename.trim() : '';
   const parser = options.parser;
   // Stated up front rather than discovered as "this is not a presentation" four
-  // reads later — the same courtesy `zip.js` pays `DecompressionStream`.
+  // reads later — the same courtesy `zip.ts` pays `DecompressionStream`.
   if (typeof (parser || globalThis.DOMParser) !== 'function') {
     throw new ImportError('unsupported', 'this runtime has no DOMParser');
   }
@@ -172,8 +179,7 @@ export async function importPptx(bytes, options = {}) {
   const { srcW, srcH, listed } = await readDeck(zip, parser);
   const report = createReport({ format: 'pptx', file });
   const fit = centreFit(srcW, srcH, options.aspect);
-  /** @type {PptxContext} */
-  const ctx = {
+  const ctx: PptxContext = {
     zip,
     parser,
     theme: await readTheme(zip, parser),
@@ -234,12 +240,11 @@ export async function importPptx(bytes, options = {}) {
  * Every failure here is the whole import's, because there is no deck without
  * them — which is the line this function draws. Everything after it costs at
  * most one slide.
- *
- * @param {import('./zip.js').ZipReader} zip
- * @param {typeof DOMParser} [parser]
- * @returns {Promise<{srcW: number, srcH: number, listed: Element[]}>}
  */
-async function readDeck(zip, parser) {
+async function readDeck(
+  zip: import('./zip.ts').ZipReader,
+  parser?: typeof DOMParser,
+): Promise<{srcW: number, srcH: number, listed: Element[]}> {
   const pres = await readPart(zip, PRESENTATION, 'presentation', parser);
   if (!pres) throw new ImportError('malformed', 'is not a presentation', PRESENTATION);
   const size = child(pres, 'sldSz');
@@ -257,12 +262,11 @@ async function readDeck(zip, parser) {
  * Every slide, in order, each one's failure costing only itself. A deck where
  * *nothing* could be read is a different thing from a deck that came back
  * short, and is the import's failure.
- *
- * @param {PptxContext} ctx
- * @param {string[]} parts
- * @returns {Promise<import('../document.js').CarouselSlide[]>}
  */
-async function importSlides(ctx, parts) {
+async function importSlides(
+  ctx: PptxContext,
+  parts: string[],
+): Promise<import('../document.ts').CarouselSlide[]> {
   const slides = [];
   for (const [index, part] of parts.entries()) {
     try {
@@ -277,12 +281,11 @@ async function importSlides(ctx, parts) {
   return slides;
 }
 
-/** A thrown thing as a sentence for the report. @param {*} err */
-const reasonOf = (err) => (err instanceof Error ? err.message : String(err));
+/** A thrown thing as a sentence for the report. */
+const reasonOf = (err: any) => (err instanceof Error ? err.message : String(err));
 
-/** Up to three names and a count for the rest, for a sentence a person reads.
- *  @param {string[]} names */
-function named(names) {
+/** Up to three names and a count for the rest, for a sentence a person reads. */
+function named(names: string[]) {
   const head = names.slice(0, 3).join(', ');
   const list = names.length > 3 ? `${head} and ${names.length - 3} more` : head;
   return `${names.length} typeface${names.length === 1 ? '' : 's'} (${list})`;
@@ -292,11 +295,8 @@ function named(names) {
  * Open the archive, translating a ZIP failure into an import one so a caller
  * has a single error vocabulary to catch. The codes line up closely enough that
  * only the two "we will not read this" cases need folding together.
- *
- * @param {Uint8Array|ArrayBuffer} bytes
- * @returns {import('./zip.js').ZipReader}
  */
-function openArchive(bytes) {
+function openArchive(bytes: Uint8Array | ArrayBuffer): import('./zip.ts').ZipReader {
   try {
     return openZip(bytes);
   } catch (err) {
@@ -309,12 +309,8 @@ function openArchive(bytes) {
  * One archive member as text. UTF-8 with the BOM dropped: PowerPoint writes
  * one, and `DOMParser` treats a leading `U+FEFF` as content sitting before the
  * declaration, which fails the parse.
- *
- * @param {import('./zip.js').ZipReader} zip
- * @param {string} part
- * @returns {Promise<string>}
  */
-async function readText(zip, part) {
+async function readText(zip: import('./zip.ts').ZipReader, part: string): Promise<string> {
   return utf8.decode(await readBytes(zip, part)).replace(/^\uFEFF/, '');
 }
 
@@ -322,12 +318,8 @@ async function readText(zip, part) {
  * One archive member, translated into the import's own failure type — so a
  * corrupt member inside a slide costs that slide through the same catch as a
  * malformed one, and a caller has one error vocabulary rather than two.
- *
- * @param {import('./zip.js').ZipReader} zip
- * @param {string} part
- * @returns {Promise<Uint8Array>}
  */
-async function readBytes(zip, part) {
+async function readBytes(zip: import('./zip.ts').ZipReader, part: string): Promise<Uint8Array> {
   try {
     return await zip.read(part);
   } catch (err) {
@@ -339,26 +331,24 @@ async function readBytes(zip, part) {
 /**
  * A ZIP failure code as an import one. Only the two "we will not read this"
  * cases need folding together; the rest line up.
- *
- * @param {import('./zip.js').ZipErrorCode} code
- * @returns {import('./adapter.js').ImportErrorCode}
  */
-function importCode(code) {
+function importCode(code: import('./zip.ts').ZipErrorCode): import('./adapter.ts').ImportErrorCode {
   if (code === 'too-large') return 'too-large';
   return code === 'zip64' || code === 'unsupported' ? 'unsupported' : 'malformed';
 }
 
 /**
  * Parse one XML member, or `null` when it is absent or is not the part it
- * claims to be. The caller decides what that costs — see `xml.js` `parseXml`.
+ * claims to be. The caller decides what that costs — see `xml.ts` `parseXml`.
  *
- * @param {import('./zip.js').ZipReader} zip
- * @param {string} part
- * @param {string} root expected root element, local name
- * @param {typeof DOMParser} [parser]
- * @returns {Promise<Element|null>}
+ * @param root - expected root element, local name
  */
-async function readPart(zip, part, root, parser) {
+async function readPart(
+  zip: import('./zip.ts').ZipReader,
+  part: string,
+  root: string,
+  parser?: typeof DOMParser,
+): Promise<Element | null> {
   if (!zip.has(part)) return null;
   return parseXml(await readText(zip, part), root, parser);
 }
@@ -371,18 +361,18 @@ async function readPart(zip, part, root, parser) {
  * working when someone else's server does, and inlining is the whole point of
  * the envelope.
  *
- * @param {import('./zip.js').ZipReader} zip
- * @param {string} part the part the relationships belong to
- * @param {typeof DOMParser} [parser]
- * @returns {Promise<Map<string, string>>}
+ * @param part - the part the relationships belong to
  */
-async function readRels(zip, part, parser) {
+async function readRels(
+  zip: import('./zip.ts').ZipReader,
+  part: string,
+  parser?: typeof DOMParser,
+): Promise<Map<string, string>> {
   const at = part.lastIndexOf('/');
   const dir = at < 0 ? '' : part.slice(0, at);
   const name = part.slice(at + 1);
   const root = await readPart(zip, `${dir}${dir ? '/' : ''}_rels/${name}.rels`, 'Relationships', parser);
-  /** @type {Map<string, string>} */
-  const out = new Map();
+  const out: Map<string, string> = new Map();
   for (const rel of children(root, 'Relationship')) {
     const id = attr(rel, 'Id');
     const target = attr(rel, 'Target');
@@ -396,14 +386,10 @@ async function readRels(zip, part, parser) {
 /**
  * Resolve a relationship target against the directory of the part that named
  * it — `ppt` + `../media/image2.png` → `media/image2.png`. `..` is dropped at
- * the root rather than escaping it; `zip.js` already refuses an archive whose
+ * the root rather than escaping it; `zip.ts` already refuses an archive whose
  * *entries* escape, and this is the other direction.
- *
- * @param {string} dir
- * @param {string} target
- * @returns {string}
  */
-function resolvePart(dir, target) {
+function resolvePart(dir: string, target: string): string {
   // A leading slash means the package root; anything else is relative to the
   // directory of the part that named it.
   const out = target.startsWith('/') ? [] : dir.split('/').filter(Boolean);
@@ -423,13 +409,14 @@ function resolvePart(dir, target) {
  * the only authority on order in any case — a deck whose slides were reordered
  * keeps its original part names.
  *
- * @param {import('./zip.js').ZipReader} zip
- * @param {Element[]} listed the `<p:sldId>` entries, in order
- * @param {ReturnType<typeof createReport>} report
- * @param {typeof DOMParser} [parser]
- * @returns {Promise<string[]>}
+ * @param listed - the `<p:sldId>` entries, in order
  */
-async function slideParts(zip, listed, report, parser) {
+async function slideParts(
+  zip: import('./zip.ts').ZipReader,
+  listed: Element[],
+  report: ReturnType<typeof createReport>,
+  parser?: typeof DOMParser,
+): Promise<string[]> {
   const rels = await readRels(zip, PRESENTATION, parser);
   const out = [];
   for (const [index, sldId] of listed.entries()) {
@@ -446,13 +433,9 @@ async function slideParts(zip, listed, report, parser) {
  * Split out because the element carries two attributes whose name ends in `id`:
  * the deck's own slide number, which is not a link, and the relationship, which
  * is. Only the prefixed one will do — and the prefix itself is not assumed, for
- * `xml.js`'s reason.
- *
- * @param {Element} sldId
- * @param {Map<string, string>} rels
- * @returns {string}
+ * `xml.ts`'s reason.
  */
-function relFor(sldId, rels) {
+function relFor(sldId: Element, rels: Map<string, string>): string {
   const attrs = sldId.attributes;
   for (let i = 0; i < (attrs ? attrs.length : 0); i++) {
     const a = attrs[i];
@@ -470,14 +453,12 @@ function relFor(sldId, rels) {
  * colour algebra to get the shade exact would be a rendering engine, which this
  * is not. Best effort throughout: a deck with no readable theme simply resolves
  * fewer colours.
- *
- * @param {import('./zip.js').ZipReader} zip
- * @param {typeof DOMParser} [parser]
- * @returns {Promise<Map<string, string>>}
  */
-async function readTheme(zip, parser) {
-  /** @type {Map<string, string>} */
-  const out = new Map();
+async function readTheme(
+  zip: import('./zip.ts').ZipReader,
+  parser?: typeof DOMParser,
+): Promise<Map<string, string>> {
+  const out: Map<string, string> = new Map();
   const part =
     zip.names().find((n) => n === 'ppt/theme/theme1.xml') ||
     zip.names().find((n) => n.startsWith('ppt/theme/') && n.endsWith('.xml'));
@@ -502,11 +483,12 @@ async function readTheme(zip, parser) {
  * The first child that resolves wins, because a fill holds exactly one colour
  * element and the others are the sibling variants this does not read.
  *
- * @param {Element|null} holder the element a `<a:*Clr>` sits inside
- * @param {Map<string, string>} theme
- * @returns {{color: string, opacity: number}|null}
+ * @param holder - the element a `<a:*Clr>` sits inside
  */
-function readColor(holder, theme) {
+function readColor(
+  holder: Element | null,
+  theme: Map<string, string>,
+): {color: string, opacity: number} | null {
   for (const el of children(holder)) {
     const resolved = colorOf(el, theme);
     if (resolved) return resolved;
@@ -521,38 +503,31 @@ function readColor(holder, theme) {
  * Anything else — `scrgbClr`, `hslClr`, `prstClr`, and the `phClr` placeholder
  * a style reference uses — resolves to nothing, because guessing a colour wrong
  * is more visible than leaving the schema's default in place.
- *
- * @param {Element} el
- * @param {Map<string, string>} theme
- * @returns {{color: string, opacity: number}|null}
  */
-function colorOf(el, theme) {
+function colorOf(el: Element, theme: Map<string, string>): {color: string, opacity: number} | null {
   const tag = local(el);
   let color = '';
   if (tag === 'srgbClr') color = rgb(attr(el, 'val'));
   else if (tag === 'sysClr') color = rgb(attr(el, 'lastClr'));
   else if (tag === 'schemeClr') {
     const key = (attr(el, 'val') || '').toLowerCase();
-    color = theme.get(SCHEME_ALIAS[/** @type {keyof typeof SCHEME_ALIAS} */ (key)] || key) || '';
+    color = theme.get(SCHEME_ALIAS[(key as keyof typeof SCHEME_ALIAS)] || key) || '';
   }
   if (!color) return null;
   return { color, opacity: attrNum(child(el, 'alpha'), 'val', PER_CENT) / PER_CENT };
 }
 
-/** `RRGGBB` → `#rrggbb`, or `''` for anything else. @param {string|null} val */
-function rgb(val) {
+/** `RRGGBB` → `#rrggbb`, or `''` for anything else. */
+function rgb(val: string | null) {
   const hex = (val || '').trim().toLowerCase();
   return /^[0-9a-f]{6}$/.test(hex) ? `#${hex}` : '';
 }
 
-/**
- * A `<a:solidFill>` inside `spPr`, `rPr` or `bgPr`.
- *
- * @param {Element|null} el
- * @param {Map<string, string>} theme
- * @returns {{color: string, opacity: number}|null}
- */
-function solidFill(el, theme) {
+/** A `<a:solidFill>` inside `spPr`, `rPr` or `bgPr`. */
+function solidFill(
+  el: Element | null,
+  theme: Map<string, string>,
+): {color: string, opacity: number} | null {
   return readColor(child(el, 'solidFill'), theme);
 }
 
@@ -565,13 +540,12 @@ function solidFill(el, theme) {
  * (`180deg` runs top to bottom, which is `geometry.gradientLine`'s convention),
  * so the two differ by a quarter turn. A radial or path gradient has no angle at
  * all and is kept as a linear one, counted.
- *
- * @param {Element} grad
- * @param {PptxContext} ctx
- * @param {number} slide
- * @returns {{type: 'gradient', angle: number, stops: Array<{at: number, color: string}>}|null}
  */
-function gradient(grad, ctx, slide) {
+function gradient(
+  grad: Element,
+  ctx: PptxContext,
+  slide: number,
+): {type: 'gradient', angle: number, stops: Array<{at: number, color: string}>} | null {
   const stops = [];
   for (const gs of children(child(grad, 'gsLst'), 'gs')) {
     const color = readColor(gs, ctx.theme);
@@ -587,11 +561,8 @@ function gradient(grad, ctx, slide) {
  * `<a:srcRect>` — the part of an image the shape shows — as the slide `crop`
  * the schema has. Both are fractions of the source image; OOXML states insets
  * from each edge, the schema states the rectangle that survives them.
- *
- * @param {Element|null} srcRect
- * @returns {{x: number, y: number, w: number, h: number}|null}
  */
-function cropOf(srcRect) {
+function cropOf(srcRect: Element | null): {x: number, y: number, w: number, h: number} | null {
   if (!srcRect) return null;
   const x = attrNum(srcRect, 'l', 0) / PER_CENT;
   const y = attrNum(srcRect, 't', 0) / PER_CENT;
@@ -614,13 +585,14 @@ function cropOf(srcRect) {
  * rotated shape imports square — which is visibly wrong in one specific way the
  * report can name, rather than invisibly wrong.
  *
- * @param {PptxContext} ctx
- * @param {Element} shape
- * @param {PptxPage} page
- * @param {string} what the shape's name for the report
- * @returns {{x: number, y: number, w: number, h: number}|null}
+ * @param what - the shape's name for the report
  */
-function rectOf(ctx, shape, page, what) {
+function rectOf(
+  ctx: PptxContext,
+  shape: Element,
+  page: PptxPage,
+  what: string,
+): {x: number, y: number, w: number, h: number} | null {
   const xfrm = path(shape, 'spPr', 'xfrm') || path(shape, 'grpSpPr', 'xfrm');
   const off = child(xfrm, 'off');
   const ext = child(xfrm, 'ext');
@@ -643,14 +615,9 @@ function rectOf(ctx, shape, page, what) {
 /**
  * Add a layer, normalized. Returns whether it survived — a shape the schema
  * rejects is counted rather than repaired, because the alternative is this
- * module deciding what a layer may be, which is `document.js`'s job.
- *
- * @param {PptxContext} ctx
- * @param {PptxPage} page
- * @param {*} layer
- * @returns {boolean}
+ * module deciding what a layer may be, which is `document.ts`'s job.
  */
-function addLayer(ctx, page, layer) {
+function addLayer(ctx: PptxContext, page: PptxPage, layer: any): boolean {
   const normal = normalizeLayer(layer);
   if (!normal) {
     ctx.report.drop(page.index, `${layer && layer.type} the layer schema rejected`);
@@ -663,21 +630,20 @@ function addLayer(ctx, page, layer) {
 /**
  * One slide.
  *
- * @param {PptxContext} ctx
- * @param {string} part
- * @param {number} index
- * @returns {Promise<import('../document.js').CarouselSlide>}
  * @throws {ImportError} when this slide cannot be read — costing this slide only
  */
-async function importSlide(ctx, part, index) {
+async function importSlide(
+  ctx: PptxContext,
+  part: string,
+  index: number,
+): Promise<import('../document.ts').CarouselSlide> {
   const sld = await readPart(ctx.zip, part, 'sld', ctx.parser);
   if (!sld) throw new ImportError('malformed', 'is not readable as a slide', part);
   const cSld = child(sld, 'cSld');
   const tree = path(cSld, 'spTree');
   if (!tree) throw new ImportError('malformed', 'has no shape tree', part);
 
-  /** @type {PptxPage} */
-  const page = {
+  const page: PptxPage = {
     slide: { source: '', fit: 'cover', bg: null, layers: [] },
     index,
     rels: await readRels(ctx.zip, part, ctx.parser),
@@ -697,12 +663,8 @@ async function importSlide(ctx, part, index) {
  * The slide's own background. `<p:bgRef>` — a fill inherited from the theme's
  * style matrix — is counted rather than resolved, for `rectOf`'s reason: the
  * inheritance chain is not somewhere to guess.
- *
- * @param {PptxContext} ctx
- * @param {Element|null} cSld
- * @param {PptxPage} page
  */
-async function readSlideBg(ctx, cSld, page) {
+async function readSlideBg(ctx: PptxContext, cSld: Element | null, page: PptxPage) {
   const bg = child(cSld, 'bg');
   if (!bg) return;
   if (child(bg, 'bgRef')) {
@@ -728,15 +690,12 @@ async function readSlideBg(ctx, cSld, page) {
   if (crop) page.slide.crop = crop;
 }
 
-/**
- * A background's flat or gradient fill, or `null` when it has neither.
- *
- * @param {PptxContext} ctx
- * @param {Element} bgPr
- * @param {number} index
- * @returns {import('../document.js').CarouselBg|null}
- */
-function bgFill(ctx, bgPr, index) {
+/** A background's flat or gradient fill, or `null` when it has neither. */
+function bgFill(
+  ctx: PptxContext,
+  bgPr: Element,
+  index: number,
+): import('../document.ts').CarouselBg | null {
   const solid = solidFill(bgPr, ctx.theme);
   if (solid) return { type: 'solid', color: solid.color };
   const grad = child(bgPr, 'gradFill');
@@ -756,14 +715,13 @@ function bgFill(ctx, bgPr, index) {
  * coordinate space through `<a:chOff>`/`<a:chExt>`, and mapping that correctly
  * is a second transform stack for a case a template rarely needs. The report
  * says so, and the author can ungroup in PowerPoint and re-export.
- *
- * @param {PptxContext} ctx
- * @param {string} tag
- * @param {Element} node
- * @param {PptxPage} page
- * @returns {Promise<boolean>}
  */
-async function importShape(ctx, tag, node, page) {
+async function importShape(
+  ctx: PptxContext,
+  tag: string,
+  node: Element,
+  page: PptxPage,
+): Promise<boolean> {
   if (tag === 'sp') return importSp(ctx, node, page);
   if (tag === 'pic') return importPic(ctx, node, page);
   if (tag === 'grpSp') {
@@ -784,13 +742,8 @@ async function importShape(ctx, tag, node, page) {
  * A `<p:sp>`: a text box, a rectangle, or something the schema has no shape
  * for. Text wins when there is any — a filled box with a headline in it is a
  * text layer, and its fill is the design's business, not the schema's.
- *
- * @param {PptxContext} ctx
- * @param {Element} sp
- * @param {PptxPage} page
- * @returns {boolean}
  */
-function importSp(ctx, sp, page) {
+function importSp(ctx: PptxContext, sp: Element, page: PptxPage): boolean {
   const spPr = child(sp, 'spPr');
   if (children(child(spPr, 'effectLst')).length) {
     ctx.report.drop(page.index, 'shape effect (shadow, glow or reflection)');
@@ -810,16 +763,19 @@ function importSp(ctx, sp, page) {
  * A shape with no text: the schema's `rect` layer, the slide's gradient
  * background, or a count.
  *
- * @param {PptxContext} ctx
- * @param {Element|null} spPr
- * @param {{rect: {x: number, y: number, w: number, h: number},
- *   box: {x: number, y: number, w: number, h: number}}} geom the shape's
+ * @param geom - the shape's
  *   rectangle in source EMU, and the same rectangle fitted to the target
  *   canvas — pre-normalization, so `box` has no `rotate` yet
- * @param {PptxPage} page
- * @returns {boolean}
  */
-function shapeFill(ctx, spPr, geom, page) {
+function shapeFill(
+  ctx: PptxContext,
+  spPr: Element | null,
+  geom: {
+    rect: {x: number, y: number, w: number, h: number};
+    box: {x: number, y: number, w: number, h: number};
+  },
+  page: PptxPage,
+): boolean {
   const grad = child(spPr, 'gradFill');
   if (grad) return shapeGradient(ctx, grad, geom.rect, page);
 
@@ -849,11 +805,8 @@ function shapeFill(ctx, spPr, geom, page) {
  * A shape's geometry preset — `rect`, `ellipse`, `star5` — or `custom` for a
  * hand-drawn one, or `''` for a shape that states no geometry at all. Three
  * cases the report says three different things about.
- *
- * @param {Element|null} spPr
- * @returns {string}
  */
-function presetOf(spPr) {
+function presetOf(spPr: Element | null): string {
   const prst = attr(path(spPr, 'prstGeom'), 'prst');
   if (prst) return prst;
   return child(spPr, 'custGeom') ? 'custom' : '';
@@ -865,13 +818,14 @@ function presetOf(spPr) {
  * a flat fill and inventing a middle colour for it would be a guess at the
  * design rather than a reading of it.
  *
- * @param {PptxContext} ctx
- * @param {Element} grad
- * @param {{x: number, y: number, w: number, h: number}} rect source EMU
- * @param {PptxPage} page
- * @returns {boolean}
+ * @param rect - source EMU
  */
-function shapeGradient(ctx, grad, rect, page) {
+function shapeGradient(
+  ctx: PptxContext,
+  grad: Element,
+  rect: {x: number, y: number, w: number, h: number},
+  page: PptxPage,
+): boolean {
   const stops = coversCanvas(rect, ctx.srcW, ctx.srcH) && !page.slide.bg ? gradient(grad, ctx, page.index) : null;
   if (!stops) {
     ctx.report.drop(page.index, 'gradient fill on a shape');
@@ -885,11 +839,8 @@ function shapeGradient(ctx, grad, rect, page) {
  * `roundRect`'s corner as the schema's `radius`: a fraction of the shorter
  * side, which is the same convention the preset's own adjust value uses — so
  * this is a scale, not a reinterpretation.
- *
- * @param {Element|null} avLst
- * @returns {number}
  */
-function roundOf(avLst) {
+function roundOf(avLst: Element | null): number {
   const gd = children(avLst, 'gd').find((el) => (attr(el, 'name') || '') === 'adj');
   const val = /^val\s+(-?\d+)$/.exec((attr(gd, 'fmla') || '').trim());
   return (val ? Number(val[1]) : DEFAULT_ROUND) / PER_CENT;
@@ -898,13 +849,8 @@ function roundOf(avLst) {
 /**
  * A `<p:pic>`: the slide's own photograph when it covers the slide, an `image`
  * layer when it does not.
- *
- * @param {PptxContext} ctx
- * @param {Element} pic
- * @param {PptxPage} page
- * @returns {Promise<boolean>}
  */
-async function importPic(ctx, pic, page) {
+async function importPic(ctx: PptxContext, pic: Element, page: PptxPage): Promise<boolean> {
   const rect = rectOf(ctx, pic, page, 'picture');
   const blipFill = child(pic, 'blipFill');
   const blip = child(blipFill, 'blip');
@@ -939,14 +885,12 @@ async function importPic(ctx, pic, page) {
  * is the one mapping that makes an imported template *useful*: the slide's
  * source is what `applyTemplate` replaces with the post's photograph, so a
  * background picture has to land there and nowhere else.
- *
- * @param {PptxContext} ctx
- * @param {PptxPage} page
- * @param {{url: string, crop: {x: number, y: number, w: number, h: number}|null,
- *   opacity: number}} photo
- * @returns {true}
  */
-function asSlidePhoto(ctx, page, photo) {
+function asSlidePhoto(
+  ctx: PptxContext,
+  page: PptxPage,
+  photo: {url: string, crop: {x: number, y: number, w: number, h: number} | null, opacity: number},
+): true {
   page.slide.source = photo.url;
   page.slide.fit = 'cover';
   if (photo.crop) page.slide.crop = photo.crop;
@@ -955,15 +899,8 @@ function asSlidePhoto(ctx, page, photo) {
   return true;
 }
 
-/**
- * What a picture had done to it that the schema cannot reproduce.
- *
- * @param {PptxContext} ctx
- * @param {Element} pic
- * @param {Element} blip
- * @param {number} index
- */
-function notePicture(ctx, pic, blip, index) {
+/** What a picture had done to it that the schema cannot reproduce. */
+function notePicture(ctx: PptxContext, pic: Element, blip: Element, index: number) {
   if (children(child(child(pic, 'spPr'), 'effectLst')).length) {
     ctx.report.drop(index, 'shape effect (shadow, glow or reflection)');
   }
@@ -975,13 +912,8 @@ function notePicture(ctx, pic, blip, index) {
 /**
  * The `data:` URL for a `<a:blip>`, or `''` when there is nothing to inline or
  * the budget refused it — which the report already names.
- *
- * @param {PptxContext} ctx
- * @param {Element} blip
- * @param {PptxPage} page
- * @returns {Promise<string>}
  */
-async function inlineBlip(ctx, blip, page) {
+async function inlineBlip(ctx: PptxContext, blip: Element, page: PptxPage): Promise<string> {
   const rid = attr(blip, 'embed') || attr(blip, 'link') || '';
   const part = rid ? page.rels.get(rid) || '' : '';
   if (!part) {
@@ -1002,11 +934,8 @@ async function inlineBlip(ctx, blip, page) {
  * markup means: a run boundary is a formatting change, not a word boundary.
  * Only the first run's formatting survives — the schema styles a layer, not a
  * span — so a headline with one italic word imports in the headline's style.
- *
- * @param {Element} sp
- * @returns {{text: string, txBody: Element, first: Element|null}|null}
  */
-function textOf(sp) {
+function textOf(sp: Element): {text: string, txBody: Element, first: Element | null} | null {
   const txBody = child(sp, 'txBody');
   if (!txBody) return null;
   const paras = children(txBody, 'p');
@@ -1027,11 +956,8 @@ function textOf(sp) {
  * PowerPoint last computed. Literal text is the right import: a template that
  * renumbered itself would be a `counter` layer, which the author adds
  * deliberately.
- *
- * @param {Element} node
- * @returns {string}
  */
-function runText(node) {
+function runText(node: Element): string {
   const tag = local(node);
   if (tag === 'br') return '\n';
   const t = tag === 'r' || tag === 'fld' ? child(node, 't') : null;
@@ -1044,11 +970,9 @@ function runText(node) {
  * PowerPoint resolves them in, minus the layout and master this importer does
  * not walk.
  *
- * @param {Element} txBody
- * @param {Element|null} first the first paragraph carrying a run
- * @returns {Element|null}
+ * @param first - the first paragraph carrying a run
  */
-function runProps(txBody, first) {
+function runProps(txBody: Element, first: Element | null): Element | null {
   return (
     child(children(first, 'r')[0] || null, 'rPr') ||
     child(child(first, 'pPr'), 'defRPr') ||
@@ -1056,15 +980,13 @@ function runProps(txBody, first) {
   );
 }
 
-/**
- * Type the schema can hold the words of but not the styling of.
- *
- * @param {PptxContext} ctx
- * @param {Element|null} rPr
- * @param {Element|null} bodyPr
- * @param {number} index
- */
-function notePlainType(ctx, rPr, bodyPr, index) {
+/** Type the schema can hold the words of but not the styling of. */
+function notePlainType(
+  ctx: PptxContext,
+  rPr: Element | null,
+  bodyPr: Element | null,
+  index: number,
+) {
   if (attrBool(rPr, 'i') || (attr(rPr, 'u') || 'none') !== 'none') {
     ctx.report.drop(index, 'italic or underlined type (imported plain)');
   }
@@ -1079,13 +1001,12 @@ function notePlainType(ctx, rPr, bodyPr, index) {
  * `size` is a fraction of the *target* canvas height, converted through the
  * source canvas: a 40pt headline on a 7.5in slide is 7.4% of its height, and it
  * stays 7.4% of the height it is fitted into.
- *
- * @param {PptxContext} ctx
- * @param {{text: string, txBody: Element, first: Element|null}} body
- * @param {number} index
- * @returns {*}
  */
-function textStyle(ctx, body, index) {
+function textStyle(
+  ctx: PptxContext,
+  body: {text: string, txBody: Element, first: Element | null},
+  index: number,
+): any {
   const bodyPr = child(body.txBody, 'bodyPr');
   const pPr = child(body.first, 'pPr');
   const rPr = runProps(body.txBody, body.first);
@@ -1112,29 +1033,23 @@ function textStyle(ctx, body, index) {
  * the run — OOXML's own split, kept because it is also where the schema's
  * fields divide. `undefined` for anything unstated, which is how
  * `normalizeLayer` is told to use its default.
- *
- * @param {Element|null} pPr
- * @param {Element|null} bodyPr
- * @returns {{align: string|undefined, valign: string|undefined, lineHeight: number|undefined}}
  */
-function paragraphStyle(pPr, bodyPr) {
+function paragraphStyle(
+  pPr: Element | null,
+  bodyPr: Element | null,
+): {align: string | undefined, valign: string | undefined, lineHeight: number | undefined} {
   const algn = (attr(pPr, 'algn') || '').toLowerCase();
   const anchor = (attr(bodyPr, 'anchor') || '').toLowerCase();
   const spcPct = attrNum(path(pPr, 'lnSpc', 'spcPct'), 'val', 0);
   return {
-    align: TEXT_ALIGN[/** @type {keyof typeof TEXT_ALIGN} */ (algn)] || undefined,
-    valign: TEXT_ANCHOR[/** @type {keyof typeof TEXT_ANCHOR} */ (anchor)] || undefined,
+    align: TEXT_ALIGN[(algn as keyof typeof TEXT_ALIGN)] || undefined,
+    valign: TEXT_ANCHOR[(anchor as keyof typeof TEXT_ANCHOR)] || undefined,
     lineHeight: spcPct > 0 ? spcPct / PER_CENT : undefined,
   };
 }
 
-/**
- * Every typeface a text body names, into the report and nowhere else.
- *
- * @param {PptxContext} ctx
- * @param {Element} txBody
- */
-function recordFonts(ctx, txBody) {
+/** Every typeface a text body names, into the report and nowhere else. */
+function recordFonts(ctx: PptxContext, txBody: Element) {
   // `latin`, `ea` and `cs` are the three script slots a run can name a face in.
   for (const slot of ['latin', 'ea', 'cs']) {
     for (const face of descendants(txBody, slot)) ctx.report.font(attr(face, 'typeface') || '');

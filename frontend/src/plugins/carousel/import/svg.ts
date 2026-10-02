@@ -1,5 +1,5 @@
 /**
- * carousel/import/svg.js — a list of SVGs into a carousel template.
+ * carousel/import/svg.ts — a list of SVGs into a carousel template.
  *
  * The second import path, and the one that reaches the design tools PPTX does
  * not. Figma, Illustrator, Sketch and XD are proprietary on disk and all four
@@ -21,13 +21,13 @@
  *
  * ## What it is not
  *
- * Not a renderer. The layer schema has five types (`document.js`) and SVG is a
+ * Not a renderer. The layer schema has five types (`document.ts`) and SVG is a
  * general-purpose drawing language, so the honest translation is: map
  * `<rect>`, `<text>` and `<image>`, **count everything else**, and say so.
  * `<path>` and its friends are dropped with a count, not approximated by a box.
  *
  * The same four decisions the PPTX importer is built on hold here, and the
- * shared halves of them live in `adapter.js`: layers are built by
+ * shared halves of them live in `adapter.ts`: layers are built by
  * `normalizeLayer` and never by hand, the canvas fit is uniform and centred,
  * fonts are recorded rather than applied, and placeholders are not guessed.
  *
@@ -45,8 +45,8 @@
  * Schema: `docs/features/carousel-studio.md`.
  */
 
-import { normalizeDocument, normalizeLayer, toTemplate } from '../document.js';
-import { MAX_SLIDES } from '../studio/bounds.js';
+import { normalizeDocument, normalizeLayer, toTemplate } from '../document.ts';
+import { MAX_SLIDES } from '../studio/bounds.ts';
 import {
   ImportError,
   centreFit,
@@ -56,8 +56,9 @@ import {
   fromDataUrl,
   metaFromFilename,
   ratioLabel,
-} from './adapter.js';
-import { attr, children, local, parseXml } from './xml.js';
+} from './adapter.ts';
+import type { ImportOptions } from './adapter.ts';
+import { attr, children, local, parseXml } from './xml.ts';
 
 /**
  * How many paths a slide with no text at all has to hold before this is called
@@ -97,7 +98,7 @@ const DEFAULT_LINE_HEIGHT = 1.2;
 
 /**
  * How far above the baseline the em box's middle sits, as a fraction of the
- * font size. SVG positions type by its **baseline**; `render.js` paints a line
+ * font size. SVG positions type by its **baseline**; `render.ts` paints a line
  * centred in its line box (`textBaseline = 'middle'`). This is the constant
  * that turns one into the other, and 0.35em is where the middle of a Latin em
  * box falls for the proportions every text face shares.
@@ -230,69 +231,80 @@ const NAMED_COLORS = {
 const utf8 = new TextDecoder('utf-8');
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
-/**
- * @typedef {object} SvgContext
- * @property {ReturnType<typeof createReport>} report
- * @property {import('./adapter.js').ImportAssets} assets
- * @property {{kept: number, total: number}} shapes
- * @property {Map<string, string>} images `href` → the `data:` URL it became, so
- *   a logo on eight slides is decoded, inlined and counted once
- */
+export interface SvgContext {
+  report: ReturnType<typeof createReport>;
+  assets: import('./adapter.ts').ImportAssets;
+  shapes: {kept: number, total: number};
+  /**
+   * `href` → the `data:` URL it became, so a logo on eight slides is decoded, inlined and counted
+   * once
+   */
+  images: Map<string, string>;
+}
 
 /**
  * One slide under construction. The canvas and the fit are per file rather than
  * per deck: a file drawn on a different `viewBox` is centre-fitted on its own
  * terms into the deck's aspect and the difference is reported, which is the
  * honest answer when someone exports one slide at the wrong size.
- *
- * @typedef {object} SvgPage
- * @property {*} slide the document slide taking shape
- * @property {number} index
- * @property {string} name the file it came from
- * @property {{x: number, y: number, w: number, h: number}} canvas the `viewBox`
- * @property {import('./adapter.js').ImportFit} fit
- * @property {CssRule[]} css the file's own `<style>` rules, by specificity
- * @property {number} paths how many `<path>`s this slide dropped
  */
+export interface SvgPage {
+  /** the document slide taking shape */
+  slide: any;
+  index: number;
+  /** the file it came from */
+  name: string;
+  /** the `viewBox` */
+  canvas: {x: number, y: number, w: number, h: number};
+  fit: import('./adapter.ts').ImportFit;
+  /** the file's own `<style>` rules, by specificity */
+  css: CssRule[];
+  /** how many `<path>`s this slide dropped */
+  paths: number;
+}
 
-/**
- * @typedef {object} CssRule
- * @property {number} spec 0 for `*`, 1 for a tag, 2 for a class, 3 for an id
- * @property {'any'|'tag'|'class'|'id'} kind
- * @property {string} name
- * @property {Record<string, string>} decls
- */
+export interface CssRule {
+  /** 0 for `*`, 1 for a tag, 2 for a class, 3 for an id */
+  spec: number;
+  kind: 'any' | 'tag' | 'class' | 'id';
+  name: string;
+  decls: Record<string, string>;
+}
 
-/**
- * @typedef {object} SvgSource
- * @property {string} name the filename, which is where the order comes from
- * @property {string} text
- * @property {string} error why it could not be read at all, if it could not
- */
+export interface SvgSource {
+  /** the filename, which is where the order comes from */
+  name: string;
+  text: string;
+  /** why it could not be read at all, if it could not */
+  error: string;
+}
 
 /**
  * Read an ordered list of SVGs into one storable template.
  *
  * Pure apart from `DOMParser`: no upload, no network, no canvas. Images the
- * files carry inline are re-inlined under `adapter.js`'s budget; turning those
+ * files carry inline are re-inlined under `adapter.ts`'s budget; turning those
  * into real post-owned media is the apply path's job.
  *
- * @param {Array<File|SvgSource|string>} files one SVG per slide. A browser
+ * @param files - one SVG per slide. A browser
  *   `File`, a `{name, text}` pair, or bare SVG source — the dialog hands over
  *   the first, tests the second
- * @param {object} [options]
- * @param {string} [options.filename] what to call the deck; otherwise the
+ * @param options.filename - what to call the deck; otherwise the
  *   files' common prefix names it
- * @param {string} [options.aspect] force a target aspect instead of the nearest
- * @param {typeof DOMParser} [options.parser] the seam a runtime without a
+ * @param options.aspect - force a target aspect instead of the nearest
+ * @param options.parser - the seam a runtime without a
  *   global `DOMParser` supplies its own through
- * @param {number} [options.maxAssetBytes]
- * @param {number} [options.maxTotalBytes]
- * @returns {Promise<{template: import('../document.js').CarouselTemplate,
- *   report: import('./adapter.js').ImportReport}>}
+ * @param options.maxAssetBytes
+ * @param options.maxTotalBytes
  * @throws {ImportError} when there is no readable SVG in the list at all
  */
-export async function importSvg(files, options = {}) {
+export async function importSvg(
+  files: Array<File | SvgSource | string>,
+  options: ImportOptions = {},
+): Promise<{
+  template: import('../document.ts').CarouselTemplate;
+  report: import('./adapter.ts').ImportReport;
+}> {
   const parser = options.parser;
   if (typeof (parser || globalThis.DOMParser) !== 'function') {
     throw new ImportError('unsupported', 'this runtime has no DOMParser');
@@ -320,8 +332,7 @@ export async function importSvg(files, options = {}) {
   if (!first) throw new ImportError('malformed', 'no SVG in this list could be read');
 
   const deckFit = centreFit(first.canvas.w, first.canvas.h, options.aspect);
-  /** @type {SvgContext} */
-  const ctx = {
+  const ctx: SvgContext = {
     report,
     assets: createAssets(report, options),
     shapes: { kept: 0, total: 0 },
@@ -372,21 +383,17 @@ export async function importSvg(files, options = {}) {
  * Every file's text, in the order it was handed over. A file that cannot be
  * read carries its reason rather than throwing: the list still has to be sorted
  * and reported on, and one unreadable file costs that slide.
- *
- * @param {Array<File|SvgSource|string>} files
- * @returns {Promise<SvgSource[]>}
  */
-async function readSources(files) {
+async function readSources(files: Array<File | SvgSource | string>): Promise<SvgSource[]> {
   const list = Array.isArray(files) ? files : files ? [files] : [];
-  /** @type {SvgSource[]} */
-  const out = [];
+  const out: SvgSource[] = [];
   for (const entry of list) {
     if (!entry) continue;
     if (typeof entry === 'string') {
       out.push({ name: '', text: entry, error: '' });
       continue;
     }
-    const one = /** @type {*} */ (entry);
+    const one = (entry as any);
     const name = String(one.name || one.filename || '');
     try {
       out.push({ name, text: await textOf(one), error: '' });
@@ -401,11 +408,8 @@ async function readSources(files) {
  * One entry's SVG source. A `File` reads through `text()`, a test's pair
  * through its own `text`, and bytes from anywhere decode as UTF-8 — which is
  * what an SVG is, and what its XML declaration says it is.
- *
- * @param {*} entry
- * @returns {Promise<string>}
  */
-async function textOf(entry) {
+async function textOf(entry: any): Promise<string> {
   if (typeof entry.text === 'function') return stripBom(String(await entry.text()));
   if (typeof entry.text === 'string') return stripBom(entry.text);
   const bytes = entry.bytes || entry.data;
@@ -422,14 +426,16 @@ const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
  * Parse each file, keeping the list's shape: a slot per source, `null` where
  * the file could not be read, so the deck's canvas can come from the first one
  * that could.
- *
- * @param {SvgSource[]} sources
- * @param {ReturnType<typeof createReport>} report
- * @param {typeof DOMParser} [parser]
- * @returns {Array<{root: Element, canvas: {x: number, y: number, w: number, h: number},
- *   name: string}|null>}
  */
-function readRoots(sources, report, parser) {
+function readRoots(
+  sources: SvgSource[],
+  report: ReturnType<typeof createReport>,
+  parser?: typeof DOMParser,
+): Array<{
+  root: Element;
+  canvas: {x: number, y: number, w: number, h: number};
+  name: string;
+} | null> {
   return sources.map((source, index) => {
     const name = source.name || `file ${index + 1}`;
     if (source.error) {
@@ -455,11 +461,8 @@ function readRoots(sources, report, parser) {
  * absolute units. The `viewBox` wins because it is the coordinate system every
  * number in the file is written in — `width` is only how big the author wanted
  * it on a page.
- *
- * @param {Element} root
- * @returns {{x: number, y: number, w: number, h: number}|null}
  */
-function canvasOf(root) {
+function canvasOf(root: Element): {x: number, y: number, w: number, h: number} | null {
   const box = String(attr(root, 'viewBox') || '')
     .trim()
     .split(/[\s,]+/)
@@ -475,16 +478,16 @@ function canvasOf(root) {
 /**
  * One file into one slide.
  *
- * @param {SvgContext} ctx
- * @param {{root: Element, canvas: {x: number, y: number, w: number, h: number},
- *   name: string}} parsed
- * @param {import('./adapter.js').ImportFit} deckFit
- * @param {number} index the file's place in the list, which every report entry
+ * @param index - the file's place in the list, which every report entry
  *   names — the source's index rather than the output's, so a file that failed
  *   does not renumber the ones after it
- * @returns {import('../document.js').CarouselSlide}
  */
-function importOne(ctx, parsed, deckFit, index) {
+function importOne(
+  ctx: SvgContext,
+  parsed: {root: Element, canvas: {x: number, y: number, w: number, h: number}, name: string},
+  deckFit: import('./adapter.ts').ImportFit,
+  index: number,
+): import('../document.ts').CarouselSlide {
   const { root, canvas, name } = parsed;
   const fit = centreFit(canvas.w, canvas.h, deckFit.aspect);
   if (fit.aspectReport.from !== deckFit.aspectReport.from) {
@@ -495,8 +498,7 @@ function importOne(ctx, parsed, deckFit, index) {
     );
   }
 
-  /** @type {SvgPage} */
-  const page = {
+  const page: SvgPage = {
     slide: { source: '', fit: 'cover', bg: null, layers: [] },
     index,
     name,
@@ -521,14 +523,17 @@ function importOne(ctx, parsed, deckFit, index) {
  * Walk a container's children in document order, which for a drawing is paint
  * order and is meaning.
  *
- * @param {SvgContext} ctx
- * @param {Element} el
- * @param {SvgPage} page
- * @param {Record<string, string>} inherited the resolved style of `el`, cut
+ * @param inherited - the resolved style of `el`, cut
  *   down to the properties that inherit
- * @param {number[]} matrix `el`'s accumulated transform
+ * @param matrix - `el`'s accumulated transform
  */
-function walk(ctx, el, page, inherited, matrix) {
+function walk(
+  ctx: SvgContext,
+  el: Element,
+  page: SvgPage,
+  inherited: Record<string, string>,
+  matrix: number[],
+) {
   for (const node of children(el)) {
     const tag = local(node);
     if (DEFINITIONS.has(tag)) continue;
@@ -561,17 +566,19 @@ function walk(ctx, el, page, inherited, matrix) {
 /**
  * One painted element: a layer, the slide's own picture, or a count.
  *
- * @param {SvgContext} ctx
- * @param {Element} node
- * @param {string} tag
- * @param {SvgPage} page
- * @param {Record<string, string>} style
- * @param {number[]} matrix the transform in force, flattened only for a tag
+ * @param matrix - the transform in force, flattened only for a tag
  *   this can use one — reporting a lost rotation on a shape that is itself
  *   dropped would be two entries for one loss
- * @returns {boolean} whether it produced anything
+ * @returns whether it produced anything
  */
-function paint(ctx, node, tag, page, style, matrix) {
+function paint(
+  ctx: SvgContext,
+  node: Element,
+  tag: string,
+  page: SvgPage,
+  style: Record<string, string>,
+  matrix: number[],
+): boolean {
   if (tag === 'rect' || tag === 'text' || tag === 'image') {
     noteEffects(ctx, node, page.index);
     const tf = frame(ctx, matrix, page);
@@ -580,19 +587,15 @@ function paint(ctx, node, tag, page, style, matrix) {
     return importImage(ctx, node, page, style, tf);
   }
   if (tag === 'path') page.paths++;
-  ctx.report.drop(page.index, DROPPED[/** @type {keyof typeof DROPPED} */ (tag)] || `<${tag}>`);
+  ctx.report.drop(page.index, DROPPED[(tag as keyof typeof DROPPED)] || `<${tag}>`);
   return false;
 }
 
 /**
  * What was done to a shape that the schema cannot reproduce. The *reference* is
  * what gets counted, not the definition it points at — see {@link DEFINITIONS}.
- *
- * @param {SvgContext} ctx
- * @param {Element} node
- * @param {number} index
  */
-function noteEffects(ctx, node, index) {
+function noteEffects(ctx: SvgContext, node: Element, index: number) {
   if (attr(node, 'filter')) ctx.report.drop(index, 'filter (blur, shadow or glow)');
   if (attr(node, 'clip-path')) ctx.report.drop(index, 'clip path (imported uncropped)');
   if (attr(node, 'mask')) ctx.report.drop(index, 'mask (imported unmasked)');
@@ -601,15 +604,14 @@ function noteEffects(ctx, node, index) {
 /**
  * A `<rect>`: the schema's `rect` layer, or a count. This is the one SVG
  * element the schema has an exact answer for, corner radius and all.
- *
- * @param {SvgContext} ctx
- * @param {Element} node
- * @param {SvgPage} page
- * @param {Record<string, string>} style
- * @param {{sx: number, sy: number, tx: number, ty: number}} tf
- * @returns {boolean}
  */
-function importRect(ctx, node, page, style, tf) {
+function importRect(
+  ctx: SvgContext,
+  node: Element,
+  page: SvgPage,
+  style: Record<string, string>,
+  tf: {sx: number, sy: number, tx: number, ty: number},
+): boolean {
   const w = lengthOf(attr(node, 'width'), 0);
   const h = lengthOf(attr(node, 'height'), 0);
   if (!(w > 0 && h > 0)) {
@@ -645,15 +647,14 @@ function importRect(ctx, node, page, style, tf) {
  * the canvas, a centred one the widest box that stays centred on its point.
  * The type is set at the file's own size, so nothing reflows to a width the
  * author never chose; the box only says where the words may go.
- *
- * @param {SvgContext} ctx
- * @param {Element} node
- * @param {SvgPage} page
- * @param {Record<string, string>} style
- * @param {{sx: number, sy: number, tx: number, ty: number}} tf
- * @returns {boolean}
  */
-function importText(ctx, node, page, style, tf) {
+function importText(
+  ctx: SvgContext,
+  node: Element,
+  page: SvgPage,
+  style: Record<string, string>,
+  tf: {sx: number, sy: number, tx: number, ty: number},
+): boolean {
   const lines = linesOf(node);
   if (!lines.length) {
     ctx.report.drop(page.index, 'text with no words in it');
@@ -663,7 +664,7 @@ function importText(ctx, node, page, style, tf) {
 
   const size = lengthOf(style['font-size'], DEFAULT_FONT_PX) * tf.sy;
   const lineHeight = lineHeightOf(node, size / tf.sy);
-  const align = TEXT_ALIGN[/** @type {keyof typeof TEXT_ALIGN} */ (style['text-anchor'])] || 'left';
+  const align = TEXT_ALIGN[(style['text-anchor'] as keyof typeof TEXT_ALIGN)] || 'left';
   const anchor = placed(tf, anchorOf(node, 'x'), anchorOf(node, 'y'), 0, 0);
   const filled = colorOf(style.fill === undefined ? DEFAULT_FILL : style.fill) || {
     color: DEFAULT_FILL,
@@ -677,7 +678,7 @@ function importText(ctx, node, page, style, tf) {
     box: boxOf(page, {
       x: span.x,
       // The first line's baseline is where the file put it: back off the half
-      // line box `render.js` centres a line in, and the em box's own middle.
+      // line box `render.ts` centres a line in, and the em box's own middle.
       y: anchor.y - (BASELINE_TO_MIDDLE + lineHeight / 2) * size,
       w: span.w,
       h: height,
@@ -697,15 +698,14 @@ function importText(ctx, node, page, style, tf) {
  * `image` layer when it does not. The full-frame case is the mapping that makes
  * an imported template *useful* — the slide's source is what `applyTemplate`
  * replaces with the post's picture, so a background photo has to land there.
- *
- * @param {SvgContext} ctx
- * @param {Element} node
- * @param {SvgPage} page
- * @param {Record<string, string>} style
- * @param {{sx: number, sy: number, tx: number, ty: number}} tf
- * @returns {boolean}
  */
-function importImage(ctx, node, page, style, tf) {
+function importImage(
+  ctx: SvgContext,
+  node: Element,
+  page: SvgPage,
+  style: Record<string, string>,
+  tf: {sx: number, sy: number, tx: number, ty: number},
+): boolean {
   const w = lengthOf(attr(node, 'width'), 0);
   const h = lengthOf(attr(node, 'height'), 0);
   if (!(w > 0 && h > 0)) {
@@ -746,18 +746,12 @@ function importImage(ctx, node, page, style, tf) {
  * crawler, and a template whose logo is a URL on someone else's server is a
  * template that breaks when they tidy up. Identical hrefs are inlined once, so
  * a logo on eight slides costs the budget once.
- *
- * @param {SvgContext} ctx
- * @param {string} href
- * @param {number} index
- * @returns {string}
  */
-function inlineImage(ctx, href, index) {
+function inlineImage(ctx: SvgContext, href: string, index: number): string {
   const already = ctx.images.get(href);
   if (already !== undefined) return already;
 
-  /** @param {string} why */
-  const refuse = (why) => {
+  const refuse = (why: string) => {
     ctx.report.drop(index, why);
     ctx.images.set(href, '');
     return '';
@@ -776,14 +770,9 @@ function inlineImage(ctx, href, index) {
 /**
  * Add a layer, normalized. Returns whether it survived — a layer the schema
  * rejects is counted rather than repaired, because the alternative is this
- * module deciding what a layer may be, which is `document.js`'s job.
- *
- * @param {SvgContext} ctx
- * @param {SvgPage} page
- * @param {*} layer
- * @returns {boolean}
+ * module deciding what a layer may be, which is `document.ts`'s job.
  */
-function addLayer(ctx, page, layer) {
+function addLayer(ctx: SvgContext, page: SvgPage, layer: any): boolean {
   const normal = normalizeLayer(layer);
   if (!normal) {
     ctx.report.drop(page.index, `${layer && layer.type} the layer schema rejected`);
@@ -798,12 +787,13 @@ function addLayer(ctx, page, layer) {
  * origin comes off here and only here: everything upstream works in the
  * coordinates the file is written in.
  *
- * @param {SvgPage} page
- * @param {{x: number, y: number, w: number, h: number}} rect
- * @returns {{x: number, y: number, w: number, h: number}} pre-normalization —
+ * @returns pre-normalization —
  *   no `rotate` yet; {@link normalizeLayer} fills it in
  */
-function boxOf(page, rect) {
+function boxOf(
+  page: SvgPage,
+  rect: {x: number, y: number, w: number, h: number},
+): {x: number, y: number, w: number, h: number} {
   return page.fit.box(rect.x - page.canvas.x, rect.y - page.canvas.y, rect.w, rect.h);
 }
 
@@ -813,12 +803,13 @@ function boxOf(page, rect) {
  * takes the widest box that keeps the anchor at its middle, which is what
  * "centred" means — and what keeps a second line under the first.
  *
- * @param {{x: number, w: number}} canvas
- * @param {number} x the anchor, in file units
- * @param {string} align
- * @returns {{x: number, w: number}}
+ * @param x - the anchor, in file units
  */
-function widthFrom(canvas, x, align) {
+function widthFrom(
+  canvas: {x: number, w: number},
+  x: number,
+  align: string,
+): {x: number, w: number} {
   const left = canvas.x;
   const right = canvas.x + canvas.w;
   if (align === 'center') {
@@ -842,11 +833,8 @@ function widthFrom(canvas, x, align) {
  * Whitespace collapses, because that is what XML content in an SVG means
  * without `xml:space="preserve"`: the indentation of the markup is not part of
  * the headline.
- *
- * @param {Element} node
- * @returns {string[]}
  */
-function linesOf(node) {
+function linesOf(node: Element): string[] {
   const spans = children(node, 'tspan').filter(
     (s) => attr(s, 'x') !== null || attr(s, 'dy') !== null,
   );
@@ -861,11 +849,9 @@ function linesOf(node) {
  * exporter that gives every line its own `y` — means the schema's own default,
  * which is what those lines were spaced at anyway.
  *
- * @param {Element} node
- * @param {number} size the font size in the element's own units
- * @returns {number}
+ * @param size - the font size in the element's own units
  */
-function lineHeightOf(node, size) {
+function lineHeightOf(node: Element, size: number): number {
   const raw = children(node, 'tspan')
     .map((span) => attr(span, 'dy'))
     .find((value) => value !== null && value.trim() !== '');
@@ -879,12 +865,8 @@ function lineHeightOf(node, size) {
 /**
  * Where a `<text>` is anchored on one axis: its own coordinate, or the first
  * `<tspan>`'s when the element leaves the position to its spans.
- *
- * @param {Element} node
- * @param {'x'|'y'} axis
- * @returns {number}
  */
-function anchorOf(node, axis) {
+function anchorOf(node: Element, axis: 'x' | 'y'): number {
   const own = attr(node, axis);
   if (own !== null) return lengthOf(own, 0);
   const span = children(node, 'tspan').find((s) => attr(s, axis) !== null);
@@ -896,11 +878,8 @@ function anchorOf(node, axis) {
  * whole stack is recorded rather than just the first: a stack is what the
  * author chose, and the fallbacks are as much a fact about the design as the
  * head of it.
- *
- * @param {SvgContext} ctx
- * @param {string|undefined} family
  */
-function recordFonts(ctx, family) {
+function recordFonts(ctx: SvgContext, family: string | undefined) {
   for (const one of String(family || '').split(',')) {
     const name = one.trim().replace(/^['"]|['"]$/g, '');
     if (name && !GENERIC_FAMILIES.has(name.toLowerCase())) ctx.report.font(name);
@@ -913,15 +892,13 @@ function recordFonts(ctx, family) {
  * attribute. That is CSS's own order — a presentation attribute is the weakest
  * author-level rule there is — and getting it backwards is how an Illustrator
  * file, which states a colour in both places, imports the wrong one.
- *
- * @param {Element} el
- * @param {Record<string, string>} inherited
- * @param {CssRule[]} css
- * @returns {Record<string, string>}
  */
-function styleOf(el, inherited, css) {
-  /** @type {Record<string, string>} */
-  const out = { ...inherited };
+function styleOf(
+  el: Element,
+  inherited: Record<string, string>,
+  css: CssRule[],
+): Record<string, string> {
+  const out: Record<string, string> = { ...inherited };
   for (const prop of STYLE_PROPS) {
     const value = attr(el, prop);
     if (value !== null && value.trim() !== '') out[prop] = value.trim();
@@ -933,10 +910,9 @@ function styleOf(el, inherited, css) {
   return out;
 }
 
-/** The half of a resolved style that passes to children. @param {Record<string,string>} style */
-function inheritable(style) {
-  /** @type {Record<string, string>} */
-  const out = {};
+/** The half of a resolved style that passes to children. */
+function inheritable(style: Record<string,string>) {
+  const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(style)) {
     if (INHERITED.has(key)) out[key] = value;
   }
@@ -947,12 +923,8 @@ function inheritable(style) {
  * Does this rule apply to this element? Four selector shapes, because four is
  * what an exporter writes — `.cls-1` from Illustrator, `text` from a
  * hand-written file, `#id` from Sketch, `*` from a reset.
- *
- * @param {Element} el
- * @param {CssRule} rule
- * @returns {boolean}
  */
-function matches(el, rule) {
+function matches(el: Element, rule: CssRule): boolean {
   if (rule.kind === 'any') return true;
   if (rule.kind === 'tag') return local(el) === rule.name;
   if (rule.kind === 'id') return (attr(el, 'id') || '') === rule.name;
@@ -964,15 +936,9 @@ function matches(el, rule) {
 /**
  * The file's `<style>` rules, weakest selector first, so applying them in order
  * lets the strongest win.
- *
- * @param {SvgContext} ctx
- * @param {Element} root
- * @param {number} index
- * @returns {CssRule[]}
  */
-function readStyles(ctx, root, index) {
-  /** @type {CssRule[]} */
-  const rules = [];
+function readStyles(ctx: SvgContext, root: Element, index: number): CssRule[] {
+  const rules: CssRule[] = [];
   for (const el of allStyleElements(root)) {
     rules.push(...parseCss(el.textContent || '', (what) => ctx.report.drop(index, what)));
   }
@@ -981,12 +947,12 @@ function readStyles(ctx, root, index) {
   return rules.sort((a, b) => a.spec - b.spec);
 }
 
-/** Every `<style>` in the document, wherever it was put — the root, a `<defs>`,
+/**
+ * Every `<style>` in the document, wherever it was put — the root, a `<defs>`,
  *  or inside a group, all of which are legal and all of which exporters use.
- *  @param {Element} el @returns {Element[]} */
-function allStyleElements(el) {
-  /** @type {Element[]} */
-  const out = [];
+ */
+function allStyleElements(el: Element): Element[] {
+  const out: Element[] = [];
   for (const kid of children(el)) {
     if (local(kid) === 'style') out.push(kid);
     else out.push(...allStyleElements(kid));
@@ -1000,12 +966,17 @@ function allStyleElements(el) {
  * holds braces of its own — is skipped whole instead of shedding its inner
  * rules into the sheet.
  *
- * @param {string} source
- * @param {(what: string) => void} note what to call something this cannot read
- * @returns {Array<{spec: number, kind: 'any'|'tag'|'class'|'id', name: string,
- *   decls: Record<string, string>}>}
+ * @param note - what to call something this cannot read
  */
-function parseCss(source, note) {
+function parseCss(
+  source: string,
+  note: (what: string) => void,
+): Array<{
+  spec: number;
+  kind: 'any' | 'tag' | 'class' | 'id';
+  name: string;
+  decls: Record<string, string>;
+}> {
   const text = String(source).replace(/\/\*[\s\S]*?\*\//g, '');
   const rules = [];
   let at = 0;
@@ -1041,11 +1012,12 @@ function parseCss(source, note) {
  * A selector this can match, or `null` for one it cannot. Deliberately only the
  * four simple shapes: a descendant or attribute selector would need a matching
  * engine, and the properties at stake are a fill and a font size.
- *
- * @param {string} selector
- * @returns {{spec: number, kind: 'any'|'tag'|'class'|'id', name: string}|null}
  */
-function selectorOf(selector) {
+function selectorOf(selector: string): {
+  spec: number;
+  kind: 'any' | 'tag' | 'class' | 'id';
+  name: string;
+} | null {
   if (selector === '*') return { spec: 0, kind: 'any', name: '' };
   if (/^[a-z][a-z0-9]*$/i.test(selector)) return { spec: 1, kind: 'tag', name: selector };
   if (/^\.[\w-]+$/.test(selector)) return { spec: 2, kind: 'class', name: selector.slice(1) };
@@ -1058,13 +1030,9 @@ function selectorOf(selector) {
  * `!important` is stripped rather than honoured: with four sources of a value
  * and no cascade beyond them, honouring it would be a second ordering rule for
  * a case an exporter does not write.
- *
- * @param {string} body
- * @returns {Record<string, string>}
  */
-function parseDecls(body) {
-  /** @type {Record<string, string>} */
-  const out = {};
+function parseDecls(body: string): Record<string, string> {
+  const out: Record<string, string> = {};
   for (const decl of String(body).split(';')) {
     const at = decl.indexOf(':');
     if (at < 0) continue;
@@ -1081,12 +1049,8 @@ const IDENTITY = [1, 0, 0, 1, 0, 0];
 /**
  * `m` with `value` applied inside it — the child's transform runs first, then
  * the parent's, which is the order a nested `transform` attribute means.
- *
- * @param {number[]} m
- * @param {string|null} value
- * @returns {number[]}
  */
-function compose(m, value) {
+function compose(m: number[], value: string | null): number[] {
   let out = m;
   for (const [, name, args] of String(value || '').matchAll(/([a-z]+)\s*\(([^)]*)\)/gi)) {
     const n = args.trim().split(/[\s,]+/).map(Number);
@@ -1097,14 +1061,8 @@ function compose(m, value) {
   return out;
 }
 
-/**
- * One transform function as a matrix.
- *
- * @param {string} name
- * @param {number[]} n
- * @returns {number[]|null}
- */
-function transformOf(name, n) {
+/** One transform function as a matrix. */
+function transformOf(name: string, n: number[]): number[] | null {
   const rad = (deg) => (deg * Math.PI) / 180;
   if (name === 'matrix' && n.length === 6) return n;
   if (name === 'translate') return [1, 0, 0, 1, n[0] || 0, n.length > 1 ? n[1] : 0];
@@ -1121,8 +1079,8 @@ function transformOf(name, n) {
   return null;
 }
 
-/** `m` then `n`, in SVG's six-number order. @param {number[]} m @param {number[]} n */
-function multiply(m, n) {
+/** `m` then `n`, in SVG's six-number order. */
+function multiply(m: number[], n: number[]) {
   return [
     m[0] * n[0] + m[2] * n[1],
     m[1] * n[0] + m[3] * n[1],
@@ -1143,13 +1101,12 @@ function multiply(m, n) {
  * one specific way the report can name rather than invisibly wrong. A mirror
  * loses its handedness the same way, for the same reason: reflecting a box
  * about its own centre is a change the schema cannot state.
- *
- * @param {SvgContext} ctx
- * @param {number[]} m
- * @param {SvgPage} page
- * @returns {{sx: number, sy: number, tx: number, ty: number}}
  */
-function frame(ctx, m, page) {
+function frame(
+  ctx: SvgContext,
+  m: number[],
+  page: SvgPage,
+): {sx: number, sy: number, tx: number, ty: number} {
   if (Math.abs(m[1]) > 1e-6 || Math.abs(m[2]) > 1e-6) {
     ctx.report.drop(page.index, 'rotation or skew (imported square)');
   }
@@ -1162,9 +1119,8 @@ function frame(ctx, m, page) {
   };
 }
 
-/** A rectangle in its element's coordinates, moved into the file's.
- *  @param {{sx: number, sy: number, tx: number, ty: number}} tf */
-function placed(tf, x, y, w, h) {
+/** A rectangle in its element's coordinates, moved into the file's. */
+function placed(tf: {sx: number, sy: number, tx: number, ty: number}, x, y, w, h) {
   return { x: tf.tx + tf.sx * x, y: tf.ty + tf.sy * y, w: tf.sx * w, h: tf.sy * h };
 }
 
@@ -1172,12 +1128,8 @@ function placed(tf, x, y, w, h) {
  * A CSS length in user units, or `fallback`. A percentage is refused: it means
  * a fraction of a viewport this importer is not laying out, and guessing which
  * one would move a shape.
- *
- * @param {string|null|undefined} value
- * @param {number} [fallback]
- * @returns {number}
  */
-function lengthOf(value, fallback = 0) {
+function lengthOf(value: string | null | undefined, fallback: number = 0): number {
   const match = /^\s*(-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)\s*([a-z%]*)\s*$/i.exec(
     String(value ?? ''),
   );
@@ -1186,7 +1138,7 @@ function lengthOf(value, fallback = 0) {
   if (!Number.isFinite(n)) return fallback;
   const unit = match[2].toLowerCase();
   if (!unit) return n;
-  const per = UNIT_PX[/** @type {keyof typeof UNIT_PX} */ (unit)];
+  const per = UNIT_PX[(unit as keyof typeof UNIT_PX)];
   return per ? n * per : fallback;
 }
 
@@ -1194,15 +1146,12 @@ function lengthOf(value, fallback = 0) {
  * A paint value as a colour the schema takes, or `null` for one it does not —
  * which includes `none`, a gradient reference and `currentColor`, three
  * different ways of saying "not a colour written here".
- *
- * @param {string|undefined} value
- * @returns {{color: string, alpha: number}|null}
  */
-function colorOf(value) {
+function colorOf(value: string | undefined): {color: string, alpha: number} | null {
   const raw = String(value || '').trim().toLowerCase();
   if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(raw)) return { color: raw, alpha: 1 };
-  if (NAMED_COLORS[/** @type {keyof typeof NAMED_COLORS} */ (raw)]) {
-    return { color: NAMED_COLORS[/** @type {keyof typeof NAMED_COLORS} */ (raw)], alpha: 1 };
+  if (NAMED_COLORS[(raw as keyof typeof NAMED_COLORS)]) {
+    return { color: NAMED_COLORS[(raw as keyof typeof NAMED_COLORS)], alpha: 1 };
   }
   const rgb = /^rgba?\(([^)]*)\)$/.exec(raw);
   if (!rgb) return null;
@@ -1216,8 +1165,8 @@ function colorOf(value) {
   return { color: `#${hex}`, alpha };
 }
 
-/** What to call a fill that produced no colour. @param {string|undefined} raw */
-function fillNote(raw) {
+/** What to call a fill that produced no colour. */
+function fillNote(raw: string | undefined) {
   const value = String(raw || '').trim().toLowerCase();
   if (value.startsWith('url(')) return 'gradient or pattern fill';
   if (value === 'none' || value === 'transparent') return 'shape with no fill';
@@ -1227,12 +1176,8 @@ function fillNote(raw) {
 /**
  * The element's own opacity: `opacity`, `fill-opacity` and any alpha the colour
  * carried, multiplied — the three ways a design tool writes the same thing.
- *
- * @param {Record<string, string>} style
- * @param {number} alpha
- * @returns {number}
  */
-function opacityOf(style, alpha) {
+function opacityOf(style: Record<string, string>, alpha: number): number {
   const one = (value) => {
     const raw = String(value ?? '').trim();
     if (!raw) return 1;
@@ -1247,22 +1192,18 @@ function opacityOf(style, alpha) {
  * A colour with an opacity folded into its alpha channel — how a `text` layer
  * carries one, since only three of the five layer types have an `opacity`
  * field. A fully opaque colour is left as it was written.
- *
- * @param {string} color
- * @param {number} opacity
- * @returns {string}
  */
-function withAlpha(color, opacity) {
+function withAlpha(color: string, opacity: number): string {
   if (opacity >= 1 || color.length > 7) return color;
   const hex = clamp(Math.round(opacity * 255), 0, 255).toString(16).padStart(2, '0');
   // `#rgb` takes a one-digit alpha, `#rrggbb` a two-digit one.
   return color.length === 4 ? `${color}${hex[0]}` : `${color}${hex}`;
 }
 
-/** A `font-weight` as the number the schema stores. @param {string|undefined} value */
-function weightOf(value) {
+/** A `font-weight` as the number the schema stores. */
+function weightOf(value: string | undefined) {
   const raw = String(value || '').trim().toLowerCase();
-  const named = WEIGHTS[/** @type {keyof typeof WEIGHTS} */ (raw)];
+  const named = WEIGHTS[(raw as keyof typeof WEIGHTS)];
   if (named) return named;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : 400;
@@ -1272,12 +1213,8 @@ function weightOf(value) {
  * Filenames in the order a person means them: `slide-2` before `slide-10`,
  * which a plain string sort gets backwards, and case-insensitively, because a
  * capital letter in a filename is not an ordering decision.
- *
- * @param {string} a
- * @param {string} b
- * @returns {number}
  */
-export function naturalOrder(a, b) {
+export function naturalOrder(a: string, b: string): number {
   const parts = (name) => String(name || '').toLowerCase().match(/\d+|\D+/g) || [];
   const left = parts(a);
   const right = parts(b);
@@ -1293,8 +1230,8 @@ export function naturalOrder(a, b) {
   return 0;
 }
 
-/** A filename without its directory or its extension. @param {string} name */
-const baseOf = (name) =>
+/** A filename without its directory or its extension. */
+const baseOf = (name: string) =>
   String(name || '')
     .split(/[\\/]/)
     .pop()
@@ -1304,11 +1241,8 @@ const baseOf = (name) =>
  * What to call a deck of several files: their common prefix with any trailing
  * counter taken off, so `slide-01.svg`…`slide-09.svg` is "slide" rather than
  * the first file's name. One file names itself.
- *
- * @param {string[]} names
- * @returns {{id: string, name: string}}
  */
-function deckMeta(names) {
+function deckMeta(names: string[]): {id: string, name: string} {
   if (names.length < 2) return metaFromFilename(names[0] || '');
   const bases = names.map(baseOf);
   let prefix = bases[0];
@@ -1320,13 +1254,11 @@ function deckMeta(names) {
   return metaFromFilename(prefix.replace(/[\s._-]*\d*$/, '').trim() || bases[0]);
 }
 
-/** What the report calls the import: the file, when there is one of them.
- *  @param {string[]} names */
-const deckFile = (names) => (names.length === 1 ? names[0] : `${names.length} SVG files`);
+/** What the report calls the import: the file, when there is one of them. */
+const deckFile = (names: string[]) => (names.length === 1 ? names[0] : `${names.length} SVG files`);
 
-/** Up to three names and a count for the rest, for a sentence a person reads.
- *  @param {string[]} names */
-function listOf(names) {
+/** Up to three names and a count for the rest, for a sentence a person reads. */
+function listOf(names: string[]) {
   const head = names.slice(0, 3).join(', ');
   return names.length > 3 ? `${head} and ${names.length - 3} more` : head;
 }

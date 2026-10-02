@@ -13,20 +13,20 @@
  * the user can then pan, zoom and letterbox one slide at a time.
  *
  * This file is UI only. It holds a `CarouselDoc` as its state and mutates it
- * exclusively through `document.js` (`splitDocument`, `toDeckDocument`,
+ * exclusively through `document.ts` (`splitDocument`, `toDeckDocument`,
  * `updateSlideFraming`), which clamp and normalize — there is no parallel
  * control state to reconcile back into a document later, and a gesture cannot
  * leave the preview and the renderer disagreeing. The heavy lifting is split
  * three ways —
- *   - `geometry.js`  the pure math (strip crop, column rects, deck crops, and
+ *   - `geometry.ts`  the pure math (strip crop, column rects, deck crops, and
  *                    the CSS pair that reproduces each in the DOM)
- *   - `render.js`    the thin draw layer (decode → drawImage → encode → upload)
- *   - `document.js`  the carousel document + its `:::{.carousel-block}` output
+ *   - `render.ts`    the thin draw layer (decode → drawImage → encode → upload)
+ *   - `document.ts`  the carousel document + its `:::{.carousel-block}` output
  * — and the studio's own three halves live under `studio/`:
- *   - `studio/panels.js`    the markup, as pure functions of what they are given
- *   - `studio/preview.js`   the CSS writers that put a crop on screen
- *   - `studio/gestures.js`  deck-mode drag / pinch / wheel / arrow keys
- *   - `studio/history.js`   the undo/redo ring over that document
+ *   - `studio/panels.ts`    the markup, as pure functions of what they are given
+ *   - `studio/preview.ts`   the CSS writers that put a crop on screen
+ *   - `studio/gestures.ts`  deck-mode drag / pinch / wheel / arrow keys
+ *   - `studio/history.ts`   the undo/redo ring over that document
  * What is left here is the Component: the route, the lifecycle, the actions
  * map, and the one document every one of those modules is handed a piece of.
  * Layers and templates land in later stages (see docs/features/carousel-studio.md).
@@ -41,6 +41,7 @@
  */
 
 import { Component } from "../../components/Component.ts";
+import type { ComponentState } from "../../components/Component.ts";
 import {
   adminLayoutTemplate,
   setupAdminLayout,
@@ -57,7 +58,7 @@ import {
   listCarouselTemplates,
   saveCarousel,
   saveCarouselTemplate,
-} from "../../api/carousel.js";
+} from "../../api/carousel.ts";
 import { getSettings, setToast } from "../../store.ts";
 import { showConfirm } from "../../utils/dialogs.ts";
 import { html, navigate } from "../../utils/helpers.ts";
@@ -72,7 +73,7 @@ import {
   safeAreaRect,
   spanLayerCoverage,
   spanLayerRect,
-} from "./geometry.js";
+} from "./geometry.ts";
 import {
   addLayer,
   addSlide,
@@ -96,17 +97,17 @@ import {
   toTemplate,
   updateLayer,
   updateSlideFraming,
-} from "./document.js";
-import { adapterFor, IMPORTERS } from "./import/index.js";
-import { browserDeps, DEFAULT_MARK_COLOR, renderAndUpload } from "./render.js";
-import { DEFAULT_SLIDES, MAX_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.js";
+} from "./document.ts";
+import { adapterFor, IMPORTERS } from "./import/index.ts";
+import { browserDeps, DEFAULT_MARK_COLOR, renderAndUpload } from "./render.ts";
+import { DEFAULT_SLIDES, MAX_SLIDES, MIN_SLIDES, clampSlides } from "./studio/bounds.ts";
 import {
   PROPS_PREF_KEY,
   ZOOM_STEP,
   clampZoom,
   isTouchLayout,
   readPropsPref,
-} from "./studio/layout.js";
+} from "./studio/layout.ts";
 import {
   actionsBar,
   builder,
@@ -115,7 +116,7 @@ import {
   pickPrompt,
   saveTemplateDialog,
   templateGallery,
-} from "./studio/panels.js";
+} from "./studio/panels.ts";
 import {
   dataAssets,
   decodeAsset,
@@ -123,7 +124,7 @@ import {
   replaceAssets,
   templateLimitError,
   templateSlug,
-} from "./studio/templates.js";
+} from "./studio/templates.ts";
 import {
   ensurePreviewFont,
   paintAnchorRail,
@@ -135,9 +136,9 @@ import {
   paintSpanLayers,
   paintSplit,
   restyleEditingText,
-} from "./studio/preview.js";
-import { createAnchorGesture, createDeckGestures } from "./studio/gestures.js";
-import { createHistory } from "./studio/history.js";
+} from "./studio/preview.ts";
+import { createAnchorGesture, createDeckGestures } from "./studio/gestures.ts";
+import { createHistory } from "./studio/history.ts";
 
 /** What a background chip writes, given the type. Bare defaults: the colour and
  *  angle inputs then edit them, and `normalizeBg` is the only clamp. */
@@ -170,7 +171,7 @@ const BG_PRESETS = {
 const DEFAULT_INK_WIDTH = 0.02;
 
 /** The smallest an ink session's box may be on either axis, before
- *  `normalizeBox` (`document.js`) gets to re-clamp it for real — this
+ *  `normalizeBox` (`document.ts`) gets to re-clamp it for real — this
  *  module's own copy of that module's own `MIN_BOX`, so dividing a stroke's
  *  points by a zero-width box here never happens. */
 const MIN_INK_BOX = 1 / 1080;
@@ -258,7 +259,7 @@ function strokeTouchedAt(stroke, fx, fy, canvasW, canvasH) {
 
 /** The post id from `?post=`, or null when absent/malformed. */
 function readPostId(query) {
-  const raw = /** @type {{ post?: string }} */ (query || {}).post;
+  const raw = ((query || {}) as { post?: string }).post;
   return raw != null && /^[0-9]+$/.test(String(raw)) ? Number(raw) : null;
 }
 
@@ -275,7 +276,7 @@ const BLOCK_PARAM_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
  *  reads as "this post's first carousel", the whole studio's address before
  *  block keys existed. */
 function readBlockParam(query) {
-  const raw = /** @type {{ block?: string }} */ (query || {}).block;
+  const raw = ((query || {}) as { block?: string }).block;
   const value = raw == null ? "" : String(raw);
   return BLOCK_PARAM_RE.test(value) ? value : null;
 }
@@ -293,11 +294,12 @@ function readBlockParam(query) {
  * `paths` is what that fence currently lists, which is what `_adoptLoaded`
  * reconciles the stored document against — empty when there is no fence.
  *
- * @param {string} content the post's markdown
- * @param {string|null} param
- * @returns {{ key: string|null, ordinal: number|null, paths: string[] }}
+ * @param content - the post's markdown
  */
-function resolveBlock(content, param) {
+function resolveBlock(
+  content: string,
+  param: string | null,
+): { key: string | null, ordinal: number | null, paths: string[] } {
   const fences = carouselFences(content);
   const none = { key: null, ordinal: null, paths: [] };
   const at = (n) => {
@@ -436,11 +438,8 @@ function documentWithRenders(doc, media) {
  * on where it was dragged from (see `adapterFor`). The refusals are by name —
  * "Point cannot read notes.txt" beats "unsupported file" when four files were
  * selected and one of them is wrong.
- *
- * @param {File[]} files
- * @returns {string}
  */
-function importRefusal(files) {
+function importRefusal(files: File[]): string {
   if (!files.length) return "Choose a file to import.";
   const adapter = adapterFor(files[0].name);
   if (!adapter) {
@@ -463,12 +462,11 @@ function importRefusal(files) {
  * `applyTemplate` reports counts and lists, deliberately, so that the prose is
  * written where the user is — here. An unresolved placeholder stays visible on
  * the slide as well; this is what tells the author to go looking.
- *
- * @param {string} name
- * @param {import('./document.js').CarouselTemplateReport} report
- * @returns {string}
  */
-function applyMessage(name, report) {
+function applyMessage(
+  name: string,
+  report: import('./document.ts').CarouselTemplateReport,
+): string {
   const parts = [`Applied “${name}”.`];
   if (report.unresolved.length) {
     parts.push(`Still to fill: ${report.unresolved.join(" ")}.`);
@@ -489,18 +487,73 @@ function applyMessage(name, report) {
 /**
  * `query.post` carries the target post id; `renderDeps` overrides the browser
  * render backend (tests inject a fake).
- *
- * @typedef {import('../../router.ts').PageProps
- *   & { renderDeps?: import('./render.js').RenderDeps }} CarouselStudioProps
  */
+export type CarouselStudioProps = import('../../router.ts').PageProps & {
+  renderDeps?: import('./render.ts').RenderDeps;
+};
 
-/** @extends {Component<CarouselStudioProps>} */
-export default class CarouselStudioPage extends Component {
-  /**
-   * @param {HTMLElement} container
-   * @param {CarouselStudioProps} [props]
-   */
-  constructor(container, props) {
+export default class CarouselStudioPage extends Component<CarouselStudioProps> {
+  _stageZoom: number;
+  _picker: MediaPickerDialog;
+  _layerPicker: MediaPickerDialog;
+  _previewEl: HTMLDivElement;
+  _previewMount: HTMLDivElement;
+  _previewViewer: MediaViewer;
+  _saveName: string;
+  _saveSlug: string;
+  _slugTouched: boolean;
+  _blockParam: string;
+  _blockKey: string | null;
+  _blockOrdinal: number;
+  _legacyRow: boolean;
+  _priorRendered: any[];
+  _renderedDoc: string;
+  _refocus: number;
+  _stepSmooth: boolean;
+  _refocusRail: number;
+  _refocusLayerHandle: {
+    scope: string;
+    index: any;
+  };
+  _stageScrollLeft: number;
+  _detachReorder: Function;
+  _detachLayerReorder: Function;
+  _editing: {
+    i: any;
+    j: any;
+    scope: string;
+    layerEl: HTMLElement;
+    block: HTMLElement;
+    original: string;
+    teardown(): void;
+  };
+  _focusedLayerField: HTMLElement;
+  _drawSession: {
+    i: number;
+    mode: "draw" | "erase";
+    color: string;
+    width: number;
+    opacity: number;
+    strokes: Array<{
+        w: number;
+        pts: Array<[number, number]>;
+    }>;
+    past: Array<Array<any>>;
+    future: Array<Array<any>>;
+  };
+  _history: import("./studio/history.ts").CarouselHistory;
+  _gestures: {
+    attach(frames: ArrayLike<HTMLElement>): void;
+    detach: () => void;
+    destroy(): void;
+  };
+  _anchorGesture: {
+    attach(stage: HTMLElement | null): void;
+    detach: () => void;
+    destroy(): void;
+  };
+
+  constructor(container: HTMLElement, props?: CarouselStudioProps) {
     super(container, props);
     this.state = {
       postId: readPostId(this.props.query),
@@ -519,7 +572,7 @@ export default class CarouselStudioPage extends Component {
       // A probe is a decode, and a deck frozen from a panorama names one photo
       // N times, so every probe lands here and no path is measured twice.
       // Read through `_dimsFor`, never directly.
-      dims: /** @type {Record<string, {srcW: number, srcH: number}>} */ ({}),
+      dims: ({} as Record<string, {srcW: number, srcH: number}>),
       selected: 0,
       // Which layer the property form is editing, or null. An index into the
       // list `layerScope` names: the selected deck slide's `layers`, or
@@ -527,13 +580,13 @@ export default class CarouselStudioPage extends Component {
       // is cleared whenever the slide selection moves (a stale index would edit
       // the wrong layer); a span-scoped one survives, since it is not slide-bound.
       selectedLayer: null,
-      layerScope: /** @type {"slide"|"span"} */ ("slide"),
+      layerScope: ("slide" as "slide" | "span"),
       showGuides: true,
       busy: false,
       renderProgress: null,
       hasCarousel: false,
       // Rail wide, bottom sheet below 64em. Remembered only on a wide viewport
-      // — a sheet sitting over the stage always opens closed (see layout.js).
+      // — a sheet sitting over the stage always opens closed (see layout.ts).
       propsOpen: readPropsPref(),
       // The document-controls popover — plain viewport state like `propsOpen`,
       // but not remembered: it is a rarely-used disclosure, not a rail, so it
@@ -640,7 +693,7 @@ export default class CarouselStudioPage extends Component {
     // block, original, teardown }`. Lives outside `state`: every keystroke
     // restyles the block directly (see `_liveEditText`), and a `setState`
     // rebuild would tear that block out from under the caret. Set by
-    // `_enterTextEdit`, cleared by `_exitTextEdit` — see studio/gestures.js's
+    // `_enterTextEdit`, cleared by `_exitTextEdit` — see studio/gestures.ts's
     // `editLayer` and its `onPointerDown`/`onDoubleClick` guards.
     this._editing = null;
     // The properties rail field currently focused, or null — set on `focus`,
@@ -659,7 +712,7 @@ export default class CarouselStudioPage extends Component {
     this._drawSession = null;
     // Undo/redo. A ring of `doc` references, not a log of operations — the
     // document is immutable by construction, so the previous state is simply
-    // the previous reference (see studio/history.js). Every write goes through
+    // the previous reference (see studio/history.ts). Every write goes through
     // `_setDoc`, which is the only thing that pushes onto it.
     this._history = createHistory();
     // Deck direct manipulation, over the stage's own columns — the surface the
@@ -679,7 +732,7 @@ export default class CarouselStudioPage extends Component {
       refocus: (i) => {
         this._refocus = i;
       },
-      // The plain-drag/plain-wheel default (`studio/gestures.js`): unlike a
+      // The plain-drag/plain-wheel default (`studio/gestures.ts`): unlike a
       // finger, which `touch-action` already lets pan the strip natively, a
       // mouse or wheel has to be driven by hand.
       scrollPaneBy: (px) => {
@@ -687,7 +740,7 @@ export default class CarouselStudioPage extends Component {
         if (scroll) scroll.scrollLeft += px;
       },
       // Layer direct manipulation reuses the same machine over the box field —
-      // see studio/gestures.js. `activeLayer` is what routes a press between the
+      // see studio/gestures.ts. `activeLayer` is what routes a press between the
       // two: a layer only takes the pointer when its own layer is selected.
       activeLayer: () => {
         const j = this.state.selectedLayer;
@@ -713,7 +766,7 @@ export default class CarouselStudioPage extends Component {
       layersOnColumn: (i) => this._layersOnColumn(i),
       selectLayer: (i, j, scope) => this._selectLayerOnStage(i, j, scope),
       // Double-click-to-edit: the layer is already selected by the time this
-      // fires (gestures.js's own guard), so this only ever starts an edit,
+      // fires (gestures.ts's own guard), so this only ever starts an edit,
       // never a selection change.
       editLayer: (i, j, scope) => this._enterTextEdit(i, j, scope),
       isEditing: () => Boolean(this._editing),
@@ -775,19 +828,19 @@ export default class CarouselStudioPage extends Component {
     },
     "input:ink-color"(_e, el) {
       if (!this._drawSession) return;
-      this._drawSession.color = /** @type {HTMLInputElement} */ (el).value;
+      this._drawSession.color = (el as HTMLInputElement).value;
       this._paintInkDraft(this._drawSession.i);
     },
     "input:ink-width"(_e, el) {
       if (!this._drawSession) return;
-      const value = Number(/** @type {HTMLInputElement} */ (el).value);
+      const value = Number((el as HTMLInputElement).value);
       this._drawSession.width = value;
       const out = this.$("#carousel-ink-width-out");
       if (out) out.textContent = `${Math.round(value * 100)}%`;
     },
     "input:ink-opacity"(_e, el) {
       if (!this._drawSession) return;
-      const value = Number(/** @type {HTMLInputElement} */ (el).value);
+      const value = Number((el as HTMLInputElement).value);
       this._drawSession.opacity = value;
       const out = this.$("#carousel-ink-opacity-out");
       if (out) out.textContent = `${Math.round(value * 100)}%`;
@@ -796,11 +849,11 @@ export default class CarouselStudioPage extends Component {
     "fit-chip"(_e, el) {
       this._setSplit({
         n: clampSlides(Number(el.dataset.n)),
-        strategy: /** @type {'cover'|'exact'|'pad'} */ (el.dataset.strategy),
+        strategy: (el.dataset.strategy as 'cover' | 'exact' | 'pad'),
       });
     },
     "change:fit-mode"(_e, el) {
-      this._applyFitMode(/** @type {HTMLInputElement} */ (el).value);
+      this._applyFitMode((el as HTMLInputElement).value);
     },
     mode(_e, el) {
       this._setMode(el.dataset.mode);
@@ -904,9 +957,9 @@ export default class CarouselStudioPage extends Component {
     "input:carousel-n"(_e, el) {
       // Every copy, not the first: the coarse-pointer layout has no toolbar,
       // so `builder` emits these controls a second time in the properties
-      // panel (`propsTools`, studio/panels.js). Only the toolbar's copy owns
+      // panel (`propsTools`, studio/panels.ts). Only the toolbar's copy owns
       // the id, and the class is what reaches both.
-      const value = String(/** @type {HTMLInputElement} */ (el).value);
+      const value = String((el as HTMLInputElement).value);
       this.$$(".carousel-studio__n-out").forEach((out) => {
         out.textContent = value;
       });
@@ -916,12 +969,12 @@ export default class CarouselStudioPage extends Component {
       // their slide count, so leaving `strategy` on `exact`/`pad` here would
       // show a stale readout. The chips and the radio set both together.
       this._setSplit({
-        n: clampSlides(Number(/** @type {HTMLInputElement} */ (el).value)),
+        n: clampSlides(Number((el as HTMLInputElement).value)),
         strategy: "cover",
       });
     },
     "change:carousel-aspect"(_e, el) {
-      const aspect = /** @type {HTMLSelectElement} */ (el).value;
+      const aspect = (el as HTMLSelectElement).value;
       // Deck slides carry their own crops, so an aspect change reframes them
       // where a split deck has to be re-sliced from scratch.
       this._setDoc(
@@ -931,16 +984,16 @@ export default class CarouselStudioPage extends Component {
       );
     },
     "change:carousel-guides"(_e, el) {
-      this.setState({ showGuides: /** @type {HTMLInputElement} */ (el).checked });
+      this.setState({ showGuides: (el as HTMLInputElement).checked });
     },
     "input:carousel-anchor"(_e, el) {
       const out = this.$("#carousel-anchor-out");
       if (out) {
-        out.textContent = `${Math.round(Number(/** @type {HTMLInputElement} */ (el).value) * 100)}%`;
+        out.textContent = `${Math.round(Number((el as HTMLInputElement).value) * 100)}%`;
       }
     },
     "change:carousel-anchor"(_e, el) {
-      this._setSplit({ anchorY: Number(/** @type {HTMLInputElement} */ (el).value) });
+      this._setSplit({ anchorY: Number((el as HTMLInputElement).value) });
     },
 
     // The keyboard half of the stage reorder: the handle is a button, so the
@@ -949,7 +1002,7 @@ export default class CarouselStudioPage extends Component {
     // which is the failure the arrange mode in `PostEditPage` avoids the same
     // way.
     "keydown:rail-handle"(e, el) {
-      const ev = /** @type {KeyboardEvent} */ (e);
+      const ev = (e as KeyboardEvent);
       if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
       ev.preventDefault();
       const from = Number(el.dataset.slide);
@@ -959,7 +1012,7 @@ export default class CarouselStudioPage extends Component {
     // above but up/down — the axis the layer list runs on — and reading
     // `scope` off the handle instead of assuming one list.
     "keydown:layer-handle"(e, el) {
-      const ev = /** @type {KeyboardEvent} */ (e);
+      const ev = (e as KeyboardEvent);
       if (ev.key !== "ArrowUp" && ev.key !== "ArrowDown") return;
       ev.preventDefault();
       const j = Number(el.dataset.index);
@@ -974,7 +1027,7 @@ export default class CarouselStudioPage extends Component {
     // hand the way a real `<button>` would not — same as the plugins page's
     // group headers.
     "keydown:toggle-props"(e) {
-      const ev = /** @type {KeyboardEvent} */ (e);
+      const ev = (e as KeyboardEvent);
       if (ev.key !== "Enter" && ev.key !== " ") return;
       ev.preventDefault();
       this._toggleProps();
@@ -987,7 +1040,7 @@ export default class CarouselStudioPage extends Component {
       const i = this._selectedIndex();
       const slide = this.state.doc.slides[i];
       if (!slide) return;
-      const angle = /** @type {HTMLInputElement|null} */ (this.$("#carousel-bg-angle"));
+      const angle = (this.$("#carousel-bg-angle") as HTMLInputElement | null);
       const angleOut = this.$("#carousel-bg-angle-out");
       if (angleOut && angle) angleOut.textContent = `${angle.value}°`;
       this._paintDeckSlide(i, { ...slide, bg: this._bgFromFields(slide) });
@@ -1034,14 +1087,15 @@ export default class CarouselStudioPage extends Component {
     return this.state.doc.slides[0]?.source || "";
   }
 
-  /** The pixel size of one slide's source. The per-path probe cache answers
+  /**
+   * The pixel size of one slide's source. The per-path probe cache answers
    *  first; the document-level pair is the fallback, which is the whole answer
    *  for a deck that shares one photo.
-   *
-   * @param {import('./document.js').CarouselSlide} [slide]
-   * @returns {{srcW: number|null, srcH: number|null}}
    */
-  _dimsFor(slide) {
+  _dimsFor(slide?: import('./document.ts').CarouselSlide): {
+    srcW: number | null;
+    srcH: number | null;
+  } {
     return this.state.dims[slide?.source] || { srcW: this.state.srcW, srcH: this.state.srcH };
   }
 
@@ -1056,10 +1110,8 @@ export default class CarouselStudioPage extends Component {
    * same question `paintSlide` asks, answered from the same `deckSlideRects`
    * pad, so the control and the preview cannot disagree with the render. False
    * with no source or no source dimensions: there is nothing to fill around.
-   *
-   * @param {import('./document.js').CarouselSlide} slide
    */
-  _hasPad(slide) {
+  _hasPad(slide: import('./document.ts').CarouselSlide) {
     const { srcW, srcH } = this._dimsFor(slide);
     if (!slide?.source || !srcW || !srcH) return false;
     const { aspect } = this.state.doc;
@@ -1116,13 +1168,15 @@ export default class CarouselStudioPage extends Component {
    * down the post never had a row, and taking the first block's design for it
    * would show the wrong carousel.
    *
-   * @param {number} postId
-   * @param {{ key: string|null, ordinal: number|null }} block
-   * @param {{key: string|null}[]} fences every carousel fence in the post,
+   * @param fences - every carousel fence in the post,
    *   for {@link _preKeyRow} to tell an orphaned key from one a different
    *   fence still claims
    */
-  async _loadBlockRow(postId, block, fences) {
+  async _loadBlockRow(
+    postId: number,
+    block: { key: string | null, ordinal: number | null },
+    fences: {key: string | null}[],
+  ) {
     if (block.key) {
       const row = await getCarousel(postId, block.key).catch(noRowOn404);
       // A keyed FIRST fence may still be stored under the pre-key empty key:
@@ -1151,12 +1205,11 @@ export default class CarouselStudioPage extends Component {
    * moved. A key some other fence does carry stays untouched: that fence is
    * the row's rightful match, and adopting it here would steal its design.
    *
-   * @param {number} postId
-   * @param {{key: string|null}[]} [fences] every carousel fence in the post;
+   * @param fences - every carousel fence in the post;
    *   omitted only by {@link _retirePreKeyRow}, which never reaches the check
    *   that needs it — the row it is retiring always has the empty key.
    */
-  async _preKeyRow(postId, fences = []) {
+  async _preKeyRow(postId: number, fences: {key: string | null}[] = []) {
     const row = await getCarousel(postId).catch(noRowOn404);
     if (!row) return null;
     if (!row.block_key) return row;
@@ -1175,16 +1228,22 @@ export default class CarouselStudioPage extends Component {
    * that fence with its own first render. It is also what keeps a slide deleted
    * by hand in Text mode from coming back on the next render.
    *
-   * @param {*} post
-   * @param {*} carousel the stored row for this block, or null
-   * @param {{ key: string|null, ordinal: number|null, paths?: string[] }} block
+   * @param carousel - the stored row for this block, or null
    */
-  async _adoptLoaded(post, carousel, block = { key: null, ordinal: null, paths: [] }) {
+  async _adoptLoaded(
+    post: any,
+    carousel: any,
+    block: {
+      key: string | null;
+      ordinal: number | null;
+      paths?: string[];
+    } = { key: null, ordinal: null, paths: [] },
+  ) {
     const stored = carousel ? parseDocument(carousel.doc) : emptyDocument();
     let doc = adoptFencePaths(stored, block.paths || []);
     const droppedByAdoption = droppedByFence(stored, doc);
     let dims = this.state.dims;
-    // A split names one source for the whole strip (render.js's renderSplit
+    // A split names one source for the whole strip (render.ts's renderSplit
     // slices `slides[0].source` by index alone) — it cannot carry a slide
     // adoption gave its own path. Freeze it to a deck, which needs the shared
     // source's pixel size to derive each slide's crop (see toDeckDocument).
@@ -1232,10 +1291,8 @@ export default class CarouselStudioPage extends Component {
    * One dialog either way: the scope rides on the per-call handler
    * `MediaPickerDialog.open` takes, which is what that parameter exists for. A
    * second dialog would be a second thing to keep mounted and in sync.
-   *
-   * @param {number|null} [slice]
    */
-  _openPicker(slice = null) {
+  _openPicker(slice: number | null = null) {
     if (!this._picker) {
       this._picker = new MediaPickerDialog({
         onConfirm: (items) => this._applyPickedSource(items, null),
@@ -1245,14 +1302,16 @@ export default class CarouselStudioPage extends Component {
     this._picker.open(slice == null ? null : (items) => this._applyPickedSource(items, slice));
   }
 
-  /** The first image in a picker result, with the dimensions its media row
+  /**
+   * The first image in a picker result, with the dimensions its media row
    *  carried. The media mapper emits width/height (api/internal/api/mappers.go);
    *  they are null for a pre-dimensions upload, and the bitmap is probed then.
-   *
-   * @param {Array<{path?: string, width?: number, height?: number}>} items
-   * @returns {{path: string, srcW: number|null, srcH: number|null}|null}
    */
-  _pickedImage(items) {
+  _pickedImage(items: Array<{
+    path?: string;
+    width?: number;
+    height?: number;
+  }>): {path: string, srcW: number | null, srcH: number | null} | null {
     const img = (items || []).find((m) => isImagePath(m?.path));
     if (!img) return null;
     return {
@@ -1272,10 +1331,12 @@ export default class CarouselStudioPage extends Component {
    * lose and only ever has one source, so a new image starts a fresh
    * projection whatever `slice` says.
    *
-   * @param {Array<{path?: string, width?: number, height?: number}>} items
-   * @param {number|null} slice  the slide to change, or null for every slide
+   * @param slice - the slide to change, or null for every slide
    */
-  _applyPickedSource(items, slice) {
+  _applyPickedSource(
+    items: Array<{path?: string, width?: number, height?: number}>,
+    slice: number | null,
+  ) {
     const img = this._pickedImage(items);
     if (!img) return;
     const doc = this.state.doc;
@@ -1289,7 +1350,7 @@ export default class CarouselStudioPage extends Component {
         })
       : this._splitDoc({ source: img.path, strategy: "cover", anchorY: 0.5 });
 
-    const patch = {};
+    const patch: ComponentState = {};
     if (img.srcW && img.srcH) {
       patch.dims = { ...this.state.dims, [img.path]: { srcW: img.srcW, srcH: img.srcH } };
     }
@@ -1304,25 +1365,23 @@ export default class CarouselStudioPage extends Component {
     if (!img.srcW || !img.srcH) this._probeSource(img.path);
   }
 
-  /** Make sure every distinct source the document names has been measured —
+  /**
+   * Make sure every distinct source the document names has been measured —
    *  one slide's dimensions cannot answer for another once a deck carries more
    *  than one photo.
-   *
-   * @param {import('./document.js').CarouselDoc} doc
    */
-  _probeSources(doc) {
+  _probeSources(doc: import('./document.ts').CarouselDoc) {
     for (const path of new Set((doc.slides || []).map((s) => s.source).filter(Boolean))) {
       this._ensureDims(path);
     }
   }
 
-  /** `_probeSource`, skipping the network for a path already measured — but
+  /**
+   * `_probeSource`, skipping the network for a path already measured — but
    *  still re-seating `srcW`/`srcH` when that path is now the document's
    *  source, which is what an undo across a source change needs.
-   *
-   * @param {string} path
    */
-  _ensureDims(path) {
+  _ensureDims(path: string) {
     const known = this.state.dims[path];
     if (!known) {
       this._probeSource(path);
@@ -1351,8 +1410,7 @@ export default class CarouselStudioPage extends Component {
   async _probeSource(path) {
     const { w, h } = await this._probeSize(path);
     if (this._unmounted) return;
-    /** @type {Record<string, *>} */
-    const patch = {};
+    const patch: ComponentState = {};
     if (w && h) patch.dims = { ...this.state.dims, [path]: { srcW: w, srcH: h } };
     // A slide that is not the document's source repaints off `dims`; setting
     // the pair from it would hand the fit panel another slide's numbers.
@@ -1378,12 +1436,15 @@ export default class CarouselStudioPage extends Component {
    * edit the user made. Only `_render` uses it, and it repairs the current
    * entry itself (see below).
    *
-   * @param {*} doc  the next document
-   * @param {import('../../components/Component.ts').ComponentState} [patch]  state
+   * @param doc - the next document
+   * @param patch - state
    *   to set alongside it
-   * @param {{history?: boolean}} [options]
    */
-  _setDoc(doc, patch = {}, { history = true } = {}) {
+  _setDoc(
+    doc: any,
+    patch: import('../../components/Component.ts').ComponentState = {},
+    { history = true }: {history?: boolean} = {},
+  ) {
     if (history) this._history.push(doc);
     this.setState({ ...patch, doc });
   }
@@ -1399,10 +1460,8 @@ export default class CarouselStudioPage extends Component {
    * re-probed — they are derived data, deliberately not document fields, so the
    * ring does not carry them. `_probeSources` is cached per path, so stepping
    * back and forth over a swap costs one probe, not one per step.
-   *
-   * @param {"undo"|"redo"} direction
    */
-  _step(direction) {
+  _step(direction: "undo" | "redo") {
     if (this.state.busy) return;
     const doc = direction === "undo" ? this._history.undo() : this._history.redo();
     if (!doc) return;
@@ -1423,15 +1482,13 @@ export default class CarouselStudioPage extends Component {
    * render — a page-level shortcut has to work when nothing inside the studio
    * holds focus, which a listener on the container cannot do. A text entry
    * keeps its own (see `isTextEntry`).
-   *
-   * @param {KeyboardEvent} e
    */
-  _onHistoryKey(e) {
+  _onHistoryKey(e: KeyboardEvent) {
     const combo = (e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === "z";
     // A dialog is modal: undo there would step the document behind it, which is
     // not the thing the user is looking at.
     if (this._dialogOpen()) return;
-    if (!combo || isTextEntry(/** @type {HTMLElement|null} */ (e.target))) return;
+    if (!combo || isTextEntry((e.target as HTMLElement | null))) return;
     e.preventDefault();
     if (e.shiftKey) this._redo();
     else this._undo();
@@ -1445,11 +1502,14 @@ export default class CarouselStudioPage extends Component {
    * span layers ride along untouched: their box is deck-normalized, so a new
    * slide count re-flows the same headline across the new seams rather than
    * dropping it.
-   *
-   * @param {{source?: string, n?: number, aspect?: string,
-   *   strategy?: 'cover'|'exact'|'pad', anchorY?: number}} patch
    */
-  _splitDoc(patch = {}) {
+  _splitDoc(patch: {
+    source?: string;
+    n?: number;
+    aspect?: string;
+    strategy?: 'cover' | 'exact' | 'pad';
+    anchorY?: number;
+  } = {}) {
     const doc = this.state.doc;
     const current = doc.slides.length >= MIN_SLIDES ? doc.slides.length : DEFAULT_SLIDES;
     const next = splitDocument({
@@ -1480,12 +1540,10 @@ export default class CarouselStudioPage extends Component {
    * says so and carries the way back.
    *
    * The user-facing words for the two modes are **Panorama** and **Slides**
-   * (`modeToggle` in `studio/panels.js`); the stored values stay `split` and
+   * (`modeToggle` in `studio/panels.ts`); the stored values stay `split` and
    * `deck`, so everything below and every document on disk keeps one vocabulary.
-   *
-   * @param {string} mode
    */
-  _setMode(mode) {
+  _setMode(mode: string) {
     const doc = this.state.doc;
     if (!mode || mode === doc.mode || this.state.busy || !doc.slides.length) return;
 
@@ -1499,7 +1557,7 @@ export default class CarouselStudioPage extends Component {
       // The freeze is invisible except for one case: `pad`'s short tail column
       // sat flush left with its gap on the right, and a deck slide can only
       // centre a contained crop. Say so, rather than let the user hunt for what
-      // moved (see toDeckDocument in document.js).
+      // moved (see toDeckDocument in document.ts).
       const recentred = next.slides.some((s) => s.fit === "contain");
       setToast({
         message: recentred
@@ -1544,7 +1602,7 @@ export default class CarouselStudioPage extends Component {
     if (this.state.selected === i) return;
     // A slide-scoped layer selection is an index into *this* slide's list, so it
     // cannot survive the move; a span-scoped one is deck-wide and stays put.
-    const patch = { selected: i };
+    const patch: ComponentState = { selected: i };
     if (this.state.layerScope === "slide") patch.selectedLayer = null;
     this.setState(patch);
   }
@@ -1561,9 +1619,9 @@ export default class CarouselStudioPage extends Component {
    * `afterRender` makes the move — the one place that already scrolls the
    * touch layout, and the one place that runs late enough to measure.
    *
-   * @param {number} delta  -1 or 1
+   * @param delta - 1 or 1
    */
-  _stepSlide(delta) {
+  _stepSlide(delta: number) {
     const n = this.state.doc.slides.length;
     const from = this._selectedIndex();
     const i = Math.max(0, Math.min(n - 1, from + delta));
@@ -1587,10 +1645,8 @@ export default class CarouselStudioPage extends Component {
    * Whether `n` is a slide count the studio will write. Refusing is a toast,
    * not an exception: every caller is a button, the ends are disabled anyway,
    * and the bounds are the user's business rather than a programming error.
-   *
-   * @param {number} n
    */
-  _allowSlideCount(n) {
+  _allowSlideCount(n: number) {
     if (n < MIN_SLIDES) {
       setToast({ message: `A carousel needs at least ${MIN_SLIDES} slides.`, type: "error" });
       return false;
@@ -1606,7 +1662,7 @@ export default class CarouselStudioPage extends Component {
    *  selection is an index into *that* slide's list, so it cannot survive the
    *  move; a span-scoped one is deck-wide and stays. Same rule as `_select`. */
   _selectSlidePatch(i) {
-    const patch = { selected: i };
+    const patch: ComponentState = { selected: i };
     if (this.state.layerScope === "slide") patch.selectedLayer = null;
     return patch;
   }
@@ -1671,14 +1727,11 @@ export default class CarouselStudioPage extends Component {
    * `refocus` is for the keyboard path: the write rebuilds the rail out from
    * under the handle the user is holding, so it is claimed *before* the write
    * — `_setDoc` renders synchronously, and a flag set after it would be read
-   * by the render after next. The same order `gestures.js` nudges in.
+   * by the render after next. The same order `gestures.ts` nudges in.
    *
-   * @param {number} from
-   * @param {number} to
-   * @param {{refocus?: boolean}} [opts]
-   * @returns {boolean} whether the document moved
+   * @returns whether the document moved
    */
-  _moveSlide(from, to, { refocus = false } = {}) {
+  _moveSlide(from: number, to: number, { refocus = false }: {refocus?: boolean} = {}): boolean {
     const doc = this.state.doc;
     if (doc.mode !== "deck" || this.state.busy) return false;
     if (!Number.isInteger(from) || !Number.isInteger(to)) return false;
@@ -1709,7 +1762,7 @@ export default class CarouselStudioPage extends Component {
     this._detachReorder = attachPointerReorder({
       handleSelector: ".carousel-studio__rail-handle",
       // The top management pane, not the stage: the handle moved out of the
-      // image column into its own pane segment (`studio/panels.js`), so that
+      // image column into its own pane segment (`studio/panels.ts`), so that
       // segment — not the photo underneath it — is what `attachPointerReorder`
       // measures and drags. It never moves the image itself mid-drag (only an
       // indicator line), so this costs nothing visually; `onDrop` below still
@@ -1736,12 +1789,10 @@ export default class CarouselStudioPage extends Component {
   /**
    * The `slideIndex` and current list a layer scope addresses: the deck's
    * spanning layers at {@link SPAN_SLIDE}, the selected slide's own otherwise.
-   * Every layer mutator routes through this, so one family of `document.js`
-   * calls serves both — see `layerPanel` in `studio/panels.js`.
-   *
-   * @param {"slide"|"span"} scope
+   * Every layer mutator routes through this, so one family of `document.ts`
+   * calls serves both — see `layerPanel` in `studio/panels.ts`.
    */
-  _layerTarget(scope) {
+  _layerTarget(scope: "slide" | "span") {
     if (scope === "span") {
       return { slideIndex: SPAN_SLIDE, list: this.state.doc.spanLayers || [] };
     }
@@ -1758,7 +1809,7 @@ export default class CarouselStudioPage extends Component {
    * Both lists are live containers even though only one scope's rows can be
    * dragged into the other's space: `onDrop` below refuses a drop that
    * crossed lists, since a slide layer and a span layer are not
-   * interchangeable items — `reorderLayer` (`document.js`) only ever moves a
+   * interchangeable items — `reorderLayer` (`document.ts`) only ever moves a
    * layer within its own list.
    *
    * Bound once, for the life of the page, like the rail's.
@@ -1789,7 +1840,7 @@ export default class CarouselStudioPage extends Component {
    * Where a layer drag's drop line lands, translated into `reorderLayer`'s
    * `to` (a post-removal array index) — the mirror image of
    * `_setupSlideReorder`'s `after`/`from` arithmetic, because the list is
-   * shown **top of stack first** (`layerRows`, `studio/panels.js`) while the
+   * shown **top of stack first** (`layerRows`, `studio/panels.ts`) while the
    * array is back-to-front: a row's DOM predecessor is the layer with the
    * NEXT HIGHER array index, not the next lower one.
    *
@@ -1799,12 +1850,11 @@ export default class CarouselStudioPage extends Component {
    * drag landed. Null means the drop line sits above every row — the top of
    * the stack — which is the array's last slot once `from` has been removed.
    *
-   * @param {number} from the dragged row's index before the move
-   * @param {HTMLElement|null} afterEl the row (if any) the drop line sits
+   * @param from - the dragged row's index before the move
+   * @param afterEl - the row (if any) the drop line sits
    *   directly under, in DOM order
-   * @param {"slide"|"span"} scope
    */
-  _layerDropIndex(from, afterEl, scope) {
+  _layerDropIndex(from: number, afterEl: HTMLElement | null, scope: "slide" | "span") {
     const { list } = this._layerTarget(scope);
     if (!afterEl) return list.length - 1;
     const above = Number(afterEl.dataset.index);
@@ -1813,20 +1863,19 @@ export default class CarouselStudioPage extends Component {
 
   /**
    * A fresh layer of `type`, its box landed inside the slide's `safeAreaRect`
-   * (`geometry.js`) rather than at the origin — a layer outside the frame's
+   * (`geometry.ts`) rather than at the origin — a layer outside the frame's
    * honest bounds is one the user has to move before it is any use. A `"span"`
    * layer keeps the type's vertical placement but stretches across the deck,
    * since its box is normalized to the whole stage and running across the
    * seams is the use. Only the `box` (and an `image` layer's default source) is
    * set here; every other field is `normalizeLayer`'s to fill, because the
-   * studio never authors a layer literal — see `addLayer` in `document.js`.
+   * studio never authors a layer literal — see `addLayer` in `document.ts`.
    *
-   * @param {string} type one of `LAYER_TYPES`, never `"ink"` — an ink layer's
+   * @param type - one of `LAYER_TYPES`, never `"ink"` — an ink layer's
    *   box and strokes are the draw session's own output, so `_addLayer` routes
    *   that type to `_startDrawSession` and this function never sees it.
-   * @param {"slide"|"span"} [scope]
    */
-  _defaultLayer(type, scope = "slide") {
+  _defaultLayer(type: string, scope: "slide" | "span" = "slide") {
     const { aspect } = this.state.doc;
     const [w, h] = canvasSize(aspect);
     const sa = safeAreaRect(aspect);
@@ -1851,7 +1900,7 @@ export default class CarouselStudioPage extends Component {
         box.w = 0.88;
       }
     }
-    const layer = { type, box };
+    const layer: { type: string; box: typeof box; source?: string } = { type, box };
     if (type === "image") {
       const logo = getSettings()?.logo_url;
       if (logo) layer.source = logo;
@@ -1888,26 +1937,26 @@ export default class CarouselStudioPage extends Component {
    * stroke this session gathers lives on that one column
    * (`_inkSessionFor`), the same way a selected layer's drag is scoped to
    * one column. Clears the layer selection: while the session is on, a
-   * press draws instead of selecting (`studio/gestures.js`'s own routing).
+   * press draws instead of selecting (`studio/gestures.ts`'s own routing).
    * Deck mode only, matching every other layer-editing control.
    */
   _startDrawSession() {
     if (this.state.doc.mode !== "deck" || this._drawSession) return;
     this._drawSession = {
       i: this._selectedIndex(),
-      mode: /** @type {"draw"|"erase"} */ ("draw"),
+      mode: ("draw" as "draw" | "erase"),
       color: DEFAULT_MARK_COLOR,
       width: DEFAULT_INK_WIDTH,
       opacity: 1,
-      strokes: /** @type {Array<{w: number, pts: Array<[number, number]>}>} */ ([]),
-      // The session's own undo ring (S10), the shape `studio/history.js`
+      strokes: ([] as Array<{w: number, pts: Array<[number, number]>}>),
+      // The session's own undo ring (S10), the shape `studio/history.ts`
       // keeps at document scale: `past` holds the stroke lists this session
       // has been through, the *current* one last, so the empty list it
       // starts on is the floor an undo can never step past. Nothing here
       // reaches the document — the session still commits once, as one layer,
       // as one document step (`_endDrawSession`).
-      past: /** @type {Array<Array<*>>} */ ([[]]),
-      future: /** @type {Array<Array<*>>} */ ([]),
+      past: ([[]] as Array<Array<any>>),
+      future: ([] as Array<Array<any>>),
     };
     this.setState({ selectedLayer: null });
   }
@@ -1947,16 +1996,16 @@ export default class CarouselStudioPage extends Component {
   }
 
   /**
-   * Two or three fingers tapped the stage together (`studio/gestures.js`'s
+   * Two or three fingers tapped the stage together (`studio/gestures.ts`'s
    * own watcher). Procreate's model: inside a draw session the pair steps one
    * stroke, because the session is what the user is looking at and it commits
    * as a single document step — so a document undo there would drop the edit
    * made *before* the session rather than the mark just drawn. Anywhere else
    * the same taps are the document's own undo and redo.
    *
-   * @param {number} count  2 or 3; the gesture reports no other count
+   * @param count - 2 or 3; the gesture reports no other count
    */
-  _onMultiTap(count) {
+  _onMultiTap(count: number) {
     if (this._drawSession) {
       if (count === 2) this._inkUndo();
       else this._inkRedo();
@@ -2022,7 +2071,7 @@ export default class CarouselStudioPage extends Component {
   }
 
   /** The ink tool's session over column `i`, or null when the tool is off or
-   *  `i` is not its drawing column — `studio/gestures.js`'s own routing
+   *  `i` is not its drawing column — `studio/gestures.ts`'s own routing
    *  hook, read on every press ahead of every other gesture. */
   _inkSessionFor(i) {
     return this._drawSession && this._drawSession.i === i ? this._drawSession : null;
@@ -2061,7 +2110,7 @@ export default class CarouselStudioPage extends Component {
 
   /** Throw away the stroke in progress rather than finish it — a second
    *  finger landed on a live draw drag, so the first finger's mark was the
-   *  opening half of a two- or three-finger tap (`studio/gestures.js`). The
+   *  opening half of a two- or three-finger tap (`studio/gestures.ts`). The
    *  ring is untouched: the stroke never reached it, so its top already
    *  holds exactly the list this leaves behind. */
   _inkDrawAbort() {
@@ -2122,25 +2171,29 @@ export default class CarouselStudioPage extends Component {
    * Every layer painted on column `i`, topmost (last-painted) first — the
    * slide's own `layers`, reversed, then any `spanLayers` whose coverage
    * reaches this column, also reversed. Matches the DOM stacking order
-   * `layerNodes`/`spanNodes` (`studio/panels.js`) paint in: a span layer
+   * `layerNodes`/`spanNodes` (`studio/panels.ts`) paint in: a span layer
    * paints before the slide's own layers there, so it sits underneath.
    *
-   * Read by `studio/gestures.js`'s click-to-select, for a press that misses
+   * Read by `studio/gestures.ts`'s click-to-select, for a press that misses
    * the active layer (or there is none) to hit-test against. A `hidden` layer
    * is left out: it paints nothing on the column, so a press that lands on
    * where it used to be belongs to whatever is actually visible under it. It
    * stays selectable — and draggable, once selected — from the layer list.
-   *
-   * @param {number} i
-   * @returns {Array<{scope: 'slide'|'span', j: number, box: {x:number,y:number,w:number,h:number}}>}
    */
-  _layersOnColumn(i) {
+  _layersOnColumn(i: number): Array<{
+    scope: 'slide' | 'span';
+    j: number;
+    box: {x:number,y:number,w:number,h:number};
+  }> {
     const { doc } = this.state;
     const slideLayers = doc.slides[i]?.layers || [];
     const spanLayers = doc.spanLayers || [];
     const n = doc.slides.length;
-    /** @type {Array<{scope: 'slide'|'span', j: number, box: {x:number,y:number,w:number,h:number}}>} */
-    const out = [];
+    const out: Array<{
+      scope: 'slide' | 'span';
+      j: number;
+      box: {x:number,y:number,w:number,h:number};
+    }> = [];
     for (let j = slideLayers.length - 1; j >= 0; j--) {
       if (slideLayers[j].hidden) continue;
       out.push({ scope: "slide", j, box: slideLayers[j].box });
@@ -2161,12 +2214,8 @@ export default class CarouselStudioPage extends Component {
    * — two `setState` calls would flash the panel with the old slide's list
    * against the new index. `i` is ignored for a span layer, whose selection
    * is not slide-bound.
-   *
-   * @param {number} i
-   * @param {number} j
-   * @param {"slide"|"span"} scope
    */
-  _selectLayerOnStage(i, j, scope) {
+  _selectLayerOnStage(i: number, j: number, scope: "slide" | "span") {
     const s = scope === "span" ? "span" : "slide";
     if (
       this.state.layerScope === s &&
@@ -2175,20 +2224,20 @@ export default class CarouselStudioPage extends Component {
     ) {
       return;
     }
-    const patch = { layerScope: s, selectedLayer: j };
+    const patch: ComponentState = { layerScope: s, selectedLayer: j };
     if (s === "slide" && this.state.selected !== i) patch.selected = i;
     this.setState(patch);
   }
 
   /**
    * Enter on-canvas editing for layer `j` of `scope`, double-clicked on
-   * column `i` — `studio/gestures.js`'s `editLayer`. One edit at a time, and
+   * column `i` — `studio/gestures.ts`'s `editLayer`. One edit at a time, and
    * `text` layers only: a `counter`'s DOM text is a computed preview
    * (`counterText`), not a value of its own to type into. The block itself
    * is the DOM `paintDeckLayers`/`paintSpanLayers` already painted for it;
    * this only ever adds `contenteditable` and a caret to that node, so a
    * doc-driven repaint elsewhere still finds the layer it expects — see the
-   * `dataset.editing` guard in `studio/preview.js`'s `paintLayerContent`.
+   * `dataset.editing` guard in `studio/preview.ts`'s `paintLayerContent`.
    */
   _enterTextEdit(i, j, scope) {
     if (this._editing) return;
@@ -2200,8 +2249,8 @@ export default class CarouselStudioPage extends Component {
     const host = this.$(`.carousel-studio__stage-slide[data-slice="${i}"]`);
     const layerSel =
       s === "span" ? `.carousel-studio__span-layer[data-span-layer="${j}"]` : `.carousel-studio__layer[data-layer="${j}"]`;
-    const layerEl = /** @type {HTMLElement|null} */ (host?.querySelector(layerSel));
-    const block = /** @type {HTMLElement|null} */ (layerEl?.querySelector(".carousel-studio__layer-text"));
+    const layerEl = (host?.querySelector(layerSel) as HTMLElement | null);
+    const block = (layerEl?.querySelector(".carousel-studio__layer-text") as HTMLElement | null);
     if (!layerEl || !block) return;
 
     layerEl.dataset.editing = "true";
@@ -2327,7 +2376,7 @@ export default class CarouselStudioPage extends Component {
     const { slideIndex, list } = this._layerTarget(s);
     if (to < 0 || to >= list.length) return;
     const doc = reorderLayer(this.state.doc, slideIndex, from, to);
-    const patch = {};
+    const patch: ComponentState = {};
     if (this.state.layerScope === s && this.state.selectedLayer != null) {
       let sel = this.state.selectedLayer;
       if (sel === from) sel = to;
@@ -2363,7 +2412,7 @@ export default class CarouselStudioPage extends Component {
     const s = scope === "span" ? "span" : "slide";
     const { slideIndex } = this._layerTarget(s);
     const doc = removeLayer(this.state.doc, slideIndex, j);
-    const patch = {};
+    const patch: ComponentState = {};
     if (this.state.layerScope === s) {
       let sel = this.state.selectedLayer;
       if (sel === j) sel = null;
@@ -2399,16 +2448,15 @@ export default class CarouselStudioPage extends Component {
     if (layer) this._setLayer(this._layerFromFields(layer));
   }
 
-  /** The safe-area rect to snap a layer against, in the fractions of the space
+  /**
+   * The safe-area rect to snap a layer against, in the fractions of the space
    *  that layer's box lives in. A slide layer gets the slide's own. A span
    *  layer gets the *deck's*: vertically the same band, horizontally the left
    *  inset of the first slide to the right inset of the last, so a headline
    *  snaps to the margins that actually cut it off rather than to a seam it is
    *  meant to cross (the seams are guides in their own right — `deckSeams`).
-   *
-   * @param {"slide"|"span"} [scope]
    */
-  _safeAreaFor(scope) {
+  _safeAreaFor(scope?: "slide" | "span") {
     const { aspect } = this.state.doc;
     const [w, h] = canvasSize(aspect);
     const sa = safeAreaRect(aspect);
@@ -2466,10 +2514,8 @@ export default class CarouselStudioPage extends Component {
    * `document.body` rather than mounted in the studio's own tree, the same
    * way the two `MediaPickerDialog`s above are: an overlay has to sit above
    * everything, including the properties sheet, not just above the builder.
-   *
-   * @param {number} index
    */
-  _openRenderedPreview(index) {
+  _openRenderedPreview(index: number) {
     const paths = this._renderedPaths();
     if (!paths.length) return;
     if (!this._previewEl) {
@@ -2514,9 +2560,9 @@ export default class CarouselStudioPage extends Component {
    * `exact` and `pad` each snap the count to what the strategy makes from this
    * source (`ceil`/`floor` of `srcW / slideW`), clamped to the studio bounds.
    *
-   * @param {string} mode  one of the fit panel's modes
+   * @param mode - one of the fit panel's modes
    */
-  _applyFitMode(mode) {
+  _applyFitMode(mode: string) {
     const { srcW } = this.state;
     const doc = this.state.doc;
     const [dstW] = canvasSize(doc.aspect);
@@ -2818,7 +2864,7 @@ export default class CarouselStudioPage extends Component {
   }
 
   // ── Templates ─────────────────────────────────────────────────────────────
-  // A template is an envelope (`toTemplate` in document.js) with its images
+  // A template is an envelope (`toTemplate` in document.ts) with its images
   // inlined as `data:` URLs, stored under a slug. Two things move between that
   // world and the studio's:
   //
@@ -2932,7 +2978,7 @@ export default class CarouselStudioPage extends Component {
    * Turn every `data:` asset of a freshly applied document into a real,
    * post-owned media file, and answer with the url → path map that rewrites it.
    *
-   * Both halves are load-bearing. `deps.fetchBlob` (`render.js`) is a
+   * Both halves are load-bearing. `deps.fetchBlob` (`render.ts`) is a
    * same-origin GET of a content path and the CSS preview points a
    * `background-image` at the same string, so neither can be handed a `data:`
    * URL. And the upload carries `post_id`, because a media row without one is
@@ -2943,15 +2989,15 @@ export default class CarouselStudioPage extends Component {
    * exactly those on a failure part way through, the way `renderAndUpload`
    * unwinds its own.
    *
-   * @param {import('./document.js').CarouselDoc} doc
-   * @param {import('./render.js').RenderDeps} deps
-   * @param {Array<{id: number, path: string}>} uploaded  appended to
-   * @returns {Promise<Map<string, string>>}
+   * @param uploaded - appended to
    */
-  async _materializeAssets(doc, deps, uploaded) {
+  async _materializeAssets(
+    doc: import('./document.ts').CarouselDoc,
+    deps: import('./render.ts').RenderDeps,
+    uploaded: Array<{id: number, path: string}>,
+  ): Promise<Map<string, string>> {
     const assets = dataAssets(doc);
-    /** @type {Map<string, string>} */
-    const paths = new Map();
+    const paths: Map<string, string> = new Map();
     for (let i = 0; i < assets.length; i++) {
       const asset = assets[i];
       const decoded = decodeAsset(asset.url, `carousel-template-${this.state.postId}-${i + 1}`);
@@ -2960,7 +3006,7 @@ export default class CarouselStudioPage extends Component {
       }
       // The cast is for the checker only: `Uint8Array` is a `BlobPart` at
       // runtime, but its `buffer` widens to `ArrayBufferLike` in the lib types.
-      const part = /** @type {BlobPart} */ (/** @type {unknown} */ (decoded.bytes));
+      const part = ((decoded.bytes as any) as BlobPart);
       const file = new File([part], decoded.name, { type: decoded.mime });
       const media = await deps.upload(file, { post_id: this.state.postId });
       uploaded.push(media);
@@ -2980,16 +3026,13 @@ export default class CarouselStudioPage extends Component {
    * The document is saved as soon as it is built, before any render. The
    * materialized assets are media rows that carry this post's id, so nothing
    * would ever collect them again; saving is what makes the document name them.
-   *
-   * @param {string} slug
    */
-  async _applyTemplate(slug) {
+  async _applyTemplate(slug: string) {
     const { postId, post } = this.state;
     if (!slug || !postId || !post || this.state.busy || this.state.templateBusy) return;
 
     const deps = this.props.renderDeps || browserDeps();
-    /** @type {Array<{id: number, path: string}>} */
-    const uploaded = [];
+    const uploaded: Array<{id: number, path: string}> = [];
     this.setState({ templateBusy: true, templatesError: "" });
     try {
       const stored = await getCarouselTemplate(slug);
@@ -3040,7 +3083,7 @@ export default class CarouselStudioPage extends Component {
    * take one archive's bytes.
    */
   async _runImport() {
-    const input = /** @type {HTMLInputElement} */ (this.$("#carousel-import-file"));
+    const input = (this.$("#carousel-import-file") as HTMLInputElement);
     const files = [...(input?.files || [])];
     const problem = importRefusal(files);
     if (problem) {
@@ -3212,7 +3255,7 @@ export default class CarouselStudioPage extends Component {
     // studio with no photo yet takes the body row with `pickPrompt` instead of
     // a builder, and "import a deck to start" is exactly the state where the
     // gallery has to stay reachable — so the tray is built once here and
-    // handed to whichever one is showing (`builder` in `studio/panels.js`
+    // handed to whichever one is showing (`builder` in `studio/panels.ts`
     // reads none of the page's own state; this is where that state is read).
     const busy = this.state.busy || this.state.templateBusy;
     const tray = html`
@@ -3265,7 +3308,7 @@ export default class CarouselStudioPage extends Component {
     card?.querySelector(".carousel-studio__props-header")
       ?.setAttribute("aria-expanded", String(open));
     // The touch layout's sheet is not a remembered choice. `readPropsPref`
-    // ignores the key on a coarse pointer anyway (studio/layout.js), and
+    // ignores the key on a coarse pointer anyway (studio/layout.ts), and
     // writing "0" there — which is what dismissing a sheet would write, every
     // time — would collapse the rail on the same user's desktop next visit.
     if (isTouchLayout()) return;
@@ -3361,10 +3404,10 @@ export default class CarouselStudioPage extends Component {
    * buttons (carousel.css), and a column sized against that padding would eat
    * the very room the padding reserves.
    *
-   * @param {number} paneHeight the top pane's height, already measured
-   * @returns {number} the budget in px, or 0 where there is nothing to measure
+   * @param paneHeight - the top pane's height, already measured
+   * @returns the budget in px, or 0 where there is nothing to measure
    */
-  _touchStageBudget(paneHeight) {
+  _touchStageBudget(paneHeight: number): number {
     const scroll = this.$(".carousel-studio__stage-scroll");
     if (!scroll) return 0;
     const cs = getComputedStyle(scroll);
@@ -3394,10 +3437,10 @@ export default class CarouselStudioPage extends Component {
    * what makes the strip movable by the page while it is immovable by a
    * finger.
    *
-   * @param {boolean} [smooth] animate the move — false for a render, true for
+   * @param smooth - animate the move — false for a render, true for
    *   a deliberate step between slides
    */
-  _scrollActiveIntoView(smooth = false) {
+  _scrollActiveIntoView(smooth: boolean = false) {
     const scroll = this.$(".carousel-studio__stage-scroll");
     const i = this._selectedIndex();
     const col = this.$(`.carousel-studio__stage [data-slice="${i}"]`);
@@ -3410,13 +3453,15 @@ export default class CarouselStudioPage extends Component {
     scroll.scrollTo?.({ left, behavior: smooth ? "smooth" : "auto" });
   }
 
-  /** Everything the builder markup needs, read off the state in one place —
-   *  `studio/panels.js` answers no questions about the page itself.
+  /**
+   * Everything the builder markup needs, read off the state in one place —
+   *  `studio/panels.ts` answers no questions about the page itself.
    *
-   * @param {import('../../utils/helpers.ts').Slot} tray  the gallery and the
+   * @param tray - the gallery and the
    *   import report, built once by `_renderStudio` so the same markup reaches
-   *   the tray row whether or not a source is picked. */
-  _renderBuilder(tray) {
+   *   the tray row whether or not a source is picked.
+   */
+  _renderBuilder(tray: import('../../utils/helpers.ts').Slot) {
     const { doc, showGuides, selected, srcW, srcH, busy, selectedLayer, layerScope, error } = this.state;
     const deckIndex = this._selectedIndex();
     return builder({
@@ -3441,7 +3486,7 @@ export default class CarouselStudioPage extends Component {
       inkSession: this._drawSession,
       canUndo: this._history.canUndo,
       canRedo: this._history.canRedo,
-      // The pointer question, asked here rather than there: `panels.js` is a
+      // The pointer question, asked here rather than there: `panels.ts` is a
       // pure function of what it is handed. It decides one thing only — that
       // the tray's contents sit at the end of the properties sheet instead of
       // in a row under the stage, which no media query can do.
@@ -3476,10 +3521,10 @@ export default class CarouselStudioPage extends Component {
     // Re-taken every render, released with it (see Component's resource
     // contract) — so navigating off the studio takes the shortcut with it.
     this.on(document, "keydown", (e) => {
-      this._onSheetKey(/** @type {KeyboardEvent} */ (e));
-      this._onDialogKey(/** @type {KeyboardEvent} */ (e));
-      this._onDrawKey(/** @type {KeyboardEvent} */ (e));
-      this._onHistoryKey(/** @type {KeyboardEvent} */ (e));
+      this._onSheetKey((e as KeyboardEvent));
+      this._onDialogKey((e as KeyboardEvent));
+      this._onDrawKey((e as KeyboardEvent));
+      this._onHistoryKey((e as KeyboardEvent));
     });
 
     const deck = this.state.doc.mode === "deck";
@@ -3502,7 +3547,7 @@ export default class CarouselStudioPage extends Component {
     // The preview typesets on a real 2D context, and until the theme's face has
     // loaded that context measures a system fallback — so the first paint of a
     // cold load wraps against the wrong metrics. One await for the whole
-    // session (preview.js memoizes it), then one repaint; it resolves `false`
+    // session (preview.ts memoizes it), then one repaint; it resolves `false`
     // on every render after that, so this costs a microtask and nothing else.
     // Split mode carries no layers, so only the deck has type to re-measure.
     if (deck && source) {
@@ -3515,7 +3560,7 @@ export default class CarouselStudioPage extends Component {
     this._wireTemplateDialog();
     this._gestures.attach(deck ? this.$$(".carousel-studio__stage-slide") : []);
     // The panorama stage takes the pointer only when it is the surface — and
-    // only when `panels.js` emitted a rail, which is its answer to whether the
+    // only when `panels.ts` emitted a rail, which is its answer to whether the
     // crop leaves any slack to drag through.
     this._anchorGesture.attach(
       deck ? null : this.$(".carousel-studio__stage--anchor"),
@@ -3523,7 +3568,7 @@ export default class CarouselStudioPage extends Component {
 
     // The selected layer's chrome (outline + handles) is markup; position it
     // now that the columns exist. Cleared for free when nothing is selected —
-    // panels.js emits the chrome node only then.
+    // panels.ts emits the chrome node only then.
     if (deck && this.state.selectedLayer != null) {
       const j = this.state.selectedLayer;
       if (this.state.layerScope === "span") {
@@ -3582,11 +3627,8 @@ export default class CarouselStudioPage extends Component {
    * `anchorOverride` is the live drag's provisional value — the same argument
    * `_paintDeckSlide` takes a provisional slide for, and for the same reason:
    * a gesture and a committed document are painted by identical code.
-   *
-   * @param {string} source
-   * @param {number} [anchorOverride]
    */
-  _paintSplit(source, anchorOverride) {
+  _paintSplit(source: string, anchorOverride?: number) {
     const { srcW, srcH } = this.state;
     const { aspect, slides } = this.state.doc;
     const anchorY = anchorOverride ?? this.state.doc.anchorY;
@@ -3602,7 +3644,7 @@ export default class CarouselStudioPage extends Component {
         aspect,
         anchorY,
         n: slides.length,
-        strategy: /** @type {'cover'|'exact'|'pad'} */ (this.state.doc.strategy),
+        strategy: (this.state.doc.strategy as 'cover' | 'exact' | 'pad'),
       },
     );
     paintAnchorRail(this.$(".carousel-studio__anchor-rail"), anchorY);
@@ -3613,7 +3655,7 @@ export default class CarouselStudioPage extends Component {
    * band sits and how much room the current strategy leaves it. Null whenever
    * there is nothing to drag — deck mode, no source pixels yet, or a crop that
    * fills the height exactly — which is the `report.trimmedH > 1` condition
-   * `panels.js` draws the rail and the slider under.
+   * `panels.ts` draws the rail and the slider under.
    */
   _anchorMetrics() {
     const doc = this.state.doc;
@@ -3624,7 +3666,7 @@ export default class CarouselStudioPage extends Component {
       srcH,
       doc.slides.length,
       doc.aspect,
-      /** @type {'cover'|'exact'|'pad'} */ (doc.strategy),
+      (doc.strategy as 'cover' | 'exact' | 'pad'),
     );
     if (!(report.trimmedH > 1)) return null;
     const [, dstH] = canvasSize(doc.aspect);
@@ -3635,13 +3677,11 @@ export default class CarouselStudioPage extends Component {
    * Paint a provisional anchor: the band, the rail, and the slider — which is
    * the same control by another face, so it tracks the drag rather than going
    * stale until the commit rebuilds it.
-   *
-   * @param {number} anchorY
    */
-  _paintAnchor(anchorY) {
+  _paintAnchor(anchorY: number) {
     const source = this._source();
     if (source) this._paintSplit(source, anchorY);
-    const slider = /** @type {HTMLInputElement|null} */ (this.$("#carousel-anchor"));
+    const slider = (this.$("#carousel-anchor") as HTMLInputElement | null);
     if (slider) slider.value = String(anchorY);
     const out = this.$("#carousel-anchor-out");
     if (out) out.textContent = `${Math.round(anchorY * 100)}%`;
@@ -3655,7 +3695,7 @@ export default class CarouselStudioPage extends Component {
   /** Paint the deck's spanning layers over slide `i`, from `spanLayers` unless a
    *  provisional list is given (a live span-form edit). Positioned per slide
    *  through `spanLayerRect`, so the seam falls where the render puts it. */
-  _paintSpanLayersForSlide(i, spanLayers) {
+  _paintSpanLayersForSlide(i, spanLayers?) {
     paintSpanLayers(
       { hosts: this.$$(`[data-slice="${i}"]`) },
       {
@@ -3680,11 +3720,8 @@ export default class CarouselStudioPage extends Component {
    * Paint one deck slide onto its stage tile (`[data-slice="${i}"]`). Called
    * with a provisional slide mid-gesture and with the document's own slide
    * otherwise, which is what keeps a drag and a commit painting identically.
-   *
-   * @param {number} i
-   * @param {import('./document.js').CarouselSlide} slide
    */
-  _paintDeckSlide(i, slide) {
+  _paintDeckSlide(i: number, slide: import('./document.ts').CarouselSlide) {
     const { srcW, srcH } = this._dimsFor(slide);
     paintDeckSlide(
       {
@@ -3782,8 +3819,8 @@ export default class CarouselStudioPage extends Component {
    * is here to support.
    */
   _wireTemplateDialog() {
-    const name = /** @type {HTMLInputElement|null} */ (this.$("#carousel-template-name"));
-    const slug = /** @type {HTMLInputElement|null} */ (this.$("#carousel-template-slug"));
+    const name = (this.$("#carousel-template-name") as HTMLInputElement | null);
+    const slug = (this.$("#carousel-template-slug") as HTMLInputElement | null);
     if (!name || !slug) return;
 
     this.on(name, "input", () => {
@@ -3851,7 +3888,7 @@ export default class CarouselStudioPage extends Component {
       });
     }
 
-    const addSelects = /** @type {HTMLSelectElement[]} */ (Array.from(this.$$(".carousel-studio__add-layer-select")));
+    const addSelects = (Array.from(this.$$(".carousel-studio__add-layer-select")) as HTMLSelectElement[]);
     for (const select of addSelects) {
       this.on(select, "change", () => {
         const type = select.value;
@@ -3871,11 +3908,11 @@ export default class CarouselStudioPage extends Component {
       const out = this.$(sel);
       if (out) out.textContent = text;
     };
-    const opacity = /** @type {HTMLInputElement|null} */ (this.$("#carousel-layer-opacity"));
+    const opacity = (this.$("#carousel-layer-opacity") as HTMLInputElement | null);
     if (opacity) put("#carousel-layer-opacity-out", `${Math.round(Number(opacity.value) * 100)}%`);
-    const weight = /** @type {HTMLInputElement|null} */ (this.$("#carousel-layer-weight"));
+    const weight = (this.$("#carousel-layer-weight") as HTMLInputElement | null);
     if (weight) put("#carousel-layer-weight-out", weight.value);
-    const radius = /** @type {HTMLInputElement|null} */ (this.$("#carousel-layer-radius"));
+    const radius = (this.$("#carousel-layer-radius") as HTMLInputElement | null);
     if (radius) put("#carousel-layer-radius-out", `${Math.round(Number(radius.value) * 100)}%`);
   }
 
@@ -3885,16 +3922,15 @@ export default class CarouselStudioPage extends Component {
    * field. A value the schema rejects (an empty number field) is left to
    * `updateLayer` to drop back to the layer's own — its `base` argument.
    *
-   * @param {import('./document.js').CarouselLayer} layer
-   * @returns {Record<string, unknown>}  The fields' raw values, not yet validated.
+   * @returns The fields' raw values, not yet validated.
    */
-  _layerFromFields(layer) {
+  _layerFromFields(layer: import('./document.ts').CarouselLayer): Record<string, unknown> {
     const val = (sel) => {
-      const el = /** @type {HTMLInputElement|null} */ (this.$(sel));
+      const el = (this.$(sel) as HTMLInputElement | null);
       return el ? el.value : undefined;
     };
     const checked = (sel) => {
-      const el = /** @type {HTMLInputElement|null} */ (this.$(sel));
+      const el = (this.$(sel) as HTMLInputElement | null);
       return el ? el.checked : undefined;
     };
     const t = layer.type;
@@ -3939,13 +3975,10 @@ export default class CarouselStudioPage extends Component {
    * A gradient is rebuilt as its two ends — the control edits a `from` and a
    * `to`, and a hand-authored document with more stops renders them all but
    * loses the middle ones the moment this panel writes.
-   *
-   * @param {import('./document.js').CarouselSlide} slide
-   * @returns {import('./document.js').CarouselBg|null}
    */
-  _bgFromFields(slide) {
+  _bgFromFields(slide: import('./document.ts').CarouselSlide): import('./document.ts').CarouselBg | null {
     const value = (sel, fallback) => {
-      const el = /** @type {HTMLInputElement|null} */ (this.$(sel));
+      const el = (this.$(sel) as HTMLInputElement | null);
       return el ? el.value : fallback;
     };
     const bg = slide.bg;

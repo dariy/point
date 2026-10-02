@@ -480,7 +480,7 @@ export function insertHTML(
  * is minted and consumed inside one function — no caller is left holding a
  * value it could route to a real sink. Nothing parsed here is adopted into the
  * live DOM; the importers read the tree attribute by named attribute (see
- * `plugins/carousel/import/xml.js`).
+ * `plugins/carousel/import/xml.ts`).
  *
  * @param mime - 'image/svg+xml', 'application/xml', …
  * @param Parser - the seam a runtime with no global

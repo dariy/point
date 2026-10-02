@@ -345,7 +345,7 @@ function patchLayoutGeometry(win) {
  *
  * linkedom's `<canvas>` carries a `getContext` that answers `null`, which is a
  * `TypeError` one line later. The carousel studio's live preview typesets on an
- * offscreen context (`plugins/carousel/studio/preview.js`) precisely so the
+ * offscreen context (`plugins/carousel/studio/preview.ts`) precisely so the
  * stage breaks lines where the JPEG will — without this, no `text` layer would
  * ever appear in a test DOM. Nothing here draws: the studio's own render path
  * injects `makeSurface`, so this context only ever measures.

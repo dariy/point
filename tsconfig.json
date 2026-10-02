@@ -35,10 +35,6 @@
   },
   "include": [
     "frontend/src/**/*.ts",
-    // carousel-studio only: the Carousel Studio files are still .js.
-    "frontend/src/plugins/carousel/**/*.js",
-    "frontend/src/api/carousel.js",
-    "frontend/src/utils/deckTransition.js",
     "frontend/*.js",
     "frontend/index.html",
     "frontend/types/**/*.d.ts"

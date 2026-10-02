@@ -29,12 +29,12 @@ Staged delivery. As of 2026-09: the **output contract** below is pinned (a Go re
 test), the editor's Visual mode preserves a `:::{.carousel-block}` fence (C3), the
 `carousel` plugin exists as a gated skeleton — registry descriptor, an empty studio
 shell at `/light/carousel?post=<id>`, and a post-editor menu entry (C4) — and the pure
-`geometry.js` / `document.js` modules with their unit tests have landed (C5), and the
+`geometry.ts` / `document.ts` modules with their unit tests have landed (C5), and the
 `carousels` table with its `GET/PUT/DELETE /api/carousel?post=<id>&block=<key>`
 document API is wired and gated (C6 — rekeyed by block since, see the Decisions
 row). The splitter MVP is live (C7) — the studio picks one image,
 slices it into 2–20 equal 4:5 / 1:1 / 1.91:1 slides through a thin browser-canvas
-`render.js`, uploads each as a post-owned media file, saves the document, and writes
+`render.ts`, uploads each as a post-owned media file, saves the document, and writes
 the `:::{.carousel-block}` into post content. Re-render cleanup and Instagram
 slide selection have landed (C8) — a re-render deletes the superseded slide
 rows and byte-identical slides are refused in the studio. C8's slide *selection*
@@ -81,7 +81,7 @@ pick prompt, with every adopted slide marked as not the studio's to delete. See
 "Plain and designed carousels" below. Production
 (S5) is not built yet. See "Delivery stages".
 
-Ahead of S2, `geometry.js` gained the inverse of the split question — `fitReport`
+Ahead of S2, `geometry.ts` gained the inverse of the split question — `fitReport`
 and `slideCountOptions` say how many slides a source makes and at what scale
 (`cover` resamples to fill; `exact`/`pad` stay pixel-for-pixel), and `sliceRects`
 takes a `{ strategy, anchorY }` option and rounds every column edge to a whole
@@ -99,7 +99,7 @@ strategy or anchor change invalidates a cached render. The source's own
 load (preferring the picked media item's own fields; falling back to an
 `Image()` probe otherwise).
 
-`render.js` acts on that: one `createImageBitmap(blob, sx, sy, sw, sh, { resizeWidth,
+`render.ts` acts on that: one `createImageBitmap(blob, sx, sy, sw, sh, { resizeWidth,
 resizeHeight, resizeQuality })` **per slide**, cropping the column and resampling it
 straight to the slide canvas, so the decoder holds a constant `slideW × slideH` RGBA
 (~5.8 MB at 4:5) whatever the source megapixels or slide count — and the blit is 1:1,
@@ -193,7 +193,7 @@ The id survives the pipeline end to end: goldmark-attributes is enabled
 class alone and is unaffected by it. Attribute order and spacing are whatever
 goldmark-attributes accepts, so `:::{ #c-7f3a .carousel-block }` is the same
 fence — both readers (`matchCarouselFenceOpen` in `postNodes.js`,
-`carouselFences` in `document.js`) are tolerant of it, because a person may have
+`carouselFences` in `document.ts`) are tolerant of it, because a person may have
 typed it.
 
 Keys are minted by **writers** only — `newCarouselKey` (`postNodes.js`) for the
@@ -235,7 +235,7 @@ reconciliation below necessary rather than defensive.
 
 ### Adoption: content wins, and the author's photos are never deleted
 
-When the studio opens a block, `adoptFencePaths` (`document.js`) reconciles the
+When the studio opens a block, `adoptFencePaths` (`document.ts`) reconciles the
 stored document — an empty one when the block has no row — against the paths the
 fence actually carries, and `_adoptLoaded` takes the result as the working
 document:
@@ -275,7 +275,7 @@ out of the post and leaves every photo alone.
 
 ## Sizing
 
-`geometry.js` answers two questions about one source image and one target aspect:
+`geometry.ts` answers two questions about one source image and one target aspect:
 "how many slides, and what happens to the pixels that don't divide evenly?" There
 are three strategies, all cutting the same full-height band:
 
@@ -319,15 +319,15 @@ each slide carries its own `source`, its own normalized `crop`, its own `fit`,
 and its own background fill. That is what makes per-slide pan and zoom possible
 at all, and it is the substrate S3's layers sit on.
 
-`split` and `deck` are the *stored* values (`MODES`, `document.js`) and the words
+`split` and `deck` are the *stored* values (`MODES`, `document.ts`) and the words
 this document uses throughout. The studio's chips say **Panorama** and
 **Slides** — one wide photo cut across every slide, versus a photo per slide —
 because that is the choice a user is making. The naming lives in `modeToggle`
-(`studio/panels.js`) and nowhere else: no migration, one vocabulary in the code
+(`studio/panels.ts`) and nowhere else: no migration, one vocabulary in the code
 and on disk.
 
 **Split → deck is a one-way freeze, not a toggle.** `toDeckDocument(doc, srcW,
-srcH)` (`document.js`) runs `sliceRects` once and writes each column back as the
+srcH)` (`document.ts`) runs `sliceRects` once and writes each column back as the
 slide's own `crop` (normalized against the source) plus a `fit` — `contain`
 where the column had a `pad`, `cover` otherwise. Nothing on screen moves: the
 deck starts as an exact restatement of the split projection, and only diverges
@@ -370,12 +370,12 @@ whole-strip one, and both are deliberate:
 
 ### The Canvas/CSS geometry pair
 
-`geometry.js` answers the framing question twice, from one private helper
+`geometry.ts` answers the framing question twice, from one private helper
 (`deckSlideFrame`), because the studio needs the same numbers in two languages:
 
 | Function | Returns | Consumed by |
 |---|---|---|
-| `deckSlideRects(srcW, srcH, aspect, crop, fit)` | the same 8-tuple `sliceRects` returns (`sx,sy,sw,sh,dx,dy,dw,dh`), plus `pad` | `render.js` → `createImageBitmap` + `drawImage` |
+| `deckSlideRects(srcW, srcH, aspect, crop, fit)` | the same 8-tuple `sliceRects` returns (`sx,sy,sw,sh,dx,dy,dw,dh`), plus `pad` | `render.ts` → `createImageBitmap` + `drawImage` |
 | `deckSlideFitCSS(srcW, srcH, aspect, crop, fit)` | `{size, position, box}` — percent pairs | `index.js` → `background-size` / `background-position` |
 
 Both round to whole source pixels *in the shared helper*, not each in a formula
@@ -404,7 +404,7 @@ document once, `WHEEL_COMMIT_MS` after the last tick, because a wheel gesture
 has no release event.
 
 **The document is the single source of truth.** `index.js` holds a `CarouselDoc`
-and mutates it only through `document.js`. `updateSlideFraming(doc, i, update,
+and mutates it only through `document.ts`. `updateSlideFraming(doc, i, update,
 {srcW, srcH})` is the single writer for `crop` / `fit` / `bg`: it merges a
 partial crop field by field (so a pan can send `{x, y}` without resetting the
 zoom), passes it through `clampPan`, and returns a new document. An out-of-range
@@ -488,7 +488,7 @@ offers the layer panel in deck mode; see "What the studio does not yet offer".
 ### The layer schema
 
 Six types over one shared `box`, produced by exactly one function —
-`normalizeLayer` (`document.js`) dispatching a table of per-type builders
+`normalizeLayer` (`document.ts`) dispatching a table of per-type builders
 (`LAYER_BUILDERS`). `LAYER_TYPES` is derived from that same table, so the list of
 what is valid and the code that produces it cannot disagree — S9's `ink` landed
 as one entry rather than a longer function, exactly as the table was built to
@@ -500,7 +500,7 @@ of the 1080px width every aspect shares, the only dimension they have in common 
 and the origin is then clamped so `x + w <= 1` and `y + h <= 1` (`normalizeBox`).
 That is the same discipline `clampPan` keeps for a crop against its source, done
 arithmetically here: a box has no source to measure against, which is what keeps
-`document.js` independent of `geometry.js`. Because the box is normalized, an
+`document.ts` independent of `geometry.ts`. Because the box is normalized, an
 `aspect` change moves a layer with the frame instead of throwing it off.
 
 S7 adds a fifth field, `rotate` — degrees, wrapped into -180..180 by
@@ -514,7 +514,7 @@ turn that stored angle into a rotated mark.
 A layer may also carry `hidden` — the eye ahead of its name in the layer list.
 It switches the layer off without deleting it: the layer keeps its place in the
 list, its index, its selection and its property form, but `paintDispatch`
-(`render.js`) and the two preview painters skip it, so it is absent from the
+(`render.ts`) and the two preview painters skip it, so it is absent from the
 JPEG and from the stage alike. Two consequences are deliberate. It is stored
 **only when `true`** — absent means visible — so adding the flag left every
 document already written normalizing byte-for-byte as before, and no slide's
@@ -537,7 +537,7 @@ cannot drift into subtly different typesetters):
 | `color` | hex (3/4/6/8 digits) or `transparent` | `#ffffff` — a mark over a photograph, and dark photographs are the common case |
 | `weight` | 1..1000, rounded | `400`. The CSS `font-weight` range, not a static family's 100..900: the theme font may be variable and the canvas takes whatever CSS takes |
 | `size` | fraction of the canvas **height**, or `null` | `null` = auto-fit the box. A headline that fits is worth more than one that is exactly 7% tall |
-| `shadow` | boolean | `false`. One opinionated preset (`TEXT_SHADOW` in `render.js`), both numbers multiples of the font size so it survives a resize |
+| `shadow` | boolean | `false`. One opinionated preset (`TEXT_SHADOW` in `render.ts`), both numbers multiples of the font size so it survives a resize |
 
 Neither carries an `opacity`: the alpha channel of a `#rrggbbaa` `color` is it.
 The other three types do carry one (0..1, default `1`), because their fill or
@@ -558,7 +558,7 @@ layer's fields mean nothing without its `type`,
 so a `type` outside `LAYER_TYPES` cannot be migrated into anything and
 `normalizeLayer` returns `null`, which `normalizeLayers` filters out. Every
 *other* field degrades instead — out of range is clamped, unrecognized is
-defaulted, unknown is dropped — exactly as everywhere else in `document.js`. If a
+defaulted, unknown is dropped — exactly as everywhere else in `document.ts`. If a
 hand-edited document comes back from a save one layer short, this is why.
 
 `DOC_VERSION` stayed **1** through S3. `layers` and `spanLayers` have been
@@ -568,7 +568,7 @@ passthrough with real normalization cannot invalidate a document in the wild. A
 version bump would claim a migration exists; there is none.
 
 Layer mutation goes through four writers, `addLayer` / `updateLayer` /
-`removeLayer` / `reorderLayer` (`document.js`), which take a slide index or
+`removeLayer` / `reorderLayer` (`document.ts`), which take a slide index or
 `SPAN_SLIDE` (`-1`, negative by construction so no slide can collide with it) and
 so serve a slide's own list and the deck's from one family of calls. They keep
 `updateSlideFraming`'s contract exactly: `box` merges field by field (a drag
@@ -581,17 +581,17 @@ gesture. A reorder is a splice, not a swap: the list *is* the paint order.
 ### The Canvas/CSS geometry pair, again
 
 The pair discipline S2 established for framing continues for layers. One private
-helper, `layerFrame` (`geometry.js`), resolves a normalized box into a
+helper, `layerFrame` (`geometry.ts`), resolves a normalized box into a
 whole-pixel rect; three exports read it:
 
 | Function | Returns | Consumed by |
 |---|---|---|
-| `layerRect(layer, aspect)` | `{x, y, w, h}` in the slide's canvas pixels | `render.js` → the layer painters |
-| `layerCSS(layer, aspect)` | the same region in **percent of the frame** | `studio/preview.js` → `left`/`top`/`width`/`height` |
-| `spanLayerRect(layer, i, n, aspect)` | slide `i`'s slice of a deck-space box, in that slide's canvas pixels, or `null` | both — `render.js` paints it, `preview.js` positions it |
+| `layerRect(layer, aspect)` | `{x, y, w, h}` in the slide's canvas pixels | `render.ts` → the layer painters |
+| `layerCSS(layer, aspect)` | the same region in **percent of the frame** | `studio/preview.ts` → `left`/`top`/`width`/`height` |
+| `spanLayerRect(layer, i, n, aspect)` | slide `i`'s slice of a deck-space box, in that slide's canvas pixels, or `null` | both — `render.ts` paints it, `preview.ts` positions it |
 
-Only `box` is read, so a bare `{box}` is a valid argument and `geometry.js` stays
-free of the layer schema — `document.js` imports `geometry.js`, never the other
+Only `box` is read, so a bare `{box}` is a valid argument and `geometry.ts` stays
+free of the layer schema — `document.ts` imports `geometry.ts`, never the other
 way round. Edges are rounded, not sizes: `w` is `round(x1) − round(x0)`, exactly
 how `sliceRects` derives its column widths, because rounding a width
 independently lets two boxes sharing an edge round apart and leave a hairline.
@@ -627,7 +627,7 @@ editing a span layer invalidates every slide's cached render, which is correct.
 
 ### Painting
 
-Layer painting lives in `paintSlide` (`render.js`), **after the image blit**: a
+Layer painting lives in `paintSlide` (`render.ts`), **after the image blit**: a
 layer is baked into the JPEG, never composited afterwards. Both sequencers get
 layers for free through `encodeSlide`, the same reason `paintSlide` stayed the
 shared core in S2 — a split slide and a deck slide are still produced by
@@ -642,7 +642,7 @@ layers leaves `paintSlide` byte-for-byte where it was before layers existed:
 `paintLayers` returns on an empty list without touching the context, so the S1/S2
 render paths encode exactly the bytes they always did.
 
-`LAYER_PAINTERS` (`render.js`) is the draw-layer twin of `LAYER_BUILDERS` — a
+`LAYER_PAINTERS` (`render.ts`) is the draw-layer twin of `LAYER_BUILDERS` — a
 table, not a switch, so a type the schema knows and this build cannot draw is a
 missing key, skipped whole, rather than a half-executed branch. Every painter
 takes the same four arguments (context, layer, resolved pixel box, per-slide
@@ -652,7 +652,7 @@ directly instead of resolving one itself.
 Type by type:
 
 - **`text`** is measured with a real 2D context, never a guessed metric.
-  `wrapText` and `autoFitText` (`geometry.js`) have taken a `measure` callback
+  `wrapText` and `autoFitText` (`geometry.ts`) have taken a `measure` callback
   and been unit-tested since #450 with no production caller; S3 is what wires
   them, to `ctx.measureText` bound to the size being tried. A numeric `size` is a
   fraction of the canvas height and wraps; `size: null` auto-fits, bounded before
@@ -685,7 +685,7 @@ Type by type:
 - **`ink`** strokes each point list as a rounded, stroked path (`paintInkLayer`),
   the points resolved through the same 0..1-of-the-box space every other layer
   field uses — the reason a drawn mark scales and rotates for free with its box,
-  with no code of its own in `geometry.js`. Width is a fraction of the box's
+  with no code of its own in `geometry.ts`. Width is a fraction of the box's
   shorter side, the same `ARROW_STROKE` convention, converted to canvas pixels
   per stroke since each one carries its own; a box under a pixel on either side
   is skipped whole, the same refusal `arrow` makes.
@@ -706,7 +706,7 @@ has not loaded silently measures — and paints — a system fallback, so the JP
 would disagree with the CSS preview beside it. That only happens on a cold load,
 which is exactly the kind that ships.
 
-The wait is lazy and paid once. `fontResolver` (`render.js`) memoizes the promise
+The wait is lazy and paid once. `fontResolver` (`render.ts`) memoizes the promise
 for the whole render, so slide 9 pays nothing for what slide 1 waited for, and it
 resolves nothing at all unless a slide actually carries a `text` or `counter`
 layer (`TYPESET_LAYERS`) — a deck of rects and arrows, or of no layers, must not
@@ -717,7 +717,7 @@ all land on `DEFAULT_FONT_STACK`: type in the wrong face beats a failed encode.
 ### The studio surface
 
 The layer UI sits under deck mode's framing controls (`layerPanel` / `layerForm`
-in `studio/panels.js`; `index.js` owns the state):
+in `studio/panels.ts`; `index.js` owns the state):
 
 - **Two lists, one form.** The selected slide's own layers, and the deck's span
   layers ("Deck layers — across all slides"), each with the same five add chips
@@ -738,7 +738,7 @@ in `studio/panels.js`; `index.js` owns the state):
   origin, because a layer outside the frame's honest bounds is one the user has
   to move before it is any use. A span layer keeps the type's vertical placement
   and stretches across the deck.
-- **Direct manipulation.** `createDeckGestures` (`studio/gestures.js`) drives
+- **Direct manipulation.** `createDeckGestures` (`studio/gestures.ts`) drives
   the layer `box` with the identical provisional-write-then-commit cycle it
   already drove `crop` with: `hitLayer` geometrically hit-tests the selected
   layer and its eight resize handles (`HANDLE_GRAB_PX` of the edge, converted to
@@ -759,7 +759,7 @@ in `studio/panels.js`; `index.js` owns the state):
   the stage rather than only through the layer panel — see "Rotation" and
   "Click-to-select" below.
 - **The preview is CSS, as ever.** `paintDeckLayers` and `paintSpanLayers`
-  (`studio/preview.js`) are the DOM twins of the two canvas functions, resolving
+  (`studio/preview.ts`) are the DOM twins of the two canvas functions, resolving
   every box through `layerRect` / `spanLayerRect` — the very rects the painters
   are handed — so the preview cannot round differently from the render.
   `paintLayerChrome` positions the selection outline, its eight resize handles
@@ -769,7 +769,7 @@ in `studio/panels.js`; `index.js` owns the state):
 
 **The preview runs the render's own typesetter.** CSS has no `measureText`, so
 left to itself the browser would break lines where it likes and the JPEG would
-break them where `wrapText` does. Instead `preview.js` holds one memoized
+break them where `wrapText` does. Instead `preview.ts` holds one memoized
 offscreen 2D context, reads the same `--font-family` token `browserDeps`
 resolves and awaits `document.fonts.ready` once (`ensurePreviewFont`, which the
 studio calls from `afterRender` and repaints on), then calls `autoFitText` or
@@ -801,9 +801,9 @@ the same three points, the same `stroke-linecap: round`, the same
 `max(1, round(min(w, h) · ARROW_STROKE))` width, and the same refusal to draw a
 box too small to hold its own stroke. The `❯` glyph is gone.
 
-`preview.js` imports those numbers — `MIN_AUTO_PX`, `TEXT_SHADOW`,
+`preview.ts` imports those numbers — `MIN_AUTO_PX`, `TEXT_SHADOW`,
 `ARROW_STROKE`, `VALIGN_SLACK`, `ALIGN_ANCHOR`, `fontSpec`, `counterText` —
-from `render.js` rather than restating them, and the dependency runs one way:
+from `render.ts` rather than restating them, and the dependency runs one way:
 the preview reads the render, never the reverse. `carouselStudioPreview.test.js`
 paints the same layer through both halves and asserts they agree line for line,
 so the claim is falsifiable rather than aspirational. What remains different
@@ -839,7 +839,7 @@ kept it inert:
   you edited in, and the rendered strip.
 
 A second surface would have had to grow its own seams, safe areas and per-slide
-hosts, which is a second consumer of the same geometry beside `preview.js` — the
+hosts, which is a second consumer of the same geometry beside `preview.ts` — the
 drift the Canvas/CSS pair exists to prevent. Moving the gestures up cost the
 columns a `tabindex`, a `role` and an aria label, the `cursor: grab`, the
 `touch-action` and the `is-dragging` / `is-selected` / `:focus-visible` dressing,
@@ -905,7 +905,7 @@ over the column it acts on:
   dock's `‹ 3 / 8 ›` stepper is the second way — see "The touch layout"
   below.
 - **Reorder, number and delete** are `.carousel-studio__pane-row--top`
-  (`builder`, `studio/panels.js`): a grip (`data-action="rail-handle"`, with
+  (`builder`, `studio/panels.ts`): a grip (`data-action="rail-handle"`, with
   the left and right arrow keys as its keyboard half), the slide number, and
   Delete at the segment's own right edge.
 - **Add and duplicate** are `.carousel-studio__insert-zone`, one per seam plus
@@ -950,7 +950,7 @@ asks for the crop instead — plain input scrolls the strip:
 
 S10 **narrows** this rule; it does not cancel it. On a coarse pointer the strip
 does not scroll, so a plain drag has nothing to scroll and pans the crop
-instead — `onPointerDown` (`studio/gestures.js`) reads `isTouchLayout()` once
+instead — `onPointerDown` (`studio/gestures.ts`) reads `isTouchLayout()` once
 per press and never takes the `"pane"` branch there. Everything above still
 holds on a fine pointer, which is every mouse and every pen. See "The touch
 layout" below.
@@ -974,18 +974,18 @@ it always did.
 ### Rotation
 
 S7.2, S7.4, S7.5. A layer's `box` gained a fifth field, `rotate` (degrees,
-wrapped into -180..180 by `document.js`'s `wrapRotate`), and it is
+wrapped into -180..180 by `document.ts`'s `wrapRotate`), and it is
 **presentational only** — the stored box is never rotated, and `layerFrame`
-(`geometry.js`) and everything built on it stay exactly as rotation-blind as
+(`geometry.ts`) and everything built on it stay exactly as rotation-blind as
 before. That is deliberate: `layerRect`, `layerCSS` and `spanLayerRect` answer
 "where is this box," and a caller that wants to draw it tilted rotates the
 *drawing*, not the arithmetic that already has to agree between the canvas and
 the DOM. It is also what keeps an unrotated layer's render byte-identical —
-`render.js`'s `paintDispatch` is the one place both `paintLayers` and
+`render.ts`'s `paintDispatch` is the one place both `paintLayers` and
 `paintSpanLayers` route a layer through, and it skips `ctx.save`/`rotate`/
 `restore` entirely when `rotate` is `0`, translating to the box's own centre,
 rotating, translating back, and only then calling the type's ordinary painter
-when it isn't. `studio/preview.js` reaches the same pixels the opposite way — a
+when it isn't. `studio/preview.ts` reaches the same pixels the opposite way — a
 CSS `rotate()` on the layer element, about its default transform-origin (the
 element's own centre), which is the same point `paintDispatch` pivots on.
 
@@ -1007,10 +1007,10 @@ no movement re-selects rather than rotating, the same not-moved-is-a-click rule
 
 Because the angle is a field of the same `box` a move or a resize rewrites, the
 three functions a dragged box passes through — `dragBox`, `snapBox` and
-`clampBox` (`gestures.js`) — each spread the box they got, and write only the
+`clampBox` (`gestures.ts`) — each spread the box they got, and write only the
 geometry fields they own. A function that rebuilds `{x, y, w, h}` by hand drops
 `rotate` into every provisional frame of the drag, and the layer paints upright
-until the release puts the stored angle back (`document.js`'s `mergeCrop` copies
+until the release puts the stored angle back (`document.ts`'s `mergeCrop` copies
 finite numbers only, so the document itself is never damaged).
 
 ### On-canvas text editing
@@ -1022,7 +1022,7 @@ click-to-select's containment test is, turns the exact DOM node
 `paintDeckLayers`/`paintSpanLayers` already painted for it into a
 `contenteditable` block, rather than opening a second, shadow editor — a
 doc-driven repaint elsewhere during the edit still finds the layer it expects,
-because `studio/preview.js`'s `paintLayerContent` skips the block currently
+because `studio/preview.ts`'s `paintLayerContent` skips the block currently
 being edited (`dataset.editing`). One edit at a time; a double-click anywhere
 else, or with no layer selected, or before the click that selects it, does
 nothing here — a plain click outside the block is what an unfocused text field
@@ -1049,7 +1049,7 @@ maths have to run in deck coordinates rather than one frame's, and the chrome
 has to be sliced across every frame the layer crosses") both became cheap. The
 fact that there are now two spaces lives in exactly one function.
 
-`layerSpace(rect, safe, seams)` (`gestures.js`) names the three things a layer
+`layerSpace(rect, safe, seams)` (`gestures.ts`) names the three things a layer
 gesture reads off geometry: the rect the box is fractions of, what `SNAP_PX` is
 worth in it, and the lines to snap against. `onPointerDown` resolves it once
 onto `drag.space` rather than re-deriving the tolerance and re-asking the host
@@ -1087,7 +1087,7 @@ over a seam and find chrome waiting, with no rebuild mid-gesture.
 `anchorY` had a horizontal slider for an up-and-down quantity. The split stage
 paints the source as a CSS background, so the band itself can be dragged, over
 the one field split mode has. `createAnchorGesture` joins `createDeckGestures`
-in `gestures.js` as a separate small controller rather than a branch: the two
+in `gestures.ts` as a separate small controller rather than a branch: the two
 surfaces never coexist, and the split stage has no crop, zoom or layers to route
 a press between. What the two share is the provisional-paint-then-commit cycle
 and the direction-declaring touch claim, mirrored to the other axis — the stage
@@ -1111,7 +1111,7 @@ controls re-derive the whole array from one strip through `splitDocument`. In
 split, which discards every per-slide crop. So there was no way to add one slide
 and no way to drop one.
 
-`document.js` gains the four writers the layer family already has —
+`document.ts` gains the four writers the layer family already has —
 `addSlide(doc, at, slide)`, `removeSlide(doc, i)`, `duplicateSlide(doc, i)` and
 `moveSlide(doc, from, to)` — keeping that family's contract exactly: an index
 that names nothing returns an equal document, nothing throws (these run from
@@ -1163,15 +1163,15 @@ renders synchronously.
 The studio had no way back: a wheel tick over a slide changed its zoom for good,
 and two confirms said "this cannot be undone" and meant it. Undo turned out to
 be nearly free, because the document is already immutable by construction —
-every writer in `document.js` returns a *new* `CarouselDoc`, and the page
+every writer in `document.ts` returns a *new* `CarouselDoc`, and the page
 commits with `setState({ doc })` under the document-is-the-state contract. So
-history is **a ring of document references** (`studio/history.js`): no cloning,
+history is **a ring of document references** (`studio/history.ts`): no cloning,
 no inverse operations, no command objects, and undo is "hand back the previous
 reference". The ring holds 60, which is deep enough for a working session and
 trivial next to the media the documents point at.
 
 Granularity is free for the same kind of reason: the studio already commits at
-the right moments. `gestures.js` paints provisionally and commits once per
+the right moments. `gestures.ts` paints provisionally and commits once per
 gesture (a wheel burst debounces into a single commit through
 `WHEEL_COMMIT_MS`), and the property forms repaint on `input` and commit on
 `change`. Pushing at those commit points — and nowhere else — reproduces the
@@ -1240,7 +1240,7 @@ in both files, because the touch layout takes that room back a different way:
 it docks the controls on the bottom edge, and a dock needs an edge to sit on. A
 dock pinned to the bottom of a document-flow page is pinned to nothing, and the
 stage there needs a definite height to claim rather than a `vh` guess. The
-query's second half is `TOUCH_LAYOUT` in `studio/layout.js` — the same
+query's second half is `TOUCH_LAYOUT` in `studio/layout.ts` — the same
 `(pointer: coarse)` the studio already reads for grab targets. What is left
 outside both halves is a narrow fine-pointer window: it keeps the document flow
 it always had. This is where the studio parts from `MediaPage`, which is still
@@ -1274,7 +1274,7 @@ invent one in. See "The touch layout" below.
 Three of those facts cannot live in the stylesheet alone — the page has to
 answer "rail or stacked card?" *before* it renders, it has to answer "is this a
 finger?" for more than the card, and the zoom control has to clamp what it
-writes — so `studio/layout.js` mirrors the 64em breakpoint, the
+writes — so `studio/layout.ts` mirrors the 64em breakpoint, the
 `(pointer: coarse)` query and the zoom range into JS, for the reason
 `tagGestures.js` gives for its own `SWIPE_BREAKPOINT`: a breakpoint written
 twice is a breakpoint that will disagree with itself. The panel's open/closed
@@ -1285,7 +1285,7 @@ viewport only — a sheet over the stage always opens closed, exactly how
 ### One toolbar, and most of `.carousel-studio__chip` retires
 
 The mode toggle, the document controls and the zoom bar now share the single
-`.carousel-studio__toolbar` row described above. `modeToggle` (`studio/panels.js`)
+`.carousel-studio__toolbar` row described above. `modeToggle` (`studio/panels.ts`)
 emits `.editor-mode-toggle` — the same segmented control the post editor's own
 mode switch uses — rather than its own chip markup, so the studio does not
 grow a third segmented-control pattern; the "switch mode discards per-slide
@@ -1310,7 +1310,7 @@ something S8 did everywhere.
 
 Before S8 `layerForm` rendered once, after *both* layer lists, so editing a
 span layer meant scrolling away from the slide list that held the selection
-that opened it. `layerRows` (`studio/panels.js`) now takes the form's markup
+that opened it. `layerRows` (`studio/panels.ts`) now takes the form's markup
 as an optional argument and splices it in as its own `<li
 class="carousel-studio__layer-form-row">`, immediately after the selected row,
 in whichever list `layerScope` names. The distinct class — not
@@ -1327,10 +1327,10 @@ empty layer-list states shrank to one line each.
 
 ### One pointer session under both gesture controllers
 
-`createDeckGestures` and `createAnchorGesture` (`studio/gestures.js`) had
+`createDeckGestures` and `createAnchorGesture` (`studio/gestures.ts`) had
 grown their own copies of the same low-level pointer mechanics — capture,
 element dressing, the undecided-touch-vs-scroll policy, the no-op-commit
-guard. `studio/pointerSession.js` (new) factors those into one module:
+guard. `studio/pointerSession.ts` (new) factors those into one module:
 `createListenerGroup` (bind/release), `claimPointer`/`releasePointer`
 (capture plus dressing, with an optional opt-out of `preventDefault` for a
 claim like the deck's pane-scroll that wants the capture without stopping the
@@ -1346,7 +1346,7 @@ of it (see "Decisions").
 Four gaps closed together, all downstream of the pointer session above:
 
 - **`touch-action: none` arms only the column holding the selected layer's
-  chrome**, not every column. `builder()` (`studio/panels.js`) adds
+  chrome**, not every column. `builder()` (`studio/panels.ts`) adds
   `is-layer-armed` to a stage column under the same test `layerChrome()` uses
   — a resize handle or a span layer's chrome is present — and `carousel.css`
   scopes the rule to that class alone; every other column keeps the general
@@ -1369,9 +1369,9 @@ Four gaps closed together, all downstream of the pointer session above:
   regression test now pins that a pen drag scrolls the strip immediately, the
   same as a mouse, where this had been true but untested.
 - **Grab targets grow under a coarse pointer.** `HANDLE_GRAB_PX`,
-  `ROTATE_HANDLE_OFFSET_PX` and `ROTATE_HANDLE_HIT_PX` (`studio/gestures.js`)
+  `ROTATE_HANDLE_OFFSET_PX` and `ROTATE_HANDLE_HIT_PX` (`studio/gestures.ts`)
   each gained a `_COARSE` twin (22, 48, 22), read behind
-  `matchMedia("(pointer: coarse)")` the way `studio/layout.js` reads
+  `matchMedia("(pointer: coarse)")` the way `studio/layout.ts` reads
   `SHEET_BREAKPOINT` — S10 replaced this module's private copy of that query
   with `isTouchLayout()`, so one press answers it once (`ctx.touch`) for the
   grab targets and the routing together — and passed as an optional trailing
@@ -1392,13 +1392,13 @@ S10 as its answer.
 S10. Any coarse pointer now gets a layout of its own, at every width: one
 slide fills the stage, the controls sit on the bottom edge, and the strip under
 them does not move. Nothing stored changed, and no painter changed —
-`geometry.js`, `document.js`, `render.js` and `preview.js` are untouched by the
+`geometry.ts`, `document.ts`, `render.ts` and `preview.ts` are untouched by the
 whole of S10.
 
 ### The gate is a pointer, not a width
 
-`TOUCH_LAYOUT` (`studio/layout.js`) is `(pointer: coarse)`, and
-`isTouchLayout()` is the only reader of that query in JS — `studio/gestures.js`
+`TOUCH_LAYOUT` (`studio/layout.ts`) is `(pointer: coarse)`, and
+`isTouchLayout()` is the only reader of that query in JS — `studio/gestures.ts`
 dropped its own copy of the string, so there is one query with one name.
 `carousel.css` asks it in its own blocks, and `light/layout.css` widens
 `.carousel-studio-main` with it.
@@ -1423,7 +1423,7 @@ the active column in it after every render — last in `afterRender`, so it
 measures a column whose width the budget has already fixed.
 
 Rendering one slide instead was refused. Span layers cross the seams, the pane
-row divides the same `n` segments, and `geometry.js` resolves every box against
+row divides the same `n` segments, and `geometry.ts` resolves every box against
 deck space. A one-slide DOM would be a second consumer of that geometry —
 exactly the drift the Canvas/CSS pair exists to prevent.
 
@@ -1441,7 +1441,7 @@ a column, and the centring is what keeps both ends their room.
 
 ### The dock
 
-`dock()` (`studio/panels.js`) emits `.carousel-studio__dock`, a
+`dock()` (`studio/panels.ts`) emits `.carousel-studio__dock`, a
 `role="toolbar"` row on the bottom edge, inside the thumb arc. It is the fourth
 grid row, hidden on a fine pointer. The row reads burger, `‹ 3 / 8 ›`, undo,
 redo. With a draw session open it reads burger, Erase, undo, redo, Done: the
@@ -1492,14 +1492,14 @@ what a tap outside a sheet means on every platform.
 S7.1 gated the crop behind Ctrl or Shift only because the strip needed a scroll
 gesture of its own. The touch layout has no strip to scroll, so a plain drag
 has nothing else to do there, and a finger has no modifier to hold.
-`onPointerDown` (`studio/gestures.js`) reads `isTouchLayout()` once per press
+`onPointerDown` (`studio/gestures.ts`) reads `isTouchLayout()` once per press
 and never takes the `"pane"` branch. This narrows "Pan and zoom need a
 modifier" above rather than cancelling it: the gate is unchanged on every fine
 pointer.
 
 ### Ink is a layer type in the UI
 
-`LAYER_KINDS` (`studio/panels.js`) gains `ink`, beside Text, Image, Shape,
+`LAYER_KINDS` (`studio/panels.ts`) gains `ink`, beside Text, Image, Shape,
 Counter and Arrow, and the toolbar's `Draw` switch is retired. One vocabulary
 for one schema: `ink` is the sixth `LAYER_BUILDERS` entry, so the dropdown now
 names what the document holds.
@@ -1510,11 +1510,11 @@ authors the layer — `_defaultLayer` never sees `ink`, and the session commits
 one finished `ink` layer when Done or Escape ends it. `addLayerChips("span")`
 filters `ink` out of the span list: a draw session is scoped to one slide, so a
 span ink layer has no session that could produce it. Erase and Done live in the
-dock while the session is open (`inkActions`, `studio/panels.js`).
+dock while the session is open (`inkActions`, `studio/panels.ts`).
 
 ### Two- and three-finger taps
 
-`createMultiTapWatcher` (`studio/pointerSession.js`) reads a tap as `k`
+`createMultiTapWatcher` (`studio/pointerSession.ts`) reads a tap as `k`
 pointers down at once, every one released inside `tapMs` (`TAP_MS`, 300) and
 none moved past `DRAG_SLOP_PX`. A pinch cannot be read as a tap, because a
 pinch moves: the first pointer past the slop disarms the group until every
@@ -1533,7 +1533,7 @@ scopes:
   document: the session still commits once, as one layer. A document undo there
   would drop the edit *before* the session rather than the stroke just drawn.
 - **Anywhere else on the stage**, to `_undo` / `_redo` — the document's own
-  ring (`studio/history.js`), the same one the dock's two buttons drive.
+  ring (`studio/history.ts`), the same one the dock's two buttons drive.
 
 The dock's buttons and the taps stay separate paths on purpose: the buttons are
 document history at every moment, the taps branch on whether a session is open.
@@ -1560,7 +1560,7 @@ until now — is the provenance the applied document keeps.
 
 ### Placeholders
 
-`PLACEHOLDERS` (`document.js`) is derived from the resolver's own table, the
+`PLACEHOLDERS` (`document.ts`) is derived from the resolver's own table, the
 same discipline `LAYER_TYPES` keeps against `LAYER_BUILDERS`: the list of what
 is valid and the code that fills it cannot disagree.
 
@@ -1574,7 +1574,7 @@ is valid and the code that fills it cannot disagree.
 
 **Placeholders resolve on apply, not at paint time.** That is the whole split
 against a `counter` layer's `{i}`/`{n}`, which are deliberately *absent* from
-the table and stay `render.js`'s, resolved per slide from the slide's own
+the table and stay `render.ts`'s, resolved per slide from the slide's own
 position. The author has to be able to edit the headline the template produced,
 so `applyTemplate` writes real strings once and the document is thereafter
 ordinary; a template that resolved `{i}` through this table would freeze slide
@@ -1588,11 +1588,11 @@ paints nothing, so an empty `logo_url` drops that layer rather than leaving a
 dead one behind, and the report counts it.
 
 `applyTemplate(template, { post, settings, media })` → `{ doc, report }`, pure
-like the rest of `document.js` — no DOM, no network, no clock. In order:
+like the rest of `document.ts` — no DOM, no network, no clock. In order:
 
-- the slide count is clamped to `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.js`)
+- the slide count is clamped to `MIN_SLIDES`/`MAX_SLIDES` (`studio/bounds.ts`)
   **first**, so a slide the clamp appended is filled like any other. This is the
-  one place in `document.js` that clamps a count, and it is the exception that
+  one place in `document.ts` that clamps a count, and it is the exception that
   proves the "Slide-count bounds" decision below: a template is built out of a
   file nobody in this session authored, so there is no gesture to refuse — only
   a count to bring into range and name in the report;
@@ -1666,7 +1666,7 @@ gating test C6 established now drives all seven routes the carousel group
 declares. `slug` must match `^[a-z0-9](?:[a-z0-9_-]{0,98}[a-z0-9])?$`, and one
 envelope is capped at 8 MB (`maxTemplateDocBytes`, measured on the raw body
 before the JSON is parsed, 413 past it). The browser checks the same number
-(`TEMPLATE_MAX_BYTES`, `api/carousel.js`) so a refusal can name the photograph
+(`TEMPLATE_MAX_BYTES`, `api/carousel.ts`) so a refusal can name the photograph
 that broke it, but the handler is the one that has to hold — a cap only the
 client enforces is not a cap.
 
@@ -1688,13 +1688,13 @@ throws `ImportError`, so the dialog has one thing to catch.
 |---|---|---|
 | Reaches | PowerPoint — **and Canva**, whose manual download and Connect API both export PPTX, so "Instagram templates from Canva" and "PowerPoint templates" turn out to be one importer | Figma, Illustrator, Sketch and XD, all proprietary on disk and all exporting SVG; Canva exports it too |
 | Input | one archive | an **ordered list**, one file per slide, because an SVG has no concept of a deck. Order is a natural filename sort (`slide-2` before `slide-10`, which a plain string sort gets backwards) and the report states the order it chose, so a person can see it guessed wrong and rename |
-| Reads with | `import/zip.js` + `import/xml.js` | `import/xml.js` |
+| Reads with | `import/zip.ts` + `import/xml.ts` | `import/xml.ts` |
 | Source canvas | `<p:sldSz cx cy>` in EMU (914400/inch) | the root `<svg viewBox>` |
 
 **Zero new dependencies**, which is what keeps the whole stage inside
 [vendors.md](../vendors.md). A `.pptx` is a ZIP of XML and
 `DecompressionStream('deflate-raw')` has shipped in every browser Point targets
-since May 2023, so `import/zip.js` is Point's own read-only reader over it:
+since May 2023, so `import/zip.ts` is Point's own read-only reader over it:
 sizes and offsets from the **central directory only** (an entry written with a
 data descriptor has zeroed sizes in its local header, which is exactly what
 streaming exporters emit), stored entries passed through rather than inflated,
@@ -1708,7 +1708,7 @@ rejection instead of an allocation. CRC32 is not verified: the inflated-length
 check catches truncation and the bomb, and a table-driven CRC over parts about
 to be handed to an XML parser buys little for its ~40 lines.
 
-`import/xml.js` is the other shared half, and it matches on the **local name**
+`import/xml.ts` is the other shared half, and it matches on the **local name**
 — the part after the colon — never on a qualified name. `getElementsByTagNameNS`
 is unimplemented in linkedom, which is the DOM the frontend tests run against,
 and `localName` disagrees between DOMs (linkedom returns `p:cSld` where a
@@ -1812,7 +1812,7 @@ value it could route to a real sink, and an eslint rule now refuses a bare
 ### Assets: inlined in the row, materialized on apply
 
 A template stores its images as `data:` URLs inside its envelope, capped at
-**2 MB per asset and 8 MB per template** (`ASSET_LIMITS`, `import/adapter.js`) —
+**2 MB per asset and 8 MB per template** (`ASSET_LIMITS`, `import/adapter.ts`) —
 counted on the *encoded* URLs, because that is what the envelope costs and what
 the store's cap measures, so base64's 4-bytes-per-3 makes ~5.8 MB of
 photographs the real ceiling. An import that cannot fit refuses by the name of
@@ -1821,14 +1821,14 @@ costs the budget once.
 
 On apply, every inlined asset is uploaded as **post-owned media** and the
 document that lands in `carousels.doc` names real `/YYYY/MM/…` paths. Two
-load-bearing reasons: `render.js`'s `deps.fetchBlob` is a same-origin GET of a
+load-bearing reasons: `render.ts`'s `deps.fetchBlob` is a same-origin GET of a
 content path and nothing on the render path should learn about `data:`; and an
 asset uploaded with no `post_id` would be swept by `ListOrphanedMedia`, whose
 orphan test is `post_id IS NULL`. A failure mid-upload deletes every row *that
 attempt* created and only those, as U5 established — a template applied halfway
 is not applied.
 
-The arithmetic is `studio/templates.js` and is pure: `dataAssets` walks a
+The arithmetic is `studio/templates.ts` and is pure: `dataAssets` walks a
 document for inlined sources in paint order, deduplicated, each labelled for a
 message a person reads ("slide 3, layer 2"); `replaceAssets` rewrites the
 document against a `url → path` map, leaving a URL with no entry alone rather
@@ -1886,7 +1886,7 @@ One gap is S3's own:
 
 - **Layers are authored in deck mode only.** The renderer paints
   `slides[].layers` and `doc.spanLayers` in **both** modes, and a split document
-  carrying layers renders them correctly — but `builder` (`studio/panels.js`)
+  carrying layers renders them correctly — but `builder` (`studio/panels.ts`)
   emits the layer panel and the stage's per-slide layer hosts only when
   `mode === "deck"`, so in split mode there is no way to add one from the UI. A
   split deck that wants a headline is one switch to Slides away, which is why
@@ -1904,7 +1904,7 @@ this epic, not merely unaddressed by it.
 S4's are all in the gallery rather than in the format:
 
 - **Nothing in the studio tells you a placeholder exists.** `PLACEHOLDERS`
-  (`document.js`) is exported for exactly this — the resolver's own table, so
+  (`document.ts`) is exported for exactly this — the resolver's own table, so
   help text and substitution cannot disagree — and no panel reads it yet. A
   template written by hand or adapted from an import gets its `{title}` typed
   into a text layer from memory.
@@ -1920,7 +1920,7 @@ S4's are all in the gallery rather than in the format:
 - **`ASPECTS` still has three entries.** A 16:9 deck, the common PowerPoint
   case, arrives centre-fit into 1.91:1 with a reported margin rather than at its
   own ratio. Adding a literal `16:9` is a separate follow-up — two entries, in
-  `document.js`'s `ASPECTS` and `geometry.js`'s, plus the aspect chips — and not
+  `document.ts`'s `ASPECTS` and `geometry.ts`'s, plus the aspect chips — and not
   something the importer should decide on its own.
 
 ## Decisions
@@ -1939,20 +1939,20 @@ S4's are all in the gallery rather than in the format:
 | Superseded slides on re-render | Studio deletes the prior generation's `rendered[].media_id` rows explicitly, skipping any path still elsewhere in the post | Slides carry a `post_id`, so `ListOrphanedMedia` (`post_id IS NULL`) never flags them — without an explicit delete every re-render leaks the old slides onto disk forever. Widening orphan detection into a content scan is a media-library change and out of scope |
 | A post with a carousel block on Instagram | Every image in the post ships, in document order, then the ≤20 truncation still applies. This **reverses** the earlier rule ("the block's slides ARE the carousel, the loose photos are dropped") recorded here through C8 | A post may carry several carousel blocks, so "the post's carousel" no longer names anything: the old selector took the *first* fence and silently dropped every other image in the post, the other decks included. `post_publish.go` now reads `ExtractMediaPaths(post.Content, "")` alone — `carouselBlockPaths` and `carouselBlockRe` are deleted — so a fence's slides are ordinary content paths, deduped and ordered with everything else. An author who wants only the deck on Instagram publishes a post that carries only the deck |
 | Grid thumbnail of a post whose first media is a carousel | Slide 1 becomes the post's `media_url` — kept, not worked around | `DeriveMediaURL` (`api/internal/utils/media.go`) takes the first bare media path in content, and the fence emits bare paths, so a carousel at the top of a post makes its cover slide the grid thumbnail. That is the right thumbnail for a designed deck. A post that wants a different thumbnail sets `thumbnail_path` explicitly, which still wins |
-| Immersive step between two deck slides | Pan, don't crossfade — both slices held at full opacity, each translating by *its own image width* under a clip-path at the letterbox margin | The studio splits one photo into continuity-matched slices; the shared `MediaViewer` crossfade drops the outgoing slice to `opacity: 0`, flashing the backdrop through the seam, and a full-viewport translate opens a two-margin gap between them. `postMedia.js` marks expanded slides `carousel: true`; `MediaViewer._seamlessPair` gates it, `frontend/src/utils/deckTransition.js` does the geometry, and an equal-width guard falls back to the legacy pan. Non-deck media is untouched — see "Transitions" in [immersive.md](immersive.md) |
+| Immersive step between two deck slides | Pan, don't crossfade — both slices held at full opacity, each translating by *its own image width* under a clip-path at the letterbox margin | The studio splits one photo into continuity-matched slices; the shared `MediaViewer` crossfade drops the outgoing slice to `opacity: 0`, flashing the backdrop through the seam, and a full-viewport translate opens a two-margin gap between them. `postMedia.js` marks expanded slides `carousel: true`; `MediaViewer._seamlessPair` gates it, `frontend/src/utils/deckTransition.ts` does the geometry, and an equal-width guard falls back to the legacy pan. Non-deck media is untouched — see "Transitions" in [immersive.md](immersive.md) |
 | Split → deck | A **one-way freeze**, not a two-way toggle of equal footing | `toDeckDocument` derives per-slide crops from `sliceRects`, so the visual output is identical until the user edits something — the freeze costs nothing to enter. The reverse direction genuinely destroys work (every hand-set crop, fit and fill), so it is a confirmed action, not a chip |
-| Where deck framing math lives | `geometry.js`, as a Canvas/CSS pair (`deckSlideRects` + `deckSlideFitCSS`) over one private rounding helper | The two must agree to the pixel or the preview lies about the render, and the only way to guarantee that is one rounding site. Also keeps pixel arithmetic out of the gesture handlers: `index.js` records normalized intent and `geometry.js` resolves what it means on screen. Same relationship `sliceRects`/`backgroundFit` already had |
+| Where deck framing math lives | `geometry.ts`, as a Canvas/CSS pair (`deckSlideRects` + `deckSlideFitCSS`) over one private rounding helper | The two must agree to the pixel or the preview lies about the render, and the only way to guarantee that is one rounding site. Also keeps pixel arithmetic out of the gesture handlers: `index.js` records normalized intent and `geometry.ts` resolves what it means on screen. Same relationship `sliceRects`/`backgroundFit` already had |
 | Live pan/zoom preview | CSS `background-size`/`background-position`, never a canvas redraw | A `drawImage`/`createImageBitmap` on every pointermove cannot hold 60fps at source resolution, and the CSS pair is exactly what `applyBg` already consumed. The canvas is reserved for the one render that produces bytes |
-| Studio state | The `CarouselDoc` **is** the state; every mutation goes through `document.js` | S1 held `n`/`strategy`/`anchorY`/`source` as loose component fields and rebuilt a doc at render time. Parallel UI state that must later be reconciled into a document is what per-slide framing makes untenable — one writer (`updateSlideFraming`) means a gesture cannot leave the renderer and the preview reading different numbers |
+| Studio state | The `CarouselDoc` **is** the state; every mutation goes through `document.ts` | S1 held `n`/`strategy`/`anchorY`/`source` as loose component fields and rebuilt a doc at render time. Parallel UI state that must later be reconciled into a document is what per-slide framing makes untenable — one writer (`updateSlideFraming`) means a gesture cannot leave the renderer and the preview reading different numbers |
 | Source pixel dimensions | Arguments to `toDeckDocument` / `updateSlideFraming` / `renderDeck`, never document fields | The document stores no derived data (S1 already re-probes on load). A stored `srcW` goes stale the moment the source is replaced, and nothing would notice |
 | Deck source fetches | Deduplicated per path inside `renderDeck`, caching the compressed blob | The common deck names one image on all N slides, so the naive path is N identical GETs and N probes. Caching the blob (not a bitmap) keeps the constant-decoded-memory promise intact |
 | `blur` background | Stored as `bg: null`, not `{type:"blur"}` | It is the render's default; writing it explicitly changes `specHash` without changing a pixel, which would re-encode and re-upload every slide for nothing |
 | Gradient colours | Hex or `transparent` only — narrower than CSS | The stop reaches `CanvasGradient.addColorStop`, which throws on anything it cannot parse. Rejecting at normalization keeps a bad background a document problem, not a mid-encode exception |
 | Background control visibility | Shown only for a slide whose `deckSlideRects` actually reports a `pad` | Asked and answered from the same call `paintSlide` uses, so the control cannot disagree with the render. A `cover` slide covers its frame; a fill that paints nothing is worse than no control |
 | Byte-identical slides | Refused in the studio with a clear message | They dedup to one media row (SHA256) and one path, which the blog's `extractMedia` renders twice while Go's `ExtractMediaPaths` dedups to one Instagram child — the two would disagree. Rejecting the render is simpler than de-duping at two display sites, and a carousel with two identical slides has no purpose |
-| Layer placement | A normalized `{x, y, w, h}` box in 0..1 of the canvas, never pixels | `aspect` is a document-level switch, so a 4:5 → 1:1 change has to move a layer *with* the frame rather than throw it off. Same discipline `crop` follows against its source, and it keeps `document.js`'s clamp arithmetic — no source to measure against, so no dependency on `geometry.js` |
-| Where layer geometry lives | `geometry.js`, as a Canvas/CSS pair (`layerRect` + `layerCSS`) plus `spanLayerRect`, all three over one private rounding helper (`layerFrame`) | Exactly the relationship `deckSlideRects`/`deckSlideFitCSS` already have, for the same reason: the studio's preview is DOM and the export is canvas, and two formulas rounding independently is how a filmstrip starts lying about the render. One rounding site is the only way to guarantee they agree |
-| Layer rotation | `box.rotate`, presentational only — the stored box never rotates, and `layerFrame` (and `layerRect`/`layerCSS`/`spanLayerRect` over it) stay rotation-blind; `render.js`'s `paintDispatch` and `preview.js`'s CSS `rotate()` each rotate the *drawing* about the unrotated box's own centre instead | Keeps a rotated layer inside the Canvas/CSS pair's existing guarantee rather than growing a second one: `layerFrame` answers "where is this box" for every caller, rotated or not, and only the two paint sites need to agree on the pivot. It is also what keeps an unrotated layer's render byte-identical — `paintDispatch` skips `ctx.save`/`rotate`/`restore` entirely when `rotate` is `0` |
+| Layer placement | A normalized `{x, y, w, h}` box in 0..1 of the canvas, never pixels | `aspect` is a document-level switch, so a 4:5 → 1:1 change has to move a layer *with* the frame rather than throw it off. Same discipline `crop` follows against its source, and it keeps `document.ts`'s clamp arithmetic — no source to measure against, so no dependency on `geometry.ts` |
+| Where layer geometry lives | `geometry.ts`, as a Canvas/CSS pair (`layerRect` + `layerCSS`) plus `spanLayerRect`, all three over one private rounding helper (`layerFrame`) | Exactly the relationship `deckSlideRects`/`deckSlideFitCSS` already have, for the same reason: the studio's preview is DOM and the export is canvas, and two formulas rounding independently is how a filmstrip starts lying about the render. One rounding site is the only way to guarantee they agree |
+| Layer rotation | `box.rotate`, presentational only — the stored box never rotates, and `layerFrame` (and `layerRect`/`layerCSS`/`spanLayerRect` over it) stay rotation-blind; `render.ts`'s `paintDispatch` and `preview.ts`'s CSS `rotate()` each rotate the *drawing* about the unrotated box's own centre instead | Keeps a rotated layer inside the Canvas/CSS pair's existing guarantee rather than growing a second one: `layerFrame` answers "where is this box" for every caller, rotated or not, and only the two paint sites need to agree on the pivot. It is also what keeps an unrotated layer's render byte-identical — `paintDispatch` skips `ctx.save`/`rotate`/`restore` entirely when `rotate` is `0` |
 | Text measurement | A real 2D context's `measureText`, bound to the size being tried — never a metric guessed from character count | `wrapText`/`autoFitText` took a `measure` callback and were fully unit-tested from #450 with no production caller; S3 wires them to the slide canvas on the render path. A guessed metric makes auto-fit wrong in exactly the fonts a theme is most likely to set |
 | Fonts | The active theme's `--font-family`, resolved at paint time, with `document.fonts.ready` awaited before the first paint. **No bundled WOFF2** | `loadThemeCss()` runs unconditionally (`app.js`), so the admin document already carries the token; a slide should be set in the blog's own type, not in a face the studio shipped. Bundling one would add a binary asset to a repo whose vendoring policy is "short, vendored, unminified and reviewable" ([vendors.md](../vendors.md)). Awaiting the face matters because `measureText` on an unloaded font silently measures a system fallback, so the JPEG would disagree with the preview beside it |
 | Waiting on the font | Lazily, once per render, and only when a slide carries a `text` or `counter` layer | A deck of rects and arrows, or of no layers at all, must issue exactly the calls it issued before layers existed — that is what keeps the S1/S2 render paths provably unchanged. `fontResolver` memoizes the promise, so slide 9 pays nothing for slide 1's wait |
@@ -1961,29 +1961,29 @@ S4's are all in the gallery rather than in the format:
 | `spanLayers` | Sliced per slide from one deck-space rect, not duplicated per slide | A duplicated layer would have to be kept in sync by the editor and would break at the seam; a slice is continuous by construction, because the columns are exact multiples of `slideW`. The slice is deliberately unclipped — a negative `x` on the right-hand slide is what lets the canvas clip for free without re-wrapping text that starts off-frame |
 | `spanLayers` in `specHash` | Folded in by the caller, alongside `strategy`/`anchorY` | `specHash` sees one slide and cannot find the deck's span layers, which paint across that slide whether it knows about them or not. Without the fold, editing a headline would leave every slide's cached render in place |
 | An unrecognized layer | **Dropped** by `normalizeLayer`, not migrated — and `DOC_VERSION` stays `1` | A layer's fields mean nothing without its `type`, so there is nothing to migrate it into. The tightening is safe because `layers`/`spanLayers` were reserved-but-unvalidated since version 1 and no released code ever wrote one; bumping the version would claim a migration that does not exist. This is the one place S3 can lose user data, which is why it is stated in "Layers" as well as here |
-| Layer type dispatch | A table in `document.js` (`LAYER_BUILDERS`) and its twin in `render.js` (`LAYER_PAINTERS`), keyed by `type` | `LAYER_TYPES` is derived from the builders, so the list of what is valid and the code that produces it cannot disagree. On the draw side a type the schema knows and the build cannot paint is a missing key — skipped whole — rather than a half-executed branch, so a future sixth type degrades instead of corrupting a slide |
+| Layer type dispatch | A table in `document.ts` (`LAYER_BUILDERS`) and its twin in `render.ts` (`LAYER_PAINTERS`), keyed by `type` | `LAYER_TYPES` is derived from the builders, so the list of what is valid and the code that produces it cannot disagree. On the draw side a type the schema knows and the build cannot paint is a missing key — skipped whole — rather than a half-executed branch, so a future sixth type degrades instead of corrupting a slide |
 | A broken `image` layer | Skipped; the rest of the slide still renders | A source that will not fetch, a decode that fails or a box with no area drops that one layer out of the map `paintImageLayer` reads. One broken logo must never cost a whole carousel — the same reason a bad gradient degrades in `normalizeBg` rather than throwing mid-encode |
 | `arrow` as a shape | A stroked canvas path, not a glyph | The theme font stack is whatever the theme says it is, and nothing guarantees it carries an arrow: a `text` layer holding "→" is one missing face away from a tofu box baked into a JPEG |
-| Layer preview fidelity | The preview measures on its own offscreen 2D context and runs the render's `wrapText` / `autoFitText`, then emits the resolved lines `white-space: pre` at the painter's own line box; `arrow` is an inline SVG polyline over the same `layerRect` numbers. Only glyph rasterization still differs | The earlier position — fixed 9% auto-fit, browser line breaking, a `❯` glyph — was accepted because chasing parity looked like a second typesetter, "the drift the Canvas/CSS pair exists to prevent". Binding `measure` to a real context is the opposite of that: `wrapText`/`autoFitText` take a `measure` callback precisely so there can be one typesetter with two callers, and the constants come from `render.js` by import rather than by copy. The render is still the contract |
+| Layer preview fidelity | The preview measures on its own offscreen 2D context and runs the render's `wrapText` / `autoFitText`, then emits the resolved lines `white-space: pre` at the painter's own line box; `arrow` is an inline SVG polyline over the same `layerRect` numbers. Only glyph rasterization still differs | The earlier position — fixed 9% auto-fit, browser line breaking, a `❯` glyph — was accepted because chasing parity looked like a second typesetter, "the drift the Canvas/CSS pair exists to prevent". Binding `measure` to a real context is the opposite of that: `wrapText`/`autoFitText` take a `measure` callback precisely so there can be one typesetter with two callers, and the constants come from `render.ts` by import rather than by copy. The render is still the contract |
 | `ink` as a sixth layer type, not a vector editor | One drawing session makes one `ink` layer; once committed it is an ordinary layer, moved, resized, rotated and deleted like any of the other five | This **narrows** the standing rejection of a true vector editor recorded under "Considered and rejected", rather than cancelling it: no node editing, no path tool, no groups, no text on a path. Where that line sits is stated there, plainly, so ink is not read as permission for the rest |
-| Ink point space | Points normalized 0..1 **inside the layer's own box**, the same space every other layer field uses | Scale and rotate come free: the box gestures already move, scale and rotate a layer, and `paintDispatch` already rotates the drawing about the box's own centre. Nothing new is needed in `geometry.js`, which stays rotation-blind |
-| Ink stroke width | A fraction of the box's shorter side, `0.001..0.25`, default `0.02` | The same convention `rect`'s `radius` and `render.js`'s `ARROW_STROKE` already use, so a resize keeps the stroke sensible — canvas pixels would not survive a resize |
+| Ink point space | Points normalized 0..1 **inside the layer's own box**, the same space every other layer field uses | Scale and rotate come free: the box gestures already move, scale and rotate a layer, and `paintDispatch` already rotates the drawing about the box's own centre. Nothing new is needed in `geometry.ts`, which stays rotation-blind |
+| Ink stroke width | A fraction of the box's shorter side, `0.001..0.25`, default `0.02` | The same convention `rect`'s `radius` and `render.ts`'s `ARROW_STROKE` already use, so a resize keeps the stroke sensible — canvas pixels would not survive a resize |
 | Ink caps | At most 2000 points on one stroke, at most 200 strokes on one layer; overflow drops the tail, never the stroke or the layer | A hand-written or runaway document must not make a slide take forever to paint. Both numbers are generous for a real stylus session sampled at pointer-move rate and for one sitting's drawing, so nothing a real session produces is ever trimmed |
 | The eraser | Works only while the drawing session is open, and removes a whole stroke the pointer touches | Per-stroke editing after the layer is committed is out of scope; a committed `ink` layer is edited the way every other layer is — moved, resized, rotated, deleted — never reopened for node-level changes |
 | `DOC_VERSION` for `ink` | Stays `1` | Additive, exactly as `box.rotate` was in S7. The one real cost: `normalizeLayer` drops a layer whose type it does not know, so a document holding an `ink` layer loses it if opened by a build from before this layer type existed. That is the schema's recorded behaviour, not a new hazard — see "Layers" |
-| The studio's editing surface | The deck-space stage, with the filmstrip demoted to a selection rail | The stage was *already* the deck-space canvas — `aspect-ratio: n·w/h`, seam dividers, per-slide safe areas, and in deck mode one host per slide carrying its framing, layers and chrome. It was only capped (a stale `max-width: 22rem` from the C7 skeleton) and inert (`createDeckGestures` bound the filmstrip's 128px thumbnail). Inverting those two lands the asked-for model as a *rearrangement* of what exists; a new canvas element would have grown its own seams, safe areas and per-slide hosts — a second geometry consumer beside `preview.js`, which is exactly the drift the Canvas/CSS pair exists to prevent. It also dissolved the deferral on span-layer manipulation, because on the stage the element **is** the deck box |
-| Undo / redo | A ring of `CarouselDoc` references (`studio/history.js`), pushed at the commit points the studio already had | The document is immutable by construction — every `document.js` writer returns a new one and the page commits with `setState({ doc })` — so a snapshot ring needs no cloning, no inverse operations and no command objects. Granularity comes free too: `gestures.js` already debounces a wheel burst into one commit and the property forms already repaint on `input` and commit on `change`, so pushing there *is* the step size a user expects. A render `replace`s the current entry instead of adding one, since stamping `rendered` blocks is not an edit but the entry has to carry them or the next undo re-encodes every slide |
+| The studio's editing surface | The deck-space stage, with the filmstrip demoted to a selection rail | The stage was *already* the deck-space canvas — `aspect-ratio: n·w/h`, seam dividers, per-slide safe areas, and in deck mode one host per slide carrying its framing, layers and chrome. It was only capped (a stale `max-width: 22rem` from the C7 skeleton) and inert (`createDeckGestures` bound the filmstrip's 128px thumbnail). Inverting those two lands the asked-for model as a *rearrangement* of what exists; a new canvas element would have grown its own seams, safe areas and per-slide hosts — a second geometry consumer beside `preview.ts`, which is exactly the drift the Canvas/CSS pair exists to prevent. It also dissolved the deferral on span-layer manipulation, because on the stage the element **is** the deck box |
+| Undo / redo | A ring of `CarouselDoc` references (`studio/history.ts`), pushed at the commit points the studio already had | The document is immutable by construction — every `document.ts` writer returns a new one and the page commits with `setState({ doc })` — so a snapshot ring needs no cloning, no inverse operations and no command objects. Granularity comes free too: `gestures.ts` already debounces a wheel burst into one commit and the property forms already repaint on `input` and commit on `change`, so pushing there *is* the step size a user expects. A render `replace`s the current entry instead of adding one, since stamping `rendered` blocks is not an edit but the entry has to carry them or the next undo re-encodes every slide |
 | The studio's own scroll shell | `.carousel-studio-main` clamps `.light-main` above 48em, imperatively, in `afterRender` | Not a new pattern: `PostsListPage` adds `.posts-list-main` and `MediaPage` adds `.media-page-main`, each backed by `flex: 0 0 auto; min-height: 0; height: 100lvh; overflow: hidden`. Before S8 the studio only cleared the admin content column's *width* clamp, which is why the document, not the studio, kept scrolling |
 | The toolbar and `.carousel-studio__chip` | One toolbar row (mode toggle, a Document popover, the zoom bar); the toolbar's own controls move onto `.editor-mode-toggle` and `.btn.btn-sm` instead of `.carousel-studio__chip` | One class was doing six jobs — mode toggle, zoom, fit chips, slide-fit chips, delete-layer, template actions — which is why the studio did not read like the rest of the admin. The segmented control reuses `.editor-mode-toggle` rather than inventing a third segmented pattern. The chip stays everywhere S8 did not touch it — full retirement is a follow-up |
 | Where the layer property form renders | Spliced into the layer list directly under the selected row (`carousel-studio__layer-form-row`), not once after both lists | The form is what you are editing; putting it anywhere but next to the row that opened it meant scrolling away from the selection to reach it. The distinct row class keeps it out of `_setupLayerReorder`'s and `pointerReorder.js`'s row walks |
-| Shared pointer mechanics | Factored into `studio/pointerSession.js` before any touch/stylus behaviour changed, landed as its own change with no behaviour change | Same discipline `layerSpace` followed in S6: land the refactor first, so a second input policy extends one machine instead of spreading a branch across two copies of it |
+| Shared pointer mechanics | Factored into `studio/pointerSession.ts` before any touch/stylus behaviour changed, landed as its own change with no behaviour change | Same discipline `layerSpace` followed in S6: land the refactor first, so a second input policy extends one machine instead of spreading a branch across two copies of it |
 | Which touch surfaces are first class | Tablet — finger and stylus both get full editing on the stage. The phone keeps its existing bottom sheet and stays view-and-adjust. **Answered by S10**, which makes every coarse pointer first class, the phone included | A fixed shell and direct manipulation need room a phone screen does not have; a tablet has it. Widening to the phone is a different, larger change than S8 scoped — and S10 is that change. It takes the room back a different way rather than finding more of it: the controls dock on the bottom edge, one slide fills the stage and the strip stops scrolling. The row stays because the reasoning is what S10 had to answer, not something it deleted |
-| Mode naming | **Panorama** / **Slides** on the chips; `split` / `deck` in the code, in this document and on disk | The stored values are the schema and changing them would mean a migration for a wording choice. The chips name what the user is choosing — one wide photo cut across every slide, versus a photo per slide — and the naming lives in `modeToggle` (`studio/panels.js`) and nowhere else, so there is one vocabulary in the code and one on screen, with a single translation point between them |
+| Mode naming | **Panorama** / **Slides** on the chips; `split` / `deck` in the code, in this document and on disk | The stored values are the schema and changing them would mean a migration for a wording choice. The chips name what the user is choosing — one wide photo cut across every slide, versus a photo per slide — and the naming lives in `modeToggle` (`studio/panels.ts`) and nowhere else, so there is one vocabulary in the code and one on screen, with a single translation point between them |
 | Per-slide sources in the picker | One `MediaPickerDialog`; the scope rides on the button — the properties panel's *Change this slide's photo* carries `data-slide`, the controls bar's *Use one photo for all slides* carries none | The renderer and schema have supported a multi-source deck since S2 (`renderDeck` dedups per path). What was missing was only the intent, and a per-call handler (`open(onConfirmOverride)`) already existed to carry it — a second dialog, or a mode flag on the studio, would be two code paths for one question. `specHash` includes `source`, so a swap re-encodes exactly the slide it touched, and framing survives either swap because a `crop` is fractions of its own source |
 | A removed slide's media row | Left for the *next* render's supersede cleanup, not deleted at removal | The row carries a `post_id`, so `ListOrphanedMedia` never flags it and only the supersede cleanup can collect it — and that cleanup reads the *saved* generation, so it collects the row on the next render without any new code. Deleting at removal would put the file beyond the reach of the Ctrl+Z that is otherwise sitting right there, for a row that costs nothing to keep until then |
 | Slide-count bounds | Enforced by the state owner (a disabled chip, a toast), not by the four slide writers | The writers keep the layer family's contract — an index that names nothing returns an equal document and nothing throws, because they run from pointer handlers. A silent refusal inside the model would leave the caller unable to tell a refusal from a no-op, which is the one thing a document writer must never do |
 | Template format | A `CarouselDoc` with placeholder values, in band — `{title}` inside a `text` layer's `text`, `"{logo}"` as an `image` layer's `source`, `""` as a slide's source | Point already had the vocabulary twice over: `expandCaptionTemplate` (`post_publish.go`) resolves `{title}` `{excerpt}` `{tags}` `{link}` for an Instagram caption, and a `counter` layer's `{i}`/`{n}` is already an in-band placeholder inside a layer. Reusing both means `DOC_VERSION` does not move for S4, no layer gains a field, and a template is readable by every tool that already reads a document — the renderer included |
-| When a placeholder resolves | On **apply**, once, by `applyTemplate` — unlike `{i}`/`{n}`, which stay `render.js`'s and resolve per slide at paint time | The author must be able to edit the headline the template produced; a value that re-resolved on every render would be a field they could not touch. The split also falls out of what the two kinds *are*: `{title}` is a fact about the post, known once, while `{i}` is a fact about a slide's position, which a re-slice or a reorder changes |
+| When a placeholder resolves | On **apply**, once, by `applyTemplate` — unlike `{i}`/`{n}`, which stay `render.ts`'s and resolve per slide at paint time | The author must be able to edit the headline the template produced; a value that re-resolved on every render would be a field they could not touch. The split also falls out of what the two kinds *are*: `{title}` is a fact about the post, known once, while `{i}` is a fact about a slide's position, which a re-slice or a reorder changes |
 | An unresolvable placeholder | Left literal, and named in the report | A visible `{excerpt}` on a slide is a bug the author can see and fix before publishing; a silently blank headline is one they ship. `{logo}` is the deliberate exception — an `image` layer with no source paints nothing at all, so the layer is dropped and counted rather than left dead |
 | Import formats | PPTX and SVG. **No raster or PDF-page fallback** | These are the two openly-specified formats that keep *editable* structure — a headline that is still text, a rect that is still a rect. Importing page images as slide backgrounds is indistinguishable from dropping photos into a post, which the studio already does, and PDF needs a real parser the vendoring policy refuses |
 | Import dependencies | None. `DecompressionStream('deflate-raw')` + `DOMParser`, with Point's own ~200-line read-only ZIP reader | A `.pptx` is a ZIP of XML and both halves are browser built-ins, so the whole importer stays inside [vendors.md](../vendors.md)'s "no JS runtime dependency". The reader is read-only by design: Point reads OOXML, it does not write it |
@@ -1991,16 +1991,16 @@ S4's are all in the gallery rather than in the format:
 | Fonts in an imported template | Recorded in `origin.fonts`, never applied; the report says so in a sentence | The layer schema gains no `font` field, so paint time is unchanged and type stays in the active theme's `--font-family` — the S3 decision, reaffirmed. Rendering the template's face would mean bundling a webfont, settled the other way twice now. Saying it once, plainly, is what stops the author hunting for a font picker |
 | Unmappable shapes | Dropped and **counted**, with a slide index and a name, never approximated | `normalizeLayer`'s discipline promoted to something a user sees: an import that silently lost half a design is worse than one that says it kept 14 of 22 shapes. Identical drops collapse into one entry with a count, which is what keeps a 20-slide deck's report readable |
 | Aspect on import | Nearest of `ASPECTS` by log-ratio distance, with every box normalized against a **uniform centre-fit** | A squash is a silent lie about the design — a circle that arrives an ellipse. Centre-fit leaves the mismatch visible as margin, which the report then names, and 16:9 into 1.91:1 (the common PowerPoint case) costs 3% each side rather than a distorted logo |
-| Where a template's images live | Inlined as `data:` in the stored envelope; uploaded as post-owned media on apply | Both halves are load-bearing. `render.js`'s `deps.fetchBlob` is a same-origin GET of a content path and nothing on the render path should learn about `data:`; and an asset uploaded with no `post_id` would be swept by `ListOrphanedMedia`, whose orphan test is `post_id IS NULL`. Inlining is what lets a template be one row a person can export, delete or move |
+| Where a template's images live | Inlined as `data:` in the stored envelope; uploaded as post-owned media on apply | Both halves are load-bearing. `render.ts`'s `deps.fetchBlob` is a same-origin GET of a content path and nothing on the render path should learn about `data:`; and an asset uploaded with no `post_id` would be swept by `ListOrphanedMedia`, whose orphan test is `post_id IS NULL`. Inlining is what lets a template be one row a person can export, delete or move |
 | The templates listing | `ListCarouselTemplates` selects `slug`, `name`, `created_at` and never `doc` | A template carries its images inline, so a gallery that listed envelopes would pull every asset of every template to draw a list of names — the same reasoning that kept the carousel document off the `posts` table. It is also why the gallery has no thumbnails |
 | Built-in templates | None in v1; the table is filled by import and by "save as template" | Authoring a set worth shipping is its own project, and there is a licensing edge: a bought template may generally be adapted for your own posts but not redistributed, so anything bundled later has to be originally authored or explicitly permissively licensed |
 | An imported deck's slug | Derived from the filename, then made unique against what is already stored (`freeSlug`) | The store's upsert is deliberate — it is what makes "save as template" idempotent — which means the caller that must *not* replace is the one that has to say so. Two exports of one deck carry one filename, and importing a revision must not silently overwrite the template the author already adapted |
-| What selects the touch layout | `(pointer: coarse)` — `TOUCH_LAYOUT` in `studio/layout.js` — never a width | The problem is a finger, not a narrow window. A tablet and a touchscreen laptop have the same problem a phone has, and a narrow desktop window does not have it at all. The studio already read this query for its grab targets, so the precedent was there; S10 made `isTouchLayout()` the single reader of it and deleted `gestures.js`'s private copy of the string |
-| One slide on a coarse pointer | The strip stays whole in the DOM. One slide is shown by locking the scroller (`overflow: hidden`) and scrolling it to the active column, never by rendering one slide | Span layers cross the seams, the pane row divides the same `n` segments, and the Canvas/CSS pair resolves every box against deck space. A one-slide DOM would be a second consumer of that geometry — the drift the pair exists to prevent. `geometry.js`, `document.js`, `render.js` and `preview.js` are untouched by S10 |
+| What selects the touch layout | `(pointer: coarse)` — `TOUCH_LAYOUT` in `studio/layout.ts` — never a width | The problem is a finger, not a narrow window. A tablet and a touchscreen laptop have the same problem a phone has, and a narrow desktop window does not have it at all. The studio already read this query for its grab targets, so the precedent was there; S10 made `isTouchLayout()` the single reader of it and deleted `gestures.ts`'s private copy of the string |
+| One slide on a coarse pointer | The strip stays whole in the DOM. One slide is shown by locking the scroller (`overflow: hidden`) and scrolling it to the active column, never by rendering one slide | Span layers cross the seams, the pane row divides the same `n` segments, and the Canvas/CSS pair resolves every box against deck space. A one-slide DOM would be a second consumer of that geometry — the drift the pair exists to prevent. `geometry.ts`, `document.ts`, `render.ts` and `preview.ts` are untouched by S10 |
 | The modifier gate on a coarse pointer | Lifted. A plain drag pans the crop there, and `"pane"` is never the drag kind | S7.1 gated the crop behind Ctrl/Shift only because the strip needed a scroll gesture of its own. With the strip locked a plain drag has nothing left to do, and a finger has no modifier to hold. This **narrows** "Pan and zoom need a modifier" rather than cancelling it — every fine pointer keeps the gate |
 | What a multi-finger tap is | `k` pointers down at once, all released inside `TAP_MS` (300), none past `DRAG_SLOP_PX` | A pinch moves, so a tap and a pinch cannot be confused, and a hold takes too long because the clock starts at the first press. A tap misread as a pinch still costs nothing: `commitIfChanged` already no-ops when nothing moved. `createMultiTapWatcher` reports only the count; what 2 or 3 fingers *mean* stays the controller's policy |
 | What a tap undoes | One stroke inside a draw session; the document's own history everywhere else | Procreate's model inside the session. The session already commits as one document step, so a document undo there would drop the edit *before* the session rather than the stroke just drawn. The dock's undo/redo buttons stay document-only at every moment — two paths, not one branching ring |
-| Ink's session history | `past`/`future` arrays of shallow stroke-list copies on the session, capped at `INK_HISTORY_LIMIT` (40), pushed at `_inkDrawEnd` and `_inkEraseAt` | Mirrors `studio/history.js`'s model at session scale, which also makes an erase one step. Nothing reaches the document: the session still commits once, as one layer |
+| Ink's session history | `past`/`future` arrays of shallow stroke-list copies on the session, capped at `INK_HISTORY_LIMIT` (40), pushed at `_inkDrawEnd` and `_inkEraseAt` | Mirrors `studio/history.ts`'s model at session scale, which also makes an erase one step. Nothing reaches the document: the session still commits once, as one layer |
 | Ink in the object dropdown | `LAYER_KINDS` gains `ink`, and `_addLayer` starts the draw session for it instead of adding a layer. The toolbar's `Draw` switch retires | One vocabulary for one schema — the dropdown names what the document holds. The studio still authors no `ink` literal: the session is what produces the final box and strokes, and `_defaultLayer` never sees the type |
 | Ink is slide-scoped | `addLayerChips("span")` drops the `ink` option | A draw session is scoped to one slide. A span ink layer has no session that could produce it |
 | The properties panel on a coarse pointer | A bottom sheet, on the same `.collapsed` class the card already flips, with the dock's burger as its handle | `_toggleProps` is already a DOM-only class flip with no rebuild, so the sheet costs none either. The pattern is `.editor-details-panel`'s (`css/light/editor.css`), which `carousel.css` carried until S8 trimmed it. The open/closed choice is *not* remembered there: dismissing a sheet would otherwise collapse the rail on the same user's desktop |
@@ -2055,7 +2055,7 @@ null                                              // blur at the default radius
 except for the last slide's `bg`, which fills the `pad` strategy's tail gap.
 `layers` and `spanLayers` are read in **both** modes — see "Layers".
 
-Every field is normalized on the way in by `document.js` — unknown fields
+Every field is normalized on the way in by `document.ts` — unknown fields
 dropped, out-of-range numbers clamped, an unusable gradient degraded to the
 default rather than thrown — and `normalizeDocument` is idempotent, which is
 what makes parse/serialize a round trip. `DOC_VERSION` is still `1` through S4:
@@ -2123,27 +2123,27 @@ type the same way, and S8 and S10 changed layout and input only.
 | **C1** | Fix Instagram carousel slide order (reorder `GetMediaByPaths` output by `ExtractMediaPaths` order). Ships standalone — a live bug. |
 | **C2** | This doc + the fence render contract test. |
 | **C3** | `postNodes.js` + `VisualEditor.js` carousel node — line-based parse ahead of `IMAGE_PATH_RE`, serialize in both, round-trip tests. Data-loss guard: today, opening a carousel post in Visual mode and saving destroys the block. Must precede any writer. |
-| **C4** | Plugin skeleton: `registry.go` descriptor, `frontend/src/plugins/carousel/index.js`, post-editor menu entry, gating tests (chunk + `/api/carousel` 404 when off). |
-| **C5** | Pure `geometry.js` + `document.js` + unit tests. No UI, no canvas. **Done** — `frontend/src/plugins/carousel/{geometry,document}.js`, `frontend/test/carousel{Geometry,Document}.test.js`. |
-| **C6** | `carousels` table + migration + repo queries + handler + JS API client + Go tests. **Done** — `api/internal/api/carousel.go`, `frontend/src/api/carousel.js`. `doc` is stored and returned verbatim (validated only as a JSON object); all 404 with the plugin off; post delete cascades. C6 landed one row per post (`carousels(post_id UNIQUE)`, `GetCarouselByPostID` / `UpsertCarousel` / `DeleteCarouselByPostID`, `?post=<id>` on every verb); the row is keyed by block since — `UNIQUE(post_id, block_key)`, `GetCarouselByBlockKey` / `UpsertCarousel` / `ListCarouselsByPostID` / `DeleteCarouselByBlockKey`, and `?post=<id>&block=<key>`, with `block` omissible for the post's first carousel. |
-| **C7** | Splitter MVP: source picker, N/aspect controls, safe-area guides, thin `render.js`, `createImageBitmap` downscale, upload, write block, save document. **Done** — `frontend/src/plugins/carousel/{index,render}.js`, `document.js` gains `splitDocument` / `applyCarouselBlock`, tests in `frontend/test/carousel{Render,Document,StudioPage}.test.js`. |
+| **C4** | Plugin skeleton: `registry.go` descriptor, `frontend/src/plugins/carousel/index.ts`, post-editor menu entry, gating tests (chunk + `/api/carousel` 404 when off). |
+| **C5** | Pure `geometry.ts` + `document.ts` + unit tests. No UI, no canvas. **Done** — `frontend/src/plugins/carousel/{geometry,document}.js`, `frontend/test/carousel{Geometry,Document}.test.js`. |
+| **C6** | `carousels` table + migration + repo queries + handler + JS API client + Go tests. **Done** — `api/internal/api/carousel.go`, `frontend/src/api/carousel.ts`. `doc` is stored and returned verbatim (validated only as a JSON object); all 404 with the plugin off; post delete cascades. C6 landed one row per post (`carousels(post_id UNIQUE)`, `GetCarouselByPostID` / `UpsertCarousel` / `DeleteCarouselByPostID`, `?post=<id>` on every verb); the row is keyed by block since — `UNIQUE(post_id, block_key)`, `GetCarouselByBlockKey` / `UpsertCarousel` / `ListCarouselsByPostID` / `DeleteCarouselByBlockKey`, and `?post=<id>&block=<key>`, with `block` omissible for the post's first carousel. |
+| **C7** | Splitter MVP: source picker, N/aspect controls, safe-area guides, thin `render.ts`, `createImageBitmap` downscale, upload, write block, save document. **Done** — `frontend/src/plugins/carousel/{index,render}.js`, `document.ts` gains `splitDocument` / `applyCarouselBlock`, tests in `frontend/test/carousel{Render,Document,StudioPage}.test.js`. |
 | **C8** | Superseded-slide cleanup on re-render; "carousel block wins" + the >20 rule in `post_publish.go`; resolve the duplicate-path divergence between Go (`ExtractMediaPaths` dedups) and the browser (`extractMedia` does not). **Done** — `index.js` `_render` deletes superseded `media_id`s and refuses byte-identical slides; `post_publish.go` `carouselBlockPaths` selected the fence's slides — **since reversed**, the publish path now ships every image in the post in document order and that helper is gone; see the Decisions rows above. |
 | **C9** | Public block CSS partial; verify non-immersive and immersive rendering, including `mediaFromHtml` expansion in the immersive viewer. **Done** — `frontend/css/public/carousel-block.css` appended to the **main** bundle list in `build-css.sh` (not the plugin chunk); `mediaFromHtml` (`postMedia.js`) expands a `<div class="carousel-block">` into its N media items on the `<hr>` path and marks each `carousel: true`; the immersive `MediaViewer` pans between same-deck slides rather than crossfading (see Decisions); grid-thumbnail behaviour recorded below. |
-| **U1** | `fitReport` + `slideCountOptions` in `geometry.js`: given a source and target aspect, how many slides at what cost. **Done** — see "Sizing" above; `sliceRects` gains `{strategy, anchorY}`, column edges rounded to whole source pixels. |
+| **U1** | `fitReport` + `slideCountOptions` in `geometry.ts`: given a source and target aspect, how many slides at what cost. **Done** — see "Sizing" above; `sliceRects` gains `{strategy, anchorY}`, column edges rounded to whole source pixels. |
 | **U2** | Per-slide crop decode, `MAX_STRIP_WIDTH` removed. **Done** — see the Decisions row above. |
 | **U3** | Fit panel: source pixel size, count/strategy chips, live `fitReport` readout, upscale warning, `anchorY` slider. **Done** — `strategy`/`anchorY` are additive doc-level fields (`DOC_VERSION` stays 1) folded into `specHash`; `MAX_SLIDES` raised 10 → 20. |
 | **U4** | Filmstrip + stage preview computed from the same numbers `sliceRects` renders from, replacing a `background-size: cover` guess that only agreed with the `cover` strategy. **Done** — `exact`/`pad` now preview truthfully, including the padded region as a distinct hatched block. |
 | **U5** | Render lifecycle: progress (`onProgress({done,total})`), dirty-state badge when slide count/aspect/strategy/anchorY drift from the saved document, `specHash`-gated skip of unchanged slides, a confirmed remove-carousel action, and upload cleanup on a mid-loop failure. **Done**. |
 | **U6** | Open Carousel Studio from the Visual editor's read-only carousel card (today: post-editor overflow menu only), and a clearer way back to the post. Navigation only — no render-contract, schema, or editing-surface change. |
-| **S2** | Framing — per-slide pan/zoom, cover/contain, background fill, `deck` mode. **Done** — `geometry.js` gains the `deckSlideRects`/`deckSlideFitCSS` Canvas/CSS pair plus `padRects`/`gradientLine`; `document.js` gains `toDeckDocument` (one-way freeze) and `updateSlideFraming` (the single framing writer); `render.js` gains the `renderCarousel` facade and `renderDeck` with per-source fetch dedup; `index.js` becomes doc-as-state with CSS-only pan/zoom preview and a per-slide fill picker. Tests in `frontend/test/carousel{Geometry,Document,Render,StudioPage}.test.js`. Multi-source decks are supported by the schema and renderer but not yet by the picker UI — see "What the studio does not yet offer". |
-| **S3** | Layers — per-slide and canvas-space spanning layers, text with wrap/auto-fit, logo, counters. Uses the active theme's font stack, **not** bundled WOFF2 (`docs/vendors.md`). **Done** — see "Layers" above. `document.js` gains the five-type schema (`normalizeLayer` over `LAYER_BUILDERS`, `LAYER_TYPES`) and the `addLayer`/`updateLayer`/`removeLayer`/`reorderLayer` family addressing a slide or `SPAN_SLIDE`, with `spanLayers` folded into `specHash` by the caller; `geometry.js` gains the `layerRect`/`layerCSS` pair plus `spanLayerRect`/`spanLayerCoverage` over one `layerFrame` helper; `render.js` gains `paintLayers`/`paintSpanLayers` inside `paintSlide`, the `LAYER_PAINTERS` table, `loadLayerImages` and the lazy `fontResolver`; `index.js` was split into `studio/{bounds,panels,preview,gestures}.js` first (no behaviour change) and then grew the layer panel, the per-type property form and stage drag/resize/snap. Tests in `frontend/test/carousel{Document,Geometry,Render,StudioPage}.test.js` and `carouselStudio{Bounds,Panels,Preview,Gestures}.test.js`. **Two things it does not do:** layers are authored in deck mode only (the renderer paints them in both), and a span layer is form-only on the stage — direct manipulation for it is filed as a follow-up. Both are recorded under "What the studio does not yet offer". |
-| **S4** | Templates — a template is this same document with placeholder values, plus PPTX and SVG import. **Done** — see "Templates" above. `document.js` gains `PLACEHOLDERS`, `applyTemplate` and `toTemplate` over the envelope (`TEMPLATE_VERSION`, separate from `DOC_VERSION`, which stays 1); `carousel_templates(slug UNIQUE, name, doc)` with four routes on the existing `CarouselHandler`, `doc` opaque to Go and capped at 8 MB; `import/{zip,xml,adapter,index,pptx,svg}.js` read a `.pptx` or a list of `.svg` with no dependency at all, every layer through `normalizeLayer` and everything unmappable dropped **and counted**; `studio/templates.js` plus gallery, import dialog, save-as-template and drop report in `panels.js`/`index.js`, with a template's inlined `data:` assets materialized as post-owned media on apply. Outside the plugin, `utils/helpers.js` gains `parseMarkup` — `DOMParser.parseFromString` turns out to be a Trusted Types sink for every mime type, and an eslint rule now says so. Tests in `frontend/test/carousel{Document,Api,ImportZip,ImportPptx,ImportSvg}.test.js`, `carouselStudio{Templates,Panels}.test.js`, `CarouselStudioPage.test.js` and the Go `internal/api`/`internal/repository` carousel tests, over six generated OOXML fixtures (`frontend/test/fixtures/make-pptx.sh`). **What it does not do:** no built-in templates, no placeholder help in the studio, no thumbnails and no rename — see "What the studio does not yet offer". |
+| **S2** | Framing — per-slide pan/zoom, cover/contain, background fill, `deck` mode. **Done** — `geometry.ts` gains the `deckSlideRects`/`deckSlideFitCSS` Canvas/CSS pair plus `padRects`/`gradientLine`; `document.ts` gains `toDeckDocument` (one-way freeze) and `updateSlideFraming` (the single framing writer); `render.ts` gains the `renderCarousel` facade and `renderDeck` with per-source fetch dedup; `index.js` becomes doc-as-state with CSS-only pan/zoom preview and a per-slide fill picker. Tests in `frontend/test/carousel{Geometry,Document,Render,StudioPage}.test.js`. Multi-source decks are supported by the schema and renderer but not yet by the picker UI — see "What the studio does not yet offer". |
+| **S3** | Layers — per-slide and canvas-space spanning layers, text with wrap/auto-fit, logo, counters. Uses the active theme's font stack, **not** bundled WOFF2 (`docs/vendors.md`). **Done** — see "Layers" above. `document.ts` gains the five-type schema (`normalizeLayer` over `LAYER_BUILDERS`, `LAYER_TYPES`) and the `addLayer`/`updateLayer`/`removeLayer`/`reorderLayer` family addressing a slide or `SPAN_SLIDE`, with `spanLayers` folded into `specHash` by the caller; `geometry.ts` gains the `layerRect`/`layerCSS` pair plus `spanLayerRect`/`spanLayerCoverage` over one `layerFrame` helper; `render.ts` gains `paintLayers`/`paintSpanLayers` inside `paintSlide`, the `LAYER_PAINTERS` table, `loadLayerImages` and the lazy `fontResolver`; `index.js` was split into `studio/{bounds,panels,preview,gestures}.js` first (no behaviour change) and then grew the layer panel, the per-type property form and stage drag/resize/snap. Tests in `frontend/test/carousel{Document,Geometry,Render,StudioPage}.test.js` and `carouselStudio{Bounds,Panels,Preview,Gestures}.test.js`. **Two things it does not do:** layers are authored in deck mode only (the renderer paints them in both), and a span layer is form-only on the stage — direct manipulation for it is filed as a follow-up. Both are recorded under "What the studio does not yet offer". |
+| **S4** | Templates — a template is this same document with placeholder values, plus PPTX and SVG import. **Done** — see "Templates" above. `document.ts` gains `PLACEHOLDERS`, `applyTemplate` and `toTemplate` over the envelope (`TEMPLATE_VERSION`, separate from `DOC_VERSION`, which stays 1); `carousel_templates(slug UNIQUE, name, doc)` with four routes on the existing `CarouselHandler`, `doc` opaque to Go and capped at 8 MB; `import/{zip,xml,adapter,index,pptx,svg}.js` read a `.pptx` or a list of `.svg` with no dependency at all, every layer through `normalizeLayer` and everything unmappable dropped **and counted**; `studio/templates.ts` plus gallery, import dialog, save-as-template and drop report in `panels.ts`/`index.js`, with a template's inlined `data:` assets materialized as post-owned media on apply. Outside the plugin, `utils/helpers.js` gains `parseMarkup` — `DOMParser.parseFromString` turns out to be a Trusted Types sink for every mime type, and an eslint rule now says so. Tests in `frontend/test/carousel{Document,Api,ImportZip,ImportPptx,ImportSvg}.test.js`, `carouselStudio{Templates,Panels}.test.js`, `CarouselStudioPage.test.js` and the Go `internal/api`/`internal/repository` carousel tests, over six generated OOXML fixtures (`frontend/test/fixtures/make-pptx.sh`). **What it does not do:** no built-in templates, no placeholder help in the studio, no thumbnails and no rename — see "What the studio does not yet offer". |
 | **S5** | Production — caption composer, one-click push, brand kit scoped to 2–3 settings rows. The brand kit widens something that already exists rather than introducing it: an `image` layer added in the studio already defaults to the site's `logo_url` setting (S3), and S3 added no settings row of its own (see "Out of scope"). |
-| **S6** | The studio becomes one canvas: the stage is the editing surface, at a size worth editing on and with a bottom-sheet panel on a narrow viewport; undo/redo; slide add / remove / duplicate / reorder; Panorama/Slides chips and a per-slide source; the vertical anchor by direct drag; and preview/render parity for text and arrows. **Done** — see "The stage is the editor" above. Nothing stored changed: `document.js` gains only `addSlide`/`removeSlide`/`duplicateSlide`/`moveSlide`, `DOC_VERSION` stays 1, `geometry.js` is untouched, and `render.js`'s painting is unchanged (it only exports the constants `studio/preview.js` now imports instead of restating). New modules `studio/{history,layout}.js`; `gestures.js` gains `layerSpace`/`deckRect`/`snapLines`/`deckSeams` and `createAnchorGesture`; `preview.js` gains `ensurePreviewFont`, `textPlan`, `arrowPlan` and `paintSpanChrome`; outside the plugin, `utils/pointerReorder.js` gains an `axis` option and `Toast` an optional `action`. Tests in `frontend/test/carouselStudio{History,Layout,Gestures,Panels,Preview}.test.js`, `CarouselStudioPage.test.js`, `carouselDocument.test.js` and `toastAction.test.js`. |
-| **S7** | Direct manipulation on the stage: guard the wheel/drag pan-and-zoom behind Ctrl/Shift so a plain pointer can scroll the strip instead; a `box.rotate` field and a ninth handle to drive it; click-to-select a layer straight off the stage; and on-canvas text editing through a double-click into `contenteditable`. **Done** — see "Pan and zoom need a modifier", "Click-to-select a layer directly", "Rotation" and "On-canvas text editing" above. `document.js`'s `CarouselBox` gains `rotate`, wrapped by `wrapRotate` and folded into `specHash` with the rest of the box; `DOC_VERSION` stays 1. `geometry.js` is untouched — `layerFrame` and everything over it stay rotation-blind by design. `render.js` gains `paintDispatch`, the one point both `paintLayers` and `paintSpanLayers` now route a layer through, rotating the canvas about the box's own centre when `rotate` is non-zero and skipping `ctx.save`/`restore` entirely otherwise. `studio/gestures.js` gains the pane-scroll drag/wheel branch, the rotate-handle drag and hit test, and the stage's own click-to-select fallback; `index.js` gains `_enterTextEdit`/`_liveEditText`/`_exitTextEdit`; `preview.js`'s `paintDeckLayers`/`paintSpanLayers`/`paintChrome` gain the CSS `rotate()` twin and the ninth chrome handle, and `paintLayerContent` gains the `dataset.editing` guard. Panorama-mode layer authoring remains out of scope — see "What the studio does not yet offer". |
-| **S8** | The studio becomes an app: a fixed-height shell above 48em (the phone stays document flow), a three-row grid (toolbar/body/tray), one toolbar row, the property form spliced under its selected row, and touch/stylus as first-class input on the stage. **Done** — see "The studio is an app" above. `frontend/css/light/layout.css` gains `.carousel-studio-main`; `carousel.css` gains the three-row grid, the bottom-sheet panel below 64em and the `(pointer: coarse)` sizing block — S10 has since widened the shell query to any coarse pointer, added a fourth grid row for the dock, and moved the sheet from the width query onto the pointer one; `index.js` gains `_measureStageBudget`/`_toggleDocControls`/`docControlsOpen`; `studio/panels.js`'s `builder()` emits the one toolbar row, the Document popover, and splices `layerForm` under the selected row via a new `formHtml` argument to `layerRows`; `studio/pointerSession.js` (new) factors `createListenerGroup`/`claimPointer`/`releasePointer`/`resolveTouchClaim`/`commitIfChanged` out of `gestures.js`, which then gains the pinch (`onLayerPointerAdd`/`onLayerPinchMove`), the partial-release rebase, and the coarse-pointer constants. Alongside it, the Visual editor's own carousel card (`components/light/VisualEditor.js`, `css/light/editor.css`, `css/common/buttons.css`) picked up the slide-handle and button styling S7's card work had left unfinished. No stored field changed; `DOC_VERSION` stays 1; `geometry.js` is untouched. |
-| **S9** | The ink layer — draw a freehand mark on a slide with a stylus, mouse or finger, and erase a stroke while the session is open. Narrows the standing rejection of a true vector editor rather than cancelling it — see "Considered and rejected". **Done** — `document.js` gains `ink` as a sixth `LAYER_BUILDERS` entry: `strokes` is a list of `{w, pts}`, points normalized 0..1 inside the layer's own box, stroke width a fraction of the box's shorter side clamped `0.001..0.25`, capped at 2000 points per stroke and 200 strokes per layer; `DOC_VERSION` stays 1. `render.js` gains `paintInkLayer` in `LAYER_PAINTERS`, stroking each point list as a rounded path at canvas pixels; `studio/preview.js` gets the same plan over `layerRect`'s numbers for the live preview. `studio/gestures.js` gains the draw-and-erase pointer session over the existing `claimPointer`/`releasePointer` machinery `pointerSession.js` already factored out in S8, using `getCoalescedEvents` to keep a fast line smooth; `Ink` in the object dropdown (`studio/panels.js`) starts a session on the selected slide, Erase toggles the eraser inside that same session, and Escape or Done ends it and commits one `ink` layer through `addLayer`. S10 put the session behind the dropdown; before it, a `Draw` control in the toolbar did the same job. The committed layer's property form is colour and opacity only — no per-stroke editing once the layer exists. Tests in `frontend/test/carousel{Document,Render}.test.js` and `carouselStudio{Gestures,Panels,Preview}.test.js` and `CarouselStudioPage.test.js`. |
-| **S10** | The touch layout: every coarse pointer becomes a first-class editing surface, at any width — one slide maximized over a locked strip, an icon dock on the bottom edge, the properties panel as a sheet behind a burger, `ink` in the object dropdown, and two- and three-finger taps for undo and redo. **Done** — see "The touch layout" above. Nothing stored changed; `DOC_VERSION` stays 1; `geometry.js`, `document.js`, `render.js` and `preview.js` are untouched. `studio/layout.js` gains `TOUCH_LAYOUT` and `isTouchLayout`, and `readPropsPref` returns false on a coarse pointer; `carousel.css` widens the shell query to `@media (min-width: 48em), (pointer: coarse)` (mirrored by `.carousel-studio-main` in `frontend/css/light/layout.css`) and grows four `(pointer: coarse)` blocks — the locked scroller and the measured stage height, `touch-action: none` on every column, the dock and the swapped bars, and the sheet with its backdrop. `studio/panels.js` gains `dock()` (burger, stepper, undo/redo, and Erase/Done with a session open) and `inkActions()`, `LAYER_KINDS` gains `ink` while `addLayerChips("span")` filters it out, `drawToolControl` retires, and `builder()` takes a `touch` argument that places the props tools and the whole tray inside the sheet. `studio/pointerSession.js` gains `TAP_MS` and `createMultiTapWatcher`; `studio/gestures.js` drops its private `isCoarsePointer` for `isTouchLayout`, gates the `"pane"` drag kind off under touch, and adds the deck-wide tap watcher and the `inkDrawAbort` host hook. `index.js` gains `_touchStageBudget`, `_scrollActiveIntoView`, `_stepSlide`, `_onSheetKey`, `_onMultiTap`, `INK_HISTORY_LIMIT` with `_inkPushHistory`/`_inkUndo`/`_inkRedo`/`_inkDrawAbort`, and an `ink` branch in `_addLayer`; `utils/icons.js` gains `UNDO_SVG` and `REDO_SVG`. Tests in `frontend/test/carouselStudio{Layout,Panels,Gestures}.test.js` and `CarouselStudioPage.test.js`. **What it does not do:** the narrow fine-pointer window keeps its document flow, and Panorama-mode layer authoring is still out of scope — see "What the studio does not yet offer". |
+| **S6** | The studio becomes one canvas: the stage is the editing surface, at a size worth editing on and with a bottom-sheet panel on a narrow viewport; undo/redo; slide add / remove / duplicate / reorder; Panorama/Slides chips and a per-slide source; the vertical anchor by direct drag; and preview/render parity for text and arrows. **Done** — see "The stage is the editor" above. Nothing stored changed: `document.ts` gains only `addSlide`/`removeSlide`/`duplicateSlide`/`moveSlide`, `DOC_VERSION` stays 1, `geometry.ts` is untouched, and `render.ts`'s painting is unchanged (it only exports the constants `studio/preview.ts` now imports instead of restating). New modules `studio/{history,layout}.js`; `gestures.ts` gains `layerSpace`/`deckRect`/`snapLines`/`deckSeams` and `createAnchorGesture`; `preview.ts` gains `ensurePreviewFont`, `textPlan`, `arrowPlan` and `paintSpanChrome`; outside the plugin, `utils/pointerReorder.js` gains an `axis` option and `Toast` an optional `action`. Tests in `frontend/test/carouselStudio{History,Layout,Gestures,Panels,Preview}.test.js`, `CarouselStudioPage.test.js`, `carouselDocument.test.js` and `toastAction.test.js`. |
+| **S7** | Direct manipulation on the stage: guard the wheel/drag pan-and-zoom behind Ctrl/Shift so a plain pointer can scroll the strip instead; a `box.rotate` field and a ninth handle to drive it; click-to-select a layer straight off the stage; and on-canvas text editing through a double-click into `contenteditable`. **Done** — see "Pan and zoom need a modifier", "Click-to-select a layer directly", "Rotation" and "On-canvas text editing" above. `document.ts`'s `CarouselBox` gains `rotate`, wrapped by `wrapRotate` and folded into `specHash` with the rest of the box; `DOC_VERSION` stays 1. `geometry.ts` is untouched — `layerFrame` and everything over it stay rotation-blind by design. `render.ts` gains `paintDispatch`, the one point both `paintLayers` and `paintSpanLayers` now route a layer through, rotating the canvas about the box's own centre when `rotate` is non-zero and skipping `ctx.save`/`restore` entirely otherwise. `studio/gestures.ts` gains the pane-scroll drag/wheel branch, the rotate-handle drag and hit test, and the stage's own click-to-select fallback; `index.js` gains `_enterTextEdit`/`_liveEditText`/`_exitTextEdit`; `preview.ts`'s `paintDeckLayers`/`paintSpanLayers`/`paintChrome` gain the CSS `rotate()` twin and the ninth chrome handle, and `paintLayerContent` gains the `dataset.editing` guard. Panorama-mode layer authoring remains out of scope — see "What the studio does not yet offer". |
+| **S8** | The studio becomes an app: a fixed-height shell above 48em (the phone stays document flow), a three-row grid (toolbar/body/tray), one toolbar row, the property form spliced under its selected row, and touch/stylus as first-class input on the stage. **Done** — see "The studio is an app" above. `frontend/css/light/layout.css` gains `.carousel-studio-main`; `carousel.css` gains the three-row grid, the bottom-sheet panel below 64em and the `(pointer: coarse)` sizing block — S10 has since widened the shell query to any coarse pointer, added a fourth grid row for the dock, and moved the sheet from the width query onto the pointer one; `index.js` gains `_measureStageBudget`/`_toggleDocControls`/`docControlsOpen`; `studio/panels.ts`'s `builder()` emits the one toolbar row, the Document popover, and splices `layerForm` under the selected row via a new `formHtml` argument to `layerRows`; `studio/pointerSession.ts` (new) factors `createListenerGroup`/`claimPointer`/`releasePointer`/`resolveTouchClaim`/`commitIfChanged` out of `gestures.ts`, which then gains the pinch (`onLayerPointerAdd`/`onLayerPinchMove`), the partial-release rebase, and the coarse-pointer constants. Alongside it, the Visual editor's own carousel card (`components/light/VisualEditor.js`, `css/light/editor.css`, `css/common/buttons.css`) picked up the slide-handle and button styling S7's card work had left unfinished. No stored field changed; `DOC_VERSION` stays 1; `geometry.ts` is untouched. |
+| **S9** | The ink layer — draw a freehand mark on a slide with a stylus, mouse or finger, and erase a stroke while the session is open. Narrows the standing rejection of a true vector editor rather than cancelling it — see "Considered and rejected". **Done** — `document.ts` gains `ink` as a sixth `LAYER_BUILDERS` entry: `strokes` is a list of `{w, pts}`, points normalized 0..1 inside the layer's own box, stroke width a fraction of the box's shorter side clamped `0.001..0.25`, capped at 2000 points per stroke and 200 strokes per layer; `DOC_VERSION` stays 1. `render.ts` gains `paintInkLayer` in `LAYER_PAINTERS`, stroking each point list as a rounded path at canvas pixels; `studio/preview.ts` gets the same plan over `layerRect`'s numbers for the live preview. `studio/gestures.ts` gains the draw-and-erase pointer session over the existing `claimPointer`/`releasePointer` machinery `pointerSession.ts` already factored out in S8, using `getCoalescedEvents` to keep a fast line smooth; `Ink` in the object dropdown (`studio/panels.ts`) starts a session on the selected slide, Erase toggles the eraser inside that same session, and Escape or Done ends it and commits one `ink` layer through `addLayer`. S10 put the session behind the dropdown; before it, a `Draw` control in the toolbar did the same job. The committed layer's property form is colour and opacity only — no per-stroke editing once the layer exists. Tests in `frontend/test/carousel{Document,Render}.test.js` and `carouselStudio{Gestures,Panels,Preview}.test.js` and `CarouselStudioPage.test.js`. |
+| **S10** | The touch layout: every coarse pointer becomes a first-class editing surface, at any width — one slide maximized over a locked strip, an icon dock on the bottom edge, the properties panel as a sheet behind a burger, `ink` in the object dropdown, and two- and three-finger taps for undo and redo. **Done** — see "The touch layout" above. Nothing stored changed; `DOC_VERSION` stays 1; `geometry.ts`, `document.ts`, `render.ts` and `preview.ts` are untouched. `studio/layout.ts` gains `TOUCH_LAYOUT` and `isTouchLayout`, and `readPropsPref` returns false on a coarse pointer; `carousel.css` widens the shell query to `@media (min-width: 48em), (pointer: coarse)` (mirrored by `.carousel-studio-main` in `frontend/css/light/layout.css`) and grows four `(pointer: coarse)` blocks — the locked scroller and the measured stage height, `touch-action: none` on every column, the dock and the swapped bars, and the sheet with its backdrop. `studio/panels.ts` gains `dock()` (burger, stepper, undo/redo, and Erase/Done with a session open) and `inkActions()`, `LAYER_KINDS` gains `ink` while `addLayerChips("span")` filters it out, `drawToolControl` retires, and `builder()` takes a `touch` argument that places the props tools and the whole tray inside the sheet. `studio/pointerSession.ts` gains `TAP_MS` and `createMultiTapWatcher`; `studio/gestures.ts` drops its private `isCoarsePointer` for `isTouchLayout`, gates the `"pane"` drag kind off under touch, and adds the deck-wide tap watcher and the `inkDrawAbort` host hook. `index.js` gains `_touchStageBudget`, `_scrollActiveIntoView`, `_stepSlide`, `_onSheetKey`, `_onMultiTap`, `INK_HISTORY_LIMIT` with `_inkPushHistory`/`_inkUndo`/`_inkRedo`/`_inkDrawAbort`, and an `ink` branch in `_addLayer`; `utils/icons.js` gains `UNDO_SVG` and `REDO_SVG`. Tests in `frontend/test/carouselStudio{Layout,Panels,Gestures}.test.js` and `CarouselStudioPage.test.js`. **What it does not do:** the narrow fine-pointer window keeps its document flow, and Panorama-mode layer authoring is still out of scope — see "What the studio does not yet offer". |
 
 ## Out of scope
 
@@ -2169,7 +2169,7 @@ npm run test:frontend
 
 The first pins the fence render contract; the second the template store's CRUD,
 its opaque-JSON contract, its size cap and the plugin gate on all seven carousel
-routes; the third covers `geometry.js`, `document.js`, `render.js`, the
+routes; the third covers `geometry.ts`, `document.ts`, `render.ts`, the
 importers and the studio modules. `./scripts/check.sh` is the full gate (lint,
 both test suites, and `check-docs.sh` over the commands this repo documents) —
 it is not listed in the block above because running it from inside

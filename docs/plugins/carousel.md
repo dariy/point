@@ -25,7 +25,7 @@ Production (captions, one-click push, a brand kit) is the one stage still ahead.
 `(post_id, block_key)` pair in the `carousels` table (`ON DELETE CASCADE` from `posts`;
 `block` is omissible for a post's first carousel). The document body is opaque — the
 server validates only that it is a JSON object and round-trips it verbatim; the schema is
-`frontend/src/plugins/carousel/document.js`.
+`frontend/src/plugins/carousel/document.ts`.
 
 See [Carousel Studio](../features/carousel-studio.md) for the output contract, the
 document schema, and the delivery stages.

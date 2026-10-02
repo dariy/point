@@ -29,7 +29,7 @@ describe('carousel API client', () => {
       return jsonOk({ post_id: 7, doc: { version: 1 }, created_at: 'x', updated_at: 'y' });
     };
 
-    const { getCarousel } = await import('../src/api/carousel.js');
+    const { getCarousel } = await import('../src/api/carousel.ts');
     const res = await getCarousel(7);
 
     assert.strictEqual(method, 'GET');
@@ -45,7 +45,7 @@ describe('carousel API client', () => {
       return jsonOk({ post_id: 7, block_key: 'c-7f3a', doc: { version: 1 }, created_at: 'x', updated_at: 'y' });
     };
 
-    const { getCarousel, saveCarousel, deleteCarousel } = await import('../src/api/carousel.js');
+    const { getCarousel, saveCarousel, deleteCarousel } = await import('../src/api/carousel.ts');
     await getCarousel(7, 'c-7f3a');
     await saveCarousel(7, { version: 1 }, 'c-7f3a');
     await deleteCarousel(7, 'c-7f3a');
@@ -68,7 +68,7 @@ describe('carousel API client', () => {
       return jsonOk({ post_id: 7, block_key: '', doc: { version: 1 }, created_at: 'x', updated_at: 'y' });
     };
 
-    const { getCarousel, saveCarousel, deleteCarousel } = await import('../src/api/carousel.js');
+    const { getCarousel, saveCarousel, deleteCarousel } = await import('../src/api/carousel.ts');
     await getCarousel(7);
     await saveCarousel(7, { version: 1 });
     await deleteCarousel(7, '');
@@ -89,7 +89,7 @@ describe('carousel API client', () => {
       return jsonOk({ post_id: 7, doc: { version: 1, aspect: '1:1' }, created_at: 'x', updated_at: 'y' });
     };
 
-    const { saveCarousel } = await import('../src/api/carousel.js');
+    const { saveCarousel } = await import('../src/api/carousel.ts');
     await saveCarousel(7, { version: 1, aspect: '1:1' });
 
     assert.strictEqual(opts.method, 'PUT');
@@ -106,7 +106,7 @@ describe('carousel API client', () => {
       return { status: 204, ok: true, headers: { get: () => '' } };
     };
 
-    const { deleteCarousel } = await import('../src/api/carousel.js');
+    const { deleteCarousel } = await import('../src/api/carousel.ts');
     const res = await deleteCarousel(7);
 
     assert.strictEqual(method, 'DELETE');
@@ -122,7 +122,7 @@ describe('carousel API client', () => {
       json: async () => ({ message: 'no carousel for this post' }),
     });
 
-    const { getCarousel } = await import('../src/api/carousel.js');
+    const { getCarousel } = await import('../src/api/carousel.ts');
     await assert.rejects(() => getCarousel(7), (err) => err.status === 404);
   });
 });
@@ -150,7 +150,7 @@ describe('carousel template API client', () => {
       return jsonOk([{ slug: 'zine', name: 'Zine', created_at: 'x' }]);
     };
 
-    const { listCarouselTemplates } = await import('../src/api/carousel.js');
+    const { listCarouselTemplates } = await import('../src/api/carousel.ts');
     const res = await listCarouselTemplates();
 
     assert.strictEqual(method, 'GET');
@@ -166,7 +166,7 @@ describe('carousel template API client', () => {
       return jsonOk({ slug: 'a b', name: 'N', doc: { version: 1 }, created_at: 'x', updated_at: 'y' });
     };
 
-    const { getCarouselTemplate } = await import('../src/api/carousel.js');
+    const { getCarouselTemplate } = await import('../src/api/carousel.ts');
     const res = await getCarouselTemplate('a b');
 
     assert.strictEqual(requested, '/api/carousel/templates/a%20b');
@@ -182,7 +182,7 @@ describe('carousel template API client', () => {
       return jsonOk({ slug: 'zine', name: 'Zine', doc: { version: 1 }, created_at: 'x', updated_at: 'y' });
     };
 
-    const { saveCarouselTemplate } = await import('../src/api/carousel.js');
+    const { saveCarouselTemplate } = await import('../src/api/carousel.ts');
     await saveCarouselTemplate('zine', 'Zine', { version: 1 });
 
     assert.strictEqual(opts.method, 'POST');
@@ -199,7 +199,7 @@ describe('carousel template API client', () => {
       return { status: 204, ok: true, headers: { get: () => '' } };
     };
 
-    const { deleteCarouselTemplate } = await import('../src/api/carousel.js');
+    const { deleteCarouselTemplate } = await import('../src/api/carousel.ts');
     const res = await deleteCarouselTemplate('zine');
 
     assert.strictEqual(method, 'DELETE');
@@ -215,7 +215,7 @@ describe('carousel template API client', () => {
       json: async () => ({ message: 'template is larger than the 8 MB limit' }),
     });
 
-    const { saveCarouselTemplate, TEMPLATE_MAX_BYTES } = await import('../src/api/carousel.js');
+    const { saveCarouselTemplate, TEMPLATE_MAX_BYTES } = await import('../src/api/carousel.ts');
     assert.strictEqual(TEMPLATE_MAX_BYTES, 8 * 1024 * 1024);
     await assert.rejects(() => saveCarouselTemplate('big', 'Big', { version: 1 }), (err) => err.status === 413);
   });

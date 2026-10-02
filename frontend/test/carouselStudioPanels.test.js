@@ -1,5 +1,5 @@
 /**
- * carousel/studio/panels.js — the studio's markup builders.
+ * carousel/studio/panels.ts — the studio's markup builders.
  *
  * These functions are pure by design: they take the numbers the page reads off
  * its state and return `html`, answering no questions about the page itself.
@@ -30,14 +30,14 @@ import {
   pickPrompt,
   saveTemplateDialog,
   templateGallery,
-} from '../src/plugins/carousel/studio/panels.js';
-import * as panels from '../src/plugins/carousel/studio/panels.js';
+} from '../src/plugins/carousel/studio/panels.ts';
+import * as panels from '../src/plugins/carousel/studio/panels.ts';
 import {
   emptyDocument,
   normalizeLayer,
   splitDocument,
   toDeckDocument,
-} from '../src/plugins/carousel/document.js';
+} from '../src/plugins/carousel/document.ts';
 
 const doc3 = splitDocument({ source: '/m/x.jpg', n: 3, aspect: '4:5', strategy: 'cover' });
 

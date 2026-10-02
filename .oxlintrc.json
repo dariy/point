@@ -83,9 +83,6 @@
     {
       "files": [
         "frontend/src/**/*.ts",
-        "frontend/src/plugins/carousel/**/*.js",
-        "frontend/src/api/carousel.js",
-        "frontend/src/utils/deckTransition.js",
         "demo/mock/**/*.js"
       ],
       "globals": {

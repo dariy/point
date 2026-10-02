@@ -1,7 +1,7 @@
 /**
- * carousel/render.js — the draw layer.
+ * carousel/render.ts — the draw layer.
  *
- * render.js issues no measurements of its own (all from geometry.js) and
+ * render.ts issues no measurements of its own (all from geometry.ts) and
  * touches nothing real: decode, canvas, encode and upload go through an
  * injected `deps` object. These tests drive it with a recording fake and
  * assert the call SEQUENCE — clearRect then (pad fill then) drawImage, one
@@ -18,19 +18,19 @@ import {
   renderDeck,
   renderCarousel,
   renderAndUpload,
-} from '../src/plugins/carousel/render.js';
+} from '../src/plugins/carousel/render.ts';
 import {
   sliceRects,
   deckSlideRects,
   canvasSize,
   layerRect,
-} from '../src/plugins/carousel/geometry.js';
+} from '../src/plugins/carousel/geometry.ts';
 import {
   normalizeDocument,
   normalizeLayer,
   splitDocument,
   toDeckDocument,
-} from '../src/plugins/carousel/document.js';
+} from '../src/plugins/carousel/document.ts';
 
 /** Gradient handles the fake ctx has handed out, so a `fillStyle` carrying one
  *  logs as the plain string `'gradient'` instead of an unassertable object. */

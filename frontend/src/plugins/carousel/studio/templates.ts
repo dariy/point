@@ -2,7 +2,7 @@
  * Carousel Studio — the template gallery's arithmetic.
  *
  * A template envelope inlines its images as `data:` URLs (see
- * `import/adapter.js`), and a carousel document must not: `render.js`'s
+ * `import/adapter.ts`), and a carousel document must not: `render.ts`'s
  * `fetchBlob` is a same-origin GET of a content path, and the studio's CSS
  * preview points a `background-image` at the same path. So applying a template
  * has one job this module answers the questions for — turn every inlined asset
@@ -13,7 +13,7 @@
  * `index.js`'s, which is the only half that can fail halfway.
  */
 
-import { ASSET_LIMITS, fromDataUrl } from '../import/adapter.js';
+import { ASSET_LIMITS, fromDataUrl } from '../import/adapter.ts';
 
 /**
  * The caps the studio checks *before* a template is stored, so an oversized
@@ -24,7 +24,7 @@ import { ASSET_LIMITS, fromDataUrl } from '../import/adapter.js';
  */
 export { ASSET_LIMITS };
 
-/** Megabytes, one decimal — `adapter.js`'s spelling, for messages that sit
+/** Megabytes, one decimal — `adapter.ts`'s spelling, for messages that sit
  *  beside each other in the same report. */
 const mb = (n) => `${(n / (1024 * 1024)).toFixed(1)} MB`;
 
@@ -42,11 +42,8 @@ const isInlined = (v) => typeof v === 'string' && v.startsWith('data:');
  * Derived from the name, and then *editable*, which is why this is a function
  * and not a field of the save dialog: the studio offers what the name suggests
  * and the author overrules it.
- *
- * @param {string} name
- * @returns {string}
  */
-export function templateSlug(name) {
+export function templateSlug(name: string): string {
   const slug = String(name || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -65,12 +62,8 @@ export function templateSlug(name) {
  * replace the template the author had already adapted. The store's upsert is
  * deliberate (it is what makes "save as template" idempotent), which means the
  * caller that must *not* replace is the one that has to say so.
- *
- * @param {string} slug
- * @param {Iterable<string>} taken
- * @returns {string}
  */
-export function freeSlug(slug, taken) {
+export function freeSlug(slug: string, taken: Iterable<string>): string {
   const used = new Set(taken);
   if (!used.has(slug)) return slug;
   for (let n = 2; n < 1000; n++) {
@@ -80,23 +73,22 @@ export function freeSlug(slug, taken) {
   return `${slug.slice(0, 96)}-${Date.now().toString(36).slice(-3)}`;
 }
 
-/**
- * @typedef {object} DocAsset
- * @property {string} url the `data:` URL, verbatim
- * @property {string} where what to call it in a message a person reads
- */
+export interface DocAsset {
+  /** the `data:` URL, verbatim */
+  url: string;
+  /** what to call it in a message a person reads */
+  where: string;
+}
 
 /**
  * Every inlined asset one document carries, in paint order and deduplicated —
  * a logo on eight slides is one upload and one media row, which is the whole
  * reason this returns a list of URLs rather than a list of places.
  *
- * @param {*} doc a normalized carousel document
- * @returns {DocAsset[]}
+ * @param doc - a normalized carousel document
  */
-export function dataAssets(doc) {
-  /** @type {Map<string, DocAsset>} */
-  const found = new Map();
+export function dataAssets(doc: any): DocAsset[] {
+  const found: Map<string, DocAsset> = new Map();
   const add = (url, where) => {
     if (isInlined(url) && !found.has(url)) found.set(url, { url, where });
   };
@@ -124,11 +116,12 @@ export function dataAssets(doc) {
  * The input is not mutated, and the result still has to go through
  * `normalizeDocument` — this only rewrites strings.
  *
- * @param {*} doc
- * @param {Map<string, string>|Record<string, string>} paths url → content path
- * @returns {*}
+ * @param paths - url → content path
  */
-export function replaceAssets(doc, paths) {
+export function replaceAssets(
+  doc: any,
+  paths: Map<string, string> | Record<string, string>,
+): any {
   const at = (url) =>
     (paths instanceof Map ? paths.get(url) : paths?.[url]) || url;
   const layer = (l) => (isInlined(l?.source) ? { ...l, source: at(l.source) } : l);
@@ -152,12 +145,14 @@ export function replaceAssets(doc, paths) {
  * the media library. The extension comes from the MIME type, since that is the
  * only thing the URL actually states.
  *
- * @param {string} url
- * @param {string} stem filename without the extension
- * @returns {{bytes: Uint8Array, mime: string, name: string}|null} null when
+ * @param stem - filename without the extension
+ * @returns null when
  *   the URL is not a base64 image this can store
  */
-export function decodeAsset(url, stem) {
+export function decodeAsset(
+  url: string,
+  stem: string,
+): {bytes: Uint8Array, mime: string, name: string} | null {
   return fromDataUrl(url, stem);
 }
 
@@ -172,11 +167,12 @@ export function decodeAsset(url, stem) {
  * says nothing about *which* photograph to shrink, and that is the only fact
  * the author can act on.
  *
- * @param {*} envelope the `toTemplate()` result about to be sent
- * @param {{maxAssetBytes?: number, maxTotalBytes?: number}} [limits]
- * @returns {string}
+ * @param envelope - the `toTemplate()` result about to be sent
  */
-export function templateLimitError(envelope, limits = {}) {
+export function templateLimitError(
+  envelope: any,
+  limits: {maxAssetBytes?: number, maxTotalBytes?: number} = {},
+): string {
   const maxAsset = limits.maxAssetBytes ?? ASSET_LIMITS.maxAssetBytes;
   const maxTotal = limits.maxTotalBytes ?? ASSET_LIMITS.maxTotalBytes;
 

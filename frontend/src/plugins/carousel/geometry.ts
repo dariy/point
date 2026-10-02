@@ -4,7 +4,7 @@
  * No DOM, no canvas, no network: every function here takes numbers (or a
  * `measureText`-shaped callback) and returns plain objects, so the whole module
  * runs under `node:test` where linkedom has no canvas. The draw layer that
- * lands in a later bead (`render.js`) is a thin shim over these results — see
+ * lands in a later bead (`render.ts`) is a thin shim over these results — see
  * `docs/features/carousel-studio.md`.
  *
  * Rect convention: functions that describe a `drawImage` call return the full
@@ -19,34 +19,37 @@ export const ASPECTS = {
   '1.91:1': [1080, 566],
 };
 
-/** @typedef {keyof typeof ASPECTS} AspectKey */
+export type AspectKey = keyof typeof ASPECTS;
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
-const num = (v, fallback) => (Number.isFinite(v) ? /** @type {number} */ (v) : fallback);
+const num = (v, fallback) => (Number.isFinite(v) ? (v as number) : fallback);
 
-/**
- * Canvas `[width, height]` for an aspect key, falling back to 4:5.
- *
- * @param {string} aspect
- * @returns {[number, number]}
- */
-export function canvasSize(aspect) {
-  const dims = ASPECTS[/** @type {AspectKey} */ (aspect)] || ASPECTS['4:5'];
+/** Canvas `[width, height]` for an aspect key, falling back to 4:5. */
+export function canvasSize(aspect: string): [number, number] {
+  const dims = ASPECTS[(aspect as AspectKey)] || ASPECTS['4:5'];
   return [dims[0], dims[1]];
 }
 
-/**
- * @typedef {object} FitReport
- * @property {number} n slides the strategy produces
- * @property {number} scale canvas px per source px (`>1` blows the source up)
- * @property {boolean} feasible the strategy can be honoured for this source
- * @property {number} stripW source px the deck consumes horizontally
- * @property {number} stripH source px the deck consumes vertically
- * @property {number} trimmedW source px cropped off the width (both sides)
- * @property {number} trimmedH source px cropped off the height (both sides)
- * @property {number} padPx canvas px of `slide.bg` fill on the last slide (`pad` only)
- * @property {'exact'|'downscale'|'upscale'} quality resampling the deck applies
- */
+export interface FitReport {
+  /** slides the strategy produces */
+  n: number;
+  /** canvas px per source px (`>1` blows the source up) */
+  scale: number;
+  /** the strategy can be honoured for this source */
+  feasible: boolean;
+  /** source px the deck consumes horizontally */
+  stripW: number;
+  /** source px the deck consumes vertically */
+  stripH: number;
+  /** source px cropped off the width (both sides) */
+  trimmedW: number;
+  /** source px cropped off the height (both sides) */
+  trimmedH: number;
+  /** canvas px of `slide.bg` fill on the last slide (`pad` only) */
+  padPx: number;
+  /** resampling the deck applies */
+  quality: 'exact' | 'downscale' | 'upscale';
+}
 
 /**
  * The inverse of {@link sliceRects}: given a source and a slide size, what does
@@ -61,14 +64,18 @@ export function canvasSize(aspect) {
  * `exact`/`pad` are infeasible when the source is shorter than one canvas
  * (`srcH < dstH`) or — for `exact` — narrower than one (`srcW < dstW`).
  *
- * @param {number} srcW source width in pixels
- * @param {number} srcH source height in pixels
- * @param {number} n slide count (used by `cover`; derived for `exact`/`pad`)
- * @param {string} aspect aspect key
- * @param {'cover'|'exact'|'pad'} [strategy='cover']
- * @returns {FitReport}
+ * @param srcW - source width in pixels
+ * @param srcH - source height in pixels
+ * @param n - slide count (used by `cover`; derived for `exact`/`pad`)
+ * @param aspect - aspect key
  */
-export function fitReport(srcW, srcH, n, aspect, strategy = 'cover') {
+export function fitReport(
+  srcW: number,
+  srcH: number,
+  n: number,
+  aspect: string,
+  strategy: 'cover' | 'exact' | 'pad' = 'cover',
+): FitReport {
   const [dstW, dstH] = canvasSize(aspect);
   const nExact = srcW / dstW;
 
@@ -109,7 +116,7 @@ export function fitReport(srcW, srcH, n, aspect, strategy = 'cover') {
     trimmedW: Math.max(0, srcW - stripW),
     trimmedH: Math.max(0, srcH - stripH),
     padPx: 0,
-    quality: /** @type {'exact'|'downscale'|'upscale'} */ (quality),
+    quality: (quality as 'exact' | 'downscale' | 'upscale'),
   };
 }
 
@@ -129,14 +136,22 @@ export function fitReport(srcW, srcH, n, aspect, strategy = 'cover') {
  * left-aligned for `pad`; here that trim (and `anchorY`, vertically) become
  * an offset into the same scaled image every slide's box shares.
  *
- * @param {number} srcW @param {number} srcH @param {string} aspect
- * @param {number} n slide count @param {'cover'|'exact'|'pad'} strategy
- * @param {number} anchorY 0..1 vertical placement of the crop band in its slack
- * @param {number} span how many slide-widths the box spans (1 or `n`)
- * @param {number} offset how many slide-widths precede this box (0..`n`-1)
- * @returns {{size: [number, number], position: [number, number]}} percent pairs
+ * @param n - slide count
+ * @param anchorY - 0..1 vertical placement of the crop band in its slack
+ * @param span - how many slide-widths the box spans (1 or `n`)
+ * @param offset - how many slide-widths precede this box (0..`n`-1)
+ * @returns percent pairs
  */
-export function backgroundFit(srcW, srcH, aspect, n, strategy, anchorY, span, offset) {
+export function backgroundFit(
+  srcW: number,
+  srcH: number,
+  aspect: string,
+  n: number,
+  strategy: 'cover' | 'exact' | 'pad',
+  anchorY: number,
+  span: number,
+  offset: number,
+): {size: [number, number], position: [number, number]} {
   const [dstW, dstH] = canvasSize(aspect);
   const { scale, trimmedW, trimmedH } = fitReport(srcW, srcH, n, aspect, strategy);
   const hAlign = strategy === 'pad' ? 0 : 0.5;
@@ -164,25 +179,25 @@ export function backgroundFit(srcW, srcH, aspect, n, strategy, anchorY, span, of
   };
 }
 
-/**
- * @typedef {object} SlideCountOption
- * @property {number} n
- * @property {'cover'|'exact'|'pad'} strategy
- * @property {string} label one-line chip text
- * @property {number} scale
- * @property {number} trimmedPx source px the deck throws away
- * @property {number} padPx canvas px of background fill (`pad` only)
- */
+export interface SlideCountOption {
+  n: number;
+  strategy: 'cover' | 'exact' | 'pad';
+  /** one-line chip text */
+  label: string;
+  scale: number;
+  /** source px the deck throws away */
+  trimmedPx: number;
+  /** canvas px of background fill (`pad` only) */
+  padPx: number;
+}
 
-/**
- * @param {'cover'|'exact'|'pad'} strategy
- * @param {number} n
- * @param {number} scale
- * @param {number} trimmedPx
- * @param {number} padPx
- * @returns {string}
- */
-function fitLabel(strategy, n, scale, trimmedPx, padPx) {
+function fitLabel(
+  strategy: 'cover' | 'exact' | 'pad',
+  n: number,
+  scale: number,
+  trimmedPx: number,
+  padPx: number,
+): string {
   const unit = n === 1 ? 'slide' : 'slides';
   if (strategy === 'exact') return `${n} ${unit} · pixel-exact`;
   if (strategy === 'pad') return `${n} ${unit} · ${padPx}px padding`;
@@ -199,20 +214,20 @@ function fitLabel(strategy, n, scale, trimmedPx, padPx) {
  * `ceil(srcW/dstW)`); it is geometrically identical to `cover` and stores no
  * value, so it is not returned here.
  *
- * @param {number} srcW
- * @param {number} srcH
- * @param {string} aspect
- * @param {{min?: number, max?: number}} [opts] slide-count bounds (default 2–20)
- * @returns {SlideCountOption[]}
+ * @param opts - slide-count bounds (default 2–20)
  */
-export function slideCountOptions(srcW, srcH, aspect, opts = {}) {
+export function slideCountOptions(
+  srcW: number,
+  srcH: number,
+  aspect: string,
+  opts: {min?: number, max?: number} = {},
+): SlideCountOption[] {
   const [dstW] = canvasSize(aspect);
   const min = Math.max(1, Math.floor(opts.min ?? 2));
   const max = Math.max(min, Math.floor(opts.max ?? 20));
   const nExact = srcW / dstW;
 
-  /** @param {'cover'|'exact'|'pad'} strategy @param {FitReport} r */
-  const toChip = (strategy, r) => {
+  const toChip = (strategy: 'cover' | 'exact' | 'pad', r: FitReport) => {
     const trimmedPx = Math.round(r.trimmedW + r.trimmedH);
     const padPx = Math.round(r.padPx);
     return {
@@ -225,9 +240,8 @@ export function slideCountOptions(srcW, srcH, aspect, opts = {}) {
     };
   };
 
-  /** @type {SlideCountOption[]} */
-  const out = [];
-  for (const strategy of /** @type {const} */ (['exact', 'pad'])) {
+  const out: SlideCountOption[] = [];
+  for (const strategy of (['exact', 'pad'] as const)) {
     const r = fitReport(srcW, srcH, 0, aspect, strategy);
     if (r.feasible && r.n >= min && r.n <= max) out.push(toChip(strategy, r));
   }
@@ -263,14 +277,28 @@ export function slideCountOptions(srcW, srcH, aspect, opts = {}) {
  * scale 1 (too short, or — `exact` — too narrow for `n` columns); the studio
  * only offers them via {@link slideCountOptions}, which omits infeasible ones.
  *
- * @param {number} srcW source width in pixels
- * @param {number} srcH source height in pixels
- * @param {number} n slide count (>= 1)
- * @param {string} aspect aspect key
- * @param {{strategy?: 'cover'|'exact'|'pad', anchorY?: number}} [opts]
- * @returns {Array<{sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number,pad?:{x:number,w:number}}>}
+ * @param srcW - source width in pixels
+ * @param srcH - source height in pixels
+ * @param n - slide count (>= 1)
+ * @param aspect - aspect key
  */
-export function sliceRects(srcW, srcH, n, aspect, opts) {
+export function sliceRects(
+  srcW: number,
+  srcH: number,
+  n: number,
+  aspect: string,
+  opts?: {strategy?: 'cover' | 'exact' | 'pad', anchorY?: number},
+): Array<{
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+  dx: number;
+  dy: number;
+  dw: number;
+  dh: number;
+  pad?: {x:number,w:number};
+}> {
   const count = Math.max(1, Math.floor(n));
   const [dstW, dstH] = canvasSize(aspect);
   const { strategy: wanted = 'cover', anchorY: rawAnchorY = 0.5 } = opts || {};
@@ -290,8 +318,7 @@ export function sliceRects(srcW, srcH, n, aspect, opts) {
       const x0 = stripX + i * dstW;
       const x1 = strategy === 'exact' ? x0 + dstW : Math.min(srcW, x0 + dstW);
       const sw = x1 - x0;
-      /** @type {any} */
-      const rect = { sx: x0, sy, sw, sh: dstH, dx: 0, dy: 0, dw: sw, dh: dstH };
+      const rect: any = { sx: x0, sy, sw, sh: dstH, dx: 0, dy: 0, dw: sw, dh: dstH };
       if (sw < dstW) rect.pad = { x: sw, w: dstW - sw };
       rects.push(rect);
     }
@@ -338,9 +365,13 @@ export function sliceRects(srcW, srcH, n, aspect, opts) {
   return rects;
 }
 
-/**
- * @typedef {{x:number, y:number, w:number, h:number}} CropRect normalized 0..1, relative to the source
- */
+/** normalized 0..1, relative to the source */
+export interface CropRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 /** Sanitize a possibly-absent, possibly-garbage crop into the full frame. */
 function safeCrop(crop) {
@@ -355,13 +386,26 @@ function safeCrop(crop) {
  * Shared by {@link deckSlideRects} and {@link deckSlideFitCSS} so the canvas
  * render and the CSS preview cannot drift: both read the same rounded numbers
  * rather than each rounding a formula of their own.
- *
- * @param {number} srcW @param {number} srcH @param {string} aspect
- * @param {CropRect} crop @param {'cover'|'contain'} fit
- * @returns {{ok:boolean, dstW:number, dstH:number, sx:number, sy:number, sw:number,
- *   sh:number, dx:number, dy:number, dw:number, dh:number}}
  */
-function deckSlideFrame(srcW, srcH, aspect, crop, fit) {
+function deckSlideFrame(
+  srcW: number,
+  srcH: number,
+  aspect: string,
+  crop: CropRect,
+  fit: 'cover' | 'contain',
+): {
+  ok: boolean;
+  dstW: number;
+  dstH: number;
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+  dx: number;
+  dy: number;
+  dw: number;
+  dh: number;
+} {
   const [dstW, dstH] = canvasSize(aspect);
   const w0 = Number.isFinite(srcW) ? Math.floor(srcW) : 0;
   const h0 = Number.isFinite(srcH) ? Math.floor(srcH) : 0;
@@ -427,7 +471,7 @@ function deckSlideFrame(srcW, srcH, aspect, crop, fit) {
  * where on the slide canvas it lands. The deck-mode counterpart of
  * {@link sliceRects} — same 8-tuple — but driven by a per-slide normalized
  * `crop` (what pan/zoom edits) plus a `fit`, instead of a doc-level strategy
- * every slide is a slave of. `paintSlide` (`render.js`) consumes either
+ * every slide is a slave of. `paintSlide` (`render.ts`) consumes either
  * without branching.
  *
  * - `cover`: the frame is filled. If the crop's aspect differs from the slide's
@@ -448,17 +492,30 @@ function deckSlideFrame(srcW, srcH, aspect, crop, fit) {
  * be integers, and rounding here (rather than in the caller) is what keeps the
  * CSS preview and the render agreeing on the same pixel.
  *
- * @param {number} srcW source width in pixels
- * @param {number} srcH source height in pixels
- * @param {string} aspect aspect key
- * @param {CropRect} crop normalized crop, 0..1 relative to the source
- * @param {'cover'|'contain'} [fit='cover']
- * @returns {{sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number,pad?:Array<{x:number,y:number,w:number,h:number}>}}
+ * @param srcW - source width in pixels
+ * @param srcH - source height in pixels
+ * @param aspect - aspect key
+ * @param crop - normalized crop, 0..1 relative to the source
  */
-export function deckSlideRects(srcW, srcH, aspect, crop, fit = 'cover') {
+export function deckSlideRects(
+  srcW: number,
+  srcH: number,
+  aspect: string,
+  crop: CropRect,
+  fit: 'cover' | 'contain' = 'cover',
+): {
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+  dx: number;
+  dy: number;
+  dw: number;
+  dh: number;
+  pad?: Array<{x:number,y:number,w:number,h:number}>;
+} {
   const f = deckSlideFrame(srcW, srcH, aspect, crop, fit);
-  /** @type {any} */
-  const rect = {
+  const rect: any = {
     sx: f.sx,
     sy: f.sy,
     sw: f.sw,
@@ -515,14 +572,21 @@ export function deckSlideRects(srcW, srcH, aspect, crop, fit = 'cover') {
  * independently, reproducing the same non-uniform stretch `drawImage` applies
  * when rounding leaves `sw:sh` slightly off the frame ratio.
  *
- * @param {number} srcW @param {number} srcH @param {string} aspect
- * @param {CropRect} crop normalized crop, 0..1 relative to the source
- * @param {'cover'|'contain'} [fit='cover']
- * @returns {{size: [number, number], position: [number, number],
- *   box: {x:number, y:number, w:number, h:number}}} percent pairs, plus the
+ * @param crop - normalized crop, 0..1 relative to the source
+ * @returns percent pairs, plus the
  *   image element's rect as a percentage of the slide frame
  */
-export function deckSlideFitCSS(srcW, srcH, aspect, crop, fit = 'cover') {
+export function deckSlideFitCSS(
+  srcW: number,
+  srcH: number,
+  aspect: string,
+  crop: CropRect,
+  fit: 'cover' | 'contain' = 'cover',
+): {
+  size: [number, number];
+  position: [number, number];
+  box: {x:number, y:number, w:number, h:number};
+} {
   const f = deckSlideFrame(srcW, srcH, aspect, crop, fit);
   const fullBox = { x: 0, y: 0, w: 100, h: 100 };
   // No usable source: the neutral "fills the box, centred" pair, so a preview
@@ -572,13 +636,17 @@ export function deckSlideFitCSS(srcW, srcH, aspect, crop, fit = 'cover') {
  * Zero-area rects are dropped, so an empty result means "the frame is fully
  * covered, paint no background at all".
  *
- * @param {{pad?: {x:number,w:number,y?:number,h?:number}
- *   | Array<{x:number,y:number,w:number,h:number}>}} rect a rect from either producer
- * @param {number} dstW canvas width — the default width of a shapeless pad
- * @param {number} dstH canvas height — the default height of a full-height pad
- * @returns {Array<{x:number,y:number,w:number,h:number}>}
+ * @param rect - a rect from either producer
+ * @param dstW - canvas width — the default width of a shapeless pad
+ * @param dstH - canvas height — the default height of a full-height pad
  */
-export function padRects(rect, dstW, dstH) {
+export function padRects(
+  rect: {
+    pad?: {x:number,w:number,y?:number,h?:number} | Array<{x:number,y:number,w:number,h:number}>;
+  },
+  dstW: number,
+  dstH: number,
+): Array<{x:number,y:number,w:number,h:number}> {
   const pad = rect && typeof rect === 'object' ? rect.pad : null;
   if (!pad) return [];
   const list = Array.isArray(pad) ? pad : [pad];
@@ -604,12 +672,16 @@ export function padRects(rect, dstW, dstH) {
  * and the render is a canvas gradient, and the two must agree pixel for pixel or
  * the preview lies. Rounded to whole pixels so the call sequence is assertable.
  *
- * @param {number} angleDeg CSS gradient angle in degrees; any real number (it
+ * @param angleDeg - CSS gradient angle in degrees; any real number (it
  *   wraps), defaulting to `180` (top → bottom) when not finite
- * @param {number} w frame width @param {number} h frame height
- * @returns {{x0:number, y0:number, x1:number, y1:number}}
+ * @param w - frame width
+ * @param h - frame height
  */
-export function gradientLine(angleDeg, w, h) {
+export function gradientLine(
+  angleDeg: number,
+  w: number,
+  h: number,
+): {x0:number, y0:number, x1:number, y1:number} {
   const deg = ((num(angleDeg, 180) % 360) + 360) % 360;
   const rad = (deg * Math.PI) / 180;
   // Screen coordinates: y grows downward, so `to top` is -1 on y.
@@ -639,15 +711,14 @@ export function gradientLine(angleDeg, w, h) {
  *   the whole frame).
  * - `contain`: the whole source is shown; the destination is letterboxed and
  *   centred inside the frame.
- *
- * @param {number} srcW
- * @param {number} srcH
- * @param {number} dstW
- * @param {number} dstH
- * @param {'cover'|'contain'} mode
- * @returns {{sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number}}
  */
-export function fitRect(srcW, srcH, dstW, dstH, mode) {
+export function fitRect(
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
+  mode: 'cover' | 'contain',
+): {sx:number,sy:number,sw:number,sh:number,dx:number,dy:number,dw:number,dh:number} {
   const srcAspect = srcW / srcH;
   const dstAspect = dstW / dstH;
 
@@ -698,11 +769,8 @@ export function fitRect(srcW, srcH, dstW, dstH, mode) {
  *
  * Conservative: the square the feed grid crops a 4:5 post to, plus a small
  * breathing margin all round.
- *
- * @param {string} aspect
- * @returns {{x:number,y:number,w:number,h:number}}
  */
-export function safeAreaRect(aspect) {
+export function safeAreaRect(aspect: string): {x:number,y:number,w:number,h:number} {
   const [w, h] = canvasSize(aspect);
   const side = 0.05 * w;
   const gridCropBand = Math.max(0, (h - w) / 2);
@@ -715,12 +783,10 @@ export function safeAreaRect(aspect) {
   };
 }
 
-/**
- * @typedef {{box?: {x?:number, y?:number, w?:number, h?:number}}} BoxedLayer a
- *   layer-shaped object. Only `box` is read here, so a bare `{box}` is a valid
- *   argument and this module stays free of the layer schema — `document.js`
- *   imports this file, never the other way round.
- */
+/** a */
+export interface BoxedLayer {
+  box?: {x?:number, y?:number, w?:number, h?:number};
+}
 
 /**
  * Resolve a layer's normalized `box` into a whole-pixel rect on a
@@ -741,14 +807,13 @@ export function safeAreaRect(aspect) {
  * missing or malformed field falls back to the full frame rather than `NaN`,
  * the box is pinned to at least one pixel (so a zero-area box is a sliver, not
  * an empty rect), and it cannot start outside the canvas — the same window
- * `normalizeBox` (`document.js`) already holds a stored layer to.
- *
- * @param {*} box
- * @param {number} frameW
- * @param {number} frameH
- * @returns {{x:number, y:number, w:number, h:number}}
+ * `normalizeBox` (`document.ts`) already holds a stored layer to.
  */
-function layerFrame(box, frameW, frameH) {
+function layerFrame(
+  box: any,
+  frameW: number,
+  frameH: number,
+): {x:number, y:number, w:number, h:number} {
   const b = box && typeof box === 'object' ? box : {};
   const w = clamp(num(b.w, 1), Math.min(1, 1 / frameW), 1);
   const h = clamp(num(b.h, 1), Math.min(1, 1 / frameH), 1);
@@ -767,18 +832,21 @@ function layerFrame(box, frameW, frameH) {
 
 /**
  * A layer's rect in canvas pixels, on the slide's own canvas — where
- * `render.js` draws it.
+ * `render.ts` draws it.
  *
  * The Canvas half of the layer pair; {@link layerCSS} is the DOM half and both
  * resolve through {@link layerFrame}. For a layer in `doc.spanLayers`, whose
  * box is normalized to the whole deck rather than one slide, use
  * {@link spanLayerRect} instead.
  *
- * @param {BoxedLayer} layer a normalized layer; only its `box` is read
- * @param {string} aspect aspect key
- * @returns {{x:number, y:number, w:number, h:number}} canvas pixels
+ * @param layer - a normalized layer; only its `box` is read
+ * @param aspect - aspect key
+ * @returns canvas pixels
  */
-export function layerRect(layer, aspect) {
+export function layerRect(
+  layer: BoxedLayer,
+  aspect: string,
+): {x:number, y:number, w:number, h:number} {
   const [w, h] = canvasSize(aspect);
   return layerFrame(layer?.box, w, h);
 }
@@ -793,11 +861,14 @@ export function layerRect(layer, aspect) {
  * whatever CSS size the filmstrip gives the frame, and a layer nudged one
  * canvas pixel moves one canvas pixel in the preview too.
  *
- * @param {BoxedLayer} layer a normalized layer; only its `box` is read
- * @param {string} aspect aspect key
- * @returns {{x:number, y:number, w:number, h:number}} percent of the frame
+ * @param layer - a normalized layer; only its `box` is read
+ * @param aspect - aspect key
+ * @returns percent of the frame
  */
-export function layerCSS(layer, aspect) {
+export function layerCSS(
+  layer: BoxedLayer,
+  aspect: string,
+): {x:number, y:number, w:number, h:number} {
   const [frameW, frameH] = canvasSize(aspect);
   const r = layerFrame(layer?.box, frameW, frameH);
   return {
@@ -824,14 +895,19 @@ export function layerCSS(layer, aspect) {
  * clips for free, and clipping here would re-wrap text that starts off-slide
  * and break the continuation.
  *
- * @param {BoxedLayer} layer a normalized layer; only its `box` is read
- * @param {number} i slide index, 0-based
- * @param {number} n slides in the deck (clamped to at least 1)
- * @param {string} aspect aspect key
- * @returns {{x:number, y:number, w:number, h:number}|null} canvas pixels in
+ * @param layer - a normalized layer; only its `box` is read
+ * @param i - slide index, 0-based
+ * @param n - slides in the deck (clamped to at least 1)
+ * @param aspect - aspect key
+ * @returns canvas pixels in
  *   slide `i`'s space, or `null` when the layer misses this slide
  */
-export function spanLayerRect(layer, i, n, aspect) {
+export function spanLayerRect(
+  layer: BoxedLayer,
+  i: number,
+  n: number,
+  aspect: string,
+): {x:number, y:number, w:number, h:number} | null {
   const [slideW, slideH] = canvasSize(aspect);
   const count = Math.max(1, Math.floor(num(n, 1)));
   const index = Math.floor(num(i, 0));
@@ -850,12 +926,12 @@ export function spanLayerRect(layer, i, n, aspect) {
  * it. Contiguous by construction — a layer box is one rectangle — so the array
  * is `[]` or a run of consecutive indices.
  *
- * @param {BoxedLayer} layer a normalized layer; only its `box` is read
- * @param {number} n slides in the deck (clamped to at least 1)
- * @param {string} aspect aspect key
- * @returns {number[]} covered slide indices, ascending
+ * @param layer - a normalized layer; only its `box` is read
+ * @param n - slides in the deck (clamped to at least 1)
+ * @param aspect - aspect key
+ * @returns covered slide indices, ascending
  */
-export function spanLayerCoverage(layer, n, aspect) {
+export function spanLayerCoverage(layer: BoxedLayer, n: number, aspect: string): number[] {
   const count = Math.max(1, Math.floor(num(n, 1)));
   const covered = [];
   for (let i = 0; i < count; i++) {
@@ -869,13 +945,12 @@ export function spanLayerCoverage(layer, n, aspect) {
  * stays fully inside the source however it was panned or zoomed. Width and
  * height are pinned to at least one source pixel and at most the whole image;
  * the origin is then clamped so `x+w <= 1` and `y+h <= 1`.
- *
- * @param {{x:number,y:number,w:number,h:number}} crop
- * @param {number} srcW
- * @param {number} srcH
- * @returns {{x:number,y:number,w:number,h:number}}
  */
-export function clampPan(crop, srcW, srcH) {
+export function clampPan(
+  crop: {x:number,y:number,w:number,h:number},
+  srcW: number,
+  srcH: number,
+): {x:number,y:number,w:number,h:number} {
   const minW = srcW > 0 ? Math.min(1, 1 / srcW) : 0;
   const minH = srcH > 0 ? Math.min(1, 1 / srcH) : 0;
   const w = clamp(crop.w, minW, 1);
@@ -888,28 +963,23 @@ export function clampPan(crop, srcW, srcH) {
   };
 }
 
-/**
- * @callback MeasureText
- * @param {string} text
- * @param {number} fontSize font size, in px, the width should be measured at
- * @returns {{width:number}} `measureText`-shaped result
- */
+export type MeasureText = (text: string, fontSize: number) => {width:number};
 
 /**
  * Greedy word wrap. Splits on whitespace and packs as many words per line as
  * fit within `maxWidth` at `fontSize`. A single word wider than `maxWidth` is
  * left on its own line rather than dropped or broken.
  *
- * @param {string} text
- * @param {number} maxWidth
- * @param {number} fontSize
- * @param {MeasureText} measure
- * @returns {string[]} lines (empty array for blank input)
+ * @returns lines (empty array for blank input)
  */
-export function wrapText(text, maxWidth, fontSize, measure) {
+export function wrapText(
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+  measure: MeasureText,
+): string[] {
   const words = String(text ?? '').split(/\s+/).filter(Boolean);
-  /** @type {string[]} */
-  const lines = [];
+  const lines: string[] = [];
   let current = '';
   for (const word of words) {
     const candidate = current ? `${current} ${word}` : word;
@@ -928,19 +998,16 @@ export function wrapText(text, maxWidth, fontSize, measure) {
  * Largest integer font size (within `[min, max]`) at which `text`, wrapped to
  * `maxWidth`, fits inside `maxWidth × maxHeight`. `lineHeight` is a multiple of
  * the font size. Falls back to `min` when nothing fits.
- *
- * @param {{
- *   text: string,
- *   maxWidth: number,
- *   maxHeight: number,
- *   measure: MeasureText,
- *   lineHeight?: number,
- *   min?: number,
- *   max?: number,
- * }} opts
- * @returns {{fontSize:number, lines:string[]}}
  */
-export function autoFitText(opts) {
+export function autoFitText(opts: {
+  text: string;
+  maxWidth: number;
+  maxHeight: number;
+  measure: MeasureText;
+  lineHeight?: number;
+  min?: number;
+  max?: number;
+}): {fontSize:number, lines:string[]} {
   const { text, maxWidth, maxHeight, measure } = opts;
   const lineHeight = opts.lineHeight ?? 1.2;
   const min = Math.max(1, Math.floor(opts.min ?? 8));

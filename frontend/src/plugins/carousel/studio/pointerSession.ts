@@ -51,12 +51,12 @@ export function releasePointer(e, el, dressClass) {
  *
  * Returns `"claim"` (the caller owns this drag now), `"abandon"` (hand it
  * back and stop watching), or `null` (still too little travel to call).
- *
- * @param {number} dx
- * @param {number} dy
- * @param {(dir: "horizontal"|"vertical") => boolean} ownsDirection
  */
-export function resolveTouchClaim(dx, dy, ownsDirection) {
+export function resolveTouchClaim(
+  dx: number,
+  dy: number,
+  ownsDirection: (dir: "horizontal" | "vertical") => boolean,
+) {
   const dir = gestureDirection(dx, dy);
   if (!dir) return null;
   return ownsDirection(dir) ? "claim" : "abandon";
@@ -98,13 +98,17 @@ export const TAP_MS = 300;
  * reads the same events the controller is already handling, so a tap that
  * the controller also read as some other gesture still resolves that gesture
  * its own way.
- *
- * @param {{onTap: (count: number) => void, tapMs?: number, now?: () => number}} options
  */
-export function createMultiTapWatcher({ onTap, tapMs = TAP_MS, now = () => Date.now() }) {
-  /** Pointers currently down, each at the position it landed on — the
-   *  baseline the slop test measures travel from. @type {Map<number, {x: number, y: number}>} */
-  const down = new Map();
+export function createMultiTapWatcher({ onTap, tapMs = TAP_MS, now = () => Date.now() }: {
+  onTap: (count: number) => void;
+  tapMs?: number;
+  now?: () => number;
+}) {
+  /**
+   * Pointers currently down, each at the position it landed on — the
+   *  baseline the slop test measures travel from.
+   */
+  const down: Map<number, {x: number, y: number}> = new Map();
   /** The most pointers held at once since the group began. That, not the
    *  count at release, is the `k` of "k fingers tapped": the fingers of a
    *  real tap never lift in one event. */
@@ -164,8 +168,7 @@ export function createMultiTapWatcher({ onTap, tapMs = TAP_MS, now = () => Date.
 export function createListenerGroup() {
   let bound = [];
   return {
-    /** @param {Array<[string, (e: any) => void, AddEventListenerOptions?]>} handlers */
-    bind(el, handlers) {
+    bind(el, handlers: Array<[string, (e: any) => void, AddEventListenerOptions?]>) {
       for (const [type, fn, opts] of handlers) {
         el.addEventListener(type, fn, opts);
         bound.push(() => el.removeEventListener(type, fn, opts));
