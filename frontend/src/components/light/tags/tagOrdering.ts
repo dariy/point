@@ -15,7 +15,7 @@ export function getChildrenOf(tags: Tag[], parentId: number | null | undefined):
   const parent = tags.find(t => t.id === parentId);
   if (!parent) return [];
   const childIds = (parent.children || []).map(c => c.id);
-  return childIds.map(id => tags.find(t => t.id === id)).filter(Boolean);
+  return childIds.map(id => tags.find(t => t.id === id)).filter((t): t is Tag => t !== undefined);
 }
 
 /**

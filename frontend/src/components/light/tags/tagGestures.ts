@@ -130,7 +130,7 @@ export function reorderPlan({ zone, dragParent, targetParent, targetId, siblingB
 
 /** Read a row's data-parent-id, where an empty attribute means "top level". */
 export function rowParentId(row: HTMLElement): number | null {
-  return row.dataset.parentId !== '' ? parseInt(row.dataset.parentId, 10) : null;
+  return row.dataset.parentId !== '' ? parseInt(row.dataset.parentId ?? '', 10) : null;
 }
 
 /**
@@ -297,11 +297,11 @@ export function bindDragAndDrop(
 
   container.querySelectorAll<HTMLElement>('.tm-row[draggable="true"]').forEach(row => {
     row.addEventListener('dragstart', e => {
-      const id = parseInt(row.dataset.id, 10);
+      const id = parseInt(row.dataset.id ?? '', 10);
       dragState = { tagId: id, parentId: rowParentId(row) };
       row.classList.add('tm-dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(id));
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer?.setData('text/plain', String(id));
     });
 
     row.addEventListener('dragend', () => {
@@ -312,11 +312,11 @@ export function bindDragAndDrop(
 
     row.addEventListener('dragover', e => {
       if (!dragState) return;
-      const targetId = parseInt(row.dataset.id, 10);
+      const targetId = parseInt(row.dataset.id ?? '', 10);
       if (dragState.tagId === targetId) return;
 
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
 
       clearIndicators();
       const zone = dropZoneFor(e.clientY, row.getBoundingClientRect());
@@ -336,7 +336,7 @@ export function bindDragAndDrop(
       if (!dragState) return;
 
       const { tagId: dragId, parentId: dragParent } = dragState;
-      const targetId = parseInt(row.dataset.id, 10);
+      const targetId = parseInt(row.dataset.id ?? '', 10);
       if (dragId === targetId) { clearIndicators(); dragState = null; return; }
 
       // The indicator classes are the record of where dragover last landed.

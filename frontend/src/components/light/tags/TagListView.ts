@@ -137,7 +137,7 @@ export function renderSortHeader(field: string, label: string, className = '', t
 export function renderTagList(tags: Tag[], view: TagListViewState): RawHtml {
   if (!tags.length) return html`<p class="empty-state">No tags found.</p>`;
 
-  const { sortField, sortOrder, selectMode, selectedIds, search, filterParents, filterFlags = [] } = view;
+  const { sortField, sortOrder, selectMode, selectedIds, search, filterParents = [], filterFlags = [] } = view;
   const sorted = sortTagsForList(tags, sortField, sortOrder);
 
   const rows = sorted.map(tag => {

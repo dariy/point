@@ -65,12 +65,16 @@ export interface PluginSettingsPanelProps {
 export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
   _opened: boolean;
   _closing: boolean;
-  _onKeydown: (e: KeyboardEvent) => void;
-  _gestures: GestureController;
+  _onKeydown: ((e: KeyboardEvent) => void) | null;
+  _gestures: GestureController | null;
 
   constructor(container: HTMLElement, props: PluginSettingsPanelProps = {}) {
     super(container, props);
     this.state = { saving: false };
+    this._opened = false;
+    this._closing = false;
+    this._onKeydown = null;
+    this._gestures = null;
   }
 
   get _hasForm() {
@@ -83,7 +87,7 @@ export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
 
     let formHtml: Slot = "";
     if (this._hasForm) {
-      const { inputs, toggles } = renderFields(this.props.keys, settings, {});
+      const { inputs, toggles } = renderFields(this.props.keys ?? [], settings ?? {}, {});
       const toggleSection = toggles ? html`<div class="settings-toggles">${toggles}</div>` : "";
       const connection = pluginId === "instagram" ? this._renderInstagramConnection() : "";
       formHtml = html`
@@ -129,8 +133,8 @@ export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
     const { settings, igStatus } = this.props;
     // The wire map, so the flag is a string (see api/settings.ts).
     const isEnabled =
-      settings.enable_instagram === "true" ||
-      settings.enable_instagram === "1";
+      settings?.enable_instagram === "true" ||
+      settings?.enable_instagram === "1";
     if (!isEnabled || !igStatus) return "";
 
     if (igStatus.connected) {
@@ -187,7 +191,7 @@ export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
 
     // Mount rich section components (as children so they're torn down with us).
     (this.props.sections || []).forEach((key, i) => {
-      const Cls = SECTIONS[key];
+      const Cls = SECTIONS[key as keyof typeof SECTIONS];
       const mountEl = this.$(`.plugin-section-mount[data-section-index="${i}"]`);
       if (Cls && mountEl) this.mountChild(Cls, mountEl, {});
     });
@@ -272,7 +276,7 @@ export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
     if (!form) return;
     this.setState({ saving: true });
 
-    const updates = collectUpdates(form, this.props.keys);
+    const updates = collectUpdates(form, this.props.keys ?? []);
     try {
       await updateSettings(updates);
       // Reflect changes immediately in the global settings store.
@@ -282,7 +286,7 @@ export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
       this._close();
     } catch (err) {
       console.error("[PluginSettingsPanel] save error:", err);
-      setToast({ message: err.message || "Could not save settings.", type: "error" });
+      setToast({ message: (err as Error).message || "Could not save settings.", type: "error" });
       this.setState({ saving: false });
     }
   }
@@ -294,7 +298,7 @@ export class PluginSettingsPanel extends Component<PluginSettingsPanelProps> {
       setToast({ message: "Instagram disconnected.", type: "success" });
       this._close();
     } catch (err) {
-      setToast({ message: err.message || "Failed to disconnect.", type: "error" });
+      setToast({ message: (err as Error).message || "Failed to disconnect.", type: "error" });
     }
   }
 }

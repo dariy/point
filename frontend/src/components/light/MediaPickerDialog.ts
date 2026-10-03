@@ -42,6 +42,7 @@ export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
     super(container, { onConfirm });
     this._activeBrowser = null;
     this._libraryPicker = null;
+    this._onConfirmOverride = null;
     this._keyHandler = null;
   }
 
@@ -162,7 +163,7 @@ export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
       return;
     }
     const cb = this._onConfirmOverride || this.props.onConfirm;
-    cb(items);
+    cb?.(items);
     this.close();
   }
 }

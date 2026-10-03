@@ -54,8 +54,9 @@ export function buildTagTree(tags: TreeTag[]): TagForest {
   tags.forEach(t => {
     (t.parents || []).forEach(p => {
       if (tagById.has(p.id)) {
-        if (!childrenOf.has(p.id)) childrenOf.set(p.id, []);
-        childrenOf.get(p.id).push(t);
+        const siblings = childrenOf.get(p.id) ?? [];
+        siblings.push(t);
+        childrenOf.set(p.id, siblings);
       }
     });
   });
@@ -82,7 +83,7 @@ export function buildTagTree(tags: TreeTag[]): TagForest {
   // Nav roots: explicitly placed in navigation
   const navRoots = parentless
     .filter(t => t.nav_order != null)
-    .sort((a, b) => a.nav_order - b.nav_order)
+    .sort((a, b) => (a.nav_order ?? 0) - (b.nav_order ?? 0))
     .map(t => makeNode(t, new Set([t.id])));
 
   // Other filed roots: no nav_order but have children (intentional hierarchy roots)

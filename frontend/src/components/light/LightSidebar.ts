@@ -43,6 +43,7 @@ export class LightSidebar extends Component<LightSidebarProps> {
     // null = never toggled, so the group follows the current page (expanded
     // while you are on one of its items). Once toggled it is the answer, on
     // every page — the group being open is not a fact about the route.
+    this._manageActive = false;
     const stored = localStorage.getItem('sidebar_manage_expanded');
     this.state = {
       manageExpanded: stored === null ? null : stored === 'true',
@@ -68,7 +69,7 @@ export class LightSidebar extends Component<LightSidebarProps> {
     this._manageActive = isManageActive;
     const manageExpanded = this.state.manageExpanded ?? isManageActive;
 
-    const renderItem = (item) => {
+    const renderItem = (item: typeof MANAGE_ITEMS[number]) => {
       const isActive = item.href === '/light'
         ? currentPath === item.href
         : currentPath === item.href || currentPath.startsWith(item.href + '/');
@@ -140,7 +141,7 @@ export class LightSidebar extends Component<LightSidebarProps> {
     const { collapsed } = this.state;
     document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', collapsed);
 
-    this.subscribeStore(onAppVersion, (v) => {
+    this.subscribeStore(onAppVersion, (v: string) => {
       const el = this.$('.sidebar-version');
       if (el) el.textContent = v;
     });

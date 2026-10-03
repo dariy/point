@@ -42,7 +42,7 @@ export class TagsInput extends Component<TagsInputProps> {
     const {
       tags
     } = this.state;
-    const badges = tags.map(t => html`<span class="tag tag-chip" data-tag="${t}">
+    const badges = tags.map((t: string) => html`<span class="tag tag-chip" data-tag="${t}">
          ${t}
          <button class="tag-remove" data-tag="${t}" type="button" aria-label="Remove ${t}">×</button>
        </span>`);
@@ -69,7 +69,7 @@ export class TagsInput extends Component<TagsInputProps> {
     this.$$('.tag-remove').forEach(btn => {
       btn.addEventListener('click', () => {
         const tag = btn.dataset.tag;
-        const tags = this.state.tags.filter(t => t !== tag);
+        const tags = this.state.tags.filter((t: string) => t !== tag);
         this.setState({
           tags
         });
@@ -169,7 +169,7 @@ export class TagsInput extends Component<TagsInputProps> {
   }
 
   /** Add a tag if it isn't already present. */
-  _addTag(name) {
+  _addTag(name: string) {
     if (!name || this.state.tags.includes(name)) return;
     const tags = [...this.state.tags, name];
     this.setState({
@@ -183,7 +183,7 @@ export class TagsInput extends Component<TagsInputProps> {
     }
     this._hideSuggestions();
   }
-  async _loadSuggestions(q) {
+  async _loadSuggestions(q: string) {
     try {
       if (!this._allTags.length) {
         const res = await listTags();
@@ -196,7 +196,7 @@ export class TagsInput extends Component<TagsInputProps> {
       this._hideSuggestions();
     }
   }
-  _showSuggestions(suggestions, input) {
+  _showSuggestions(suggestions: Tag[], input: string) {
     this.state.selectedIndex = -1;
     const box = this.$(`#${this._uid}-suggestions`);
     if (!box) return;
@@ -252,7 +252,7 @@ export class TagsInput extends Component<TagsInputProps> {
     }
     box.classList.add('show');
   }
-  _showCreateTagPopover(name) {
+  _showCreateTagPopover(name: string) {
     const box = this.$(`#${this._uid}-suggestions`);
     if (!box) return;
     this.state.isPopoverOpen = true;
@@ -280,10 +280,10 @@ export class TagsInput extends Component<TagsInputProps> {
     box.classList.add('show');
     const nameInput = (popover.querySelector('.new-tag-name') as HTMLInputElement);
     const parentInput = (popover.querySelector('.new-tag-parent') as HTMLInputElement);
-    const parentSuggestions = popover.querySelector('.parent-suggestions');
-    const createBtn = popover.querySelector('.btn-create');
-    const cancelBtn = popover.querySelector('.btn-cancel');
-    let selectedParentId = null;
+    const parentSuggestions = popover.querySelector('.parent-suggestions')!;
+    const createBtn = popover.querySelector('.btn-create')!;
+    const cancelBtn = popover.querySelector('.btn-cancel')!;
+    let selectedParentId: number | null = null;
 
     // Parent autocomplete logic
     const fetchParentSuggestions = debounce(async q => {

@@ -45,7 +45,7 @@ export const INTERACTIVE = 'input, button, a, select, label';
 /** Tree rows carry .tm-row; list-view rows are the <tr class="tm-tag-row">. */
 export const ROW_SELECTOR = '.tm-row, .tm-tag-row';
 
-const rowId = (row: HTMLElement): number => parseInt(row.dataset.id, 10);
+const rowId = (row: HTMLElement): number => parseInt(row.dataset.id ?? '', 10);
 
 /** The page state that select mode reads, fresh on every event. */
 export interface SelectModeState {

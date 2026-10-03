@@ -39,14 +39,14 @@ export const PINNED_STORAGE_KEY = "point:editor:pinned";
 export const ORDER_STORAGE_KEY = "point:editor:field-order";
 
 /** The stored value of one preference: account settings first, then localStorage. */
-function readRaw(settingsKey, storageKey) {
+function readRaw(settingsKey: string, storageKey: string): string | null {
   const settings = getSettings() || {};
   if (settings[settingsKey]) return settings[settingsKey];
   try { return localStorage.getItem(storageKey); } catch { return null; }
 }
 
 /** Write one preference to localStorage now and to the account settings when they answer. */
-function persistRaw(settingsKey, storageKey, raw, label) {
+function persistRaw(settingsKey: string, storageKey: string, raw: string, label: string) {
   try { localStorage.setItem(storageKey, raw); } catch { /* ignore */ }
   import("../../api/settings.ts").then(({ updateSettings }) => {
     updateSettings({ [settingsKey]: raw }).catch((err) => {
@@ -59,15 +59,15 @@ function persistRaw(settingsKey, storageKey, raw, label) {
 /** The stored order, with any key it doesn't mention appended in default order. */
 export function readFieldOrder() {
   const raw = readRaw("editor_field_order", ORDER_STORAGE_KEY);
-  let stored = [];
+  let stored: string[] = [];
   try {
     const parsed = raw ? JSON.parse(raw) : null;
-    if (Array.isArray(parsed)) stored = parsed.filter((k) => typeof k === "string");
+    if (Array.isArray(parsed)) stored = parsed.filter((k): k is string => typeof k === "string");
   } catch { /* fall through to the default */ }
   return [...stored, ...DEFAULT_ORDER.filter((k) => !stored.includes(k))];
 }
 
-export function persistFieldOrder(order) {
+export function persistFieldOrder(order: string[]) {
   persistRaw("editor_field_order", ORDER_STORAGE_KEY, JSON.stringify(order), "field order");
 }
 
@@ -88,12 +88,12 @@ export function readPinnedFields() {
   return new Set([...keys, FIXED_TO_CANVAS]);
 }
 
-export function persistPinnedFields(pinned) {
+export function persistPinnedFields(pinned: Iterable<string>) {
   persistRaw("editor_pinned", PINNED_STORAGE_KEY, JSON.stringify([...pinned]), "pinned fields");
 }
 
 /** Position of a group in the user's order; anything unknown sorts last. */
-export function orderIndex(order, key) {
+export function orderIndex(order: string[], key: string) {
   const i = order.indexOf(key);
   if (i !== -1) return i;
   const d = DEFAULT_ORDER.indexOf(key);
@@ -106,7 +106,7 @@ export function orderIndex(order, key) {
  * relative position, so a drag inside the Details panel doesn't disturb the
  * canvas and vice versa.
  */
-export function moveInOrder(order, key, afterKey) {
+export function moveInOrder(order: string[], key: string, afterKey: string | null) {
   const rest = order.filter((k) => k !== key);
   const at = afterKey ? rest.indexOf(afterKey) + 1 : 0;
   rest.splice(at < 0 ? rest.length : at, 0, key);

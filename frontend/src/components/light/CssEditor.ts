@@ -31,7 +31,7 @@ export class CssEditor extends Component<CssEditorProps> {
   jar: ReturnType<typeof CodeJar> | null;
   isMaximized: boolean;
   id: string;
-  _placeholder: HTMLElement | null;
+  _placeholder: HTMLElement | null = null;
 
   constructor(container: HTMLElement, props: CssEditorProps = {}) {
     super(container, props);
@@ -61,16 +61,16 @@ export class CssEditor extends Component<CssEditorProps> {
     `;
   }
   afterRender() {
-    const editorElement = this.container.querySelector(`#${this.id}`);
-    const maximizeBtn = this.container.querySelector('.textarea-maximize-btn');
-    const saveBtn = this.container.querySelector('.textarea-save-btn');
+    const editorElement = this.container.querySelector<HTMLElement>(`#${this.id}`);
+    const maximizeBtn = this.container.querySelector<HTMLButtonElement>('.textarea-maximize-btn');
+    const saveBtn = this.container.querySelector<HTMLButtonElement>('.textarea-save-btn');
     if (!editorElement) return;
     if (this.isMaximized) {
       acquireScrollLock(this);
     }
 
     // Highlight function using Prism
-    const highlight = editor => {
+    const highlight = (editor: HTMLElement) => {
       if (window.Prism && window.Prism.languages.css) {
         const code = editor.textContent;
         // Prism emits markup by design; it is the sanctioned raw() the
@@ -88,7 +88,7 @@ export class CssEditor extends Component<CssEditorProps> {
     this.jar.updateCode(this.value || '');
 
     // Listen for changes
-    this.jar.onUpdate(code => {
+    this.jar.onUpdate((code: string) => {
       this.value = code;
       this.onChange(code);
     });
@@ -112,8 +112,8 @@ export class CssEditor extends Component<CssEditorProps> {
     }
 
     // Handle Escape key to minimize
-    editorElement.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && this.isMaximized) {
+    editorElement.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && this.isMaximized && maximizeBtn) {
         this._toggleMaximize(editorElement, maximizeBtn, saveBtn);
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -124,14 +124,14 @@ export class CssEditor extends Component<CssEditorProps> {
       }
     });
   }
-  _toggleMaximize(editorElement, btn, saveBtn) {
+  _toggleMaximize(editorElement: HTMLElement, btn: HTMLButtonElement, saveBtn: HTMLButtonElement | null) {
     this.isMaximized = !this.isMaximized;
     editorElement.classList.toggle('is-maximized', this.isMaximized);
     btn.classList.toggle('is-maximized', this.isMaximized);
     if (saveBtn) saveBtn.classList.toggle('is-maximized', this.isMaximized);
     setHTML(btn, html`${raw(this.isMaximized ? MINIMIZE_SVG : MAXIMIZE_SVG)}`);
     btn.title = this.isMaximized ? 'Minimize' : 'Maximize';
-    const container = editorElement.closest('.css-editor-container');
+    const container = editorElement.closest<HTMLElement>('.css-editor-container');
     if (this.isMaximized) {
       acquireScrollLock(this);
       // Move container to body to avoid z-index/stacking context traps
@@ -139,14 +139,14 @@ export class CssEditor extends Component<CssEditorProps> {
         this._placeholder = document.createElement('div');
         this._placeholder.className = 'css-editor-placeholder';
         this._placeholder.style.height = container.offsetHeight + 'px';
-        container.parentNode.insertBefore(this._placeholder, container);
+        container.parentNode?.insertBefore(this._placeholder, container);
         document.body.appendChild(container);
       }
     } else {
       releaseScrollLock(this);
       // Restore container
       if (container && this._placeholder) {
-        this._placeholder.parentNode.insertBefore(container, this._placeholder);
+        this._placeholder.parentNode?.insertBefore(container, this._placeholder);
         this._placeholder.remove();
         this._placeholder = null;
       }

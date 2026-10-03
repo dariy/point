@@ -12,6 +12,7 @@ export function getInstagramStatus(): Promise<{
   username: string;
   token_expires_at: string;
   enabled: boolean;
+  default_share: boolean;
 }> {
   return api.get('/api/instagram/status');
 }

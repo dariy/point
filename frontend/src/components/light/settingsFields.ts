@@ -11,10 +11,11 @@
 
 import { html, raw } from "../../utils/helpers.ts";
 import type { RawHtml } from "../../utils/helpers.ts";
+import type { Post } from "../../api/posts.ts";
 import { DEFAULT_POST_TITLE_FORMAT, formatTitleDate } from "../../utils/formatters.ts";
 
 // Friendlier labels for keys whose snake_case name reads poorly.
-export const LABEL_OVERRIDES = {
+export const LABEL_OVERRIDES: Record<string, string> = {
   tags_visibility: "Tags visible to",
   default_post_title_format: "Title for untitled posts",
   show_title_dropdown: "Root-tag dropdown on the site title",
@@ -54,12 +55,12 @@ export const NUMERIC_KEYS = new Set([
 ]);
 
 /** Humanized label for a setting key (snake_case → Title Case), with overrides. */
-export function labelFor(key) {
+export function labelFor(key: string) {
   return (
     LABEL_OVERRIDES[key] ||
     key
       .split("_")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ")
   );
 }
@@ -81,7 +82,7 @@ export const DEFAULT_ON_KEYS = new Set([
 ]);
 
 /** Whether a key renders as an on/off checkbox (and so needs explicit collection). */
-export function isToggleKey(key) {
+export function isToggleKey(key: string) {
   return (
     key.includes("enable") ||
     key.includes("show") ||
@@ -93,7 +94,7 @@ export function isToggleKey(key) {
   );
 }
 
-function isNumericKey(key) {
+function isNumericKey(key: string) {
   return (
     NUMERIC_KEYS.has(key) ||
     key.includes("per_page") ||
@@ -101,7 +102,7 @@ function isNumericKey(key) {
   );
 }
 
-function isSecretKey(key) {
+function isSecretKey(key: string) {
   return (
     key === "gemini_api_key" ||
     key === "remark_telegram_token" ||
@@ -112,7 +113,10 @@ function isSecretKey(key) {
 }
 
 /** Markup for a single setting input (without its label wrapper). */
-function inputHtml(key, value, { posts = [] }) {
+/** The fields of a post the page pickers read. */
+type PagePickerPost = Pick<Post, "type" | "slug" | "title">;
+
+function inputHtml(key: string, value: unknown, { posts = [] }: { posts?: PagePickerPost[] }) {
   if (key === "about_post_id" || key === "home_page_post_id") {
     const options = posts
       .filter((p) => p.type === "page")
@@ -190,7 +194,7 @@ function inputHtml(key, value, { posts = [] }) {
   }
   if (key.startsWith("gemini_prompt_")) {
     // ponytail: placeholders mirror media_service.go's built-in defaults.
-    const defaults = {
+    const defaults: Record<string, string> = {
       gemini_prompt_title: "a concise, descriptive title",
       gemini_prompt_tags: "relevant keyword tags",
       gemini_prompt_excerpt: "a 1-2 sentence description",
@@ -204,7 +208,7 @@ function inputHtml(key, value, { posts = [] }) {
   if (isSecretKey(key)) {
     // Secret values are never echoed back by the API; blank means "keep".
     const input = html`<input type="password" name="${key}" id="${key}" class="form-input" value="${String(value)}" autocomplete="new-password" placeholder="Leave blank to keep the current value">`;
-    const oauthProvider = { remark_auth_github_csec: "github", remark_auth_google_csec: "google" }[key];
+    const oauthProvider = ({ remark_auth_github_csec: "github", remark_auth_google_csec: "google" } as Record<string, string>)[key];
     if (oauthProvider) {
       return html`${input}
       <small class="form-hint">Callback URL for the OAuth app: <code>${window.location.origin}/comments/auth/${oauthProvider}/callback</code></small>`;
@@ -226,10 +230,10 @@ function inputHtml(key, value, { posts = [] }) {
 export function renderFields(
   keys: string[],
   settings: Record<string, unknown>,
-  ctx: { posts?: unknown[] } = {},
+  ctx: { posts?: PagePickerPost[] } = {},
 ): { inputs: RawHtml | string; toggles: RawHtml | string } {
-  const inputs = [];
-  const toggles = [];
+  const inputs: RawHtml[] = [];
+  const toggles: RawHtml[] = [];
 
   for (const key of keys) {
     const value = settings[key] ?? (DEFAULT_ON_KEYS.has(key) ? "true" : "");
@@ -256,7 +260,7 @@ export function renderFields(
   // Every part is html`` output; raw() covers only the join that turns the
   // array back into one string.
   // eslint-disable-next-line point/restricted-syntax
-  const join = (parts) => (parts.length ? raw(parts.join("")) : "");
+  const join = (parts: RawHtml[]) => (parts.length ? raw(parts.join("")) : "");
   return { inputs: join(inputs), toggles: join(toggles) };
 }
 

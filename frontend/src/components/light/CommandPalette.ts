@@ -13,6 +13,14 @@ const STATIC_PAGES = [
   { href: '/light/settings', label: 'Settings', icon: SETTINGS_SVG },
 ];
 
+interface SearchResult {
+  href: string;
+  label: string;
+  sublabel?: string;
+  icon: string;
+  type: string;
+}
+
 export class CommandPalette extends Component {
   _onGlobalKeyDown: (e: KeyboardEvent) => void;
   _performSearch: (query: string) => void;
@@ -43,7 +51,7 @@ export class CommandPalette extends Component {
             <kbd class="cp-esc-hint">ESC</kbd>
           </div>
           <div class="cp-results" id="cp-results" role="listbox" aria-label="Search results">
-            ${results.map((r, i) => html`
+            ${results.map((r: SearchResult, i: number) => html`
               <div class="cp-result-item ${i === selectedIndex ? 'selected' : ''}" 
                    data-index="${i}" role="option" aria-selected="${i === selectedIndex}">
                 <div class="cp-result-icon">${raw(r.icon)}</div>
@@ -83,7 +91,7 @@ export class CommandPalette extends Component {
 
     this.$$('.cp-result-item').forEach(item => {
       item.addEventListener('mouseenter', () => {
-        this.setState({ selectedIndex: parseInt(item.dataset.index, 10) });
+        this.setState({ selectedIndex: parseInt(item.dataset.index ?? '0', 10) });
       });
       item.addEventListener('click', () => this._selectCurrent());
     });
@@ -117,7 +125,7 @@ export class CommandPalette extends Component {
     releaseScrollLock(this);
   }
 
-  _onKeyDownGlobal(e) {
+  _onKeyDownGlobal(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       this.open();
@@ -127,7 +135,7 @@ export class CommandPalette extends Component {
     }
   }
 
-  _onKeyDown(e) {
+  _onKeyDown(e: KeyboardEvent) {
     const { results, selectedIndex } = this.state;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -157,7 +165,7 @@ export class CommandPalette extends Component {
     return STATIC_PAGES.map(p => ({ ...p, type: 'Page' }));
   }
 
-  async _search(q) {
+  async _search(q: string) {
     if (!q) {
       this.setState({ results: this._getDefaultResults() });
       return;

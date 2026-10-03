@@ -23,7 +23,7 @@ export class TagFamilyPopover extends Component<TagFamilyPopoverProps> {
     if (error) return html`<div class="tfp-popover error">${error}</div>`;
     if (!tag) return html``;
 
-    const renderTagLink = (t) => html`<button class="tfp-tag-link" data-id="${t.id}">${t.name}</button>`;
+    const renderTagLink = (t: { id: number; name: string }) => html`<button class="tfp-tag-link" data-id="${t.id}">${t.name}</button>`;
 
     return html`
       <div class="tfp-popover">
@@ -60,13 +60,13 @@ export class TagFamilyPopover extends Component<TagFamilyPopoverProps> {
   afterRender() {
     this.$$('.tfp-tag-link').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = parseInt(btn.dataset.id, 10);
+        const id = parseInt(btn.dataset.id ?? '', 10);
         this._load(id);
       });
     });
 
     this.container.querySelector('.tfp-view-posts-btn')?.addEventListener('click', (e) => {
-      const slug = e.target.dataset.slug;
+      const slug = (e.target as HTMLElement).dataset.slug ?? '';
       navigate(`/light/posts?tag=${encodeURIComponent(slug)}`);
     });
   }
@@ -76,19 +76,19 @@ export class TagFamilyPopover extends Component<TagFamilyPopoverProps> {
     if (this.props.tagId) this._load(this.props.tagId);
   }
 
-  async _load(id) {
+  async _load(id: number) {
     this.setState({ loading: true, error: null });
     try {
       const tag = await getTag(id);
       this.setState({ loading: false, tag });
     } catch (err) {
-      this.setState({ loading: false, error: err.message });
+      this.setState({ loading: false, error: (err as Error).message });
     }
   }
 }
 
 /** Global helper to open the family popover at a position. */
-export function openTagFamilyPopover(tagId, anchorEl) {
+export function openTagFamilyPopover(tagId: number, anchorEl: HTMLElement) {
   const existing = document.querySelector('.tfp-overlay');
   if (existing) existing.remove();
 
