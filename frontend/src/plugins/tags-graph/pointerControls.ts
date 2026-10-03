@@ -186,7 +186,7 @@ export class PointerControls {
       host._dragTo(host.dragNode, p.x, p.y);
       return;
     }
-    if (host.panning) {
+    if (host.panning && this._panStart) {
       if (this._trackTravel(p)) host._userView = true;
       host.tx = p.x - this._panStart.x;
       host.ty = p.y - this._panStart.y;

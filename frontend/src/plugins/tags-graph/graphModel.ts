@@ -168,10 +168,12 @@ export function buildGraph(data: GraphData, { width, height }: { width: number; 
     links.push({ source: a, target: b, kind });
     a.degree++;
     b.degree++;
-    if (!neighbors.has(a.id)) neighbors.set(a.id, new Set());
-    if (!neighbors.has(b.id)) neighbors.set(b.id, new Set());
-    neighbors.get(a.id).add(b.id);
-    neighbors.get(b.id).add(a.id);
+    let aSet = neighbors.get(a.id);
+    if (!aSet) neighbors.set(a.id, (aSet = new Set()));
+    let bSet = neighbors.get(b.id);
+    if (!bSet) neighbors.set(b.id, (bSet = new Set()));
+    aSet.add(b.id);
+    bSet.add(a.id);
   };
 
   (data.hierarchyEdges || []).forEach((e) => addLink('t' + e.parent, 't' + e.child, 'hierarchy'));

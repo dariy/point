@@ -1,11 +1,2 @@
 # tsc --strict errors per directory. Written by scripts/ts-strict-ratchet.sh --update.
-45 frontend/src/pages/public
-23 frontend/src/plugins/breadcrumbs
-1 frontend/src/plugins/distraction-free
-11 frontend/src/plugins/immersive
-6 frontend/src/plugins/public-footer
-16 frontend/src/plugins/slideshow
-1 frontend/src/plugins/tag-cloud
-16 frontend/src/plugins/tags-atlas
-12 frontend/src/plugins/tags-graph
-11 frontend/src/plugins/tags-map
+

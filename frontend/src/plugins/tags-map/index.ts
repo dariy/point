@@ -33,6 +33,11 @@ import type { HeaderCrumb } from "../public-header/PublicHeader.ts";
 type MapPageTag = Awaited<ReturnType<typeof getMapPage>>["tags"][number];
 
 /** A map tag, with the fields the popups read that the API type omits. */
+/** The slice of a GeoJSON feature the country styling reads. */
+interface GeoFeature {
+  properties?: Record<string, string | undefined> | null;
+}
+
 interface MapTag extends MapPageTag {
   is_hidden?: boolean;
   years?: Array<{ name: string; slug: string }>;
@@ -61,7 +66,7 @@ export default class MapPage extends Component<PageProps> {
   _tagMarkers: Map<string, LeafletRef>;
   _allTagsCount: number;
   _headerChild: Component | null;
-  _canShowTimeline: boolean;
+  _canShowTimeline = false;
   _timeline: TimelineHandle | undefined;
   /** The countries GeoJSON, fetched once on the first redraw. */
   _geojson: unknown;
@@ -105,7 +110,7 @@ export default class MapPage extends Component<PageProps> {
       this.setState({
         loading: false,
         tags: [],
-        error: err.message || "Failed to load map data.",
+        error: (err as Error).message || "Failed to load map data.",
       });
       return;
     }
@@ -233,7 +238,7 @@ export default class MapPage extends Component<PageProps> {
       this.setState({
         loading: false,
         tags: [],
-        error: err.message || "Failed to load map data.",
+        error: (err as Error).message || "Failed to load map data.",
       });
     }
   }
@@ -333,7 +338,7 @@ export default class MapPage extends Component<PageProps> {
 
     // Build lookup: lowercased tag name → tag (for country polygon matching)
     const countryTagMap: Record<string, MapTag> = {};
-    tags.forEach((t) => {
+    tags.forEach((t: MapTag) => {
       if (t.type === "country" || t.type === "city") {
         countryTagMap[t.name.toLowerCase()] = t;
       }
@@ -351,14 +356,14 @@ export default class MapPage extends Component<PageProps> {
 
     if (this._geojson) {
       L.geoJSON(this._geojson, {
-        style: (feature) => {
+        style: (feature: GeoFeature) => {
           const props = feature.properties || {};
           const rawName = props.name || "";
           const names = [props.name, props.name_long, props.admin, props.brk_name, props.formal_en]
-            .filter(Boolean)
+            .filter((n): n is string => !!n)
             .map(n => n.toLowerCase());
 
-          let tag = null;
+          let tag: MapTag | null = null;
           for (const n of names) {
             if (countryTagMap[n]) {
               tag = countryTagMap[n];
@@ -374,17 +379,17 @@ export default class MapPage extends Component<PageProps> {
             weight: highlighted ? 1.5 : 0.5,
             dashArray: tag?.is_hidden ? "5 4" : null,
             fillColor: countryColor,
-            fillOpacity: highlighted ? (tag.is_hidden ? 0.2 : 0.35) : 0.1,
+            fillOpacity: highlighted ? (tag?.is_hidden ? 0.2 : 0.35) : 0.1,
             opacity: highlighted ? 0.8 : 0.3,
           };
         },
-        onEachFeature: (feature, layer) => {
+        onEachFeature: (feature: GeoFeature, layer: LeafletRef) => {
           const props = feature.properties || {};
           const names = [props.name, props.name_long, props.admin, props.brk_name, props.formal_en]
-            .filter(Boolean)
+            .filter((n): n is string => !!n)
             .map(n => n.toLowerCase());
 
-          let tag = null;
+          let tag: MapTag | null = null;
           for (const n of names) {
             if (countryTagMap[n]) {
               tag = countryTagMap[n];
@@ -410,7 +415,7 @@ export default class MapPage extends Component<PageProps> {
           layer.bindPopup(
             String(html`<a href="/tags/${encodeURIComponent(tag.slug)}" class="map-popup-tag${tag.is_hidden ? " is-hidden" : ""}">${lockIcon}${tag.name}</a><div class="tag-popup-count">${tag.post_count} post${tag.post_count !== 1 ? "s" : ""}</div>${yearsHtml}`),
           );
-          layer.on("click", (e) => layer.openPopup(e.latlng));
+          layer.on("click", (e: { latlng: unknown }) => layer.openPopup(e.latlng));
           this._tagMarkers.set(tag.slug, layer);
         },
       }).addTo(this._markerLayer);
@@ -418,7 +423,7 @@ export default class MapPage extends Component<PageProps> {
 
     // Render circle markers for city / other tags (not countries)
     const bounds: Array<[number, number]> = [];
-    tags.forEach((tag) => {
+    tags.forEach((tag: MapTag) => {
       if (tag.type === "country") return;
       const r = markerRadius(tag.post_count);
       // A hidden place is drawn hollow and dashed (the marker equivalent of the

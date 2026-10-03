@@ -16,7 +16,7 @@ export interface ExploreBlockProps {
 }
 
 export class ExploreBlock extends Component<ExploreBlockProps> {
-  _cleanupFlyout: (() => void) | null;
+  _cleanupFlyout: (() => void) | null = null;
   render() {
     const { tags = [] } = this.props;
     if (!tags.length) return html``;

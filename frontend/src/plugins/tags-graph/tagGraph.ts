@@ -181,7 +181,7 @@ export class TagGraph {
     this._kick();
   }
 
-  selectNodeBySlug(slug: string | null | undefined): GraphNode | null {
+  selectNodeBySlug(slug: string | null | undefined): GraphNode | null | undefined {
     if (!slug) {
       if (this.selected) {
         this.selected = null;

@@ -50,6 +50,8 @@ import type { TimelineHandle, TimelineRange } from "../../pages/public/HomePage.
 
 /** A geo-tag node from GET /api/pages/graph, with the owner-only marks. */
 export type AtlasTag = Awaited<ReturnType<typeof getTagsGraph>>["tags"][number] & ConcealMarks;
+/** An atlas tag that has a place on the map. */
+type GeoTag = AtlasTag & { latitude: number; longitude: number };
 
 /** A place's cloud payload: GET /api/pages/graph/tag/{id}. */
 export type CloudData = Awaited<ReturnType<typeof getTagCloud>>;
@@ -508,7 +510,7 @@ export default class AtlasPage extends Component<PageProps> {
   _wireToggles(): void {
     this.$$(".atlas-toggle").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const type = btn.dataset.type;
+        const type = btn.dataset.type ?? "";
         const turnOff = btn.getAttribute("aria-pressed") === "true";
         btn.setAttribute("aria-pressed", String(!turnOff));
         btn.classList.toggle("is-off", turnOff);
@@ -551,7 +553,7 @@ export default class AtlasPage extends Component<PageProps> {
       this.setState({
         loading: false,
         data: null,
-        error: this._loadErrorMessage(err),
+        error: this._loadErrorMessage(err as { status?: number; message?: string }),
       });
     }
   }
@@ -675,15 +677,15 @@ export default class AtlasPage extends Component<PageProps> {
     // marker with it and, because the boundary features match on this set, its
     // country shape reverts to a plain untagged outline.
     const geoTags = (this.state.data.tags || []).filter(
-      (t: AtlasTag) =>
+      (t: AtlasTag): t is GeoTag =>
         typeof t.latitude === "number" &&
         typeof t.longitude === "number" &&
         !this._filteredOut(t),
     );
 
     // name (lowercased) → geo-tag, for matching against GeoJSON features.
-    const geoTagByName: Record<string, AtlasTag> = {};
-    geoTags.forEach((t: AtlasTag) => {
+    const geoTagByName: Record<string, GeoTag> = {};
+    geoTags.forEach((t: GeoTag) => {
       geoTagByName[t.name.toLowerCase()] = t;
     });
 
@@ -722,7 +724,7 @@ export default class AtlasPage extends Component<PageProps> {
       opts: { only?: boolean | null; interactive?: boolean } = {},
     ) => {
       const { only = null, interactive = true } = opts;
-      const matchTag = (props: Record<string, unknown>): AtlasTag | null => {
+      const matchTag = (props: Record<string, unknown>): GeoTag | null => {
         for (const key of nameProps) {
           const v = props?.[key];
           if (v && geoTagByName[String(v).toLowerCase()]) {
@@ -833,7 +835,7 @@ export default class AtlasPage extends Component<PageProps> {
     }
 
     // Circle markers for every geo-tag that isn't drawn as a country shape.
-    geoTags.forEach((tag: AtlasTag) => {
+    geoTags.forEach((tag: GeoTag) => {
       if (shapeTagIds.has(tag.id)) return;
       const r = markerRadius(tag.post_count);
       const concealed = isConcealed(tag);
@@ -1087,11 +1089,14 @@ export default class AtlasPage extends Component<PageProps> {
     const edges: CloudEdge[] = [];
     const cloudNeighbors: Map<string, Set<string>> = new Map();
     const link = (a: string, b: string) => {
-      if (!cloudNeighbors.has(a)) cloudNeighbors.set(a, new Set());
-      cloudNeighbors.get(a).add(b);
+      let set = cloudNeighbors.get(a);
+      if (!set) cloudNeighbors.set(a, (set = new Set()));
+      set.add(b);
     };
     const addEdge = (a: string, b: string, kind: "hier" | "memb") => {
-      if (!nodePos.has(a) || !nodePos.has(b)) return;
+      const posA = nodePos.get(a);
+      const posB = nodePos.get(b);
+      if (!posA || !posB) return;
       link(a, b);
       link(b, a);
       const baseOpacity = kind === "hier" ? 0.65 : 0.45;
@@ -1099,7 +1104,7 @@ export default class AtlasPage extends Component<PageProps> {
         kind === "hier"
           ? { color: "#1f9e8e", weight: 1.8, opacity: baseOpacity }
           : { color: "#8a93a6", weight: 1.6, opacity: baseOpacity, dashArray: "3 4" };
-      const line = L.polyline([llOf(nodePos.get(a)), llOf(nodePos.get(b))], {
+      const line = L.polyline([llOf(posA), llOf(posB)], {
         ...style,
         className: "atlas-link",
         interactive: false,
@@ -1115,7 +1120,7 @@ export default class AtlasPage extends Component<PageProps> {
     );
 
     const sats = ordered.map((node, i) => {
-      const ll = llOf(nodePos.get(node.key));
+      const ll = llOf(placed[i]);
       // Media posts lead with a thumbnail tucked into the chip; the modifier
       // class lets the CSS reshape the pill around it.
       const thumbUrl = node.thumb && safeUrl(node.thumb);
@@ -1257,8 +1262,10 @@ export default class AtlasPage extends Component<PageProps> {
    * other tags sharing it (those get a distinct dashed ring) — the same "two
    * joints through a shared post" reveal the /tags graph uses.
    */
-  _expandCloudFocus(seedKey: string): { focus: Set<string>; related: Set<string> } {
-    const nb = this._cloud.cloudNeighbors;
+  _expandCloudFocus(
+    nb: Map<string, Set<string>>,
+    seedKey: string,
+  ): { focus: Set<string>; related: Set<string> } {
     const focus = new Set([seedKey]);
     const related: Set<string> = new Set();
     const seedIsTag = seedKey[0] === "t";
@@ -1289,14 +1296,14 @@ export default class AtlasPage extends Component<PageProps> {
    */
   _applyCloudFocus(): void {
     if (!this._cloud) return;
-    const { sats, edges, focusKey, centerKey, centerMarker } = this._cloud;
+    const { sats, edges, focusKey, centerKey, centerMarker, cloudNeighbors } = this._cloud;
     // Focusing the centre re-shows the full overview — every chip lit, exactly
     // as the cloud first opened. The centre is the cloud's subject, so
     // "selecting" it means lighting everything it touches rather than narrowing
     // to a single chip's connections.
     const data =
       focusKey && focusKey !== centerKey
-        ? this._expandCloudFocus(focusKey)
+        ? this._expandCloudFocus(cloudNeighbors, focusKey)
         : null;
     const focus = data && data.focus;
     const related = data && data.related;
@@ -1342,10 +1349,17 @@ export default class AtlasPage extends Component<PageProps> {
     // the whole cloud across the map on the first zoom.
     const llOf = (key: string) => {
       const pos = nodePos.get(key);
-      return this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy]));
+      return pos ? this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy])) : null;
     };
-    sats.forEach((s) => s.marker.setLatLng(llOf(s.key)));
-    edges.forEach((e) => e.line.setLatLngs([llOf(e.a), llOf(e.b)]));
+    sats.forEach((s) => {
+      const ll = llOf(s.key);
+      if (ll) s.marker.setLatLng(ll);
+    });
+    edges.forEach((e) => {
+      const a = llOf(e.a);
+      const b = llOf(e.b);
+      if (a && b) e.line.setLatLngs([a, b]);
+    });
   }
 
   _clearCloud(): void {
@@ -1401,7 +1415,7 @@ export default class AtlasPage extends Component<PageProps> {
     } catch (err) {
       if (token !== this._panelReq) return;
       panel.loading = false;
-      panel.error = err?.message || "Failed to load posts.";
+      panel.error = (err as Error | null)?.message || "Failed to load posts.";
       this._renderPanel();
       return;
     }
@@ -1439,7 +1453,7 @@ export default class AtlasPage extends Component<PageProps> {
       const row = target.closest?.("[data-slug]");
       if (!row) return;
       e.preventDefault();
-      this._openPanelPost(row.getAttribute("data-slug"));
+      this._openPanelPost(row.getAttribute("data-slug")!);
     });
   }
 

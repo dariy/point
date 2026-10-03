@@ -112,7 +112,8 @@ export default class PreviewPage extends Component<PageProps> {
       const { startIndex, forceImmersive } = decodeImmersiveHash(window.location.hash);
 
       this.setState({ loading: false, post, error: null, startIndex, forceImmersive });
-    } catch (err) {
+    } catch (e) {
+      const err = e as { status?: number; message?: string };
       const msg =
         err.status === 404 ? 'Preview link not found.' :
         err.status === 410 ? 'This preview link has expired.' :

@@ -51,22 +51,23 @@ import {
 
 import type { PageProps } from "../../router.ts";
 import type { PostListHandle, GridFetchParams, GridViewParams, TimelineHandle, TimelineRange } from "./HomePage.ts";
-import type { Pagination as PagePagination } from "../../api/pages.ts";
+import type { Crumb, Pagination as PagePagination } from "../../api/pages.ts";
+import type { Post } from "../../api/posts.ts";
 
 export default class TagPage extends Component<PageProps> {
   _fitLatch: ReturnType<typeof createFitLatch>;
   _resizeGate: ReturnType<typeof createResizeGate>;
   _pager: GridPager;
   _loadedVc: ViewContext | undefined;
-  _refitRefresh: boolean;
-  _loadedPerPage: number;
-  _fitOwned: boolean;
+  _refitRefresh = false;
+  _loadedPerPage = 0;
+  _fitOwned = false;
   _resizeTimer: ReturnType<typeof setTimeout> | undefined;
   _resizeHandler: (() => void) | undefined;
   _unwatchChrome: (() => void) | null | undefined;
-  _postChildren: PostListHandle[];
-  _immersivePushed: boolean;
-  _canShowTimeline: boolean;
+  _postChildren: PostListHandle[] = [];
+  _immersivePushed = false;
+  _canShowTimeline = false;
   _timeline: TimelineHandle | undefined;
 
   constructor(container: HTMLElement, props?: PageProps) {
@@ -170,7 +171,8 @@ export default class TagPage extends Component<PageProps> {
     let data;
     try {
       data = await getTagPage(slug, this._buildParams(vc));
-    } catch (err) {
+    } catch (e) {
+      const err = e as { status?: number; message?: string };
       const msg =
         err.status === 404 ? "Not found." : err.message || "Failed to load.";
       this.setState({ loading: false, data: null, post: null, error: msg });
@@ -394,7 +396,7 @@ export default class TagPage extends Component<PageProps> {
     const lastCrumbIsCurrentTag =
       breadcrumbs.length > 0 &&
       breadcrumbs[breadcrumbs.length - 1]?.slug === tag?.slug;
-    const mapCrumb = (bc) => ({
+    const mapCrumb = (bc: Crumb) => ({
       name: bc.name,
       slug: bc.slug,
       is_hidden: bc.is_hidden,
@@ -426,7 +428,7 @@ export default class TagPage extends Component<PageProps> {
       // carousel crosses page boundaries and spans the whole tag collection.
       // Fall back to the loaded page's neighbours if the nav fetch is absent.
       const posts = data?.posts || [];
-      const postIndex = posts.findIndex((p) => p.slug === post.slug);
+      const postIndex = posts.findIndex((p: Post) => p.slug === post.slug);
       const nav = this.state.nav;
       const prevPost = nav
         ? nav.prev
@@ -535,12 +537,12 @@ export default class TagPage extends Component<PageProps> {
 
     let gridComp = null;
     if (pluginHost.hasSlot('post-list')) {
-      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), gridProps);
+      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount')!, gridProps);
     } else {
       const mod = active === 'dynamic-post-list'
         ? await import('../../plugins/dynamic-post-list/index.ts')
         : await import('../../plugins/simple-post-list/index.ts');
-      gridComp = mod.mount(this.$('#grid-mount'), gridProps);
+      gridComp = mod.mount(this.$('#grid-mount')!, gridProps);
     }
 
     if (this._unmounted) {
@@ -574,7 +576,7 @@ export default class TagPage extends Component<PageProps> {
     // published page plus a queue is still worth a paginator, so the "is there
     // more than one page" test spans the whole range rather than counting up
     // from 1 — as on the home feed.
-    const minPage = Number.isInteger(pagination.min_page) && pagination.min_page < 1
+    const minPage = pagination.min_page !== undefined && Number.isInteger(pagination.min_page) && pagination.min_page < 1
       ? pagination.min_page
       : 1;
     const multiPage = pagination.pages - minPage >= 1;
@@ -707,7 +709,8 @@ export default class TagPage extends Component<PageProps> {
         setCanonical(canonicalUrl);
         this.setState({ loading: false, data, post: null, error: null });
       }
-    } catch (err) {
+    } catch (e) {
+      const err = e as { status?: number; message?: string };
       const msg =
         err.status === 404 ? "Not found." : err.message || "Failed to load.";
       this.setState({ loading: false, data: null, post: null, error: msg });

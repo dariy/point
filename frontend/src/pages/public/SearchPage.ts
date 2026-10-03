@@ -16,6 +16,7 @@ import { Component } from '../../components/Component.ts';
 import { Pagination } from '../../components/shared/Pagination.ts';
 import { listPosts } from '../../api/posts.ts';
 import { listTags } from '../../api/tags.ts';
+import type { Tag } from '../../api/tags.ts';
 import { getNavTags, getSettings, setPagination } from '../../store.ts';
 import { html, setHTML } from '../../utils/helpers.ts';
 import { GridPager } from '../../core/gridPager.ts';
@@ -32,13 +33,13 @@ export default class SearchPage extends Component<PageProps> {
   _resizeGate: ReturnType<typeof createResizeGate>;
   _pager: GridPager;
   _loadedVc: ViewContext | undefined;
-  _refitRefresh: boolean;
-  _loadedPerPage: number;
-  _fitOwned: boolean;
+  _refitRefresh = false;
+  _loadedPerPage = 0;
+  _fitOwned = false;
   _resizeTimer: ReturnType<typeof setTimeout> | undefined;
   _resizeHandler: (() => void) | undefined;
   _unwatchChrome: (() => void) | null | undefined;
-  _postChildren: PostListHandle[];
+  _postChildren: PostListHandle[] = [];
 
   constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
@@ -208,7 +209,7 @@ export default class SearchPage extends Component<PageProps> {
       });
     } else {
       const mod = active === 'dynamic-post-list' ? await import('../../plugins/dynamic-post-list/index.ts') : await import('../../plugins/simple-post-list/index.ts');
-      gridComp = mod.mount(this.$('#grid-mount'), {
+      gridComp = mod.mount(this.$('#grid-mount')!, {
         posts,
         showViewCount: !!settings.show_view_counts,
         emptyMessage: 'No posts matched your search.'
@@ -248,14 +249,14 @@ export default class SearchPage extends Component<PageProps> {
     page,
     pages,
     total
-  }) {
+  }: { page: number; pages: number; total: number }) {
     const existing = this._postChildren[1];
     if (pages > 1) {
       const props = {
         page,
         pages,
         total,
-        onPage: p => ViewContext.update({
+        onPage: (p: number) => ViewContext.update({
           page: p
         })
       };
@@ -345,7 +346,7 @@ export default class SearchPage extends Component<PageProps> {
         loading: false,
         data: null,
         tags: [],
-        error: err.message || 'Failed to search.'
+        error: (err as Error).message || 'Failed to search.'
       });
       return;
     }
@@ -384,7 +385,7 @@ export default class SearchPage extends Component<PageProps> {
     const perPage = vc.perPage || cachedPerPage(this._minPerPage());
     this._loadedPerPage = perPage;
     const params: GridFetchParams = {
-      q: vc.query,
+      q: vc.query ?? undefined,
       page: vc.page,
       per_page: perPage,
       status: 'published'
@@ -453,7 +454,7 @@ export default class SearchPage extends Component<PageProps> {
   _renderTagResults() {
     const mount = this.$('#tag-results-mount');
     if (!mount) return;
-    const tagsHtml = this.state.tags.map(t => html`
+    const tagsHtml = this.state.tags.map((t: Tag) => html`
       <a href="/tags/${t.slug}" class="search-tag-chip">
         <span class="search-tag-chip-name">${t.name}</span>
         <span class="search-tag-chip-count">${t.post_count}</span>
@@ -527,7 +528,7 @@ export default class SearchPage extends Component<PageProps> {
         loading: false,
         data: null,
         tags: [],
-        error: err.message || 'Failed to search.'
+        error: (err as Error).message || 'Failed to search.'
       });
     }
   }
