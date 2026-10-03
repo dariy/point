@@ -34,7 +34,7 @@ export function setupListFilters(
   { state, onSort, onSearch, onParentFilter, onQuickFilter, onClear }: ListFilterOptions,
 ): void {
   container.querySelectorAll<HTMLElement>('.tm-sortable-header').forEach(th => {
-    th.addEventListener('click', () => onSort(th.dataset.field));
+    th.addEventListener('click', () => onSort(th.dataset.field ?? ''));
   });
 
   const searchInput = (container.querySelector('.tm-list-search') as HTMLInputElement|null);
@@ -47,14 +47,14 @@ export function setupListFilters(
 
   container.querySelectorAll<HTMLElement>('.tm-parent-filter-btn').forEach(btn => {
     btn.addEventListener('click', () => onParentFilter({
-      id: parseInt(btn.dataset.parentId, 10),
-      name: btn.dataset.parentName
+      id: parseInt(btn.dataset.parentId ?? '', 10),
+      name: btn.dataset.parentName ?? ''
     }));
   });
 
   container.querySelectorAll<HTMLElement>('.tm-quick-filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const key = btn.dataset.flag;
+      const key = btn.dataset.flag ?? '';
       const active = state().listFilterFlags.includes(key);
       btn.classList.toggle('btn-primary', !active);
       btn.classList.toggle('btn-secondary', active);

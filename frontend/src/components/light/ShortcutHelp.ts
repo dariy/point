@@ -91,10 +91,10 @@ export class ShortcutHelp extends Component {
     releaseScrollLock(this);
   }
 
-  _onKeyDownGlobal(e) {
+  _onKeyDownGlobal(e: KeyboardEvent) {
     if (e.key === '?' && !this.state.isOpen) {
       // Don't trigger if typing in an input
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? '')) return;
       e.preventDefault();
       this.open();
     }

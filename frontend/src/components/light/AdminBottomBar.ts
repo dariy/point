@@ -21,7 +21,7 @@ export class AdminBottomBar extends Component<AdminBottomBarProps> {
   render() {
     const { currentPath = '' } = this.props;
 
-    const navItem = (href, icon, label, exact = false) => {
+    const navItem = (href: string, icon: string, label: string, exact = false) => {
       const active = exact ? currentPath === href : currentPath === href || currentPath.startsWith(href + '/');
       const ariaCurrent = active ? ' aria-current="page"' : '';
       return html`
@@ -81,7 +81,7 @@ export class AdminBottomBar extends Component<AdminBottomBarProps> {
     `;
   }
 
-  _renderMoreItem(href, icon, label) {
+  _renderMoreItem(href: string, icon: string, label: string) {
     const active = this.props.currentPath === href || this.props.currentPath?.startsWith(href + '/');
     return html`
       <a href="${href}" class="more-grid-item ${active ? 'active' : ''}">
@@ -93,7 +93,7 @@ export class AdminBottomBar extends Component<AdminBottomBarProps> {
   afterRender() {
     this.subscribeStore(onPluginToggled, () => this.setState({}));
 
-    const overlay = this.$('#more-sheet-overlay');
+    const overlay = this.$('#more-sheet-overlay')!;
     const moreBtn = this.$('#bottom-bar-more');
     const closeBtn = this.$('#more-sheet-close');
 

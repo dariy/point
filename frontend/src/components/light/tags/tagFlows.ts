@@ -271,7 +271,7 @@ export function openMergeDialog({
       try {
         await mergeTags(loserId, {
           winner_id: winnerId,
-          keep_redirect: keepRedirect
+          keep_redirect: keepRedirect ?? false
         });
         onDone?.();
         setToast({
@@ -280,7 +280,7 @@ export function openMergeDialog({
         });
       } catch (err) {
         setToast({
-          message: err.message || 'Merge failed.',
+          message: (err as Error).message || 'Merge failed.',
           type: 'error'
         });
       }
@@ -337,10 +337,10 @@ export function openMoveDialog({
     }),
     onMount: overlay => {
       // Re-offer positions whenever the chosen parent changes.
-      overlay.querySelector('.tm-picker-list').addEventListener('change', e => {
+      overlay.querySelector('.tm-picker-list')!.addEventListener('change', e => {
         const input = e.target as HTMLInputElement;
         if (input.name === 'tm-move-parent') {
-          setHTML(overlay.querySelector('.tm-move-position-select'), html`${positionOptions(tags, parseInt(input.value, 10), tagId)}`);
+          setHTML(overlay.querySelector<HTMLElement>('.tm-move-position-select')!, html`${positionOptions(tags, parseInt(input.value, 10), tagId)}`);
         }
       });
     },
@@ -354,7 +354,7 @@ export function openMoveDialog({
         if (nextParents) await setTagParents(tagId, nextParents);
         await moveTag(tagId, {
           parent_id: parentId,
-          after_id: afterId
+          after_id: afterId ?? null
         });
         onDone?.();
         setToast({
@@ -363,7 +363,7 @@ export function openMoveDialog({
         });
       } catch (err) {
         setToast({
-          message: err.message || 'Move failed.',
+          message: (err as Error).message || 'Move failed.',
           type: 'error'
         });
       }
@@ -413,20 +413,20 @@ export function openDropOnConfirm({
           <button class="btn btn-secondary" id="drop-cancel-btn">Cancel</button>
         </div>
       </div>`);
-  overlay.querySelector('#drop-cancel-btn').addEventListener('click', close);
-  overlay.querySelector('#drop-move-btn').addEventListener('click', async () => {
+  overlay.querySelector('#drop-cancel-btn')!.addEventListener('click', close);
+  overlay.querySelector('#drop-move-btn')!.addEventListener('click', async () => {
     close();
     try {
       await setTagParents(dragId, [targetId]);
       onDone?.();
     } catch (err) {
       setToast({
-        message: err.message || 'Move failed.',
+        message: (err as Error).message || 'Move failed.',
         type: 'error'
       });
     }
   });
-  overlay.querySelector('#drop-also-btn').addEventListener('click', async () => {
+  overlay.querySelector('#drop-also-btn')!.addEventListener('click', async () => {
     close();
     try {
       const nextParents = parentsWith(drag, targetId);
@@ -434,7 +434,7 @@ export function openDropOnConfirm({
       onDone?.();
     } catch (err) {
       setToast({
-        message: err.message || 'Move failed.',
+        message: (err as Error).message || 'Move failed.',
         type: 'error'
       });
     }

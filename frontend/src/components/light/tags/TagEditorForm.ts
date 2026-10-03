@@ -44,7 +44,7 @@ export function renderTagEditorForm(
 ): RawHtml {
   const isEdit = !!tag;
   const f = tag || ({} as Partial<TreeTag>);
-  const selfId = isEdit ? f.id : null;
+  const selfId = isEdit ? f.id ?? null : null;
   const { selParents, selChildren } = tagEditorSelection(tag, parentId);
 
   const existingLat = f.latitude ?? (f.locations?.[0]?.latitude ?? null);
@@ -222,8 +222,9 @@ export function renderTagToggles(inputName: string, allTags: TreeTag[], selfId: 
   available.forEach(t => {
     (t.parents || []).forEach(p => {
       if (treeById.has(p.id)) {
-        if (!childrenOf.has(p.id)) childrenOf.set(p.id, []);
-        childrenOf.get(p.id).push(t);
+        const siblings = childrenOf.get(p.id) ?? [];
+        siblings.push(t);
+        childrenOf.set(p.id, siblings);
       }
     });
   });

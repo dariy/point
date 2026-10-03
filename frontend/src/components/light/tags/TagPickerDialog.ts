@@ -111,9 +111,9 @@ export function openTagPickerDialog<T, E = unknown>({
         </div>
       </div>`);
 
-  overlay.querySelector(`#${cancelId}`).addEventListener('click', close);
+  overlay.querySelector(`#${cancelId}`)!.addEventListener('click', close);
 
-  overlay.querySelector(`.${searchClass}`).addEventListener('input', e => {
+  overlay.querySelector(`.${searchClass}`)!.addEventListener('input', e => {
     const q = (e.target as HTMLInputElement).value.trim().toLowerCase();
     overlay.querySelectorAll(`.${itemClass}`).forEach(item => {
       const name = item.querySelector(`.${nameClass}`)?.textContent.toLowerCase() || '';
@@ -121,7 +121,7 @@ export function openTagPickerDialog<T, E = unknown>({
     });
   });
 
-  overlay.querySelector(`#${confirmId}`).addEventListener('click', async () => {
+  overlay.querySelector(`#${confirmId}`)!.addEventListener('click', async () => {
     const radio = overlay.querySelector(`input[name="${radioName}"]:checked`) as HTMLInputElement | null;
     if (!radio) {
       onEmpty();

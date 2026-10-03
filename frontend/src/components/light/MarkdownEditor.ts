@@ -9,12 +9,16 @@ import Prism from '../../../vendor/prismjs/prism-core.js';
 // The language files below are vendored global scripts reading a bare `Prism`,
 // so the module's export has to be on the global before they are imported.
 window.Prism = Prism;
+
+// The vendored typings list only the built-in languages; markdown and
+// point-md are added at runtime by the imports and the block below.
+const languages = Prism.languages as typeof Prism.languages & Record<string, Parameters<typeof Prism.highlight>[1] | undefined>;
 import '../../../vendor/prismjs/prism-markup.js';
 import '../../../vendor/prismjs/prism-markdown.js';
 
 // Extend markdown with point-specific tokens for image paths and fenced divs
-if (Prism.languages.markdown) {
-  Prism.languages['point-md'] = Prism.languages.extend('markdown', {});
+if (languages.markdown) {
+  languages['point-md'] = Prism.languages.extend('markdown', {});
   Prism.languages.insertBefore('point-md', 'hr', {
     'image-path': {
       pattern: /^\/\d{4}\/\d{2}\/.+$/m,
@@ -69,29 +73,29 @@ export class MarkdownEditor extends Component<MarkdownEditorProps> {
     `;
   }
   afterRender() {
-    const editorElement = this.container.querySelector(`#${this.id}`);
-    const maximizeBtn = this.container.querySelector('.textarea-maximize-btn');
-    const saveBtn = this.container.querySelector('.textarea-save-btn');
+    const editorElement = this.container.querySelector<HTMLElement>(`#${this.id}`);
+    const maximizeBtn = this.container.querySelector<HTMLButtonElement>('.textarea-maximize-btn');
+    const saveBtn = this.container.querySelector<HTMLButtonElement>('.textarea-save-btn');
     if (!editorElement) return;
     if (this.isMaximized) {
       acquireScrollLock(this);
     }
-    const lang = Prism.languages['point-md'] || Prism.languages.markdown;
-    const langKey = Prism.languages['point-md'] ? 'point-md' : 'markdown';
-    const highlight = editor => {
+    const lang = languages['point-md'] || languages.markdown;
+    const langKey = languages['point-md'] ? 'point-md' : 'markdown';
+    const highlight = (editor: HTMLElement) => {
       if (lang) {
         // Prism emits markup by design; it is the sanctioned raw() the
         // convention names alongside the SVG constants, and its input here is
         // the editor's own textContent.
         // eslint-disable-next-line point/restricted-syntax
-        setHTML(editor, html`${raw(Prism.highlight(editor.textContent, lang, langKey))}`);
+        setHTML(editor, html`${raw(Prism.highlight(editor.textContent ?? '', lang, langKey))}`);
       }
     };
     this.jar = CodeJar(editorElement, highlight, {
       tab: '  '
     });
     this.jar.updateCode(this.value || '');
-    this.jar.onUpdate(code => {
+    this.jar.onUpdate((code: string) => {
       this.value = code;
       this.onChange(code);
     });
@@ -111,8 +115,8 @@ export class MarkdownEditor extends Component<MarkdownEditorProps> {
         }));
       });
     }
-    editorElement.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && this.isMaximized) {
+    editorElement.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && this.isMaximized && maximizeBtn) {
         this._toggleMaximize(editorElement, maximizeBtn, saveBtn);
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -123,7 +127,7 @@ export class MarkdownEditor extends Component<MarkdownEditorProps> {
       }
     });
   }
-  _toggleMaximize(editorElement, btn, saveBtn) {
+  _toggleMaximize(editorElement: HTMLElement, btn: HTMLButtonElement, saveBtn: HTMLButtonElement | null) {
     this.isMaximized = !this.isMaximized;
     editorElement.classList.toggle('is-maximized', this.isMaximized);
     btn.classList.toggle('is-maximized', this.isMaximized);
@@ -149,7 +153,7 @@ export class MarkdownEditor extends Component<MarkdownEditorProps> {
   getValue() {
     return this.value;
   }
-  insertAtEnd(text) {
+  insertAtEnd(text: string) {
     if (!this.jar) return;
     const current = this.jar.toString();
     this.jar.updateCode(current.trimEnd() + '\n' + text);

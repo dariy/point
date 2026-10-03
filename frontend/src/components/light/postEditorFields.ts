@@ -13,6 +13,8 @@ import { html, raw } from "../../utils/helpers.ts";
 import type { RawHtml } from "../../utils/helpers.ts";
 import { defaultPostTitle } from "../../utils/formatters.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
+import type { Post, PostTag } from "../../api/posts.ts";
+import type { getInstagramStatus } from "../../api/instagram.ts";
 import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, GRIP_SVG } from "../../utils/icons.ts";
 
 /** One collapsible editor group: its label, summary row and body. */
@@ -26,33 +28,47 @@ export interface FieldGroup {
   hidden?: boolean;
 }
 
+type IgStatus = Awaited<ReturnType<typeof getInstagramStatus>>;
+
+/** The editor state buildFieldGroups reads. */
+export interface FieldGroupsInput {
+  /** Null while a new post has no data yet. */
+  post: Partial<Post> | null;
+  isNew?: boolean;
+  editorMode?: string;
+  maximizedField?: string | null;
+  igStatus: Partial<IgStatus> | null;
+  publishingToInstagram?: boolean;
+  anyActionInProgress?: boolean;
+}
+
 /** Trim a value to a one-line summary length. */
-export function truncate(str, max = 24) {
+export function truncate(str: string, max = 24) {
   return str.length > max ? str.slice(0, max).trimEnd() + "…" : str;
 }
 
 /** Convert a UTC ISO string to a datetime-local input value (local time). */
-export function toDatetimeLocal(isoStr) {
+export function toDatetimeLocal(isoStr: string | null | undefined) {
   if (!isoStr) return "";
   const d = new Date(isoStr);
-  const pad = (n) => String(n).padStart(2, "0");
+  const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function scheduleSummary(scheduledAt) {
+export function scheduleSummary(scheduledAt: string | null | undefined) {
   if (!scheduledAt) return "not set";
   const d = new Date(scheduledAt);
   return isNaN(d.getTime()) ? "not set" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export const toTagNames = (tags) =>
+export const toTagNames = (tags: (string | PostTag)[] | null | undefined) =>
   (tags || []).map((t) => (typeof t === "string" ? t : t.name));
 
-function instagramGroup(post, igStatus, publishingToInstagram, anyActionInProgress, isNew = false) {
+function instagramGroup(post: Partial<Post>, igStatus: Partial<IgStatus>, publishingToInstagram: boolean | undefined, anyActionInProgress: boolean | undefined, isNew = false) {
   const igShare = isNew ? (igStatus.default_share ?? false) : (post.instagram_share ?? false);
   const igSt = post.instagram_status || "none";
   const igError = post.instagram_error || "";
-  const igStatusBadgeClass = { published: "badge-success", error: "badge-danger", failed: "badge-danger", publishing: "badge-primary" }[igSt] ?? "badge-draft";
+  const igStatusBadgeClass = ({ published: "badge-success", error: "badge-danger", failed: "badge-danger", publishing: "badge-primary" } as Record<string, string>)[igSt] ?? "badge-draft";
   const canPublishNow = !isNew && igStatus.connected && igShare && igSt !== "published";
 
   return {
@@ -79,8 +95,8 @@ function instagramGroup(post, igStatus, publishingToInstagram, anyActionInProgre
  * only when their plugin is on, so a disabled plugin leaves no empty block
  * behind — and no entry in the layout for arrange mode to move.
  */
-export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igStatus, publishingToInstagram, anyActionInProgress }) {
-  const p = post || {};
+export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igStatus, publishingToInstagram, anyActionInProgress }: FieldGroupsInput) {
+  const p: Partial<Post> = post || {};
   const title = p.title || "";
   const slug = p.slug || "";
   // "Page" is surfaced as a status in the UI but is really type=page (always
@@ -92,7 +108,7 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
   const statusOpts = ["draft", "published", "scheduled", "hidden", "page"]
     .map(s => html`<option value="${s}"${status === s ? " selected" : ""}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`);
 
-  const aiBtn = (field) => pluginHost.isEnabled("ai-analysis") ? html`<button class="field-ai-btn" data-field="${field}" type="button" title="Fill with AI" ${anyActionInProgress ? "disabled" : ""} aria-label="AI fill ${field}">${raw(SPARKLE_SVG)}</button>` : '';
+  const aiBtn = (field: string) => pluginHost.isEnabled("ai-analysis") ? html`<button class="field-ai-btn" data-field="${field}" type="button" title="Fill with AI" ${anyActionInProgress ? "disabled" : ""} aria-label="AI fill ${field}">${raw(SPARKLE_SVG)}</button>` : '';
 
   const modeToggle = html`
       <div class="editor-mode-toggle">
@@ -109,14 +125,14 @@ export function buildFieldGroups({ post, isNew, editorMode, maximizedField, igSt
   const statusSummary = status.charAt(0).toUpperCase() + status.slice(1) + featuredSummary;
   const slugSummary = slug || "auto";
   const excerptSummary = excerpt.trim() ? truncate(excerpt.trim()) : "auto";
-  const immersiveSummary = { immersive: "Immersive", "non-immersive": "Non-immersive" }[p.immersive_mode] || "Auto";
+  const immersiveSummary = ({ immersive: "Immersive", "non-immersive": "Non-immersive" } as Record<string, string>)[p.immersive_mode ?? ""] || "Auto";
   const cssSummary = (p.css || "").trim() ? "custom" : "none";
   const tagNames = toTagNames(p.tags);
 
   const groups: Record<string, FieldGroup> = {
     title: {
       label: "Post title",
-      summary: title ? truncate(p.title) : "auto",
+      summary: title ? truncate(title) : "auto",
       body: html`
           <div class="title-row">
             <div class="title-input-wrapper">
