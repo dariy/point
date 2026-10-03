@@ -81,7 +81,8 @@ describe('Trusted Types', () => {
     // A geo-tagged tag, so the map has a divIcon marker to open a popup on.
     await api('/api/tags', { name: 'Paris', slug: 'tt-paris', kind: 'location', latitude: 48.8566, longitude: 2.3522 });
     // The CSS editor is behind this plugin, and it is off by default.
-    await api('/api/plugins/custom-css', { enabled: true }, 'PATCH');
+    const css = await api('/api/plugins/custom-css', { enabled: true }, 'PATCH');
+    if (!css.ok) throw new Error('Enabling custom-css failed: ' + css.status);
 
     browser = await chromium.launch();
     context = await browser.newContext();
@@ -238,6 +239,18 @@ describe('Trusted Types', () => {
     const path = '/light/themes';
     const viol = await violationsAt(path, 1500);
     const sel = '.codejar-editor.language-css';
+    // ThemesPage mounts the editor only after its three API calls resolve, and
+    // only when custom-css is in the page's plugin manifest. Wait for it, and
+    // on a miss report which of those conditions failed.
+    await page.waitForSelector(sel, { timeout: 10000 }).catch(async () => {
+      const state = await page.evaluate(() => ({
+        url: location.href,
+        customCss: (window.__PLUGINS__ || []).some((e) => e.id === 'custom-css'),
+        spinner: !!document.querySelector('.loading-spinner'),
+        error: document.querySelector('.error-state')?.textContent || null,
+      }));
+      throw new Error(`the CSS editor did not mount: ${JSON.stringify(state)} errors=${JSON.stringify(pageErrors)}`);
+    });
     await page.click(sel);
     await page.keyboard.type('.probe { color: red;');
     await page.waitForTimeout(400);
@@ -248,8 +261,12 @@ describe('Trusted Types', () => {
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(400);
     const undone = await page.evaluate((s) => document.querySelector(s).textContent, sel);
+    // CodeJar auto-closes the `{`, so an undo step taken mid-typing can hold a
+    // prefix of the typed text plus that `}`. Strip one trailing `}` before the
+    // prefix check; a missing `{` still fails it.
+    const undonePrefix = undone.endsWith('}') ? undone.slice(0, -1) : undone;
     assert.ok(
-      undone === '' || typed.startsWith(undone),
+      undone === '' || typed.startsWith(undonePrefix),
       `undo left something that was never typed: ${JSON.stringify(undone)} (typed ${JSON.stringify(typed)})`,
     );
     await page.keyboard.press('Control+Shift+z');
