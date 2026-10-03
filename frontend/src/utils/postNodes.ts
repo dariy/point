@@ -35,7 +35,7 @@ const FIRST_IMAGE_IN_TEXT_RE =
   /(?:^|["'\s(])(\/\d{4}\/\d{2}\/.+?\.(?:jpe?g|png|webp|gif|avif|heic|tiff|bmp))(?:["'\s)]|$)/i;
 
 /** @param content - Post markdown. */
-export function parseNodes(content: string): EditorNode[] {
+export function parseNodes(content: string | undefined): EditorNode[] {
   const lines = (content || "").split("\n");
   const nodes: EditorNode[] = [];
   let textBuf: string[] = [];

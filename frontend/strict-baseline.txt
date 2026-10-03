@@ -1,5 +1,5 @@
 # tsc --strict errors per directory. Written by scripts/ts-strict-ratchet.sh --update.
-354 frontend/src/pages/light
+169 frontend/src/pages/light
 45 frontend/src/pages/public
 23 frontend/src/plugins/breadcrumbs
 59 frontend/src/plugins/comments

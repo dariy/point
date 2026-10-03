@@ -36,10 +36,15 @@ import { buildFieldGroups, renderGroup, truncate, toTagNames } from "../../compo
 
 import type { PageProps } from '../../router.ts';
 import type { Media } from '../../api/media.ts';
+import type { ShareEntry } from '../../utils/idb.ts';
 import type { EditorNode } from '../../utils/postNodes.ts';
 
 const AUTOSAVE_IDLE_MS = 5_000;
 const AUTOSAVE_BUSY_MS = 30_000;
+
+/** What an AI analysis runs on: a library item, or only a path from the post. */
+type AnalyzeTarget = Pick<Media, "path"> & Partial<Pick<Media, "id">>;
+
 export default class PostEditPage extends Component<PageProps> {
   _pinned: ReturnType<typeof readPinnedFields>;
   _order: ReturnType<typeof readFieldOrder>;
@@ -94,6 +99,20 @@ export default class PostEditPage extends Component<PageProps> {
     this._analyzing = false;
     this._idleTimer = null;
     this._maxWaitTimer = null;
+    this._chipInterval = null;
+    this._detachReorder = null;
+    this._detachFileDrop = null;
+    this._mediaPicker = null;
+    this._tagsInputRef = null;
+    this._cssEditorRef = null;
+    this._markdownEditorRef = null;
+    this._visualEditorRef = null;
+    this._mediaByPath = null;
+    this._onKeyDown = null;
+    this._onAutosaveRetry = null;
+    this._debouncedPreview = null;
+    this._previewMql = null;
+    this._onPreviewMqlChange = null;
   }
 
   /**
@@ -104,20 +123,20 @@ export default class PostEditPage extends Component<PageProps> {
    * the container these arrive at does not move.
    */
   actions = {
-    "publish-now"() { this._save({ status: "published" }); },
-    "mark-hidden"() { this._save({ status: "hidden" }); },
-    unpublish() { this._save({ status: "draft" }); },
-    analyze() { this._analyzeNow(); },
-    arrange() { this._toggleArrange(true); },
-    "toggle-preview"() { this._toggleLivePreview(); },
-    "preview-link"() { this._generatePreviewLink(); },
+    "publish-now"(this: PostEditPage) { this._save({ status: "published" }); },
+    "mark-hidden"(this: PostEditPage) { this._save({ status: "hidden" }); },
+    unpublish(this: PostEditPage) { this._save({ status: "draft" }); },
+    analyze(this: PostEditPage) { this._analyzeNow(); },
+    arrange(this: PostEditPage) { this._toggleArrange(true); },
+    "toggle-preview"(this: PostEditPage) { this._toggleLivePreview(); },
+    "preview-link"(this: PostEditPage) { this._generatePreviewLink(); },
     // Same tab, like every other public-site link in the admin. The editor is
     // the one place where leaving can cost something — edits typed inside the
     // autosave idle window are still only in the form — so flush them first
     // and let the navigation follow the save.
-    "view-on-site"() { this._viewOnSite(); },
-    schedule() {
-      const sel = this.$("#status-select");
+    "view-on-site"(this: PostEditPage) { this._viewOnSite(); },
+    schedule(this: PostEditPage) {
+      const sel = this.$("#status-select") as HTMLSelectElement | null;
       if (sel) {
         sel.value = "scheduled";
         sel.dispatchEvent(new Event("change"));
@@ -125,8 +144,8 @@ export default class PostEditPage extends Component<PageProps> {
       this._revealGroup("schedule");
       this.timer(() => this.$("#schedule-input")?.focus(), 10);
     },
-    delete() {
-      const title = this.$("#title-input")?.value
+    delete(this: PostEditPage) {
+      const title = (this.$("#title-input") as HTMLInputElement | null)?.value
         || this.state.post?.title || "this post";
       this._showConfirm("Move to Trash", `Move "${title}" to Trash?`, "Move to Trash",
         "danger", () => this._deletePost(this.state.postId));
@@ -223,7 +242,7 @@ export default class PostEditPage extends Component<PageProps> {
       anyActionInProgress
     });
     const keys = Object.keys(groups).sort((a, b) => this._orderIndex(a) - this._orderIndex(b));
-    const renderWhere = pinned => keys.filter(k => this._pinned.has(k) === pinned).map(k => renderGroup(k, groups[k], pinned));
+    const renderWhere = (pinned: boolean) => keys.filter(k => this._pinned.has(k) === pinned).map(k => renderGroup(k, groups[k], pinned));
     const pinnedHtml = renderWhere(true);
     const detailsHtml = renderWhere(false);
     return html`
@@ -264,12 +283,12 @@ export default class PostEditPage extends Component<PageProps> {
   }
 
   /** Position of a group in the user's order; anything unknown sorts last. */
-  _orderIndex(key) {
+  _orderIndex(key: string) {
     return orderIndex(this._order, key);
   }
 
   /** Move `key` to sit directly after `afterKey` (or first, when null), and persist. */
-  _moveInOrder(key, afterKey) {
+  _moveInOrder(key: string, afterKey: string | null) {
     this._order = moveInOrder(this._order, key, afterKey);
     persistFieldOrder(this._order);
   }
@@ -283,7 +302,7 @@ export default class PostEditPage extends Component<PageProps> {
    * handles next to every field would be permanent clutter around the one thing
    * the page is actually for.
    */
-  _toggleArrange(on) {
+  _toggleArrange(on?: boolean) {
     const arranging = typeof on === "boolean" ? on : !this.state.arranging;
     this.state.arranging = arranging;
     this.$(".editor-layout")?.classList.toggle("is-arranging", arranging);
@@ -306,7 +325,7 @@ export default class PostEditPage extends Component<PageProps> {
         item,
         to,
         afterEl
-      }) => this._dropGroup(item, to, afterEl)
+      }: { item: HTMLElement; to: HTMLElement | null; afterEl: Element | null }) => this._dropGroup(item, to, afterEl)
     });
 
     // Keyboard equivalent: the handle is a button, so arrows are free. Up/down
@@ -320,6 +339,7 @@ export default class PostEditPage extends Component<PageProps> {
       if (!handle) return;
       const group = (handle.closest(".details-group") as HTMLElement);
       const host = group.parentElement;
+      if (!host) return;
       if (e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();
         const sibs = [...host.querySelectorAll(":scope > .details-group")];
@@ -339,9 +359,9 @@ export default class PostEditPage extends Component<PageProps> {
       if (!to || to === host) return;
       e.preventDefault();
       // Land at the position the shared order asks for, not at the end.
-      const idx = this._orderIndex(group.dataset.group);
+      const idx = this._orderIndex(group.dataset.group ?? "");
       const sibs = ([...to.querySelectorAll(":scope > .details-group")] as HTMLElement[]);
-      const after = sibs.filter(s => this._orderIndex(s.dataset.group) < idx).pop() || null;
+      const after = sibs.filter(s => this._orderIndex(s.dataset.group ?? "") < idx).pop() || null;
       this._dropGroup(group, to, after);
       handle.focus();
     });
@@ -354,7 +374,7 @@ export default class PostEditPage extends Component<PageProps> {
    * Details, so the move updates the stored sides too — one gesture says both
    * where a block sits and which list it belongs to.
    */
-  _dropGroup(item, to, afterEl) {
+  _dropGroup(item: HTMLElement, to: HTMLElement | null, afterEl: Element | null) {
     const key = item.dataset.group;
     if (!key || !to) return;
     const pinnedHost = this.$("#pinned-fields");
@@ -367,12 +387,12 @@ export default class PostEditPage extends Component<PageProps> {
       item.classList.toggle("is-pinned", pinned);
       // A block on the canvas *is* the field, so it is never collapsed there;
       // back in Details it returns to being a summary row.
-      item.open = pinned;
+      (item as HTMLDetailsElement).open = pinned;
     }
     let after = afterEl;
     while (after && !after.classList?.contains("details-group")) after = after.previousElementSibling;
     to.insertBefore(item, after ? after.nextSibling : to.firstChild);
-    this._moveInOrder(key, after?.dataset.group || null);
+    this._moveInOrder(key, (after as HTMLElement | null)?.dataset.group || null);
     this._updatePanelEmpty();
   }
 
@@ -383,12 +403,12 @@ export default class PostEditPage extends Component<PageProps> {
   }
 
   /** The Schedule group is only meaningful for scheduled posts — hide it elsewhere. */
-  _setScheduleVisible(on) {
+  _setScheduleVisible(on: boolean) {
     this.$('.details-group[data-group="schedule"]')?.classList.toggle("is-hidden", !on);
   }
 
   /** Bring a group into view wherever it lives: expanded, and with the panel open if unpinned. */
-  _revealGroup(key) {
+  _revealGroup(key: string) {
     if (!this._pinned.has(key)) this._toggleDetails(true);
     this.$(`.details-group[data-group="${key}"]`)?.setAttribute("open", "");
   }
@@ -451,7 +471,7 @@ export default class PostEditPage extends Component<PageProps> {
       (this.$(sel) as HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|null);
     const check = (sel: string) =>
       (this.$(sel) as HTMLInputElement|null);
-    const set = (id, text) => {
+    const set = (id: string, text: string) => {
       const el = this.$(`#${id}`);
       if (el) el.textContent = text;
     };
@@ -522,7 +542,7 @@ export default class PostEditPage extends Component<PageProps> {
     // edits not yet flushed by autosave (title/slug/excerpt/tags/css), plus
     // lose focus and scroll position.
     const splitButton = this.$(".header-split-button");
-    const setMenuOpen = open => {
+    const setMenuOpen = (open: boolean) => {
       this.state.menuOpen = open;
       splitButton?.classList.toggle("is-menu-open", open);
     };
@@ -554,7 +574,7 @@ export default class PostEditPage extends Component<PageProps> {
     this.$("#mode-text-btn")?.addEventListener("click", () => this._switchMode("text"));
     this.$("#mode-visual-btn")?.addEventListener("click", () => this._switchMode("visual"));
     this.$$(".field-ai-btn").forEach(btn => {
-      btn.addEventListener("click", () => this._analyzeField(btn.dataset.field));
+      btn.addEventListener("click", () => this._analyzeField(btn.dataset.field ?? ""));
     });
     this._tagsInputRef = this.mountChild(TagsInput, "#tags-input-mount", {
       tags: toTagNames(this.state.post?.tags),
@@ -586,16 +606,16 @@ export default class PostEditPage extends Component<PageProps> {
     this.container.addEventListener("textarea:maximize", e => {
       const {
         isMaximized
-      } = e.detail;
+      } = (e as CustomEvent<{ isMaximized: boolean }>).detail;
       let field = null;
       if (isMaximized) {
-        const target = e.target;
+        const target = e.target as HTMLElement;
         if (target.id === "title-input") field = "title";else if (target.id === "excerpt-editor") field = "excerpt";else if (target.closest("#tags-input-mount")) field = "tags";else if (target.closest("#css-editor-mount")) field = "css";else if (target.closest("#content-editor-mount")) field = "content";
       }
       this.state.maximizedField = field;
     });
     if (this._onKeyDown) document.removeEventListener("keydown", this._onKeyDown);
-    const onKeyDown = e => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         this._save();
@@ -681,7 +701,7 @@ export default class PostEditPage extends Component<PageProps> {
 
     // Re-render the preview when the viewport grows into ultrawide range.
     if (window.matchMedia) {
-      this._previewMql?.removeEventListener?.("change", this._onPreviewMqlChange);
+      if (this._onPreviewMqlChange) this._previewMql?.removeEventListener?.("change", this._onPreviewMqlChange);
       this._previewMql = window.matchMedia("(min-width: 112em)");
       this._onPreviewMqlChange = e => {
         if (e.matches && this.state.showLivePreview) this._debouncedPreview?.();
@@ -720,7 +740,7 @@ export default class PostEditPage extends Component<PageProps> {
    * `deleting` is what parks the autosave — a queued idle save would otherwise
    * fire against the row we just trashed and resurrect it as a draft.
    */
-  async _deletePost(id) {
+  async _deletePost(id: number | null) {
     // Never saved: the post exists only in this form, so there is nothing to
     // trash — just leave.
     if (!id) {
@@ -743,7 +763,7 @@ export default class PostEditPage extends Component<PageProps> {
         deleting: false
       });
       setToast({
-        message: err.message || "Move to Trash failed.",
+        message: (err as Error).message || "Move to Trash failed.",
         type: "error"
       });
     }
@@ -752,7 +772,7 @@ export default class PostEditPage extends Component<PageProps> {
     const path = this._extractImagePath();
     if (path) this._handleAnalyze({
       path
-    });else this._mediaPicker.open(items => this._handleAnalyze(items[0]));
+    });else this._mediaPicker?.open(items => this._handleAnalyze(items[0]));
   }
   _onInput() {
     // Mutate state directly — a full re-render here would wipe input values and
@@ -766,7 +786,7 @@ export default class PostEditPage extends Component<PageProps> {
     // Save ~5s after the user stops typing. The idle timer resets on every
     // keystroke, so a separate max-wait timer (not reset on input) guarantees
     // a save during long continuous typing.
-    clearTimeout(this._idleTimer);
+    clearTimeout(this._idleTimer ?? undefined);
     this._idleTimer = setTimeout(() => this._autosave(), AUTOSAVE_IDLE_MS);
     if (!this._maxWaitTimer) {
       this._maxWaitTimer = setTimeout(() => this._autosave(), AUTOSAVE_BUSY_MS);
@@ -774,9 +794,9 @@ export default class PostEditPage extends Component<PageProps> {
     this._debouncedPreview?.();
   }
   async _autosave() {
-    clearTimeout(this._idleTimer);
+    clearTimeout(this._idleTimer ?? undefined);
     this._idleTimer = null;
-    clearTimeout(this._maxWaitTimer);
+    clearTimeout(this._maxWaitTimer ?? undefined);
     this._maxWaitTimer = null;
     if (this._unmounted || this.state.saving || this.state.deleting || !this.state.hasPendingEdits) return;
     const data = this._applyPageType(this._collectFormData());
@@ -809,14 +829,14 @@ export default class PostEditPage extends Component<PageProps> {
         status: 'saved',
         lastSaved: Date.now()
       });
-      if (this._chipInterval) clearInterval(this._chipInterval);
+      if (this._chipInterval) clearInterval(this._chipInterval ?? undefined);
       this._chipInterval = setInterval(() => {
         if (getAutosaveStatus()?.status === 'saved') {
           setOfflineStatus({
             ...getOfflineStatus()
           }); // trigger re-render of sync pill
         } else {
-          clearInterval(this._chipInterval);
+          clearInterval(this._chipInterval ?? undefined);
         }
       }, 5000);
     } catch (err) {
@@ -831,7 +851,7 @@ export default class PostEditPage extends Component<PageProps> {
   // status=published. Map the chosen status onto the real (status, type) pair.
   // Done after overrides are merged so explicit status actions (publish/hidden/
   // draft) correctly turn a page back into a regular post.
-  _applyPageType(data) {
+  _applyPageType<T extends { status: string }>(data: T) {
     if (data.status === "page") return {
       ...data,
       status: "published",
@@ -884,7 +904,7 @@ export default class PostEditPage extends Component<PageProps> {
         status: 'failed'
       });
       setToast({
-        message: err.message || "Save failed.",
+        message: (err as Error).message || "Save failed.",
         type: "error"
       });
     }
@@ -893,22 +913,22 @@ export default class PostEditPage extends Component<PageProps> {
     this._detachReorder?.();
     this._unmounted = true;
     if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);
-    clearTimeout(this._idleTimer);
-    clearTimeout(this._maxWaitTimer);
-    clearInterval(this._chipInterval);
+    clearTimeout(this._idleTimer ?? undefined);
+    clearTimeout(this._maxWaitTimer ?? undefined);
+    clearInterval(this._chipInterval ?? undefined);
     this._detachFileDrop?.();
     this._mediaPicker?.destroy();
     this._mediaPicker = null;
     this._visualEditorRef = null;
     if (this._onKeyDown) document.removeEventListener("keydown", this._onKeyDown);
-    this._previewMql?.removeEventListener?.("change", this._onPreviewMqlChange);
+    if (this._onPreviewMqlChange) this._previewMql?.removeEventListener?.("change", this._onPreviewMqlChange);
   }
-  _insertMediaPaths(items) {
+  _insertMediaPaths(items: Media[]) {
     if (!items.length) return;
     this._rememberMedia(items);
     if (this.state.editorMode === "visual") {
       this._nodes = [...this._nodes, ...items.map(item => ({
-        type: "image",
+        type: "image" as const,
         path: item.path
       }))];
       this._mountVisualEditor();
@@ -922,7 +942,7 @@ export default class PostEditPage extends Component<PageProps> {
    * load from what the post already references, so without this an image
    * inserted afterwards would render without its EXIF panel until a reload.
    */
-  _rememberMedia(items) {
+  _rememberMedia(items: Media[]) {
     if (!this._mediaByPath) this._mediaByPath = {};
     for (const item of items) if (item && item.path) this._mediaByPath[item.path] = item;
   }
@@ -937,14 +957,14 @@ export default class PostEditPage extends Component<PageProps> {
       mediaByPath: this._mediaByPath || {},
       onChange: nodes => {
         this._nodes = nodes;
-        this._visualEditorRef.setProps({
+        this._visualEditorRef?.setProps({
           nodes: this._nodes
         });
         this._onInput();
       },
       onInput: () => this._onInput(),
-      onAddMedia: index => {
-        this._mediaPicker.open(items => {
+      onAddMedia: (index: number) => {
+        this._mediaPicker?.open(items => {
           if (!items.length) return;
           this._rememberMedia(items);
           this._nodes.splice(index, 0, ...items.map(item => ({
@@ -955,10 +975,10 @@ export default class PostEditPage extends Component<PageProps> {
           this._onInput();
         });
       },
-      onRename: (oldPath, newFilename) => this._handleRename(oldPath, newFilename)
+      onRename: (oldPath: string, newFilename: string) => this._handleRename(oldPath, newFilename)
     });
   }
-  async _handleRename(oldPath, newFilename) {
+  async _handleRename(oldPath: string, newFilename: string) {
     try {
       const {
         getMediaByPaths,
@@ -984,13 +1004,13 @@ export default class PostEditPage extends Component<PageProps> {
       });
     } catch (err) {
       setToast({
-        message: err.message || "Rename failed.",
+        message: (err as Error).message || "Rename failed.",
         type: "error"
       });
       throw err;
     }
   }
-  _switchMode(targetMode) {
+  _switchMode(targetMode: string) {
     if (this.state.editorMode === targetMode) return;
     const data = this._collectFormData();
     const post = {
@@ -1039,7 +1059,7 @@ export default class PostEditPage extends Component<PageProps> {
     if (this.props.query?.share === "pending") this._processShareQueue();
   }
   async _processShareQueue() {
-    let entries;
+    let entries: ShareEntry[];
     try {
       entries = await getAllShareEntries();
     } catch {
@@ -1086,7 +1106,7 @@ export default class PostEditPage extends Component<PageProps> {
         });
       } catch (err) {
         setToast({
-          message: `Failed to save offline share: ${err.message}`,
+          message: `Failed to save offline share: ${(err as Error).message}`,
           type: "error"
         });
       }
@@ -1099,7 +1119,7 @@ export default class PostEditPage extends Component<PageProps> {
       type: "success"
     });
   }
-  async _loadPost(id) {
+  async _loadPost(id: number) {
     try {
       const [post, igStatus] = await Promise.all([getPost(id), getInstagramStatus().catch(() => null)]);
       if (post.status) post.status = post.status.toLowerCase();
@@ -1109,7 +1129,7 @@ export default class PostEditPage extends Component<PageProps> {
       // Resolve exactly the paths this post references. This used to take the
       // first 200 media site-wide and hope: the listing is ordered by upload
       // time, so a post whose images sat past that window got no metadata at all.
-      const paths = this._nodes.filter(n => n.type === "image" && n.path).map(n => n.path);
+      const paths = this._nodes.flatMap(n => n.type === "image" && n.path ? [n.path] : []);
       if (paths.length) {
         try {
           const {
@@ -1141,6 +1161,7 @@ export default class PostEditPage extends Component<PageProps> {
       (this.$(sel) as HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|null);
     const check = (sel: string) =>
       (this.$(sel) as HTMLInputElement|null);
+    const schedule = field("#schedule-input")?.value;
     return {
       title: (field("#title-input")?.value || "").trim(),
       slug: (field("#slug-input")?.value || "").trim() || null,
@@ -1154,13 +1175,13 @@ export default class PostEditPage extends Component<PageProps> {
       thumbnail_path: this.state.post?.thumbnail_path ?? null,
       meta_description: this.state.post?.meta_description ?? null,
       tags: this._tagsInputRef ? this._tagsInputRef.getTags() : this._tags,
-      scheduled_at: field("#schedule-input")?.value ? new Date(field("#schedule-input").value).toISOString() : "",
+      scheduled_at: schedule ? new Date(schedule).toISOString() : "",
       css: this._cssEditorRef ? this._cssEditorRef.getValue() : this.state.post?.css || "",
       immersive_mode: field("#immersive-mode-select")?.value || "auto",
       instagram_share: check("#ig-share-input")?.checked ?? (this.state.isNew ? this.state.igStatus?.default_share ?? false : this.state.post?.instagram_share ?? false)
     };
   }
-  _showConfirm(title, message, confirmText, variant, onConfirm) {
+  _showConfirm(title: string, message: string, confirmText: string, variant: "primary" | "danger", onConfirm: () => void) {
     const mount = document.createElement("div");
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {
@@ -1186,19 +1207,19 @@ export default class PostEditPage extends Component<PageProps> {
     if (this.state.editorMode === "visual") return this._nodes.find(n => n.type === "image")?.path ?? null;
     return firstImagePath(this._markdownEditorRef?.getValue() ?? "");
   }
-  _analyzeField(field) {
+  _analyzeField(field: string) {
     if (this._analyzing || this.state.analyzingField) return;
     const path = this._extractImagePath();
     if (path) this._doAnalyzeField(field, {
       path
-    });else this._mediaPicker.open(items => {
+    });else this._mediaPicker?.open(items => {
       if (items?.[0]) this._doAnalyzeField(field, items[0]);
     });
   }
-  async _doAnalyzeField(field, item) {
+  async _doAnalyzeField(field: string, item: AnalyzeTarget) {
     if (!item) return;
     const snap = this._collectFormData();
-    this.$$(`.field-ai-btn`).forEach((b: HTMLButtonElement) => {
+    (this.$$(`.field-ai-btn`) as NodeListOf<HTMLButtonElement>).forEach(b => {
       b.disabled = true;
     });
     const post = {
@@ -1242,7 +1263,7 @@ export default class PostEditPage extends Component<PageProps> {
       });
     } catch (err) {
       setToast({
-        message: err.message || "Analysis failed.",
+        message: (err as Error).message || "Analysis failed.",
         type: "error"
       });
     }
@@ -1251,7 +1272,7 @@ export default class PostEditPage extends Component<PageProps> {
       post
     });
   }
-  async _handleAnalyze(item) {
+  async _handleAnalyze(item: AnalyzeTarget) {
     if (!item || this._analyzing) return;
     const snap = this._collectFormData();
     this._analyzing = true;
@@ -1306,7 +1327,7 @@ export default class PostEditPage extends Component<PageProps> {
       };
       if (this.state.editorMode === "visual") this._nodes = parseNodes(post.content);
       setToast({
-        message: err.message || "Analysis failed.",
+        message: (err as Error).message || "Analysis failed.",
         type: "error"
       });
       this._analyzing = false;
@@ -1315,17 +1336,17 @@ export default class PostEditPage extends Component<PageProps> {
       });
     }
   }
-  async _uploadAndInsert(file) {
+  async _uploadAndInsert(file: File) {
     try {
       const result = await uploadMedia(file, {
         post_id: this.state.postId || undefined
       });
       if (this.state.editorMode === "visual") this._insertMediaPaths([{
         path: result.path
-      }]);else if (this._markdownEditorRef) this._markdownEditorRef.insertAtEnd(result.path);
+      } as Media]);else if (this._markdownEditorRef) this._markdownEditorRef.insertAtEnd(result.path);
     } catch (err) {
       setToast({
-        message: `Upload failed: ${err.message || file.name}`,
+        message: `Upload failed: ${(err as Error).message || file.name}`,
         type: "error"
       });
     }
@@ -1360,7 +1381,7 @@ export default class PostEditPage extends Component<PageProps> {
         publishingToInstagram: false
       });
       setToast({
-        message: err.message || "Instagram publish failed.",
+        message: (err as Error).message || "Instagram publish failed.",
         type: "error"
       });
     }
@@ -1385,7 +1406,7 @@ export default class PostEditPage extends Component<PageProps> {
       }
     } catch (err) {
       setToast({
-        message: err.message || "Could not generate preview link.",
+        message: (err as Error).message || "Could not generate preview link.",
         type: "error"
       });
     } finally {
@@ -1394,7 +1415,7 @@ export default class PostEditPage extends Component<PageProps> {
       });
     }
   }
-  _showPreviewLinkDialog(url) {
+  _showPreviewLinkDialog(url: string) {
     const mount = document.createElement("div");
     document.body.appendChild(mount);
     const close = () => {
@@ -1415,8 +1436,8 @@ export default class PostEditPage extends Component<PageProps> {
       const range = document.createRange();
       range.selectNodeContents(msgEl);
       const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
     }
   }
 }
