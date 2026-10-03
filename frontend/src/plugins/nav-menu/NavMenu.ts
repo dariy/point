@@ -26,7 +26,7 @@ interface NavItem {
 }
 
 /** Icon and label per tags-viz plugin, keyed by plugin id. */
-const VIZ_META = {
+const VIZ_META: Record<string, { icon: string; label: string }> = {
   'tags-graph': {
     icon: TAGS_SVG,
     label: 'All tags'
@@ -88,10 +88,10 @@ export class NavMenu {
   _unsubscribeSettings: Function | null;
   _unregisterFold: (() => void) | null;
   _onDocClick: ((e: Event) => void) | null;
-  _moreOpenTimer: ReturnType<typeof setTimeout> | null;
+  _moreOpenTimer: ReturnType<typeof setTimeout> | undefined;
   _moreZone: ReturnType<typeof createHotZone> | null;
-  _inline: NavItem[];
-  _configOverflow: NavItem[];
+  _inline: NavItem[] = [];
+  _configOverflow: NavItem[] = [];
   constructor({
     navItemsEl,
     burgerTagsEl,
@@ -112,7 +112,7 @@ export class NavMenu {
     this._unsubscribeSettings = null;
     this._unregisterFold = null;
     this._onDocClick = null;
-    this._moreOpenTimer = null;
+    this._moreOpenTimer = undefined;
     this._moreZone = null;
   }
   mount() {
@@ -208,7 +208,7 @@ export class NavMenu {
         ...VIZ_META[active]
       }] : [];
     }) : [];
-    const isActive = href => !!href && href === currentPath;
+    const isActive = (href: string | null | undefined) => !!href && href === currentPath;
 
     // Inline links + More shell + viz icons.
     setHTML(this.navItemsEl, html`
@@ -281,7 +281,8 @@ export class NavMenu {
     });
     const moreBtn = this.navItemsEl.querySelector<HTMLElement>('.nav-more-btn');
     if (!moreBtn) return;
-    const more = moreBtn.closest('.nav-more');
+    const more = moreBtn.closest<HTMLElement>('.nav-more');
+    if (!more) return;
     moreBtn.addEventListener('click', e => {
       e.stopPropagation();
       clearTimeout(this._moreOpenTimer);
@@ -366,6 +367,7 @@ export class NavMenu {
     // Parents only — a parent with children reveals them in the shared
     // dropdown (like inline links) rather than flattening the whole subtree.
     const panel = more.querySelector<HTMLElement>('.nav-more-panel');
+    if (!panel) return;
     setHTML(panel, html`${panelItems.map((it, i) => {
       const hasChildren = this._childItems(it).length > 0;
       const caret = hasChildren ? html`<span class="nav-more-item-caret" aria-hidden="true">›</span>` : '';

@@ -11,6 +11,7 @@ import { html, setHTML, raw } from "../../utils/helpers.ts";
 import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.ts';
 import { getAdminNavMenu, updateAdminNavMenu } from './api.ts';
+import type { NavMenuItemInput } from './api.ts';
 import type { NavTagNode } from '../../api/nav.ts';
 import { getSettings, mergeSettings, setToast } from '../../store.ts';
 import { setupTextareaMaximizer } from '../../utils/textareaMaximizer.ts';
@@ -214,7 +215,7 @@ export default class MenuPage extends Component {
   // starts a row drag instead of a selection and the field cannot be edited by
   // mouse at all. Dragging is armed on mousedown over the handle (afterRender)
   // and disarmed on dragend, mirroring VisualEditor's card list.
-  _renderVisualEditor(items) {
+  _renderVisualEditor(items: MenuItem[]) {
     const rows = items.map((item, index) => html`
       <div class="menu-row" data-index="${index}" data-depth="${item.depth}" style="margin-left: ${item.depth * 24}px">
         <span class="drag-handle" style="cursor: grab;">\u22ee\u22ee</span>
@@ -237,7 +238,7 @@ export default class MenuPage extends Component {
         </div>
       </div>`;
   }
-  _renderMarkdownEditor(items) {
+  _renderMarkdownEditor(items: MenuItem[]) {
     const text = serializeMarkdown(items);
     return html`<textarea id="menu-markdown-input" class="form-input font-mono" rows="15" placeholder="- [Label](url)">${text}</textarea>`;
   }
@@ -334,6 +335,7 @@ export default class MenuPage extends Component {
         fits: () => {
           void root.offsetWidth;
           const tools = root.querySelector('.pvh-tools');
+          if (!tools) return true;
           return tools.getBoundingClientRect().right <= root.getBoundingClientRect().right - 7;
         }
       });
@@ -371,7 +373,7 @@ export default class MenuPage extends Component {
         // Carry the unsaved editor contents across, so flipping to None to see
         // the preview and back does not discard what has been typed.
         this.setState({
-          mode: e.target.value,
+          mode: (e.target as HTMLInputElement).value,
           items: this._currentItems()
         });
       });
@@ -406,22 +408,22 @@ export default class MenuPage extends Component {
     });
     let dragSrcIndex = -1;
     this.$$('.menu-row').forEach(row => {
-      const index = parseInt(row.dataset.index, 10);
-      row.querySelector('.delete-item-btn').addEventListener('click', () => {
+      const index = parseInt(row.dataset.index ?? '', 10);
+      row.querySelector('.delete-item-btn')!.addEventListener('click', () => {
         const items = this._collectVisualItems();
         items.splice(index, 1);
         this.setState({
           items
         });
       });
-      row.querySelector('.indent-btn').addEventListener('click', () => {
+      row.querySelector('.indent-btn')!.addEventListener('click', () => {
         const items = this._collectVisualItems();
         items[index].depth = Math.min(3, items[index].depth + 1);
         this.setState({
           items
         });
       });
-      row.querySelector('.outdent-btn').addEventListener('click', () => {
+      row.querySelector('.outdent-btn')!.addEventListener('click', () => {
         const items = this._collectVisualItems();
         items[index].depth = Math.max(0, items[index].depth - 1);
         this.setState({
@@ -432,7 +434,7 @@ export default class MenuPage extends Component {
       // Arm the row for dragging only while the pointer went down on the
       // handle; anywhere else (the label and URL inputs, above all) must stay
       // an ordinary mousedown so text selection works.
-      row.querySelector('.drag-handle').addEventListener('mousedown', () => {
+      row.querySelector('.drag-handle')!.addEventListener('mousedown', () => {
         row.setAttribute('draggable', 'true');
         // A press that never becomes a drag ends in mouseup and no dragend, so
         // without this a plain click on the handle would leave the row armed
@@ -444,6 +446,7 @@ export default class MenuPage extends Component {
       row.addEventListener('dragstart', e => {
         if (row.getAttribute('draggable') !== 'true') return;
         dragSrcIndex = index;
+        if (!e.dataTransfer) return;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', index.toString());
         row.classList.add('dragging');
@@ -451,7 +454,7 @@ export default class MenuPage extends Component {
       row.addEventListener('dragover', e => {
         if (dragSrcIndex === -1) return;
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
       });
       row.addEventListener('dragenter', e => {
         if (dragSrcIndex === -1) return;
@@ -492,16 +495,17 @@ export default class MenuPage extends Component {
     // Inline cap + item edits update the preview in place (no full re-render,
     // so inputs keep focus while typing).
     this.container.querySelector('#inline-max-input')?.addEventListener('change', e => {
-      const n = parseInt(e.target.value, 10);
+      const input = e.target as HTMLInputElement;
+      const n = parseInt(input.value, 10);
       if (n >= 1 && n <= 10) this.state.inlineMax = n;
-      e.target.value = this.state.inlineMax;
+      input.value = String(this.state.inlineMax);
       this._updatePreviews();
     });
     this.container.querySelector('#more-title-input')?.addEventListener('input', e => {
-      this.state.moreTitle = e.target.value || 'More';
+      this.state.moreTitle = (e.target as HTMLInputElement).value || 'More';
       this._updatePreviews();
     });
-    let previewTimer = null;
+    let previewTimer: ReturnType<typeof setTimeout> | undefined;
     const schedulePreview = () => {
       clearTimeout(previewTimer);
       previewTimer = setTimeout(() => this._updatePreviews(), 300);
@@ -530,12 +534,12 @@ export default class MenuPage extends Component {
    */
   _collectVisualItems() {
     const rows = this.$$('.menu-row');
-    const items = [];
+    const items: MenuItem[] = [];
     rows.forEach(row => {
       items.push({
         label: (row.querySelector('.item-label') as HTMLInputElement).value.trim(),
         url: (row.querySelector('.item-url') as HTMLInputElement).value.trim(),
-        depth: parseInt(row.dataset.depth, 10) || 0
+        depth: parseInt(row.dataset.depth ?? '', 10) || 0
       });
     });
     return items;
@@ -575,7 +579,7 @@ export default class MenuPage extends Component {
    * they authored come back as the last-parsed text), even though the request
    * that left carried the right thing.
    */
-  _setSaving(saving) {
+  _setSaving(saving: boolean) {
     this.state.saving = saving;
     const btn = (this.$('#save-menu-btn') as HTMLButtonElement|null);
     if (!btn) return;
@@ -584,7 +588,7 @@ export default class MenuPage extends Component {
   }
   async _handleSave() {
     let markdown = '';
-    let apiItems = [];
+    let apiItems: NavMenuItemInput[] = [];
     if (this.state.mode === 'custom') {
       // A row the owner never named is not a menu entry — it is an empty row
       // they left behind. It must not reach the API, nor the markdown.
@@ -596,9 +600,9 @@ export default class MenuPage extends Component {
       // has been closed cannot adopt a later item: in A > B, then C, then a
       // deeper row, the deeper row belongs to C — indexing the stack by depth
       // alone would hand it to B, which is no longer on the path.
-      const stack = [];
+      const stack: { depth: number; node: NavMenuItemInput }[] = [];
       for (const item of items) {
-        const node = {
+        const node: NavMenuItemInput = {
           name: item.label,
           url: item.url,
           children: []
@@ -636,7 +640,7 @@ export default class MenuPage extends Component {
       });
     } catch (err) {
       setToast({
-        message: err.message || 'Save failed.',
+        message: (err as Error).message || 'Save failed.',
         type: 'error'
       });
     } finally {

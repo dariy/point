@@ -61,7 +61,7 @@ function themeCss() {
   const probe = document.createElement('div');
   probe.style.display = 'none';
   document.body.appendChild(probe);
-  const resolve = (token) => {
+  const resolve = (token: string) => {
     probe.style.color = `var(${token})`;
     return getComputedStyle(probe).color;
   };
@@ -109,7 +109,7 @@ export function mount(el: HTMLElement, ctx: { post?: Post; url?: string }) {
   el.appendChild(root);
 
   const settings = getSettings() || {};
-  window.remark_config = {
+  const config: RemarkConfig = {
     host: `${window.location.origin}/comments`,
     site_id: 'remark',
     simple_view: boolSetting(settings.remark_simple_view),
@@ -122,10 +122,12 @@ export function mount(el: HTMLElement, ctx: { post?: Post; url?: string }) {
     theme: isDark() ? 'dark' : 'light',
   };
 
+  window.remark_config = config;
+
   let onReady = null;
   const createInstance = () => {
     try {
-      window.REMARK42.createInstance(window.remark_config);
+      window.REMARK42?.createInstance(config);
     } catch (err) {
       console.error('[comments] remark42 init failed:', err);
     }
