@@ -146,7 +146,7 @@ export default class SetupPage extends Component {
       } catch (err) {
         this.setState({
           loading: false,
-          error: err.message || 'Setup failed. Please try again.',
+          error: (err as Error).message || 'Setup failed. Please try again.',
         });
       }
     });

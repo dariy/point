@@ -37,7 +37,8 @@ import { getInstagramStatus } from "../../api/instagram.ts";
 import { PluginSettingsPanel } from "../../components/light/PluginSettingsPanel.ts";
 import { setPluginToggled, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
-import type { Slot } from "../../utils/helpers.ts";
+import type { RawHtml, Slot } from "../../utils/helpers.ts";
+import type { PluginView } from "../../api/plugins.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
 
 import type { Settings } from "../../api/settings.ts";
@@ -67,7 +68,7 @@ const PRESET_TITLES = Object.fromEntries(PRESETS.map((p) => [p.id, p.title]));
 // Frontend-owned map from plugin id to an existing admin page where the plugin
 // is configured by a full editor (themes, menu). Only plugins whose settings
 // live on a dedicated page appear here; the backend stays decoupled from routes.
-const SETTINGS_PAGE_PATHS = {
+const SETTINGS_PAGE_PATHS: Record<string, string> = {
   "custom-css": "/light/themes",
   "nav-menu": "/light/menu",
 };
@@ -78,7 +79,7 @@ const SETTINGS_PAGE_PATHS = {
 // and /light/security — see SECTIONS in PluginSettingsPanel). `tags_visibility`
 // is one shared gate over all three tag vizzes, across both slots (`tags-route`
 // for /tags and `map-route` for /map) — not a per-viz switch.
-const PLUGIN_SETTINGS = {
+const PLUGIN_SETTINGS: Record<string, { keys?: string[]; sections?: string[] }> = {
   "ai-analysis": {
     keys: [
       "gemini_model",
@@ -153,9 +154,9 @@ function humanize(id: string, title?: string) {
 }
 
 export default class PluginsPage extends Component {
-  _mappedIds: Set<string>;
-  _settingsCache: Settings | null;
-  _panel: PluginSettingsPanel | null;
+  _mappedIds = new Set<string>();
+  _settingsCache: Settings | null = null;
+  _panel: PluginSettingsPanel | null = null;
 
   constructor(container: HTMLElement, props = {}) {
     super(container, props);
@@ -215,7 +216,7 @@ export default class PluginsPage extends Component {
         ${this._mr("public-header", "Header")}${this._mr("breadcrumbs", "Crumbs")}${this._mr("nav-menu", "Menu")}${extra}
       </div>`;
 
-    const bodies = {
+    const bodies: Record<string, RawHtml> = {
       home: html`
         ${headerRow(this._mr("distraction-free", "Focus"))}
         ${this._mr("tag-cloud", "Tag cloud", "pmap-band")}
@@ -268,8 +269,8 @@ export default class PluginsPage extends Component {
 
     // Everything not placed above has no spot on the public pages (services).
     const offMap = this.state.plugins
-      .filter((p) => !this._mappedIds.has(p.id))
-      .map((p) => this._mr(p.id))
+      .filter((p: PluginView) => !this._mappedIds.has(p.id))
+      .map((p: PluginView) => this._mr(p.id))
       .join("");
 
     return html`
@@ -289,11 +290,11 @@ export default class PluginsPage extends Component {
   }
 
   /** Map region for one or more plugin ids (space-joined into data-plugins). */
-  _mr(ids, label = "", cls = "") {
+  _mr(ids: string | string[], label = "", cls = "") {
     const list = Array.isArray(ids) ? ids : [ids];
     const known = list
-      .map((id) => this.state.plugins.find((p) => p.id === id))
-      .filter(Boolean);
+      .map((id) => (this.state.plugins as PluginView[]).find((p) => p.id === id))
+      .filter((p): p is PluginView => !!p);
     if (!known.length) return ""; // id missing from the catalog — drop the region
     known.forEach((p) => this._mappedIds.add(p.id));
     const on = known.some((p) => p.enabled);
@@ -306,7 +307,7 @@ export default class PluginsPage extends Component {
   }
 
   /** Static (non-plugin) wireframe block, for context only. */
-  _ms(label, cls = "") {
+  _ms(label: string, cls = "") {
     return html`<span class="pmap-static${cls ? " " + cls : ""}">${label}</span>`;
   }
 
@@ -342,29 +343,33 @@ export default class PluginsPage extends Component {
       </section>`;
   }
 
-  _renderGroup(group) {
-    const items = this.state.plugins.filter((p) => p.type === group.type);
+  _renderGroup(group: (typeof TYPE_GROUPS)[number]) {
+    const items = (this.state.plugins as PluginView[]).filter((p) => p.type === group.type);
     if (items.length === 0) return "";
     const collapsed = !!this.state.collapsed[group.type];
 
     const TARGET_SLOTS = ["post-list", "post-viewer", "tags-route", "map-route"];
-    const grouped = [];
-    const slotMap = new Map();
+    type Item =
+      | { type: 'slot-group'; slot: string; items: PluginView[] }
+      | { type: 'single'; plugin: PluginView };
+    const grouped: Item[] = [];
+    const slotMap = new Map<string, PluginView[]>();
 
     items.forEach(p => {
-      if (TARGET_SLOTS.includes(p.slot)) {
-        if (!slotMap.has(p.slot)) {
-          const arr = [];
+      if (p.slot && TARGET_SLOTS.includes(p.slot)) {
+        let arr = slotMap.get(p.slot);
+        if (!arr) {
+          arr = [];
           slotMap.set(p.slot, arr);
           grouped.push({ type: 'slot-group', slot: p.slot, items: arr });
         }
-        slotMap.get(p.slot).push(p);
+        arr.push(p);
       } else {
         grouped.push({ type: 'single', plugin: p });
       }
     });
 
-    const renderItem = (item) => {
+    const renderItem = (item: Item) => {
       // A slot with a single candidate (tags-route holds only the graph) has no
       // alternatives to compare, so it renders as a plain row without a heading.
       if (item.type === 'slot-group' && item.items.length === 1) {
@@ -400,19 +405,19 @@ export default class PluginsPage extends Component {
   }
 
   /** How many plugins are candidates for `slot` (tags trio, immersive pair, …). */
-  _slotSize(slot) {
+  _slotSize(slot: string | undefined) {
     if (!slot) return 0;
-    return this.state.plugins.filter((p) => p.slot === slot).length;
+    return (this.state.plugins as PluginView[]).filter((p) => p.slot === slot).length;
   }
 
-  _renderPlugin(plugin) {
+  _renderPlugin(plugin: PluginView) {
     const pending = !!this.state.pending[plugin.id];
     const editing = this.state.editingPreset !== null;
 
-    const meta = [];
+    const meta: RawHtml[] = [];
     // Rows competing for the same single-claim slot say so, so it is obvious why
     // enabling one switched another off.
-    if (SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1) {
+    if (SINGLE_CLAIM_SLOT.has(plugin.slot_rule ?? "") && this._slotSize(plugin.slot) > 1) {
       meta.push(html`<span class="plugin-badge">Alternative</span>`);
     }
     if (plugin.slot) meta.push(html`<span class="plugin-meta-text">slot: ${plugin.slot}</span>`);
@@ -437,7 +442,7 @@ export default class PluginsPage extends Component {
   }
 
   /** Enable/disable controls + settings link (normal, non-editing view). */
-  _renderRowControls(plugin, pending) {
+  _renderRowControls(plugin: PluginView, pending: boolean) {
     // Settings control only when the plugin is enabled: an inline drawer for
     // plugins whose settings were extracted here, else a link to its admin page.
     let settingsLink: Slot = "";
@@ -447,7 +452,7 @@ export default class PluginsPage extends Component {
       settingsLink = html`<a class="plugin-settings-link" href="${SETTINGS_PAGE_PATHS[plugin.id]}">Settings</a>`;
     }
 
-    const isAlternative = SINGLE_CLAIM_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) > 1;
+    const isAlternative = SINGLE_CLAIM_SLOT.has(plugin.slot_rule ?? "") && this._slotSize(plugin.slot) > 1;
 
     if (plugin.locked && !isAlternative) {
       // Required slot with NO alternatives: dead end.
@@ -471,11 +476,11 @@ export default class PluginsPage extends Component {
   }
 
   /** Preset-membership checkbox (edit mode). */
-  _renderInclude(plugin) {
+  _renderInclude(plugin: PluginView) {
     const list = this.state.presets[this.state.editingPreset] || [];
     const included = list.includes(plugin.id);
     // Sole candidate for a slot that requires one: on regardless of the preset.
-    const forced = REQUIRED_SLOT.has(plugin.slot_rule) && this._slotSize(plugin.slot) <= 1;
+    const forced = REQUIRED_SLOT.has(plugin.slot_rule ?? "") && this._slotSize(plugin.slot) <= 1;
 
     return html`
       <label class="setting-pill plugin-pill plugin-include">
@@ -502,7 +507,7 @@ export default class PluginsPage extends Component {
       const toggle = () => {
         const nowCollapsed = card.classList.toggle("collapsed");
         header.setAttribute("aria-expanded", String(!nowCollapsed));
-        this.state.collapsed[type] = nowCollapsed; // persist across re-renders, no re-render needed
+        if (type) this.state.collapsed[type] = nowCollapsed; // persist across re-renders, no re-render needed
       };
       header.addEventListener("click", toggle);
       header.addEventListener("keydown", (e) => {
@@ -520,15 +525,15 @@ export default class PluginsPage extends Component {
     this.$(".preset-edit-toggle")?.addEventListener("click", () => this._toggleEdit());
 
     // Enable/disable toggles.
-    this.$$(".plugin-toggle").forEach((input: HTMLInputElement) => {
-      input.addEventListener("change", () => this._handleToggle(input.dataset.id, input.checked));
+    (this.$$(".plugin-toggle") as NodeListOf<HTMLInputElement>).forEach((input) => {
+      input.addEventListener("change", () => this._handleToggle(input.dataset.id || "", input.checked));
       if (input.type === "radio") {
         input.addEventListener("click", (e) => {
           const id = input.dataset.id;
-          const p = this.state.plugins.find(x => x.id === id);
+          const p = (this.state.plugins as PluginView[]).find(x => x.id === id);
           if (p && p.slot_rule === "0-1" && p.enabled) {
             e.preventDefault();
-            this._handleToggle(id, false);
+            this._handleToggle(p.id, false);
           }
         });
       }
@@ -536,12 +541,12 @@ export default class PluginsPage extends Component {
 
     // Per-plugin settings drawer triggers.
     this.$$("[data-settings-id]").forEach((btn) => {
-      btn.addEventListener("click", () => this._openPanel(btn.dataset.settingsId));
+      btn.addEventListener("click", () => this._openPanel(btn.dataset.settingsId || ""));
     });
 
     // Preset-membership checkboxes (edit mode).
-    this.$$(".plugin-include-toggle").forEach((input: HTMLInputElement) => {
-      input.addEventListener("change", () => this._handleInclude(input.dataset.id, input.checked));
+    (this.$$(".plugin-include-toggle") as NodeListOf<HTMLInputElement>).forEach((input) => {
+      input.addEventListener("change", () => this._handleInclude(input.dataset.id || "", input.checked));
     });
 
     this._wireMap();
@@ -553,12 +558,12 @@ export default class PluginsPage extends Component {
    * group, scrolls to it and flashes it. Pure class toggling — no re-render.
    */
   _wireMap() {
-    const cards = new Map();
-    this.$$(".plugin-card").forEach((c) => cards.set(c.dataset.id, c));
+    const cards = new Map<string, HTMLElement>();
+    this.$$(".plugin-card").forEach((c) => cards.set(c.dataset.id || "", c));
 
     this.$$(".pmap-region").forEach((region) => {
       const ids = (region.dataset.plugins || "").split(" ").filter(Boolean);
-      const mark = (onOff) => ids.forEach((id) => cards.get(id)?.classList.toggle("map-hit", onOff));
+      const mark = (onOff: boolean) => ids.forEach((id) => cards.get(id)?.classList.toggle("map-hit", onOff));
       region.addEventListener("mouseenter", () => mark(true));
       region.addEventListener("mouseleave", () => mark(false));
       region.addEventListener("focus", () => mark(true));
@@ -568,21 +573,21 @@ export default class PluginsPage extends Component {
 
     this.$$(".plugin-card").forEach((card) => {
       // ~= matches the id inside the space-separated data-plugins list.
-      const regions = this.$$(`.pmap-region[data-plugins~="${CSS.escape(card.dataset.id)}"]`);
+      const regions = this.$$(`.pmap-region[data-plugins~="${CSS.escape(card.dataset.id || "")}"]`);
       card.addEventListener("mouseenter", () => regions.forEach((r) => r.classList.add("map-hit")));
       card.addEventListener("mouseleave", () => regions.forEach((r) => r.classList.remove("map-hit")));
     });
   }
 
   /** Expand the group holding `id`'s row, scroll to it and flash it. */
-  _revealPlugin(id, cards) {
+  _revealPlugin(id: string, cards: Map<string, HTMLElement>) {
     const card = cards.get(id);
     if (!card) return;
-    const group = card.closest(".plugins-group");
+    const group = card.closest<HTMLElement>(".plugins-group");
     if (group?.classList.contains("collapsed")) {
       group.classList.remove("collapsed");
       group.querySelector(".plugins-group-header")?.setAttribute("aria-expanded", "true");
-      this.state.collapsed[group.dataset.group] = false;
+      if (group.dataset.group) this.state.collapsed[group.dataset.group] = false;
     }
     card.scrollIntoView({ behavior: "smooth", block: "center" });
     card.classList.remove("map-flash"); // restart the animation on repeat clicks
@@ -604,12 +609,12 @@ export default class PluginsPage extends Component {
    * instance) only when the plugin has a settings form; Instagram additionally
    * needs its live connection status for the connect/disconnect block.
    */
-  async _openPanel(id) {
+  async _openPanel(id: string) {
     const cfg = PLUGIN_SETTINGS[id];
     if (!cfg) return;
     this._closePanel();
     try {
-      let settings = {};
+      let settings: Settings = {};
       if (cfg.keys) {
         if (!this._settingsCache) this._settingsCache = await getAllSettings();
         settings = this._settingsCache;
@@ -619,7 +624,7 @@ export default class PluginsPage extends Component {
       document.body.appendChild(mount);
       this._panel = new PluginSettingsPanel(mount, {
         pluginId: id,
-        title: humanize(id, this.state.plugins.find((p) => p.id === id)?.title),
+        title: humanize(id, (this.state.plugins as PluginView[]).find((p) => p.id === id)?.title),
         keys: cfg.keys || null,
         sections: cfg.sections || null,
         settings,
@@ -643,7 +648,7 @@ export default class PluginsPage extends Component {
     this._settingsCache = null;
   }
 
-  _setAllCollapsed(isCollapsed) {
+  _setAllCollapsed(isCollapsed: boolean) {
     const collapsed = { ...this.state.collapsed };
     collapsed.map = isCollapsed;
     TYPE_GROUPS.forEach(g => {
@@ -668,14 +673,14 @@ export default class PluginsPage extends Component {
     }
   }
 
-  async _handleToggle(id, enabled) {
+  async _handleToggle(id: string, enabled: boolean) {
     this.setState({ pending: { ...this.state.pending, [id]: true } });
     try {
       const updated = await setPluginEnabled(id, enabled);
-      let plugins = this.state.plugins.map((p) => (p.id === id ? { ...p, ...updated } : p));
+      let plugins = (this.state.plugins as PluginView[]).map((p) => (p.id === id ? { ...p, ...updated } : p));
       // Single-claim slot: enabling one candidate disables its peers server-side;
       // mirror that here so the sibling toggles flip off without a reload.
-      if (enabled && updated.slot && SINGLE_CLAIM_SLOT.has(updated.slot_rule)) {
+      if (enabled && updated.slot && SINGLE_CLAIM_SLOT.has(updated.slot_rule ?? "")) {
         plugins = plugins.map((p) =>
           p.id !== id && p.slot === updated.slot ? { ...p, enabled: false } : p,
         );
@@ -708,7 +713,7 @@ export default class PluginsPage extends Component {
       const pending = { ...this.state.pending };
       delete pending[id];
       this.setState({ pending });
-      setToast({ message: err.message || "Failed to update plugin.", type: "error" });
+      setToast({ message: (err as Error).message || "Failed to update plugin.", type: "error" });
     }
   }
 
@@ -716,15 +721,15 @@ export default class PluginsPage extends Component {
    * Recompute the `locked` flag client-side after a toggle so the last claimant
    * of a required slot immediately becomes read-only without a reload.
    */
-  _withLocks(plugins) {
+  _withLocks(plugins: PluginView[]) {
     return plugins.map((p) => {
-      if (!REQUIRED_SLOT.has(p.slot_rule)) return p;
+      if (!REQUIRED_SLOT.has(p.slot_rule ?? "")) return p;
       const enabledInSlot = plugins.filter((q) => q.slot === p.slot && q.enabled);
       return { ...p, locked: p.enabled && enabledInSlot.length === 1 };
     });
   }
 
-  _handlePresetPill(id) {
+  _handlePresetPill(id: string | undefined) {
     if (!id) return;
     if (this.state.editingPreset !== null) {
       this.setState({ editingPreset: id });
@@ -742,7 +747,7 @@ export default class PluginsPage extends Component {
     this.setState({ editingPreset: start });
   }
 
-  async _applyPreset(id) {
+  async _applyPreset(id: string) {
     try {
       const plugins = await applyPreset(id);
       this.setState({
@@ -758,14 +763,14 @@ export default class PluginsPage extends Component {
         window.location.reload();
       }
     } catch (err) {
-      setToast({ message: err.message || "Failed to apply preset.", type: "error" });
+      setToast({ message: (err as Error).message || "Failed to apply preset.", type: "error" });
     }
   }
 
-  async _handleInclude(id, included) {
+  async _handleInclude(id: string, included: boolean) {
     const presetId = this.state.editingPreset;
     if (!presetId) return;
-    const current = this.state.presets[presetId] || [];
+    const current: string[] = this.state.presets[presetId] || [];
     const next = included ? [...new Set([...current, id])] : current.filter((p) => p !== id);
     try {
       const data = await updatePreset(presetId, next);
@@ -773,7 +778,7 @@ export default class PluginsPage extends Component {
     } catch (err) {
       // Revert by re-rendering from unchanged state.
       this.setState({ presets: { ...this.state.presets } });
-      setToast({ message: err.message || "Failed to update preset.", type: "error" });
+      setToast({ message: (err as Error).message || "Failed to update preset.", type: "error" });
     }
   }
 }

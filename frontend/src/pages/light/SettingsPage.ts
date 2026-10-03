@@ -15,6 +15,7 @@ import { mergeSettings, setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { CHECK_SVG } from "../../utils/icons.ts";
 import { renderFields, collectUpdates } from "../../components/light/settingsFields.ts";
+import type { PagePickerPost } from "../../components/light/settingsFields.ts";
 
 import type { MediaPickerDialog } from "../../components/light/MediaPickerDialog.ts";
 
@@ -49,7 +50,7 @@ const SETTING_GROUPS = [
 ];
 
 export default class SettingsPage extends Component {
-  _logoPicker: MediaPickerDialog | null;
+  _logoPicker: MediaPickerDialog | null = null;
 
   constructor(container: HTMLElement, props = {}) {
     super(container, props);
@@ -90,7 +91,7 @@ export default class SettingsPage extends Component {
         </form>`;
   }
 
-  _renderGroup(group, settings, posts) {
+  _renderGroup(group: (typeof SETTING_GROUPS)[number], settings: Record<string, unknown>, posts: PagePickerPost[]) {
     const { inputs, toggles } = renderFields(group.keys, settings, { posts });
     const toggleSection = toggles
       ? html`<div class="settings-toggles">${toggles}</div>`
@@ -153,7 +154,7 @@ export default class SettingsPage extends Component {
             preview = document.createElement("img");
             preview.className = "settings-logo-preview";
             preview.alt = "Logo preview";
-            input.parentElement.insertBefore(preview, input);
+            input?.before(preview);
           }
           preview.src = path;
         },
@@ -204,7 +205,7 @@ export default class SettingsPage extends Component {
     } catch (err) {
       console.error("[SettingsPage] save error:", err);
       setToast({
-        message: err.message || "Could not save settings.",
+        message: (err as Error).message || "Could not save settings.",
         type: "error",
       });
       this.setState({ saving: false });
