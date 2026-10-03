@@ -15,11 +15,12 @@ import { setToast } from "../../store.ts";
 import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.ts";
 import type { Slot } from "../../utils/helpers.ts";
 import type { PageProps } from "../../router.ts";
+import type { Post, PostPage, PostTag } from "../../api/posts.ts";
 import { formatDateShort } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 import { captureInteraction } from "../../utils/preserveInteraction.ts";
 import { EDIT_SVG, X_SVG, LINK_SVG, CHECK_SVG, TRASH_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG, RESTORE_SVG, SELECT_SVG, PLUS_SVG } from "../../utils/icons.ts";
-const STATUS_LABELS = {
+const STATUS_LABELS: Record<string, string> = {
   published: "Published",
   draft: "Draft",
   hidden: "Hidden",
@@ -30,7 +31,7 @@ const STATUS_LABELS = {
 
 // "Page" is surfaced as a status in the UI but is really type=page (always
 // published). Treat any type=page post as having the effective status "page".
-const effStatus = p => p.type === "page" ? "page" : p.status || "draft";
+const effStatus = (p: { type?: string; status?: string }) => p.type === "page" ? "page" : p.status || "draft";
 
 // What the two preview boxes actually paint at. The table row's `.post-preview-img`
 // has an 80px floor, its video poster is inset into a 40px placeholder, and a
@@ -46,9 +47,25 @@ const CARD_THUMB_SIZES = "48px";
  * The poster URL 404s for videos that never got one (see dropBrokenImages),
  * which strips the <img> back to the bare glyph this list has always shown.
  */
-const videoThumb = (mediaUrl, sizes) => html`${raw(PLAY_SVG)}${mediaUrl ? html`<img ${thumbAttrs(mediaUrl, {
+const videoThumb = (mediaUrl: string | null | undefined, sizes: string) => html`${raw(PLAY_SVG)}${mediaUrl ? html`<img ${thumbAttrs(mediaUrl, {
   sizes
 })} class="post-preview-img post-preview-img--poster" loading="lazy" decoding="async">` : ""}`;
+/**
+ * A row of the admin listing. Trash rows carry deleted_at, in one of two
+ * shapes, and a tag can arrive as a bare name or with its id.
+ */
+type ListPost = Omit<Post, "tags"> & {
+  tags?: Array<string | (PostTag & { id?: number })>;
+  deleted_at?: string | { value: string } | null;
+};
+
+/** When a trash row was deleted, formatted; "" when unknown. */
+const trashDate = (p: ListPost) => {
+  const d = p.deleted_at;
+  if (typeof d === "object" && d?.value) return formatDateShort(d.value);
+  return typeof d === "string" && d ? formatDateShort(d) : "";
+};
+
 /** The list filters that _load and _syncUrl override. */
 interface PostsListFilters {
   status?: string;
@@ -80,6 +97,13 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       selectMode: false,
       selectedIds: new Set<number>()
     };
+    this._restoreInteraction = null;
+    this._perPage = 0;
+    this._onResize = null;
+    this._onKeyNav = null;
+    this._navArrows = null;
+    this._hasFitToViewport = false;
+    this._swipeCleanup = null;
   }
   render() {
     const {
@@ -97,7 +121,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       content: this._renderContent()
     });
   }
-  _renderCardRow(p) {
+  _renderCardRow(p: ListPost) {
     const {
       selectedIds,
       statusFilter
@@ -119,7 +143,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       thumbInner = raw(MUSIC_SVG);
     }
     if (isTrash) {
-      const deletedAt = p.deleted_at?.value ? formatDateShort(p.deleted_at.value) : p.deleted_at ? formatDateShort(p.deleted_at) : "";
+      const deletedAt = trashDate(p);
       return html`
         <div class="post-card post-card--trash" data-post-id="${String(p.id)}">
           <div class="post-card-thumb post-card-thumb--muted"></div>
@@ -186,7 +210,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     } else if (!posts.length) {
       inner = html`<p class="post-card-placeholder">${isTrash ? "Trash is empty." : "No posts found."}</p>`;
     } else {
-      inner = posts.map(p => this._renderCardRow(p));
+      inner = posts.map((p: ListPost) => this._renderCardRow(p));
     }
     const selectClass = selectMode && !isTrash ? " select-mode" : "";
     return html`<div class="posts-card-list${selectClass}" id="posts-card-list">${inner}</div>`;
@@ -208,7 +232,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       return html`<option value="${s}"${sel}>${label}</option>`;
     });
     const colspan = isTrash ? 5 : selectMode ? 5 : 4;
-    const rows = loading ? html`<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>` : error ? html`<tr><td colspan="${colspan}" class="error-state">${error}</td></tr>` : !posts.length ? html`<tr><td colspan="${colspan}" class="empty-state">${isTrash ? "Trash is empty." : "No posts found."}</td></tr>` : posts.map(p => {
+    const rows = loading ? html`<tr><td colspan="${colspan}" class="loading">Loading…</td></tr>` : error ? html`<tr><td colspan="${colspan}" class="error-state">${error}</td></tr>` : !posts.length ? html`<tr><td colspan="${colspan}" class="empty-state">${isTrash ? "Trash is empty." : "No posts found."}</td></tr>` : posts.map((p: ListPost) => {
       const mediaUrl = p.media_url || "";
       const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(mediaUrl);
       const isVideo = /\.(mp4|webm|mov|ogv|m4v|avi|mkv)$/i.test(mediaUrl);
@@ -227,7 +251,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       }
       const isChecked = selectedIds.has(p.id);
       if (isTrash) {
-        const deletedAt = p.deleted_at?.value ? formatDateShort(p.deleted_at.value) : p.deleted_at ? formatDateShort(p.deleted_at) : "";
+        const deletedAt = trashDate(p);
         return html`
                 <tr data-post-id="${String(p.id)}" class="post-row-main">
                   <td class="preview-col" rowspan="2">
@@ -351,7 +375,8 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     this.$(".light-main")?.classList.add("posts-list-main");
 
     // Video posters are rendered optimistically; strip the ones that 404.
-    dropBrokenImages(this.$(".light-main"));
+    const main = this.$(".light-main");
+    if (main) dropBrokenImages(main);
     try {
       sessionStorage.setItem('point:admin:posts-list-url', window.location.pathname + window.location.search);
     } catch {/* ignore */}
@@ -440,9 +465,9 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     if (!isTrash) {
       this.$$(".status-change-btn").forEach(select => {
         select.addEventListener("change", async e => {
-          const id = parseInt(select.dataset.id, 10);
+          const id = parseInt(select.dataset.id ?? "", 10);
           const newStatus = (e.target as HTMLSelectElement).value;
-          await this._updatePostStatus(id, newStatus, select);
+          await this._updatePostStatus(id, newStatus, select as HTMLSelectElement);
         });
       });
     }
@@ -450,7 +475,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     // Delete buttons (move to trash)
     this.$$(".delete-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        const id = parseInt(btn.dataset.id, 10);
+        const id = parseInt(btn.dataset.id ?? "", 10);
         const title = btn.dataset.title;
         this._showConfirm("Move to Trash", `Move "${title}" to Trash? You can restore it later.`, "Move to Trash", "danger", () => {
           this._deletePost(id);
@@ -461,8 +486,8 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     // Restore buttons (trash view)
     this.$$(".restore-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        const id = parseInt(btn.dataset.id, 10);
-        const title = btn.dataset.title;
+        const id = parseInt(btn.dataset.id ?? "", 10);
+        const title = btn.dataset.title ?? "";
         this._restorePost(id, title);
       });
     });
@@ -470,7 +495,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     // Permanently delete buttons (trash view)
     this.$$(".perm-delete-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        const id = parseInt(btn.dataset.id, 10);
+        const id = parseInt(btn.dataset.id ?? "", 10);
         const title = btn.dataset.title;
         this._showConfirm("Delete permanently", `Permanently delete "${title}"? This cannot be undone.`, "Delete", "danger", () => {
           this._permanentlyDeletePost(id);
@@ -483,15 +508,15 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       // Drawer action buttons
       this.$$('.swipe-publish-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          this._cyclePostStatus(parseInt(btn.dataset.id, 10), 'published');
+          this._cyclePostStatus(parseInt(btn.dataset.id ?? "", 10), 'published');
         });
       });
       this.$$('.swipe-preview-btn').forEach(btn => {
-        btn.addEventListener('click', () => this._copyPreviewLink(parseInt(btn.dataset.id, 10)));
+        btn.addEventListener('click', () => this._copyPreviewLink(parseInt(btn.dataset.id ?? "", 10)));
       });
       this.$$('.swipe-delete-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          const id = parseInt(btn.dataset.id, 10);
+          const id = parseInt(btn.dataset.id ?? "", 10);
           const title = btn.dataset.title;
           this._showConfirm("Move to Trash", `Move "${title}" to Trash? You can restore it later.`, "Move to Trash", "danger", () => this._deletePost(id));
         });
@@ -502,7 +527,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     // Tag family popover for chips
     this.$$(".tag-chip").forEach(chip => {
       chip.addEventListener("click", _e => {
-        const id = parseInt(chip.dataset.id, 10);
+        const id = parseInt(chip.dataset.id ?? "", 10);
         if (id) openTagFamilyPopover(id, chip);
       });
     });
@@ -526,9 +551,9 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
 
     // Card view: tap to edit or toggle selection; long-press to enter select mode
     this.$$(".post-card").forEach(card => {
-      const postId = parseInt(card.dataset.postId, 10);
+      const postId = parseInt(card.dataset.postId ?? "", 10);
       if (!isTrash) {
-        let longPressTimer = null;
+        let longPressTimer: ReturnType<typeof setTimeout> | null = null;
         card.addEventListener("pointerdown", e => {
           if ((e.target as HTMLElement).closest("select, button, a, input")) return;
           longPressTimer = setTimeout(() => {
@@ -567,7 +592,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
   }
 
   // Swipe-right selection: toggle this card; leave select mode when nothing's left.
-  _toggleCardSelection(id) {
+  _toggleCardSelection(id: number) {
     const selectedIds = new Set(this.state.selectedIds);
     if (selectedIds.has(id)) selectedIds.delete(id);else selectedIds.add(id);
     this.setState({
@@ -575,18 +600,19 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       selectedIds
     });
   }
-  _handleSelectAll(e) {
+  _handleSelectAll(e: Event) {
     // Re-render so both table checkboxes and card backgrounds reflect the change.
-    const selectedIds = new Set();
-    if (e.target.checked) this.state.posts.forEach(p => selectedIds.add(p.id));
+    const selectedIds = new Set<number>();
+    if ((e.target as HTMLInputElement).checked) this.state.posts.forEach((p: ListPost) => selectedIds.add(p.id));
     this.setState({
       selectMode: selectedIds.size > 0,
       selectedIds
     });
   }
-  _handleSelectRow(e) {
-    const id = parseInt(e.target.dataset.id, 10);
-    if (e.target.checked) {
+  _handleSelectRow(e: Event) {
+    const target = e.target as HTMLInputElement;
+    const id = parseInt(target.dataset.id ?? "", 10);
+    if (target.checked) {
       this.state.selectedIds.add(id);
     } else {
       this.state.selectedIds.delete(id);
@@ -697,7 +723,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     if (this._onResize) window.removeEventListener("resize", this._onResize);
     this._teardownPageControls();
   }
-  _setupPageControls(pagination) {
+  _setupPageControls(pagination: Partial<PostPage>) {
     this._teardownPageControls();
     const pages = pagination.pages || 1;
     const page = pagination.page || 1;
@@ -862,13 +888,13 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
   }
 
   /** Mount a TagsInput directly in the tags cell for a post row. Saves on change. */
-  _mountTagEditor(post) {
+  _mountTagEditor(post: ListPost) {
     const mount = this.$(`#tags-cell-${post.id}`);
     if (!mount) return;
     const initialTags = (post.tags || []).map(t => typeof t === "string" ? t : t.name);
     this.mountChild(TagsInput, `#tags-cell-${post.id}`, {
       tags: initialTags,
-      onChange: async tags => {
+      onChange: async (tags: string[]) => {
         try {
           const updated = await updatePostTags(post.id, tags);
           // Update local state silently so re-render preserves the new tags
@@ -882,14 +908,14 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
           });
         } catch (err) {
           setToast({
-            message: err.message || "Failed to save tags.",
+            message: (err as Error).message || "Failed to save tags.",
             type: "error"
           });
         }
       }
     });
   }
-  _showConfirm(title, message, confirmText, variant, onConfirm) {
+  _showConfirm(title: string, message: string, confirmText: string, variant: "primary" | "danger", onConfirm: () => void) {
     const mount = document.createElement("div");
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {
@@ -909,7 +935,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     });
     dialog.mount();
   }
-  async _deletePost(id) {
+  async _deletePost(id: number) {
     try {
       await deletePost(id);
       setToast({
@@ -919,12 +945,12 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       this._load();
     } catch (err) {
       setToast({
-        message: err.message || "Move to Trash failed.",
+        message: (err as Error).message || "Move to Trash failed.",
         type: "error"
       });
     }
   }
-  async _restorePost(id, title) {
+  async _restorePost(id: number, title: string) {
     try {
       await restorePost(id);
       setToast({
@@ -934,12 +960,12 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       this._load();
     } catch (err) {
       setToast({
-        message: err.message || "Restore failed.",
+        message: (err as Error).message || "Restore failed.",
         type: "error"
       });
     }
   }
-  async _permanentlyDeletePost(id) {
+  async _permanentlyDeletePost(id: number) {
     try {
       await permanentlyDeletePost(id);
       setToast({
@@ -949,7 +975,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       this._load();
     } catch (err) {
       setToast({
-        message: err.message || "Delete failed.",
+        message: (err as Error).message || "Delete failed.",
         type: "error"
       });
     }
@@ -967,14 +993,14 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
 
     const THRESHOLD_PX = 40; // minimum drag to snap open/closed
     const DAMPING = 0.55; // rubber-band resistance past the edges
-    let openCard = null;
+    let openCard: HTMLElement | null = null;
     let actionsWidth = 0;
     let startX = 0,
       startY = 0;
     let dragging = false; // committed to a horizontal drag
     let decided = false; // direction locked
     let dx = 0;
-    const abortControllers = [];
+    const abortControllers: AbortController[] = [];
     const closeOpen = () => {
       if (!openCard) return;
       openCard.style.transform = '';
@@ -1055,7 +1081,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
         } else if (dx > THRESHOLD_PX) {
           // Swipe right toggles selection for bulk operations.
           card.style.transform = '';
-          this._toggleCardSelection(parseInt(card.dataset.postId, 10));
+          this._toggleCardSelection(parseInt(card.dataset.postId ?? "", 10));
         } else {
           card.style.transform = '';
         }
@@ -1077,7 +1103,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     abortControllers.push(containerAc);
     this.container.addEventListener('click', e => {
       if (!openCard) return;
-      if (openCard.contains(e.target)) return;
+      if (openCard.contains(e.target as Node)) return;
       closeOpen();
     }, {
       signal: containerAc.signal
@@ -1089,11 +1115,11 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
   }
 
   // Swipe-right status cycle: update then re-render so the badge/select reflect it.
-  async _cyclePostStatus(id, status) {
+  async _cyclePostStatus(id: number, status: string) {
     await this._updatePostStatus(id, status);
     this.setState({});
   }
-  async _copyPreviewLink(id) {
+  async _copyPreviewLink(id: number) {
     try {
       const {
         preview_url
@@ -1112,17 +1138,17 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       }
     } catch (err) {
       setToast({
-        message: err.message || "Could not generate preview link.",
+        message: (err as Error).message || "Could not generate preview link.",
         type: "error"
       });
     }
   }
-  async _updatePostStatus(id, status, select?) {
+  async _updatePostStatus(id: number, status: string, select?: HTMLSelectElement) {
     if (status === "scheduled") {
       navigate(`/light/posts/${id}/edit?openSchedule=1`);
       return;
     }
-    const post0 = this.state.posts.find(p => p.id === id);
+    const post0 = this.state.posts.find((p: ListPost) => p.id === id);
     const originalStatus = post0 ? effStatus(post0) : "draft";
     select?.classList.add("badge-loading");
     try {
@@ -1131,7 +1157,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       // status turns a page back into a regular post.
       const updated = await setPostStatus(id, status);
       // Update local state silently to prevent full re-render
-      const post = this.state.posts.find(p => p.id === id);
+      const post = this.state.posts.find((p: ListPost) => p.id === id);
       if (post) {
         post.status = updated.status.toLowerCase();
         post.type = (updated.type || "post").toLowerCase();
@@ -1147,7 +1173,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       // Revert select value on failure
       if (select) select.value = originalStatus;
       setToast({
-        message: err.message || "Update failed.",
+        message: (err as Error).message || "Update failed.",
         type: "error"
       });
     } finally {

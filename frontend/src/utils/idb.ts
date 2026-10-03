@@ -46,7 +46,7 @@ export async function addShareEntry(entry: ShareEntry) {
 export async function getAllShareEntries() {
   const db = await openDB();
   const tx = db.transaction(STORE, 'readonly');
-  return new Promise((res, rej) => {
+  return new Promise<ShareEntry[]>((res, rej) => {
     const req = tx.objectStore(STORE).getAll();
     req.onsuccess = () => res(req.result.sort((a, b) => a.timestamp - b.timestamp));
     req.onerror   = () => rej(req.error);

@@ -109,14 +109,14 @@ export interface PostInput {
   css?: string;
   immersive_mode?: string;
   instagram_share?: boolean;
-  excerpt?: string;
-  slug?: string;
+  excerpt?: string | null;
+  slug?: string | null;
   formatter?: string;
   status?: string;
   type?: string;
   is_featured?: boolean;
-  thumbnail_path?: string;
-  meta_description?: string;
+  thumbnail_path?: string | null;
+  meta_description?: string | null;
   /** Tag names. */
   tags?: string[];
   scheduled_at?: string | null;
