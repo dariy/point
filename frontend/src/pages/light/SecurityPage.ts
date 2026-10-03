@@ -11,6 +11,7 @@ import {
   getSessions, deleteSession, deleteAllOtherSessions,
   changePassword, changeEmail, getMe
 } from '../../api/auth.ts';
+import type { Session } from '../../api/auth.ts';
 import { setToast } from '../../store.ts';
 import { html } from '../../utils/helpers.ts';
 import { usernameHintField } from '../../utils/passwordForm.ts';
@@ -103,13 +104,13 @@ export default class SecurityPage extends Component {
                   </tr>
                 </thead>
                 <tbody>
-                  ${sessions.map(s => html`
+                  ${sessions.map((s: Session) => html`
                     <tr class="${s.is_current ? 'session-current' : ''}">
                       <td>
                         <strong>${s.ua_browser || 'Unknown'} on ${s.ua_os || 'Unknown'}</strong>
                         ${s.is_current ? html` <span class="badge badge-success">Current</span>` : ''}
                       </td>
-                      <td>${formatDateShort(s.last_active)}</td>
+                      <td>${formatDateShort(s.last_active_at)}</td>
                       <td class="text-right">
                         ${!s.is_current ? html`<button class="btn btn-sm btn-danger delete-session-btn" data-id="${s.id}">Logout</button>` : ''}
                       </td>
@@ -148,7 +149,7 @@ export default class SecurityPage extends Component {
 
     this.$$('.delete-session-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        this._handleDeleteSession(btn.dataset.id);
+        this._handleDeleteSession(Number(btn.dataset.id));
       });
     });
   }
@@ -186,7 +187,7 @@ export default class SecurityPage extends Component {
       oldEl.value = '';
       newEl.value = '';
     } catch (err) {
-      setToast({ message: err.message || 'Failed to update password.', type: 'error' });
+      setToast({ message: (err as Error).message || 'Failed to update password.', type: 'error' });
     } finally {
       this.setState({ changingPassword: false });
     }
@@ -204,7 +205,7 @@ export default class SecurityPage extends Component {
       setToast({ message: 'Email updated successfully.', type: 'success' });
       this.setState({ changingEmail: false, email });
     } catch (err) {
-      setToast({ message: err.message || 'Failed to update email.', type: 'error' });
+      setToast({ message: (err as Error).message || 'Failed to update email.', type: 'error' });
       this.setState({ changingEmail: false });
     }
   }
@@ -215,20 +216,20 @@ export default class SecurityPage extends Component {
       setToast({ message: 'Other sessions logged out.', type: 'success' });
       this._load();
     } catch (err) {
-      setToast({ message: err.message || 'Failed to logout other sessions.', type: 'error' });
+      setToast({ message: (err as Error).message || 'Failed to logout other sessions.', type: 'error' });
     }
   }
 
-  async _handleDeleteSession(id) {
+  async _handleDeleteSession(id: number) {
     try {
       await deleteSession(id);
       this._load();
     } catch (err) {
-      setToast({ message: err.message || 'Failed to delete session.', type: 'error' });
+      setToast({ message: (err as Error).message || 'Failed to delete session.', type: 'error' });
     }
   }
 
-  _showConfirm(title, message, confirmText, variant, onConfirm) {
+  _showConfirm(title: string, message: string, confirmText: string, variant: 'danger' | 'primary', onConfirm: () => void) {
     const mount = document.createElement('div');
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {

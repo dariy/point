@@ -24,6 +24,7 @@ import {
   retryJob,
   clearFailedJobs,
 } from "../../api/system.ts";
+import type { Migration } from "../../api/system.ts";
 import { setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { formatFileSize } from "../../utils/formatters.ts";
@@ -122,7 +123,7 @@ export default class SystemPage extends Component {
                 <tbody>
                   ${migrations
                     .map(
-                      (m) => html`
+                      (m: Migration) => html`
                     <tr>
                       <td>${m.name}</td>
                       <td class="text-right">${m.applied_at ? new Date(m.applied_at).toLocaleString() : html`<span class="text-muted">Pending</span>`}</td>
@@ -278,7 +279,7 @@ export default class SystemPage extends Component {
     return `${Math.round(secs / 86400)}d ago`;
   }
 
-  _renderLinkAudit(audit) {
+  _renderLinkAudit(audit: Awaited<ReturnType<typeof auditPostLinks>> | null) {
     if (!audit) return '';
     if (!audit.issues.length) {
       return html`<p class="system-msg success">No broken internal links — checked ${audit.scanned} public posts.</p>`;
@@ -306,7 +307,7 @@ export default class SystemPage extends Component {
       </div>`;
   }
 
-  _renderDiskSection(disk) {
+  _renderDiskSection(disk: Awaited<ReturnType<typeof getDiskInfo>>) {
     const usagePercent = Math.round((disk.used / disk.total) * 100);
     const barClass =
       usagePercent >= 90 ? "danger" : usagePercent >= 70 ? "warning" : "";
@@ -320,7 +321,6 @@ export default class SystemPage extends Component {
           <div class="storage-bar">
             <div class="storage-bar-fill ${barClass}" style="width: ${usagePercent}%"></div>
           </div>
-          <p class="form-hint" style="margin-top: var(--spacing-sm)">Path: <code>${disk.path}</code></p>
         </div>
       </section>`;
   }
@@ -351,7 +351,7 @@ export default class SystemPage extends Component {
     );
 
     // Collapse/expand the Database Migrations card (persisted across re-renders).
-    const header = this.container.querySelector('[data-collapsible="migrations"] .card-header');
+    const header = this.container.querySelector<HTMLElement>('[data-collapsible="migrations"] .card-header');
     const card = header?.closest('[data-collapsible="migrations"]');
     if (header && card) {
       const toggle = () => {
@@ -398,19 +398,19 @@ export default class SystemPage extends Component {
         loading: false,
         error:
           "Could not load system information: " +
-          (err.message || err.toString() || JSON.stringify(err)),
+          ((err as Error).message || String(err) || JSON.stringify(err)),
       });
     }
   }
 
-  async _handleRetryJob(id) {
+  async _handleRetryJob(id: number) {
     try {
       await retryJob(id);
       setToast({ message: "Job queued again.", type: "success" });
       const jobs = await getJobs().catch(() => this.state.jobs);
       this.setState({ jobs });
     } catch (err) {
-      setToast({ message: "Could not retry job: " + (err.message || err), type: "error" });
+      setToast({ message: "Could not retry job: " + ((err as Error).message || err), type: "error" });
     }
   }
 
@@ -434,7 +434,7 @@ export default class SystemPage extends Component {
       const { deleted } = await clearFailedJobs();
       setToast({ message: `Removed ${deleted} failed job${deleted === 1 ? "" : "s"}.`, type: "success" });
     } catch (err) {
-      setToast({ message: "Could not clear failed jobs: " + (err.message || err), type: "error" });
+      setToast({ message: "Could not clear failed jobs: " + ((err as Error).message || err), type: "error" });
     }
     const jobs = await getJobs().catch(() => this.state.jobs);
     this.setState({ jobs });
@@ -446,7 +446,7 @@ export default class SystemPage extends Component {
       setToast({ message: "Cache cleared.", type: "success" });
     } catch (err) {
       setToast({
-        message: err.message || "Failed to clear cache.",
+        message: (err as Error).message || "Failed to clear cache.",
         type: "error",
       });
     }
@@ -460,7 +460,7 @@ export default class SystemPage extends Component {
     } catch (err) {
       this.setState({ auditingLinks: false });
       setToast({
-        message: err.message || "Link audit failed.",
+        message: (err as Error).message || "Link audit failed.",
         type: "error",
       });
     }
@@ -477,7 +477,7 @@ export default class SystemPage extends Component {
     } catch (err) {
       this.setState({ updatingCoords: false });
       setToast({
-        message: err.message || "Update failed.",
+        message: (err as Error).message || "Update failed.",
         type: "error",
       });
     }

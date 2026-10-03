@@ -29,6 +29,7 @@ import { setupListFilters } from '../../components/light/tags/tagListFilters.ts'
 
 import type { PageProps } from '../../router.ts';
 import type { Tag, TagStub } from '../../api/tags.ts';
+import type { TagNode } from '../../components/light/tags/TagTreeView.ts';
 import type { SelectModeHandle } from '../../components/light/tags/tagSelection.ts';
 
 export default class TagsManagerPage extends Component<PageProps> {
@@ -139,7 +140,7 @@ export default class TagsManagerPage extends Component<PageProps> {
   _applyListFilter() {
     const byId = new Map((this.state.tags as Tag[]).map(t => [t.id, t]));
     this.$$('.tm-tag-row').forEach(row => {
-      const tag = byId.get(parseInt(row.dataset.id, 10));
+      const tag = byId.get(parseInt(row.dataset.id || '', 10));
       row.classList.toggle('hidden', !tag || !matchesListFilter(tag, this._listView()));
     });
   }
@@ -147,9 +148,9 @@ export default class TagsManagerPage extends Component<PageProps> {
     const chips = this.$('#tm-filter-chips');
     if (!chips) return;
     setHTML(chips, html`${renderFilterChips(this._listFilterParents)}`);
-    chips.querySelectorAll('.tm-filter-chip').forEach((chip: HTMLElement) => {
+    chips.querySelectorAll<HTMLElement>('.tm-filter-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        const id = parseInt(chip.dataset.removeId, 10);
+        const id = parseInt(chip.dataset.removeId || '', 10);
         this._listFilterParents = this._listFilterParents.filter(p => p.id !== id);
         this._updateFilterChips();
         this._applyListFilter();
@@ -239,7 +240,7 @@ export default class TagsManagerPage extends Component<PageProps> {
       this.$('#collapse-all-btn')?.addEventListener('click', () => this._collapseAll());
       this.$$('.tm-toggle').forEach(btn => {
         btn.addEventListener('click', () => {
-          const id = parseInt(btn.dataset.id, 10);
+          const id = parseInt(btn.dataset.id || '', 10);
           const expanded = new Set(this.state.expanded);
           if (expanded.has(id)) expanded.delete(id);else expanded.add(id);
           this.setState({
@@ -253,14 +254,14 @@ export default class TagsManagerPage extends Component<PageProps> {
         });
       });
       this.$$('.add-child-btn').forEach(btn => {
-        btn.addEventListener('click', () => this._openModal(null, parseInt(btn.dataset.id, 10)));
+        btn.addEventListener('click', () => this._openModal(null, parseInt(btn.dataset.id || '', 10)));
       });
       this.$$('.move-tag-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           openMoveDialog({
             tags: this.state.tags,
-            tagId: parseInt(btn.dataset.id, 10),
-            contextParentId: btn.dataset.parentId !== '' ? parseInt(btn.dataset.parentId, 10) : null,
+            tagId: parseInt(btn.dataset.id || '', 10),
+            contextParentId: btn.dataset.parentId !== '' ? parseInt(btn.dataset.parentId || '', 10) : null,
             onDone: () => this._afterFlow()
           });
         });
@@ -269,7 +270,7 @@ export default class TagsManagerPage extends Component<PageProps> {
         btn.addEventListener('click', () => {
           openMergeDialog({
             tags: this.state.tags,
-            loserId: parseInt(btn.dataset.id, 10),
+            loserId: parseInt(btn.dataset.id || '', 10),
             onDone: () => this._afterFlow()
           });
         });
@@ -279,8 +280,8 @@ export default class TagsManagerPage extends Component<PageProps> {
       this.$$('.tm-badge-via-btn').forEach(btn => {
         btn.addEventListener('click', e => {
           e.stopPropagation();
-          const tagId = parseInt(btn.dataset.openTagId, 10);
-          const tag = this.state.tags.find(t => t.id === tagId);
+          const tagId = parseInt(btn.dataset.openTagId || '', 10);
+          const tag = (this.state.tags as Tag[]).find(t => t.id === tagId);
           if (tag) this._openModal(tag);
         });
       });
@@ -288,14 +289,14 @@ export default class TagsManagerPage extends Component<PageProps> {
     }
     this.$$('.edit-tag-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = parseInt(btn.dataset.id, 10);
-        this._openModal(this.state.tags.find(t => t.id === id));
+        const id = parseInt(btn.dataset.id || '', 10);
+        this._openModal((this.state.tags as Tag[]).find(t => t.id === id));
       });
     });
     this.$$('.delete-tag-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = parseInt(btn.dataset.id, 10);
-        const tag = this.state.tags.find(t => t.id === id);
+        const id = parseInt(btn.dataset.id || '', 10);
+        const tag = (this.state.tags as Tag[]).find(t => t.id === id);
         this._showConfirm('Delete tag', `Delete tag "${tag?.name}"? Posts will NOT be deleted.`, 'Delete', 'danger', () => {
           this._handleDelete(id);
         });
@@ -341,8 +342,8 @@ export default class TagsManagerPage extends Component<PageProps> {
     this._swipeCleanup = null;
   }
   _expandAll() {
-    const expanded = new Set();
-    const collect = nodes => nodes.forEach(n => {
+    const expanded = new Set<number>();
+    const collect = (nodes: TagNode[]) => nodes.forEach(n => {
       if (n.childrenNodes.length > 0) {
         expanded.add(n.id);
         collect(n.childrenNodes);
@@ -363,7 +364,7 @@ export default class TagsManagerPage extends Component<PageProps> {
       expanded: new Set()
     });
   }
-  _handleSort(field) {
+  _handleSort(field: string) {
     const {
       sortField,
       sortOrder
@@ -468,7 +469,7 @@ export default class TagsManagerPage extends Component<PageProps> {
           this._load();
         } catch (err) {
           setToast({
-            message: err.message || 'Reorder failed.',
+            message: (err as Error).message || 'Reorder failed.',
             type: 'error'
           });
         }
@@ -478,12 +479,12 @@ export default class TagsManagerPage extends Component<PageProps> {
 
   // ── Modal ────────────────────────────────────────────────────────────────────
 
-  _openModal(tag = null, parentId = null, {
+  _openModal(tag: Tag | null = null, parentId: number | null = null, {
     fromUrl = false
   } = {}) {
     this._closeModal();
     const isEdit = !!tag;
-    const f = tag || {};
+    const editId = tag ? tag.id : null;
     const {
       selParents,
       selChildren
@@ -504,7 +505,7 @@ export default class TagsManagerPage extends Component<PageProps> {
     setupTagToggleTrees(modal);
 
     // Reflect the open tag in the browser URL
-    const urlSlug = isEdit ? f.slug : 'new';
+    const urlSlug = tag ? tag.slug : 'new';
     const targetPath = `/light/tags/${urlSlug}`;
     if (!fromUrl && location.pathname !== targetPath) {
       history.pushState(null, '', targetPath);
@@ -525,18 +526,19 @@ export default class TagsManagerPage extends Component<PageProps> {
     const inNavCheck = (modal.querySelector('#in-nav-check') as HTMLInputElement|null);
     const navOrderRow = modal.querySelector('#nav-order-row');
     inNavCheck?.addEventListener('change', () => {
-      navOrderRow.classList.toggle('hidden', !inNavCheck.checked);
+      navOrderRow?.classList.toggle('hidden', !inNavCheck.checked);
     });
 
     // Collapsible sections
-    modal.querySelectorAll('.tm-section-toggle').forEach((btn: HTMLElement) => {
+    modal.querySelectorAll<HTMLElement>('.tm-section-toggle').forEach(btn => {
       btn.addEventListener('click', () => {
         const targetId = btn.dataset.target;
         const body = modal.querySelector(`#${targetId}`);
         const arrow = btn.querySelector('.tm-section-arrow');
+        if (!body) return;
         const isOpen = !body.classList.contains('hidden');
         body.classList.toggle('hidden', isOpen);
-        arrow.textContent = isOpen ? '▶' : '▼';
+        if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
       });
     });
 
@@ -547,7 +549,7 @@ export default class TagsManagerPage extends Component<PageProps> {
       const lngInput = (modal.querySelector('#coord-lng') as HTMLInputElement);
       const parseBtn = (modal.querySelector('#gmaps-parse-btn') as HTMLButtonElement);
       const raw = coordInput.value.trim();
-      const setLocked = locked => {
+      const setLocked = (locked: boolean) => {
         coordInput.disabled = locked;
         latInput.disabled = locked;
         lngInput.disabled = locked;
@@ -561,8 +563,8 @@ export default class TagsManagerPage extends Component<PageProps> {
           latInput.value = String(coords.lat);
           lngInput.value = String(coords.lng);
           coordInput.value = '';
-        } else if (isEdit) {
-          const result = await geocodeTag(f.id);
+        } else if (editId !== null) {
+          const result = await geocodeTag(editId);
           latInput.value = String(result.latitude);
           lngInput.value = String(result.longitude);
           setToast({
@@ -572,35 +574,35 @@ export default class TagsManagerPage extends Component<PageProps> {
         }
       } catch (err) {
         setToast({
-          message: err.message || 'Failed to get coordinates.',
+          message: (err as Error).message || 'Failed to get coordinates.',
           type: 'error'
         });
       } finally {
         setLocked(false);
       }
     });
-    modal.querySelector('.modal-close').addEventListener('click', () => this._closeModal());
-    modal.querySelector('#modal-cancel-btn').addEventListener('click', () => this._closeModal());
+    modal.querySelector('.modal-close')!.addEventListener('click', () => this._closeModal());
+    modal.querySelector('#modal-cancel-btn')!.addEventListener('click', () => this._closeModal());
     modal.addEventListener('click', e => {
       if (e.target === modal) this._closeModal();
     });
-    modal.querySelector('#tag-editor-form').addEventListener('submit', async e => {
+    modal.querySelector<HTMLFormElement>('#tag-editor-form')!.addEventListener('submit', async e => {
       e.preventDefault();
-      await this._handleSave(e.target, isEdit ? f.id : null);
+      await this._handleSave(e.target as HTMLFormElement, editId);
     });
     modal.addEventListener('textarea:save', async () => {
-      const form = modal.querySelector('#tag-editor-form');
-      if (form) await this._handleSave(form, isEdit ? f.id : null, {
+      const form = modal.querySelector<HTMLFormElement>('#tag-editor-form');
+      if (form) await this._handleSave(form, editId, {
         closeAfter: false
       });
     });
     modal.addEventListener('keydown', async e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        const form = modal.querySelector('#tag-editor-form');
+        const form = modal.querySelector<HTMLFormElement>('#tag-editor-form');
         if (form) {
           const isMaximized = !!modal.querySelector('.is-maximized');
-          await this._handleSave(form, isEdit ? f.id : null, {
+          await this._handleSave(form, editId, {
             closeAfter: !isMaximized
           });
         }
@@ -664,11 +666,11 @@ export default class TagsManagerPage extends Component<PageProps> {
       this.setState({
         loading: false,
         tags: [],
-        error: err.message || 'Could not load tags.'
+        error: (err as Error).message || 'Could not load tags.'
       });
     }
   }
-  async _handleSave(form, tagId, {
+  async _handleSave(form: HTMLFormElement, tagId: number | null, {
     closeAfter = true
   } = {}) {
     const fd = new FormData(form);
@@ -694,7 +696,7 @@ export default class TagsManagerPage extends Component<PageProps> {
     const longitude = !isNaN(lon) ? lon : null;
     const newParentIds = fd.getAll('parent_ids').map(v => parseInt(String(v), 10));
     const newChildIds = fd.getAll('child_ids').map(v => parseInt(String(v), 10));
-    const submitBtn = form.querySelector('[type="submit"]');
+    const submitBtn = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
     const origText = submitBtn.textContent;
     submitBtn.disabled = true;
     submitBtn.textContent = 'Saving…';
@@ -754,14 +756,14 @@ export default class TagsManagerPage extends Component<PageProps> {
       this._refreshNavTags();
     } catch (err) {
       setToast({
-        message: err.message || 'Save failed.',
+        message: (err as Error).message || 'Save failed.',
         type: 'error'
       });
       submitBtn.disabled = false;
       submitBtn.textContent = origText;
     }
   }
-  _showConfirm(title, message, confirmText, variant, onConfirm) {
+  _showConfirm(title: string, message: string, confirmText: string, variant: 'danger' | 'primary', onConfirm: () => unknown) {
     const mount = document.createElement('div');
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {
@@ -781,7 +783,7 @@ export default class TagsManagerPage extends Component<PageProps> {
     });
     dialog.mount();
   }
-  async _handleDelete(id) {
+  async _handleDelete(id: number) {
     try {
       await deleteTag(id);
       setToast({
@@ -792,7 +794,7 @@ export default class TagsManagerPage extends Component<PageProps> {
       this._refreshNavTags();
     } catch (err) {
       setToast({
-        message: err.message || 'Delete failed.',
+        message: (err as Error).message || 'Delete failed.',
         type: 'error'
       });
     }
@@ -807,7 +809,7 @@ export default class TagsManagerPage extends Component<PageProps> {
       this._load();
     } catch (err) {
       setToast({
-        message: err.message || 'Recalculation failed.',
+        message: (err as Error).message || 'Recalculation failed.',
         type: 'error'
       });
     }
@@ -816,7 +818,7 @@ export default class TagsManagerPage extends Component<PageProps> {
     document.dispatchEvent(new CustomEvent('nav-changed'));
   }
 }
-function _arraysEqual(a, b) {
+function _arraysEqual(a: number[], b: number[]) {
   if (a.length !== b.length) return false;
   const sa = [...a].sort((x, y) => x - y);
   const sb = [...b].sort((x, y) => x - y);

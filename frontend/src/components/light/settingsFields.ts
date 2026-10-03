@@ -114,7 +114,7 @@ function isSecretKey(key: string) {
 
 /** Markup for a single setting input (without its label wrapper). */
 /** The fields of a post the page pickers read. */
-type PagePickerPost = Pick<Post, "type" | "slug" | "title">;
+export type PagePickerPost = Pick<Post, "type" | "slug" | "title">;
 
 function inputHtml(key: string, value: unknown, { posts = [] }: { posts?: PagePickerPost[] }) {
   if (key === "about_post_id" || key === "home_page_post_id") {

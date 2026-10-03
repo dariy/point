@@ -6,6 +6,7 @@
 
 import { Component } from "../../components/Component.ts";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.ts";
+import type { Theme } from "../../api/themes.ts";
 import { getThemes, getActiveTheme, setActiveTheme, getCustomCSS, updateCustomCSS } from "../../api/themes.ts";
 import { setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
@@ -47,7 +48,7 @@ export default class ThemesPage extends Component {
 
     return html`
         <div class="themes-grid">
-          ${themes.map((theme) => this._renderThemeCard(theme, activeTheme, saving))}
+          ${themes.map((theme: Theme) => this._renderThemeCard(theme, activeTheme, saving))}
         </div>
         
         ${pluginHost.isEnabled("custom-css") ? html`
@@ -70,12 +71,12 @@ export default class ThemesPage extends Component {
   // plain colour literals are let through — a theme file is admin-authored but
   // its values are still free text, and escaping alone would not stop extra
   // declarations being smuggled into the attribute.
-  _color(value, fallback) {
+  _color(value: unknown, fallback: string) {
     const v = String(value || "").trim();
     return CSS_COLOR_RE.test(v) ? v : fallback;
   }
 
-  _renderThemeCard(theme, activeTheme, saving) {
+  _renderThemeCard(theme: Theme, activeTheme: string, saving: boolean) {
     const isActive = activeTheme === theme.name;
     const swatch = [
       `--swatch-bg:${this._color(theme.preview_bg, "#f4f4f5")}`,
@@ -121,7 +122,7 @@ export default class ThemesPage extends Component {
     if (this.state.loading || this.state.error) return;
 
     this.$$(".set-active-btn").forEach((btn) => {
-      btn.addEventListener("click", () => this._handleSetActive(btn.dataset.name));
+      btn.addEventListener("click", () => this._handleSetActive(btn.dataset.name || ""));
     });
 
     if (pluginHost.isEnabled("custom-css")) {
@@ -136,6 +137,7 @@ export default class ThemesPage extends Component {
       this.container.querySelector("#save-css-btn")?.addEventListener("click", () => this._handleSaveCSS());
 
       this.container.addEventListener("textarea:maximize", (e) => {
+        if (!(e instanceof CustomEvent)) return;
         this.state.isMaximized = e.detail.isMaximized;
       });
 
@@ -172,7 +174,7 @@ export default class ThemesPage extends Component {
     }
   }
 
-  async _handleSetActive(name) {
+  async _handleSetActive(name: string) {
     this.setState({ saving: true });
     try {
       await setActiveTheme(name);
@@ -183,7 +185,7 @@ export default class ThemesPage extends Component {
       setToast({ message: `Theme "${name}" activated.`, type: "success" });
       this.setState({ saving: false, activeTheme: name });
     } catch (err) {
-      setToast({ message: err.message || "Failed to set theme.", type: "error" });
+      setToast({ message: (err as Error).message || "Failed to set theme.", type: "error" });
       this.setState({ saving: false });
     }
   }
@@ -206,7 +208,7 @@ export default class ThemesPage extends Component {
       }
       this.setState({ savingCSS: false });
     } catch (err) {
-      setToast({ message: err.message || "Failed to save CSS.", type: "error" });
+      setToast({ message: (err as Error).message || "Failed to save CSS.", type: "error" });
       this.setState({ savingCSS: false });
     }
   }

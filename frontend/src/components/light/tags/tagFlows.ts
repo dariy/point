@@ -36,7 +36,7 @@ export interface BulkOutcome {
 
 /** The confirm plumbing of ConfirmDialog, in its positional shape. */
 export type ConfirmFn = (
-  title: string, message: string, confirmLabel: string, variant: string, onConfirm: () => unknown,
+  title: string, message: string, confirmLabel: string, variant: 'danger' | 'primary', onConfirm: () => unknown,
 ) => void;
 
 // ── Decisions ────────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ export default class PasswordResetPage extends Component<PageProps> {
     return this._renderRequestForm(loading, error, success);
   }
 
-  _renderRequestForm(loading, error, success) {
+  _renderRequestForm(loading: boolean, error: string | null, success: string | null) {
     return html`
       <div class="setup-page-container">
         <div class="card">
@@ -68,7 +68,7 @@ export default class PasswordResetPage extends Component<PageProps> {
     `;
   }
 
-  _renderResetForm(loading, error, success) {
+  _renderResetForm(loading: boolean, error: string | null, success: string | null) {
     return html`
       <div class="setup-page-container">
         <div class="card">
@@ -148,7 +148,7 @@ export default class PasswordResetPage extends Component<PageProps> {
       } catch (err) {
         this.setState({
           loading: false,
-          error: err.message || "Something went wrong. Please try again.",
+          error: (err as Error).message || "Something went wrong. Please try again.",
         });
       }
     });
@@ -188,7 +188,7 @@ export default class PasswordResetPage extends Component<PageProps> {
       } catch (err) {
         this.setState({
           loading: false,
-          error: err.message || "Reset failed. The link may have expired.",
+          error: (err as Error).message || "Reset failed. The link may have expired.",
         });
       }
     });

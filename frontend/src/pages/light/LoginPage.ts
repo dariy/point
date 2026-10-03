@@ -26,7 +26,7 @@ export interface LoginPageProps extends Partial<PageProps> {
 }
 
 export default class LoginPage extends Component<LoginPageProps> {
-  _onKeyDown: ((e: KeyboardEvent) => void) | null;
+  _onKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(container: HTMLElement, props?: LoginPageProps) {
     super(container, props);
@@ -101,8 +101,8 @@ export default class LoginPage extends Component<LoginPageProps> {
         setUser(result.user);
         this._finish(result.user);
       } catch (err) {
-        if (err?.name !== 'NotAllowedError') {
-          this.setState({ loading: false, error: err?.message || 'Passkey login failed.' });
+        if ((err as Error)?.name !== 'NotAllowedError') {
+          this.setState({ loading: false, error: (err as Error)?.message || 'Passkey login failed.' });
         } else {
           this.setState({ loading: false });
         }
@@ -131,7 +131,7 @@ export default class LoginPage extends Component<LoginPageProps> {
       } catch (err) {
         this.setState({
           loading: false,
-          error: err.message || 'Login failed. Check your credentials.',
+          error: (err as Error).message || 'Login failed. Check your credentials.',
         });
       }
     });
@@ -161,10 +161,11 @@ export default class LoginPage extends Component<LoginPageProps> {
     setTimeout(() => pwField?.focus(), 80);
 
     // Auto-redirect if already logged in.
-    if (getUser()) this._finish(getUser());
+    const current = getUser();
+    if (current) this._finish(current);
   }
 
   beforeUnmount() {
-    window.removeEventListener('keydown', this._onKeyDown);
+    if (this._onKeyDown) window.removeEventListener('keydown', this._onKeyDown);
   }
 }

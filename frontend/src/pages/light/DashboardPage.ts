@@ -9,6 +9,8 @@ import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/Ad
 import { getStats, getVersion } from '../../api/system.ts';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.ts';
 import { listPosts, createPost } from '../../api/posts.ts';
+import type { Post } from '../../api/posts.ts';
+import type { SystemStats } from '../../api/system.ts';
 import { setToast } from '../../store.ts';
 import { html, navigate, raw } from '../../utils/helpers.ts';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.ts';
@@ -71,7 +73,7 @@ export default class DashboardPage extends Component {
     `;
   }
 
-  _renderContinueWriting(drafts) {
+  _renderContinueWriting(drafts: Post[]) {
     // Falsy, not html``: RawHtml('') is truthy, and _renderContent gates the
     // sidebar wrapper on this result.
     if (!drafts || drafts.length === 0) return '';
@@ -98,7 +100,7 @@ export default class DashboardPage extends Component {
     `;
   }
 
-  _renderStats(s, analytics, topPosts) {
+  _renderStats(s: SystemStats | null, analytics: Awaited<ReturnType<typeof getPostAnalytics>> | null, topPosts: Post[]) {
     if (!s) return '';
 
     // The quota is operator-set (STORAGE_QUOTA_MB) and absent from the stats
@@ -220,7 +222,7 @@ export default class DashboardPage extends Component {
           });
           navigate(`/light/posts/${post.id}/edit`);
         } catch (err) {
-          setToast({ message: err.message || 'Failed to create draft.', type: 'error' });
+          setToast({ message: (err as Error).message || 'Failed to create draft.', type: 'error' });
         }
       });
 
