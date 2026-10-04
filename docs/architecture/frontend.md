@@ -1508,7 +1508,8 @@ follow from that:
   are `type`.
 - **Doc comments keep their prose** and have no `{Type}` part:
   `@param name - text`, `@returns text`.
-- **Casts use `as`**, never `<T>expr`. Do not add `!` while `strict` is off. Do
+- **Casts use `as`**, never `<T>expr`. Use `!` only for a DOM
+  element that is certain to exist (a query of the component's own template). Do
   not add `any`, `@ts-ignore` or `@ts-nocheck` to reduce an error count.
 - **Class fields**: a class declares every `this.<prop>` it assigns as a typed
   field.
@@ -1529,8 +1530,7 @@ follow from that:
   Declaring nothing leaves it `unknown` and the caller has to narrow — which is
   the honest answer for a wire format.
 
-`strict` stays off on purpose: turning it on adds null-safety errors to every
-DOM read at once, which is separate work.
+`strict` is on. Fix a strict error with a real guard, not with a cast or `!`.
 
 ---
 

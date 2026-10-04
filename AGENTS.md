@@ -83,7 +83,8 @@ there. JS stays in `frontend/sw.js`, `frontend/vendor/`, `frontend/test/`, `fron
 - An import names the real file: `./x.ts` for a TS module, `./x.js` for a JS module.
 - Object shapes are `interface`. Unions, aliases and mapped types are `type`.
 - Doc comments keep their prose and have no `{Type}`: `@param name - text`, `@returns text`.
-- Casts use `as`, never `<T>expr`. `strict` is off: do not add `!`. Do not add `any`, `@ts-ignore`
+- Casts use `as`, never `<T>expr`. `strict` is on: use `!` only for a DOM element that is certain to exist
+  (for example, a query of the component's own template). Do not add `any`, `@ts-ignore`
   or `@ts-nocheck` to make an error go away.
 - A class declares every `this.<prop>` it assigns as a typed field.
 
