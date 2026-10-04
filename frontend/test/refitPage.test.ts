@@ -1,16 +1,26 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
 
 // gridFit.ts reads localStorage/document at import time for its zoom helpers;
 // refitPage itself is pure arithmetic, so the stubs only have to exist.
-globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-globalThis.window = { innerWidth: 1200, innerHeight: 800, getComputedStyle: () => ({}), dispatchEvent() {} };
-globalThis.document = {
-  body: { classList: { add() {}, remove() {}, contains: () => false }, style: { setProperty() {}, removeProperty() {} }, appendChild() {} },
-  createElement: () => ({ style: {}, remove() {}, offsetWidth: 0 }),
-  appendChild() {},
+globalThis.localStorage = mock<Storage>({ getItem: () => null, setItem() {}, removeItem() {} });
+globalThis.window = mock<typeof window>({
+  innerWidth: 1200,
+  innerHeight: 800,
+  getComputedStyle: () => mock<CSSStyleDeclaration>({}),
+  dispatchEvent: () => true,
+});
+globalThis.document = mock<Document>({
+  body: mock<HTMLElement>({
+    classList: mock<DOMTokenList>({ add() {}, remove() {}, contains: () => false }),
+    style: mock<CSSStyleDeclaration>({ setProperty() {}, removeProperty: () => '' }),
+    appendChild: <T extends Node>(node: T) => node,
+  }),
+  createElement: () => mock<HTMLElement>({ style: mock<CSSStyleDeclaration>({}), remove() {}, offsetWidth: 0 }),
+  appendChild: <T extends Node>(node: T) => node,
   querySelector: () => null,
-};
+});
 
 const { refitPage } = await import('../src/utils/gridFit.ts');
 

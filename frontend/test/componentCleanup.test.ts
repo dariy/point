@@ -21,13 +21,17 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, HarnessResizeObserver, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 import { Component } from '../src/components/Component.ts';
 import { html } from '../src/utils/helpers.ts';
 import { setAutosaveStatus, setUser, store } from '../src/store.ts';
+import type { User } from '../src/api/auth.ts';
+import type { PageProps } from '../src/router.ts';
+import type TagsManagerPageClass from '../src/pages/light/TagsManagerPage.ts';
 
 /** Live subscribers on a store key — the leak, measured at its source. */
-const listeners = key => store._listeners[key]?.size ?? 0;
+const listeners = (key: string) => store._listeners[key]?.size ?? 0;
 
 /**
  * An `on*`-shaped subscriber for a probe key.
@@ -36,21 +40,18 @@ const listeners = key => store._listeners[key]?.size ?? 0;
  * key. These tests are about how long a subscription lives, not about any real
  * key, so they bind their own throwaway ones in the same shape.
  */
-const onKey = key => cb => store.subscribe(key, cb);
+const onKey = (key: string) => (cb: Function) => store.subscribe(key, cb);
 
 describe('Component — per-render cleanup', () => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM>;
 
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom.cleanup(); });
 
   /** A component that takes one resource per render and reports the balance. */
   class Acquirer extends Component {
-    constructor(container, props) {
-      super(container, props);
-      this.acquired = 0;
-      this.released = 0;
-    }
+    acquired = 0;
+    released = 0;
     render() { return html`<p>x</p>`; }
     afterRender() {
       this.acquired++;
@@ -59,7 +60,7 @@ describe('Component — per-render cleanup', () => {
     get live() { return this.acquired - this.released; }
   }
 
-  const mountIn = (Cls, props) => {
+  const mountIn = <C extends Component>(Cls: new (container: HTMLElement, props: object) => C, props: object = {}) => {
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
     const c = new Cls(el, props);
@@ -94,9 +95,9 @@ describe('Component — per-render cleanup', () => {
 
   test('a cleanup that throws does not strand the ones behind it', () => {
     let tail = 0;
-    const errors = [];
+    const errors: unknown[][] = [];
     const realError = console.error;
-    console.error = (...args) => errors.push(args);
+    console.error = (...args: unknown[]) => { errors.push(args); };
 
     class Angry extends Component {
       render() { return html``; }
@@ -122,6 +123,7 @@ describe('Component — per-render cleanup', () => {
       render() { return html``; }
       afterRender() {
         this.registerCleanup(undefined);
+        // @ts-expect-error null is the non-function input under test
         this.registerCleanup(null);
       }
     }
@@ -172,7 +174,7 @@ describe('Component — per-render cleanup', () => {
 
   test('a callback unsubscribed mid-dispatch by an earlier one is not called', () => {
     const KEY = 'cleanup_sibling';
-    const seen = [];
+    const seen: string[] = [];
     class Parent extends Component {
       render() { return html`<div id="slot"></div>`; }
       afterRender() {
@@ -198,25 +200,27 @@ describe('Component — per-render cleanup', () => {
 });
 
 describe('setupAdminLayout — the leak it caused', () => {
-  let dom, page, TagsManagerPage;
+  let dom: ReturnType<typeof setupDOM>;
+  let page: TagsManagerPageClass | null;
+  let TagsManagerPage: typeof TagsManagerPageClass;
 
   const settle = () => new Promise(r => setImmediate(r));
   const liveObservers = () =>
-    globalThis.ResizeObserver.observers.filter(o => !o.disconnected).length;
+    HarnessResizeObserver.observers.filter(o => !o.disconnected).length;
 
   beforeEach(async () => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
-    globalThis.fetch = async () => ({
+    globalThis.fetch = async () => mock<Response>({
       ok: true, status: 200,
-      headers: { get: () => 'application/json' },
+      headers: mock<Headers>({ get: () => 'application/json' }),
       json: async () => ({ tags: [], total: 0 }),
     });
-    setUser({ username: 'tester' });
+    setUser(mock<User>({ username: 'tester' }));
     ({ default: TagsManagerPage } = await import('../src/pages/light/TagsManagerPage.ts'));
 
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
-    page = new TagsManagerPage(el, {});
+    page = new TagsManagerPage(el, mock<PageProps>({}));
     page.mount();
     await settle();
   });
@@ -224,7 +228,7 @@ describe('setupAdminLayout — the leak it caused', () => {
   afterEach(() => {
     page?.unmount();
     page = null;
-    delete globalThis.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
     dom.cleanup();
   });
 
@@ -233,7 +237,7 @@ describe('setupAdminLayout — the leak it caused', () => {
     assert.ok(baseline >= 1, 'the header compact observer is running');
 
     for (let i = 0; i < 6; i++) {
-      page.setState({ filter: `probe-${i}` });
+      must(page).setState({ filter: `probe-${i}` });
       await settle();
     }
 
@@ -246,7 +250,7 @@ describe('setupAdminLayout — the leak it caused', () => {
     const autosave = listeners('autosave_status');
 
     for (let i = 0; i < 6; i++) {
-      page.setState({ filter: `probe-${i}` });
+      must(page).setState({ filter: `probe-${i}` });
       await settle();
     }
 
@@ -256,12 +260,12 @@ describe('setupAdminLayout — the leak it caused', () => {
 
   test('one status update inserts exactly one sync pill', async () => {
     for (let i = 0; i < 4; i++) {
-      page.setState({ filter: `probe-${i}` });
+      must(page).setState({ filter: `probe-${i}` });
       await settle();
     }
 
     setAutosaveStatus({ status: 'saving' });
-    assert.equal(page.container.querySelectorAll('.sync-pill').length, 1,
+    assert.equal(must(page).container.querySelectorAll('.sync-pill').length, 1,
       'the header was rewritten once, not once per leaked subscription');
 
     setAutosaveStatus({});
@@ -269,7 +273,7 @@ describe('setupAdminLayout — the leak it caused', () => {
 
   test('unmounting an admin page disconnects its header observer', async () => {
     const before = liveObservers();
-    page.unmount();
+    must(page).unmount();
     page = null;
     assert.equal(liveObservers(), before - 1);
   });

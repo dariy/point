@@ -1,19 +1,79 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type * as TextareaMaximizer from '../src/utils/textareaMaximizer.ts';
+
+type Handler = (event: Partial<KeyboardEvent>) => void;
+
+/** What document.createElement returns here: the buttons the maximizer adds. */
+interface FakeEl {
+  tag: string;
+  className?: string;
+  title?: string;
+  classList: Set<string> & { toggle(c: string): boolean };
+  style: Record<string, string>;
+  dataset: Record<string, string>;
+  listeners?: Record<string, Handler>;
+  children?: FakeEl[];
+  dispatched?: Event[];
+  parentElement?: FakeParent | FakeEl;
+  parentNode?: { children?: FakeEl[]; insertBefore?(newNode: FakeEl): void };
+  addEventListener(type: string, handler: Handler): void;
+  appendChild(child: FakeEl): void;
+  insertBefore(newNode: FakeEl): void;
+  remove(): void;
+  dispatchEvent(event: Event): void;
+}
+
+/** The element that holds the textarea and receives the buttons. */
+interface FakeParent {
+  style: Record<string, string>;
+  children: FakeEl[];
+  appendChild(child: FakeEl): void;
+  parentNode?: { insertBefore(newNode: FakeEl): void };
+}
+
+interface FakeTextarea {
+  tagName: 'TEXTAREA';
+  dataset: Record<string, string>;
+  classList: { toggle(c: string): boolean | void; add(): void; contains(c: string): boolean };
+  listeners?: Record<string, Handler>;
+  addEventListener(type: string, handler: Handler): void;
+  dispatchEvent(event: Event): void;
+  parentElement: FakeParent;
+}
+
+/** The one boundary cast: these hand fakes stand in for the DOM types the maximizer is written against. */
+const asDom = <T>(fake: object) => fake as unknown as T;
+
+/** The handler a fake registered for `type`. */
+const listener = (el: { listeners?: Record<string, Handler> }, type: string) =>
+  must(el.listeners?.[type], `${type} listener`);
 
 describe('textareaMaximizer', () => {
-  let setupTextareaMaximizer;
+  let setupTextareaMaximizer: typeof TextareaMaximizer.setupTextareaMaximizer;
 
   before(async () => {
     // Basic DOM Mocks
-    global.window = {
-      getComputedStyle: () => ({ position: 'static' })
-    };
-    global.document = {
-      createElement: (tag) => {
-        const el = {
+    global.window = mock<typeof window>({
+      getComputedStyle: () => mock<CSSStyleDeclaration>({ position: 'static' })
+    });
+    global.document = mock<Document>({
+      createElement: (tag: string) => {
+        const el: FakeEl = {
           tag,
-          classList: new Set(),
+          classList: Object.assign(new Set<string>(), {
+            toggle: (c: string) => {
+              if (el.classList.has(c)) {
+                el.classList.delete(c);
+                return false;
+              } else {
+                el.classList.add(c);
+                return true;
+              }
+            },
+          }),
           style: {},
           dataset: {},
           addEventListener: (event, handler) => {
@@ -41,49 +101,37 @@ describe('textareaMaximizer', () => {
             el.dispatched.push(event);
           }
         };
-        el.classList.add = (c) => {
-          const set = el.classList;
-          Set.prototype.add.call(set, c);
-        };
-        el.classList.toggle = (c) => {
-          if (el.classList.has(c)) {
-            el.classList.delete(c);
-            return false;
-          } else {
-            el.classList.add(c);
-            return true;
-          }
-        };
-        return el;
+        return asDom<HTMLElement>(el);
       },
-      body: {
-        classList: {
+      body: mock<HTMLElement>({
+        classList: mock<DOMTokenList>({
           add: () => {},
           remove: () => {}
-        },
+        }),
         // The maximizer locks page scrolling through utils/scrollLock.ts, which
         // writes document.body.style.overflow — without a style bag the lock is
         // silently skipped and this suite would stop covering it.
-        style: {},
-        appendChild: () => {}
-      }
-    };
+        style: mock<CSSStyleDeclaration>({}),
+        appendChild: <T extends Node>(node: T) => node
+      })
+    });
 
     const mod = await import('../src/utils/textareaMaximizer.ts');
     setupTextareaMaximizer = mod.setupTextareaMaximizer;
   });
 
   test('should add maximize button to textarea', () => {
-    const textarea = {
+    let isMaximized = false;
+    const textarea: FakeTextarea = {
       tagName: 'TEXTAREA',
       dataset: {},
       classList: {
-        toggle: (c) => {
-          textarea.isMaximized = !textarea.isMaximized;
-          return textarea.isMaximized;
+        toggle: () => {
+          isMaximized = !isMaximized;
+          return isMaximized;
         },
         add: () => {},
-        contains: (c) => textarea.isMaximized
+        contains: () => isMaximized
       },
       addEventListener: (event, handler) => {
         textarea.listeners = textarea.listeners || {};
@@ -92,22 +140,17 @@ describe('textareaMaximizer', () => {
       dispatchEvent: () => {},
       parentElement: {
         style: {},
+        children: [],
         appendChild: (child) => {
-          textarea.parentElement.child = child;
+          textarea.parentElement.children.push(child);
           child.parentElement = textarea.parentElement;
         }
       }
     };
 
-    const container = {
+    const container = asDom<HTMLElement>({
       querySelectorAll: () => [textarea]
-    };
-
-    textarea.parentElement.children = [];
-    textarea.parentElement.appendChild = (child) => {
-      textarea.parentElement.children.push(child);
-      child.parentElement = textarea.parentElement;
-    };
+    });
 
     setupTextareaMaximizer(container);
 
@@ -119,16 +162,16 @@ describe('textareaMaximizer', () => {
 
   test('should toggle maximized state on button click', () => {
     let maximized = false;
-    const textarea = {
+    const textarea: FakeTextarea = {
       tagName: 'TEXTAREA',
       dataset: {},
       classList: {
-        toggle: (c) => {
+        toggle: () => {
           maximized = !maximized;
           return maximized;
         },
         add: () => {},
-        contains: (c) => maximized
+        contains: () => maximized
       },
       addEventListener: (event, handler) => {
         textarea.listeners = textarea.listeners || {};
@@ -152,23 +195,23 @@ describe('textareaMaximizer', () => {
       }
     };
 
-    const container = {
+    const container = asDom<HTMLElement>({
       querySelectorAll: () => [textarea]
-    };
+    });
 
     setupTextareaMaximizer(container);
 
     const btn = textarea.parentElement.children[0];
     const saveBtn = textarea.parentElement.children[1];
     
-    btn.listeners.click({ preventDefault: () => {}, stopPropagation: () => {} });
+    listener(btn, 'click')({ preventDefault: () => {}, stopPropagation: () => {} });
 
     assert.strictEqual(maximized, true, 'Textarea should be maximized');
     assert.strictEqual(btn.title, 'Minimize');
     assert.ok(saveBtn.classList.has('is-maximized'), 'Save button should be marked as maximized');
     assert.strictEqual(document.body.style.overflow, 'hidden', 'page scrolling is locked behind it');
 
-    btn.listeners.click({ preventDefault: () => {}, stopPropagation: () => {} });
+    listener(btn, 'click')({ preventDefault: () => {}, stopPropagation: () => {} });
     assert.strictEqual(maximized, false, 'Textarea should be minimized');
     assert.strictEqual(btn.title, 'Maximize');
     assert.ok(!saveBtn.classList.has('is-maximized'), 'Save button should not be marked as maximized');
@@ -176,8 +219,8 @@ describe('textareaMaximizer', () => {
   });
 
   test('should dispatch save event on save button click', () => {
-    const events = [];
-    const textarea = {
+    const events: Event[] = [];
+    const textarea: FakeTextarea = {
       tagName: 'TEXTAREA',
       dataset: {},
       classList: {
@@ -186,7 +229,7 @@ describe('textareaMaximizer', () => {
         contains: () => false
       },
       addEventListener: () => {},
-      dispatchEvent: (e) => events.push(e),
+      dispatchEvent: (e) => { events.push(e); },
       parentElement: {
         style: {},
         children: [],
@@ -197,14 +240,14 @@ describe('textareaMaximizer', () => {
       }
     };
 
-    const container = {
+    const container = asDom<HTMLElement>({
       querySelectorAll: () => [textarea]
-    };
+    });
 
     setupTextareaMaximizer(container);
 
     const saveBtn = textarea.parentElement.children[1];
-    saveBtn.listeners.click({ preventDefault: () => {}, stopPropagation: () => {} });
+    listener(saveBtn, 'click')({ preventDefault: () => {}, stopPropagation: () => {} });
 
     assert.strictEqual(events.length, 1);
     assert.strictEqual(events[0].type, 'textarea:save');
@@ -212,8 +255,8 @@ describe('textareaMaximizer', () => {
   });
 
   test('should dispatch save event on Ctrl+S', () => {
-    const events = [];
-    const textarea = {
+    const events: Event[] = [];
+    const textarea: FakeTextarea = {
       tagName: 'TEXTAREA',
       dataset: {},
       classList: {
@@ -225,7 +268,7 @@ describe('textareaMaximizer', () => {
         textarea.listeners = textarea.listeners || {};
         textarea.listeners[event] = handler;
       },
-      dispatchEvent: (e) => events.push(e),
+      dispatchEvent: (e) => { events.push(e); },
       parentElement: {
         style: {},
         children: [],
@@ -236,13 +279,13 @@ describe('textareaMaximizer', () => {
       }
     };
 
-    const container = {
+    const container = asDom<HTMLElement>({
       querySelectorAll: () => [textarea]
-    };
+    });
 
     setupTextareaMaximizer(container);
 
-    textarea.listeners.keydown({ 
+    listener(textarea, 'keydown')({ 
       ctrlKey: true, 
       key: 's', 
       preventDefault: () => {} 

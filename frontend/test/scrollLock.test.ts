@@ -1,7 +1,8 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click } from './helpers/dom.ts';
+import { setupDOM, click, must } from './helpers/dom.ts';
+import type * as ScrollLock from '../src/utils/scrollLock.ts';
 
 /**
  * The body scroll lock overlays take out while they are open.
@@ -17,8 +18,8 @@ import { setupDOM, click } from './helpers/dom.ts';
  *    and that happens on every setState() of the page holding it.
  */
 
-let dom;
-let lock;
+let dom: ReturnType<typeof setupDOM>;
+let lock: typeof ScrollLock;
 
 beforeEach(async () => {
   dom = setupDOM();
@@ -135,12 +136,12 @@ describe('overlays release the lock when they are unmounted', () => {
 
     const bar = new AdminBottomBar(host, {});
     bar.mount();
-    click(host.querySelector('#bottom-bar-more'));
+    click(must(host.querySelector('#bottom-bar-more'), 'More button'));
     assert.equal(document.body.style.overflow, 'hidden');
 
     // The sheet's open state is a class on the overlay, so a re-render loses it.
     bar.setState({});
-    assert.equal(host.querySelector('#more-sheet-overlay').classList.contains('active'), false);
+    assert.equal(must(host.querySelector('#more-sheet-overlay'), 'More sheet').classList.contains('active'), false);
     assert.equal(document.body.style.overflow, '', 'the lock must go with the sheet');
 
     bar.unmount();

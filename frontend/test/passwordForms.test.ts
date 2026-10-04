@@ -18,9 +18,16 @@ import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.ts';
 import { OWNER_USERNAME } from '../src/utils/passwordForm.ts';
+import type { Component, ComponentState } from '../src/components/Component.ts';
+import type { PageProps } from '../src/router.ts';
+import { mock } from './helpers/mock.ts';
 
 /** Render a page component and hand back its markup as a string. */
-function markupOf(PageClass, props = {}, state = null) {
+function markupOf<P extends object>(
+  PageClass: new (container: HTMLElement, props: P) => Component<P>,
+  props = {} as P,
+  state: ComponentState | null = null,
+) {
   const container = document.createElement('div');
   const page = new PageClass(container, props);
   if (state) Object.assign(page.state, state);
@@ -28,15 +35,15 @@ function markupOf(PageClass, props = {}, state = null) {
 }
 
 /** The <form> elements in some markup, parsed. */
-function formsIn(markup) {
+function formsIn(markup: string) {
   const host = document.createElement('div');
   host.innerHTML = markup;
   return Array.from(host.querySelectorAll('form'));
 }
 
 describe('password forms', () => {
-  let dom;
-  let pages;
+  let dom: ReturnType<typeof setupDOM>;
+  let pages: [string, () => string][];
 
   before(async () => {
     dom = setupDOM();
@@ -48,7 +55,7 @@ describe('password forms', () => {
     pages = [
       ['LoginPage', () => markupOf(login.default)],
       ['SecurityPage', () => markupOf(security.default, {}, { loading: false, sessions: [] })],
-      ['PasswordResetPage', () => markupOf(reset.default, { params: { token: 'tok' } })],
+      ['PasswordResetPage', () => markupOf(reset.default, mock<PageProps>({ params: { token: 'tok' } }))],
     ];
   });
 

@@ -18,15 +18,15 @@ const SOURCE_DIRS = ['common', 'light', 'public', 'p'];
 
 // Comments are stripped first, so prose mentioning a z-index — the ladder is
 // documented in more than one file — is never read as a declaration.
-function stripComments(css) {
+function stripComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
 function cssSources() {
-  const files = [];
+  const files: string[] = [];
   for (const dir of SOURCE_DIRS) {
     const base = join(CSS_ROOT, dir);
-    const walk = (d) => {
+    const walk = (d: string) => {
       for (const entry of readdirSync(d, { withFileTypes: true })) {
         const p = join(d, entry.name);
         if (entry.isDirectory()) walk(p);
@@ -38,17 +38,17 @@ function cssSources() {
   return files;
 }
 
-/** @returns {{file: string, value: number}[]} every z-index declaration. */
-function zIndexDeclarations(file) {
+/** Every z-index declaration in `file`. */
+function zIndexDeclarations(file: string): { file: string; value: number }[] {
   const css = stripComments(readFileSync(file, 'utf8'));
-  const out = [];
+  const out: { file: string; value: number }[] = [];
   for (const m of css.matchAll(/z-index:\s*(-?\d+)/g)) {
     out.push({ file, value: Number(m[1]) });
   }
   return out;
 }
 
-function toastZIndex(css) {
+function toastZIndex(css: string): number {
   const block = stripComments(css).match(/#toasts\s*{([^}]*)}/);
   assert.ok(block, 'no #toasts rule found');
   const z = block[1].match(/z-index:\s*(-?\d+)/);

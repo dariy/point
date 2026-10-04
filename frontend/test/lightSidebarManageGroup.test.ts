@@ -1,5 +1,8 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type { LightSidebar as LightSidebarClass } from '../src/components/light/LightSidebar.ts';
 
 /**
  * The sidebar's Manage group.
@@ -12,41 +15,42 @@ import assert from 'node:assert';
  * is the answer everywhere.
  */
 
-let LightSidebar;
-let prefs;
+let LightSidebar: typeof LightSidebarClass;
+let prefs: Map<string, string>;
 
 /** Render at `path` with the given stored preference (null = never toggled). */
-function renderAt(path, stored) {
+function renderAt(path: string, stored: string | null) {
   prefs.clear();
   if (stored !== null) prefs.set('sidebar_manage_expanded', stored);
-  const sidebar = new LightSidebar({}, { currentPath: path });
+  const sidebar = new LightSidebar(mock<HTMLElement>({}), { currentPath: path });
   // render() returns the RawHtml html`` produces; String() for the assertions.
   return { html: String(sidebar.render()), sidebar };
 }
 
 /** The class list of the Manage group in a rendered sidebar. */
-const groupClasses = (html) => html.match(/class="nav-group ([^"]*)" id="manage-group"/)[1];
+const groupClasses = (html: string) =>
+  must(html.match(/class="nav-group ([^"]*)" id="manage-group"/), 'manage group')[1];
 
 describe('LightSidebar Manage group', () => {
   before(async () => {
     prefs = new Map();
-    global.localStorage = {
-      getItem: (k) => (prefs.has(k) ? prefs.get(k) : null),
-      setItem: (k, v) => prefs.set(k, String(v)),
-      removeItem: (k) => prefs.delete(k),
-    };
-    global.window = {
-      location: { pathname: '', search: '', hostname: 'localhost' },
+    global.localStorage = mock<Storage>({
+      getItem: (k) => prefs.get(k) ?? null,
+      setItem: (k, v) => { prefs.set(k, String(v)); },
+      removeItem: (k) => { prefs.delete(k); },
+    });
+    global.window = mock<typeof window>({
+      location: mock<Location>({ pathname: '', search: '', hostname: 'localhost' }),
       addEventListener: () => {},
       removeEventListener: () => {},
-      matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
-    };
-    global.document = {
-      documentElement: { classList: { contains: () => false } },
+      matchMedia: () => mock<MediaQueryList>({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    });
+    global.document = mock<Document>({
+      documentElement: mock<HTMLElement>({ classList: mock<DOMTokenList>({ contains: () => false }) }),
       querySelector: () => null,
-      querySelectorAll: () => [],
+      querySelectorAll: () => mock<NodeListOf<Element>>({ length: 0, forEach() {}, [Symbol.iterator]: [][Symbol.iterator] }),
       addEventListener: () => {},
-    };
+    });
     ({ LightSidebar } = await import('../src/components/light/LightSidebar.ts'));
   });
 
@@ -74,7 +78,8 @@ describe('LightSidebar Manage group', () => {
 
   test('the first click on an untoggled sidebar moves it, whatever the page', () => {
     // What the click handler flips: the state shown, not the stored null.
-    for (const [path, shown] of [['/light/plugins', true], ['/light/posts', false]]) {
+    const cases: [string, boolean][] = [['/light/plugins', true], ['/light/posts', false]];
+    for (const [path, shown] of cases) {
       const { sidebar } = renderAt(path, null);
       assert.equal(sidebar.state.manageExpanded ?? sidebar._manageActive, shown);
       assert.equal(!(sidebar.state.manageExpanded ?? sidebar._manageActive), !shown);

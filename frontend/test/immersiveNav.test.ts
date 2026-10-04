@@ -1,28 +1,37 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
+import type * as ImmersiveNav from '../src/utils/immersiveNav.ts';
+
+type StateDelta = Parameters<ImmersiveNav.ImmersivePage['setState']>[0];
+interface FakePage extends ImmersiveNav.ImmersivePage {
+  stateCalls: StateDelta[];
+}
 
 describe('immersiveNav', () => {
-  let enterImmersive, exitImmersive, decodeImmersiveHash;
-  let historyCalls;
+  let enterImmersive: typeof ImmersiveNav.enterImmersive;
+  let exitImmersive: typeof ImmersiveNav.exitImmersive;
+  let decodeImmersiveHash: typeof ImmersiveNav.decodeImmersiveHash;
+  let historyCalls: (string | URL | null | undefined)[][];
 
   before(async () => {
-    global.window = {
-      location: { pathname: '/posts/demo', search: '', hash: '' },
-      history: {
-        pushState: (...args) => historyCalls.push(['pushState', args[2]]),
-        replaceState: (...args) => historyCalls.push(['replaceState', args[2]]),
-        back: () => historyCalls.push(['back']),
-      },
+    global.window = mock<typeof window>({
+      location: mock<Location>({ pathname: '/posts/demo', search: '', hash: '' }),
+      history: mock<History>({
+        pushState: (...args) => { historyCalls.push(['pushState', args[2]]); },
+        replaceState: (...args) => { historyCalls.push(['replaceState', args[2]]); },
+        back: () => { historyCalls.push(['back']); },
+      }),
       addEventListener: () => {},
       removeEventListener: () => {},
-    };
+    });
     const mod = await import('../src/utils/immersiveNav.ts');
     ({ enterImmersive, exitImmersive, decodeImmersiveHash } = mod);
   });
 
   beforeEach(() => { historyCalls = []; });
 
-  function fakePage() {
+  function fakePage(): FakePage {
     return {
       stateCalls: [],
       setState(s) { this.stateCalls.push(s); },

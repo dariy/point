@@ -1,8 +1,8 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.ts';
-import { Component } from '../src/components/Component.ts';
+import { setupDOM, must } from './helpers/dom.ts';
+import { Component, type ComponentState } from '../src/components/Component.ts';
 import { html } from '../src/utils/helpers.ts';
 
 /**
@@ -17,14 +17,17 @@ import { html } from '../src/utils/helpers.ts';
  * screen.
  */
 
-let dom;
+let dom: ReturnType<typeof setupDOM>;
 
 beforeEach(() => { dom = setupDOM(); });
 afterEach(() => dom.cleanup());
 
 /** A component recording every lifecycle step it is taken through. */
-class Tracked extends Component {
-  constructor(container, props) {
+interface TrackedProps { label?: string }
+
+class Tracked extends Component<TrackedProps> {
+  log: string[];
+  constructor(container: HTMLElement, props?: TrackedProps) {
     super(container, props);
     this.log = [];
   }
@@ -38,7 +41,10 @@ class Tracked extends Component {
   }
 }
 
-function mounted(Cls, props = {}) {
+function mounted<C extends Tracked>(
+  Cls: new (container: HTMLElement, props: TrackedProps) => C,
+  props: TrackedProps = {},
+) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const c = new Cls(container, props);
@@ -50,9 +56,9 @@ function mounted(Cls, props = {}) {
 describe('Component.update', () => {
   test('is never consulted for the first render', () => {
     const container = document.createElement('div');
-    const calls = [];
+    const calls: unknown[][] = [];
     class First extends Tracked {
-      update(...args) { calls.push(args); return true; }
+      update(...args: unknown[]) { calls.push(args); return true; }
     }
     const c = new First(container, { label: 'one' });
     c.mount();
@@ -65,7 +71,7 @@ describe('Component.update', () => {
     class Handled extends Tracked {
       update() {
         this.log.push('update');
-        this.container.querySelector('p').textContent = this.props.label;
+        must(this.container.querySelector('p')).textContent = this.props.label ?? '';
         return true;
       }
     }
@@ -110,9 +116,9 @@ describe('Component.update', () => {
   });
 
   test('sees props as they were, against props as they now are', () => {
-    const seen = [];
+    const seen: (string | undefined)[][] = [];
     class Diffing extends Tracked {
-      update(prevProps) { seen.push([prevProps.label, this.props.label]); return true; }
+      update(prevProps: TrackedProps) { seen.push([prevProps.label, this.props.label]); return true; }
     }
     const c = mounted(Diffing, { label: 'one' });
     c.setProps({ label: 'two' });
@@ -121,9 +127,9 @@ describe('Component.update', () => {
   });
 
   test('sees state as it was, against state as it now is', () => {
-    const seen = [];
+    const seen: (number | undefined)[][] = [];
     class Diffing extends Tracked {
-      update(prevProps, prevState) { seen.push([prevState.n, this.state.n]); return true; }
+      update(_prevProps: TrackedProps, prevState: ComponentState) { seen.push([prevState.n, this.state.n]); return true; }
     }
     const c = mounted(Diffing);
     c.setState({ n: 1 });
@@ -132,9 +138,9 @@ describe('Component.update', () => {
   });
 
   test('a setState() that is handled leaves prevProps as the current props', () => {
-    const seen = [];
+    const seen: boolean[] = [];
     class Diffing extends Tracked {
-      update(prevProps) { seen.push(prevProps === this.props); return true; }
+      update(prevProps: TrackedProps) { seen.push(prevProps === this.props); return true; }
     }
     const c = mounted(Diffing, { label: 'one' });
     c.setState({ n: 1 });
@@ -146,6 +152,7 @@ describe('Component.update', () => {
       render() { return html`<em>child</em>`; }
     }
     class Parent extends Tracked {
+      child?: Component;
       render() { return html`<p></p><div class="slot"></div>`; }
       afterRender() {
         super.afterRender();
@@ -154,7 +161,7 @@ describe('Component.update', () => {
       update() { return true; }
     }
     const c = mounted(Parent, {});
-    const child = c.child;
+    const child = must(c.child, 'child');
 
     c.setProps({ label: 'two' });
 
@@ -175,7 +182,7 @@ describe('Component.update', () => {
   });
 
   test('an unmounted component is not offered the update path either', () => {
-    const calls = [];
+    const calls: string[] = [];
     class Handled extends Tracked {
       update() { calls.push('update'); return true; }
     }

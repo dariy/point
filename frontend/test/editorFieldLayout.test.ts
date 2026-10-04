@@ -1,6 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setSettings } from '../src/store.ts';
+import { mock } from './helpers/mock.ts';
 import {
   DEFAULT_ORDER,
   DEFAULT_PINNED,
@@ -13,31 +14,30 @@ import {
 } from '../src/components/light/editorFieldLayout.ts';
 
 /** A localStorage that starts empty and can be seeded per test. */
-function fakeStorage(seed = {}) {
+function fakeStorage(seed: Record<string, string> = {}): Storage {
   const data = { ...seed };
-  return {
-    data,
+  return mock<Storage>({
     getItem: (k) => (k in data ? data[k] : null),
     setItem: (k, v) => { data[k] = v; },
     removeItem: (k) => { delete data[k]; },
-  };
+  });
 }
 
 describe('editor field layout preferences', () => {
-  let savedStorage;
+  let savedStorage: Storage;
 
   beforeEach(() => {
     savedStorage = globalThis.localStorage;
-    setSettings(undefined);
+    setSettings({});
   });
   afterEach(() => {
     Object.defineProperty(globalThis, 'localStorage', {
       value: savedStorage, writable: true, configurable: true,
     });
-    setSettings(undefined);
+    setSettings({});
   });
 
-  const useStorage = (seed) => Object.defineProperty(globalThis, 'localStorage', {
+  const useStorage = (seed?: Record<string, string>) => Object.defineProperty(globalThis, 'localStorage', {
     value: fakeStorage(seed), writable: true, configurable: true,
   });
 

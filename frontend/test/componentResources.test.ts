@@ -2,7 +2,7 @@
  * Component — auto-released resources and data-action delegation.
  *
  * registerCleanup() already made "release what this render acquired" possible
- * (frontend/test/componentCleanup.test.js). It did not make it short: every
+ * (frontend/test/componentCleanup.test.ts). It did not make it short: every
  * listener still cost a stored handler, a matching removeEventListener and the
  * discipline to write both. 542 addEventListener calls in frontend/src against
  * 113 removeEventListener is what that discipline actually produced.
@@ -19,16 +19,22 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, fire } from './helpers/dom.ts';
+import { setupDOM, click, fire, must, HarnessResizeObserver } from './helpers/dom.ts';
 import { Component } from '../src/components/Component.ts';
 import { html } from '../src/utils/helpers.ts';
 
+/** A component's element that the test needs to be there. */
+const $ = (c: Component, selector: string) => must(c.$(selector), selector);
+
+/** An `actions` map, called with the component as `this` (Component._dispatchAction). */
+type Actions<T> = Record<string, (this: T, event: Event, el: HTMLElement) => void>;
+
 describe('Component — auto-released resources', () => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM>;
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom.cleanup(); });
 
-  const mountIn = (Cls, props) => {
+  const mountIn = <C extends Component>(Cls: new (container: HTMLElement, props: object) => C, props: object = {}) => {
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
     const c = new Cls(el, props);
@@ -42,9 +48,10 @@ describe('Component — auto-released resources', () => {
    */
   const counter = () => ({
     live: 0,
-    calls: [],
-    addEventListener(type, fn, opts) { this.live++; this.calls.push(['add', type, opts]); },
-    removeEventListener(type, fn, opts) { this.live--; this.calls.push(['remove', type, opts]); },
+    calls: [] as [string, string, unknown][],
+    addEventListener(type: string, _fn: unknown, opts?: unknown) { this.live++; this.calls.push(['add', type, opts]); },
+    removeEventListener(type: string, _fn: unknown, opts?: unknown) { this.live--; this.calls.push(['remove', type, opts]); },
+    dispatchEvent: () => true,
   });
 
   describe('on()', () => {
@@ -81,6 +88,7 @@ describe('Component — auto-released resources', () => {
 
     test('a missing target is a no-op, so a conditional element needs no guard', () => {
       class C extends Component {
+        result?: EventTarget | null;
         render() { return html`<p>x</p>`; }
         afterRender() { this.result = this.on(this.$('.absent'), 'click', () => {}); }
       }
@@ -96,17 +104,17 @@ describe('Component — auto-released resources', () => {
       }
 
       const c = mountIn(C);
-      click(c.$('#b'));
+      click($(c, '#b'));
       assert.equal(fired, 1);
 
       // The button from the previous render is gone from the tree but still
       // reachable; its listener must have been removed with it.
-      const stale = c.$('#b');
+      const stale = $(c, '#b');
       c.setState({ n: 1 });
       click(stale);
       assert.equal(fired, 1, 'the previous render\'s listener is detached');
 
-      click(c.$('#b'));
+      click($(c, '#b'));
       assert.equal(fired, 2, 'the current one is attached');
     });
   });
@@ -171,14 +179,14 @@ describe('Component — auto-released resources', () => {
       class C extends Component {
         render() { return html`<div class="panel"></div>`; }
         afterRender() {
-          this.observe(new ResizeObserver(() => {})).observe(this.$('.panel'));
+          this.observe(new ResizeObserver(() => {})).observe(must(this.$('.panel'), '.panel'));
         }
       }
 
       const c = mountIn(C);
       for (let i = 0; i < 4; i++) c.setState({ i });
 
-      const made = ResizeObserver.observers;
+      const made = HarnessResizeObserver.observers;
       assert.equal(made.length, 5, 'one constructed per render');
       assert.equal(made.filter(o => !o.disconnected).length, 1, 'only the newest is live');
 
@@ -199,11 +207,11 @@ describe('Component — auto-released resources', () => {
     test('a frame scheduled by the previous render cannot run against the new DOM', () => {
       // The harness runs requestAnimationFrame synchronously, so cancellation
       // has to be observed through the ids handed to cancelAnimationFrame.
-      const cancelled = [];
+      const cancelled: number[] = [];
       let next = 1;
-      const pending = new Map();
-      globalThis.requestAnimationFrame = fn => { const id = next++; pending.set(id, fn); return id; };
-      globalThis.cancelAnimationFrame = id => { cancelled.push(id); pending.delete(id); };
+      const pending = new Map<number, FrameRequestCallback>();
+      globalThis.requestAnimationFrame = (fn: FrameRequestCallback) => { const id = next++; pending.set(id, fn); return id; };
+      globalThis.cancelAnimationFrame = (id: number) => { cancelled.push(id); pending.delete(id); };
 
       class C extends Component {
         render() { return html`<p>x</p>`; }
@@ -223,11 +231,11 @@ describe('Component — auto-released resources', () => {
 });
 
 describe('Component — data-action delegation', () => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM>;
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom.cleanup(); });
 
-  const mountIn = (Cls, props) => {
+  const mountIn = <C extends Component>(Cls: new (container: HTMLElement, props: object) => C, props: object = {}) => {
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
     const c = new Cls(el, props);
@@ -236,13 +244,15 @@ describe('Component — data-action delegation', () => {
   };
 
   class List extends Component {
-    constructor(container, props) {
+    log: string[][];
+    actions: Actions<List>;
+    constructor(container: HTMLElement, props?: object) {
       super(container, props);
       this.log = [];
       this.actions = {
-        remove(e, el) { this.log.push(['remove', el.dataset.id]); },
+        remove(_e, el) { this.log.push(['remove', el.dataset.id ?? '']); },
         add() { this.log.push(['add']); },
-        'change:pick'(e, el) { this.log.push(['pick', el.value]); },
+        'change:pick'(_e, el) { this.log.push(['pick', must(el.closest('select'), 'select').value]); },
       };
     }
     render() {
@@ -257,31 +267,31 @@ describe('Component — data-action delegation', () => {
 
   test('a click on a [data-action] element runs its handler, bound to the component', () => {
     const c = mountIn(List);
-    click(c.$('[data-action="add"]'));
+    click($(c, '[data-action="add"]'));
     assert.deepEqual(c.log, [['add']]);
   });
 
   test('the handler receives the [data-action] element even when the click lands inside it', () => {
     const c = mountIn(List);
-    click(c.$('.icon'));
+    click($(c, '.icon'));
     assert.deepEqual(c.log, [['remove', '7']]);
   });
 
   test('a click on nothing in particular is ignored', () => {
     const c = mountIn(List);
-    click(c.$('button:last-of-type'));
+    click($(c, 'button:last-of-type'));
     click(c.container);
     assert.deepEqual(c.log, []);
   });
 
   test('a non-click type is delegated by writing it into the key', () => {
     const c = mountIn(List);
-    const select = c.$('[data-action="pick"]');
+    const select = $(c, '[data-action="pick"]');
     fire(select, 'change');
     assert.deepEqual(c.log, [['pick', 'a']]);
 
     // The bare-key rule is click-only: a `change` must not reach `add`.
-    fire(c.$('[data-action="add"]'), 'change');
+    fire($(c, '[data-action="add"]'), 'change');
     assert.equal(c.log.length, 1);
   });
 
@@ -289,7 +299,7 @@ describe('Component — data-action delegation', () => {
     const c = mountIn(List);
     for (let i = 0; i < 5; i++) c.setState({ i });
 
-    click(c.$('[data-action="add"]'));
+    click($(c, '[data-action="add"]'));
     assert.deepEqual(c.log, [['add']], 'attached exactly once, and still attached');
   });
 
@@ -310,15 +320,18 @@ describe('Component — data-action delegation', () => {
   });
 
   test('an event inside a mounted child belongs to the child alone', () => {
-    class Child extends Component {
-      constructor(container, props) {
+    class Child extends Component<{ log: string[][] }> {
+      actions: Actions<Child>;
+      constructor(container: HTMLElement, props?: { log: string[][] }) {
         super(container, props);
         this.actions = { add() { this.props.log.push(['child-add']); } };
       }
       render() { return html`<button data-action="add">child</button>`; }
     }
     class Parent extends Component {
-      constructor(container, props) {
+      log: string[][];
+      actions: Actions<Parent>;
+      constructor(container: HTMLElement, props?: object) {
         super(container, props);
         this.log = [];
         this.actions = { add() { this.log.push(['parent-add']); } };
@@ -328,10 +341,10 @@ describe('Component — data-action delegation', () => {
     }
 
     const c = mountIn(Parent);
-    click(c.$('#slot button'));
+    click($(c, '#slot button'));
     assert.deepEqual(c.log, [['child-add']], 'the parent did not answer it too');
 
-    click(c.$('#slot').nextElementSibling);
+    click(must($(c, '#slot').nextElementSibling, 'parent button'));
     assert.deepEqual(c.log, [['child-add'], ['parent-add']]);
   });
 
@@ -341,6 +354,6 @@ describe('Component — data-action delegation', () => {
     }
     const c = mountIn(Plain);
     assert.equal(c._actionTeardowns.length, 0);
-    click(c.$('[data-action]'));   // must not throw
+    click($(c, '[data-action]'));   // must not throw
   });
 });

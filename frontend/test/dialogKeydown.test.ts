@@ -1,7 +1,7 @@
 /**
  * The document-level Escape handler the picker dialogs bind while they are open.
  *
- * Same shape as the body scroll lock in scrollLock.test.js: the handler is
+ * Same shape as the body scroll lock in scrollLock.test.ts: the handler is
  * bound in open() and dropped in close(), but close() is not what runs when the
  * dialog is torn out of the DOM instead — a re-render of the page holding it
  * unmounts it. Left behind, the listener calls close() on a dead component on
@@ -12,21 +12,23 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM, fire } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 
 const settle = () => new Promise(r => setImmediate(r));
 const escape = () => fire(document, 'keydown', { key: 'Escape' });
 
 describe('picker dialogs drop their Escape handler when unmounted', () => {
-  let dom, savedFetch;
+  let dom: ReturnType<typeof setupDOM>;
+  let savedFetch: typeof fetch;
 
   beforeEach(() => {
     dom = setupDOM();
     savedFetch = globalThis.fetch;
     // Neither dialog is under test for what it loads; it only has to not throw.
-    globalThis.fetch = async () => ({
+    globalThis.fetch = async () => mock<Response>({
       ok: true,
       status: 200,
-      headers: { get: () => 'application/json' },
+      headers: mock<Headers>({ get: () => 'application/json' }),
       json: async () => ({}),
       text: async () => '{}',
     });

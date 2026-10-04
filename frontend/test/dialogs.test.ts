@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { showConfirm, showPrompt } from "../src/utils/dialogs.ts";
 import { beforeEach, afterEach } from "node:test";
-import { setupDOM } from "./helpers/dom.ts";
+import { setupDOM, must } from "./helpers/dom.ts";
 
 test("dialogs", async (t) => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM> | undefined;
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom?.cleanup(); });
 
@@ -22,7 +22,7 @@ test("dialogs", async (t) => {
     assert.ok(document.body.innerHTML.includes("Test Confirm"));
     assert.ok(document.body.innerHTML.includes("Are you sure?"));
     
-    const confirmBtn = document.querySelector(".btn-primary");
+    const confirmBtn = must(document.querySelector<HTMLElement>(".btn-primary"), "confirm button");
     confirmBtn.click();
   });
 
@@ -33,7 +33,7 @@ test("dialogs", async (t) => {
     });
     assert.ok(document.body.innerHTML.includes("Test Confirm Cancel"));
     
-    const cancelBtn = document.querySelector(".btn-secondary");
+    const cancelBtn = must(document.querySelector<HTMLElement>(".btn-secondary"), "cancel button");
     cancelBtn.click();
     assert.ok(!document.body.innerHTML.includes("Test Confirm Cancel"));
   });
@@ -53,11 +53,11 @@ test("dialogs", async (t) => {
     assert.ok(document.body.innerHTML.includes("Test Prompt"));
     assert.ok(document.body.innerHTML.includes("Enter name:"));
     
-    const input = document.querySelector("input");
+    const input = must(document.querySelector("input"), "prompt input");
     input.value = "bar";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     
-    const confirmBtn = document.querySelector(".btn-primary");
+    const confirmBtn = must(document.querySelector<HTMLElement>(".btn-primary"), "confirm button");
     confirmBtn.click();
   });
 
@@ -68,7 +68,7 @@ test("dialogs", async (t) => {
     });
     assert.ok(document.body.innerHTML.includes("Test Prompt Cancel"));
     
-    const cancelBtn = document.querySelector(".btn-secondary");
+    const cancelBtn = must(document.querySelector<HTMLElement>(".btn-secondary"), "cancel button");
     cancelBtn.click();
     assert.ok(!document.body.innerHTML.includes("Test Prompt Cancel"));
   });

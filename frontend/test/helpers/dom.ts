@@ -173,7 +173,7 @@ function makeStorage(): Storage {
  * `disconnect()` is there for the teardown to call. Tests that care about the
  * resize path call `trigger()` themselves.
  */
-class HarnessResizeObserver {
+export class HarnessResizeObserver {
   static observers: HarnessResizeObserver[] = [];
   callback: ResizeObserverCallback;
   targets: Element[] = [];

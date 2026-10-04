@@ -1,19 +1,21 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 import { attachWindowFileDrop } from '../src/utils/windowFileDrop.ts';
 
 /** A drag event carrying a dataTransfer linkedom does not model itself. */
-function dragEvent(type, { files = [], types = ['Files'] } = {}) {
+function dragEvent(type: string, { files = [] as File[], types = ['Files'] } = {}): Event {
   const e = new globalThis.Event(type, { bubbles: true, cancelable: true });
-  e.dataTransfer = { types, files };
-  return e;
+  return Object.assign(e, { dataTransfer: mock<DataTransfer>({ types, files: mock<FileList>(files) }) });
 }
 
-const file = (name, type) => ({ name, type });
+const file = (name: string, type: string) => mock<File>({ name, type });
 
 describe('attachWindowFileDrop', () => {
-  let dom, detach, dropped;
+  let dom: ReturnType<typeof setupDOM>;
+  let detach: (() => void) | null;
+  let dropped: string[];
 
   beforeEach(() => {
     dom = setupDOM();
@@ -74,7 +76,7 @@ describe('attachWindowFileDrop', () => {
 
   test('detaching stops the handlers and clears the mark', () => {
     document.dispatchEvent(dragEvent('dragenter'));
-    detach();
+    detach?.();
     detach = null;
     assert.ok(!document.body.classList.contains('drag-active'), 'mark cleared on detach');
 

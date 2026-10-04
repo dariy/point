@@ -1,5 +1,10 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type * as DistractionFree from '../src/plugins/distraction-free/index.ts';
+
+type Listener = () => void;
 
 /**
  * Distraction-free mode's gesture state machine.
@@ -12,17 +17,47 @@ import assert from 'node:assert';
  * as gridPager.test.js).
  */
 
-let mount, body, holder, swipeHandlers, prefs;
+let mount: typeof DistractionFree.mount;
+let body: FakeEl;
+let holder: FakeEl;
+let swipeHandlers: Record<string, EventListenerOrEventListenerObject[]>;
+let prefs: Map<string, string>;
 
 /** The body classes the plugin has set, as a plain array. */
 const classes = () => [...body.classList._set];
 
 /** Fire a vertical-swipe event the way GridPager does. */
-const flick = (dir) => {
-  for (const fn of swipeHandlers['point:grid-swipe-vertical'] || []) fn({ detail: { dir } });
+const flick = (dir: string) => {
+  for (const fn of swipeHandlers['point:grid-swipe-vertical'] || []) {
+    const e = new CustomEvent('point:grid-swipe-vertical', { detail: { dir } });
+    if (typeof fn === 'function') fn(e); else fn.handleEvent(e);
+  }
 };
 
-function makeEl() {
+/** The few element members the plugin touches. */
+interface FakeEl {
+  type: string;
+  className: string;
+  innerHTML: string;
+  children: FakeEl[];
+  parentElement?: FakeEl;
+  classList: {
+    _set: Set<string>;
+    add(c: string): void;
+    remove(...cs: string[]): void;
+    contains(c: string): boolean;
+    toggle(c: string, on?: boolean): void;
+  };
+  listeners: Record<string, Listener[]>;
+  appendChild(c: FakeEl): FakeEl;
+  remove(): void;
+  addEventListener(type: string, fn: Listener): void;
+  removeEventListener(type: string, fn: Listener): void;
+  setAttribute(): void;
+  querySelectorAll(): FakeEl[];
+}
+
+function makeEl(): FakeEl {
   return {
     type: '', className: '', innerHTML: '', children: [],
     classList: {
@@ -42,22 +77,25 @@ function makeEl() {
   };
 }
 
+/** The one boundary cast: a FakeEl stands in for the HTMLElement the plugin expects. */
+const asElement = (el: FakeEl) => el as unknown as HTMLElement;
+
 before(async () => {
   prefs = new Map();
-  globalThis.localStorage = {
-    getItem: (k) => (prefs.has(k) ? prefs.get(k) : null),
-    setItem: (k, v) => prefs.set(k, String(v)),
-    removeItem: (k) => prefs.delete(k),
-  };
-  globalThis.window = {
-    addEventListener(type, fn) { (swipeHandlers[type] ||= []).push(fn); },
-    removeEventListener(type, fn) { swipeHandlers[type] = (swipeHandlers[type] || []).filter((f) => f !== fn); },
-  };
-  globalThis.document = {
-    body: null,
-    createElement: () => makeEl(),
-    querySelectorAll: () => [], // the orphaned-toggle sweep finds nothing here
-  };
+  globalThis.localStorage = mock<Storage>({
+    getItem: (k) => prefs.get(k) ?? null,
+    setItem: (k, v) => { prefs.set(k, String(v)); },
+    removeItem: (k) => { prefs.delete(k); },
+  });
+  globalThis.window = mock<typeof window>({
+    addEventListener(type: string, fn: EventListenerOrEventListenerObject) { (swipeHandlers[type] ||= []).push(fn); },
+    removeEventListener(type: string, fn: EventListenerOrEventListenerObject) { swipeHandlers[type] = (swipeHandlers[type] || []).filter((f) => f !== fn); },
+  });
+  globalThis.document = mock<Document>({
+    createElement: () => asElement(makeEl()),
+    // the orphaned-toggle sweep finds nothing here
+    querySelectorAll: () => mock<NodeListOf<Element>>({ length: 0, forEach() {}, [Symbol.iterator]: [][Symbol.iterator] }),
+  });
   ({ mount } = await import('../src/plugins/distraction-free/index.ts'));
 });
 
@@ -67,9 +105,9 @@ function setup({ on = false } = {}) {
   prefs.clear();
   if (on) prefs.set('distraction-free', '1');
   body = makeEl();
-  document.body = body;
+  document.body = asElement(body);
   holder = makeEl();
-  return mount(holder);
+  return mount(asElement(holder));
 }
 
 describe('distraction-free gestures', () => {
@@ -129,7 +167,7 @@ describe('distraction-free gestures', () => {
 
   test('unmount drops the listener, so a stale instance cannot fight the live one', () => {
     const inst = setup({ on: true });
-    inst.unmount();
+    must(inst, 'plugin instance').unmount();
     assert.deepEqual(classes(), []);
     flick('down');
     assert.deepEqual(classes(), [], 'the torn-down plugin no longer reacts');

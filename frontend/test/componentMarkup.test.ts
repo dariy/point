@@ -15,15 +15,15 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, must } from './helpers/dom.ts';
 import { Component } from '../src/components/Component.ts';
-import { html, raw } from '../src/utils/helpers.ts';
+import { html, raw, type RawHtml } from '../src/utils/helpers.ts';
 import { renderTagStrip } from '../src/utils/tagStrip.ts';
 import { thumbAttrs } from '../src/utils/mediaUrl.ts';
 
 describe('Component.render() markup contract', () => {
-  let dom;
-  let host;
+  let dom: ReturnType<typeof setupDOM>;
+  let host: HTMLElement;
 
   beforeEach(() => {
     dom = setupDOM();
@@ -33,8 +33,8 @@ describe('Component.render() markup contract', () => {
   afterEach(() => { dom.cleanup(); });
 
   /** Mount a component whose render() is `fn`, and hand back its container. */
-  const mount = (fn) => {
-    class Ad extends Component { render() { return fn.call(this); } }
+  const mount = (fn: () => RawHtml) => {
+    class Ad extends Component { render() { return fn(); } }
     new Ad(host, {}).mount();
     return host;
   };
@@ -47,12 +47,12 @@ describe('Component.render() markup contract', () => {
   test('a hostile value interpolated by render() cannot open a tag', () => {
     const el = mount(() => html`<p>${'<img src=x onerror=alert(1)>'}</p>`);
     assert.strictEqual(el.querySelectorAll('img').length, 0);
-    assert.strictEqual(el.querySelector('p').textContent, '<img src=x onerror=alert(1)>');
+    assert.strictEqual(must(el.querySelector('p')).textContent, '<img src=x onerror=alert(1)>');
   });
 
   test('a hostile href interpolated by render() is dropped by safeUrl', () => {
     const el = mount(() => html`<a href="${'javascript:alert(1)'}">go</a>`);
-    assert.strictEqual(el.querySelector('a').getAttribute('href'), '#');
+    assert.strictEqual(must(el.querySelector('a')).getAttribute('href'), '#');
   });
 
   test('raw() still opts a trusted constant out, as the SVG blobs need', () => {
@@ -69,7 +69,9 @@ describe('Component.render() markup contract', () => {
       (e) => e instanceof TypeError && /render\(\) must return html`` output, got string/.test(e.message),
     );
     assert.throws(() => mount(() => ''), /must return html`` output/);
+    // @ts-expect-error null is the bad input under test
     assert.throws(() => mount(() => null), /got null/);
+    // @ts-expect-error undefined is the bad input under test
     assert.throws(() => mount(() => undefined), /got undefined/);
   });
 
@@ -77,7 +79,7 @@ describe('Component.render() markup contract', () => {
     // html`` yields a String OBJECT, so an empty one is truthy — and callers
     // gate a wrapper on the fragment: `frag ? html`<div>${frag}</div>` : ''`.
     // Returning html`` from the empty branch emitted the empty wrapper.
-    const wrap = (frag) => String(frag ? html`<div class="w">${frag}</div>` : '');
+    const wrap = (frag: unknown) => String(frag ? html`<div class="w">${frag}</div>` : '');
     assert.strictEqual(wrap(renderTagStrip([])), '');
     assert.strictEqual(wrap(renderTagStrip([{ name: 'a', slug: 'a', inherited: true }])), '');
     assert.strictEqual(wrap(thumbAttrs('')), '');
