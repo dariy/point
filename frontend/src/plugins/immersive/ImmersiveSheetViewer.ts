@@ -21,6 +21,7 @@
 
 import type { MediaViewerProps } from '../../components/shared/MediaViewer.ts';
 import { MediaViewer } from '../../components/shared/MediaViewer.ts';
+import type { PostStub } from '../../api/posts.ts';
 import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.ts';
 import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
@@ -37,13 +38,13 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _sheetHeight: number;
   _currentOffset: number;
   _sheetDrag: boolean;
-  _wrapper: HTMLElement | null;
-  _sheetExifMeta: ReturnType<typeof metadataForSrc>[] | null;
-  _sheetFlyoutCleanup: (() => void) | null;
-  _sheetCommentsComps: { unmount?: () => void }[] | null;
-  _onResize: (() => void) | null;
-  _sheetObserver: ResizeObserver | null;
-  _swipeAxis: 'v' | 'h' | null;
+  _wrapper: HTMLElement | null = null;
+  _sheetExifMeta: ReturnType<typeof metadataForSrc>[] | null = null;
+  _sheetFlyoutCleanup: (() => void) | null = null;
+  _sheetCommentsComps: { unmount?: () => void }[] | null = null;
+  _onResize: (() => void) | null = null;
+  _sheetObserver: ResizeObserver | null = null;
+  _swipeAxis: 'v' | 'h' | null = null;
   constructor(container: HTMLElement, props: MediaViewerProps = {}) {
     super(container, props);
     this._sheetOpen = false; // current snap state
@@ -111,7 +112,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     const shareBtn = html`<button class="immersive-sheet-action" type="button" data-action="share">${raw(SHARE_SVG)}<span>Share</span></button>`;
     return html`<div class="immersive-sheet-actions">${editBtn}${shareBtn}</div>`;
   }
-  _renderFooter(prev, next) {
+  _renderFooter(prev: PostStub | null | undefined, next: PostStub | null | undefined) {
     const settings = getSettings() || {};
     // Same renderer as the site footer — the admin-editable `footer_copyright`
     // template, so the sheet can't show a different line than the home page.
@@ -124,7 +125,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
       back: leftPost,
       fwd: rightPost
     } = immersiveNavTargets(settings, prev, next);
-    const navLink = (postObj, side) => {
+    const navLink = (postObj: PostStub | null | undefined, side: 'left' | 'right') => {
       if (!postObj) return html`<span></span>`;
       const rel = postObj === prev ? 'prev' : 'next';
       const label = postObj.title || (side === 'left' ? 'Previous' : 'Next');

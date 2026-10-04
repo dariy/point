@@ -78,9 +78,9 @@ export function mount(el: HTMLElement) {
   // Flick up raises the overlay, flick down lowers it, and a flick down with the
   // overlay already down leaves the mode — so the two directions are never
   // ambiguous and one gesture only ever does one thing.
-  const onVerticalSwipe = e => {
+  const onVerticalSwipe = (e: Event) => {
     if (!on) return;
-    const dir = e.detail?.dir;
+    const dir = (e as CustomEvent<{ dir?: string }>).detail?.dir;
     if (dir === 'up') {
       if (overlay) return;
       overlay = true;

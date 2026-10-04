@@ -70,19 +70,19 @@ export default class HomePage extends Component<PageProps> {
   _fitLatch: ReturnType<typeof createFitLatch>;
   _resizeGate: ReturnType<typeof createResizeGate>;
   _pager: GridPager;
-  _immersivePushed: boolean;
+  _immersivePushed = false;
   _loadedVc: ViewContext | undefined;
-  _refitRefresh: boolean;
-  _loadedPerPage: number;
-  _fitOwned: boolean;
+  _refitRefresh = false;
+  _loadedPerPage = 0;
+  _fitOwned = false;
   _resizeTimer: ReturnType<typeof setTimeout> | undefined;
   _resizeHandler: (() => void) | undefined;
   _unwatchChrome: (() => void) | null | undefined;
-  _canShowTimeline: boolean;
+  _canShowTimeline = false;
   _headerChild: Component | undefined;
   _footerChild: Component | undefined;
   _timeline: TimelineHandle | undefined;
-  _postChildren: PostListHandle[];
+  _postChildren: PostListHandle[] = [];
 
   constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
@@ -177,7 +177,7 @@ export default class HomePage extends Component<PageProps> {
     try {
       data = await getHomePage(this._buildParams(vc));
     } catch (err) {
-      this.setState({ loading: false, data: null, error: err.message || 'Failed to load posts.' });
+      this.setState({ loading: false, data: null, error: (err as Error).message || 'Failed to load posts.' });
       return;
     }
     if (this._unmounted) return;
@@ -453,12 +453,12 @@ export default class HomePage extends Component<PageProps> {
 
     let gridComp = null;
     if (pluginHost.hasSlot('post-list')) {
-      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount'), gridProps);
+      gridComp = await pluginHost.fillOne('post-list', this.$('#grid-mount')!, gridProps);
     } else {
       const mod = active === 'dynamic-post-list'
         ? await import('../../plugins/dynamic-post-list/index.ts')
         : await import('../../plugins/simple-post-list/index.ts');
-      gridComp = mod.mount(this.$('#grid-mount'), gridProps);
+      gridComp = mod.mount(this.$('#grid-mount')!, gridProps);
     }
 
     if (this._unmounted) {
@@ -492,7 +492,7 @@ export default class HomePage extends Component<PageProps> {
     // published page plus a queue is still worth a paginator, so the "is there
     // more than one page" test spans the whole range rather than counting up
     // from 1.
-    const minPage = Number.isInteger(pagination.min_page) && pagination.min_page < 1
+    const minPage = pagination.min_page !== undefined && Number.isInteger(pagination.min_page) && pagination.min_page < 1
       ? pagination.min_page
       : 1;
     const multiPage = pagination.pages - minPage >= 1;
@@ -597,7 +597,7 @@ export default class HomePage extends Component<PageProps> {
 
       this.setState({ loading: false, data, error: null, startIndex, forceImmersive });
     } catch (err) {
-      this.setState({ loading: false, data: null, error: err.message || 'Failed to load posts.' });
+      this.setState({ loading: false, data: null, error: (err as Error).message || 'Failed to load posts.' });
     }
   }
 }

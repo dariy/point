@@ -14,8 +14,9 @@ import { tagHref } from '../../utils/tagLinks.ts';
 import {
   showCrumbDropdown, hideFlyout, attachFlyoutTrigger, HOVER_OPEN_MS,
 } from '../../utils/tagFlyout.ts';
-import type { FlyoutCrumb } from '../../utils/tagFlyout.ts';
-import type { PublicHeaderProps } from '../public-header/PublicHeader.ts';
+import type { FlyoutCrumb, FlyoutItem } from '../../utils/tagFlyout.ts';
+import type { NavTagNode } from '../../api/nav.ts';
+import type { HeaderCrumb, PublicHeaderProps } from '../public-header/PublicHeader.ts';
 
 /**
  * The header's own props, passed on whole, plus the header group — clicks
@@ -57,7 +58,7 @@ export class Breadcrumbs extends Component<BreadcrumbsProps> {
       const isLast = i === breadcrumb.length - 1;
       const lockIcon = crumb.is_hidden ? raw(LOCK_SVG) : '';
       const tooltipAttr = crumb.tooltip ? html` title="${crumb.tooltip}"` : '';
-      const popupAttr = (has) => (has ? raw(' aria-haspopup="true"') : '');
+      const popupAttr = (has: boolean) => (has ? raw(' aria-haspopup="true"') : '');
 
       if (isLast) {
         const hasChildren = this._crumbHasChildren(crumb, navTags);
@@ -128,7 +129,7 @@ export class Breadcrumbs extends Component<BreadcrumbsProps> {
    * to and including `upToIndex` (which is flagged `current`). Lets the folded
    * "…" ancestors stay reachable inside the anchored dropdown on mobile.
    */
-  _buildPath(upToIndex) {
+  _buildPath(upToIndex: number) {
     const { settings = {}, breadcrumb = [] } = this.props;
     const path: FlyoutCrumb[] = [{ name: settings.blog_title || 'Photo Blog', href: '/' }];
     breadcrumb.slice(0, upToIndex + 1).forEach((c, i) => {
@@ -142,9 +143,9 @@ export class Breadcrumbs extends Component<BreadcrumbsProps> {
     return path;
   }
 
-  _crumbHasChildren(crumb, navTags) {
+  _crumbHasChildren(crumb: HeaderCrumb, navTags: NavTagNode[]) {
     if (!crumb.slug) return false;
-    const find = (tags) => {
+    const find = (tags: NavTagNode[]): boolean | null => {
       for (const t of tags) {
         if (t.slug === crumb.slug) return !!(t.children && t.children.length);
         if (t.children && t.children.length) {
@@ -157,8 +158,8 @@ export class Breadcrumbs extends Component<BreadcrumbsProps> {
     return find(navTags) === true;
   }
 
-  _getTagChildren(slug, navTags) {
-    const find = (tags) => {
+  _getTagChildren(slug: string, navTags: NavTagNode[]) {
+    const find = (tags: NavTagNode[]): NavTagNode[] | null => {
       for (const t of tags) {
         if (t.slug === slug) return t.children || [];
         if (t.children && t.children.length) {
@@ -185,7 +186,11 @@ export class Breadcrumbs extends Component<BreadcrumbsProps> {
 
     // `buildPath` (optional) returns the ancestor trail lazily; `children` is
     // the drill-down list. The final spec is assembled per open.
-    const attachCrumbDropdown = (el, children, buildPath = null) => {
+    const attachCrumbDropdown = (
+      el: HTMLElement,
+      children: FlyoutItem[],
+      buildPath: (() => FlyoutCrumb[]) | null = null,
+    ) => {
       if (!children.length && !buildPath) return;
       attachFlyoutTrigger(el, () => ({
         path: (buildPath && trailHidden()) ? buildPath() : [],
@@ -195,7 +200,7 @@ export class Breadcrumbs extends Component<BreadcrumbsProps> {
 
     const breadcrumbSlugs = (this.props.breadcrumb || [])
       .map(b => b.slug)
-      .filter(Boolean);
+      .filter((s): s is string => !!s);
     this.$$('.breadcrumb-link[data-crumb-slug], .breadcrumb-current[data-crumb-slug]').forEach(el => {
       if (!el.classList.contains('has-dropdown')) return;
       const slug = el.dataset.crumbSlug;
@@ -204,7 +209,7 @@ export class Breadcrumbs extends Component<BreadcrumbsProps> {
       if (!children.length) return;
       const idx = breadcrumbSlugs.indexOf(slug);
       const childPath = idx >= 0 ? breadcrumbSlugs.slice(0, idx + 1) : [slug];
-      const childItems = children.map(c => ({
+      const childItems = children.map((c: NavTagNode) => ({
         name: c.name,
         slug: c.slug,
         count: c.post_count,
@@ -225,11 +230,11 @@ export class Breadcrumbs extends Component<BreadcrumbsProps> {
       !lastCrumbCurrent.classList.contains('has-dropdown') &&
       breadcrumbSlugs.length
     ) {
-      const path = this._buildPath(this.props.breadcrumb.length - 1);
+      const path = this._buildPath((this.props.breadcrumb || []).length - 1);
       // Marker for the CSS affordance: a "reveal trail" chevron shows on this
       // crumb only while the header is actually hiding ancestors (see header.css).
       lastCrumbCurrent.classList.add('crumb-trail-toggle');
-      let trailTimer = null;
+      let trailTimer: ReturnType<typeof setTimeout> | undefined;
       lastCrumbCurrent.addEventListener('pointerenter', (e) => {
         if (e.pointerType !== 'mouse') return;
         clearTimeout(trailTimer);

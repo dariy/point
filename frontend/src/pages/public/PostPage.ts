@@ -33,7 +33,7 @@ export default class PostPage extends Component<PageProps> {
   _contentChild: PostContent | null;
   _loadVersion: number;
   _spinnerTimer: ReturnType<typeof setTimeout> | undefined;
-  _immersivePushed: boolean;
+  _immersivePushed = false;
 
   constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
@@ -460,7 +460,8 @@ export default class PostPage extends Component<PageProps> {
           forceImmersive
         });
       }
-    } catch (err) {
+    } catch (e) {
+      const err = e as { status?: number; message?: string };
       if (this._unmounted || version !== this._loadVersion) return;
       const msg = err.status === 404 ? 'Post not found.' : err.message || 'Failed to load post.';
       if (isInPlaceUpdate) this._showContentError(msg);else this.setState({

@@ -66,10 +66,10 @@ export interface PublicFooterProps {
 }
 
 export class PublicFooter extends Component<PublicFooterProps> {
-  _onZoomSync: ((e: CustomEvent<{ cols?: number }>) => void) | null;
-  _pagination: Pagination | null;
-  _unsubPagination: Function | null;
-  _cleanupFlyout: (() => void) | null;
+  _onZoomSync: ((e: Event) => void) | null = null;
+  _pagination: Pagination | null = null;
+  _unsubPagination: Function | null = null;
+  _cleanupFlyout: (() => void) | null = null;
   render() {
     const { settings = {}, immersiveTags = [] } = this.props;
 
@@ -181,7 +181,7 @@ export class PublicFooter extends Component<PublicFooterProps> {
         );
       });
       this._onZoomSync = (e) => {
-        const cols = e.detail?.cols;
+        const cols = (e as CustomEvent<{ cols?: number }>).detail?.cols;
         if (!cols) return;
         zoomEl.max = String(maxZoomCols()); // viewport may have resized
         zoomEl.value = String(Number(zoomEl.max) + 1 - clampZoom(cols));

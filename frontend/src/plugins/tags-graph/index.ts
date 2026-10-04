@@ -22,6 +22,8 @@ import { SEARCH_SVG } from '../../utils/icons.ts';
 import { setPageTitle } from '../../utils/documentTitle.ts';
 import { TagGraph } from './tagGraph.ts';
 import type { GraphNode } from './graphModel.ts';
+
+type GraphTag = Awaited<ReturnType<typeof getTagsGraph>>['tags'][number];
 import { pluginHost } from '../../core/pluginHost.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import type { PageProps } from '../../router.ts';
@@ -32,7 +34,7 @@ export default class TagsPage extends Component<PageProps> {
   _graph: TagGraph | null;
   _resizeObs: ResizeObserver | null;
   _themeListener: (() => void) | null;
-  _canShowTimeline: boolean;
+  _canShowTimeline = false;
   _timeline: TimelineHandle | undefined;
   _headerChild: Component | undefined;
 
@@ -74,9 +76,9 @@ export default class TagsPage extends Component<PageProps> {
     const tags = (data && data.tags) || [];
     const fallback = tags
       .slice()
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a: GraphTag, b: GraphTag) => a.name.localeCompare(b.name))
       .map(
-        (t) =>
+        (t: GraphTag) =>
           html`<li><a href="/tags/${t.slug}">${t.name} (${String(t.post_count || 0)})</a></li>`,
       );
 
@@ -166,7 +168,7 @@ export default class TagsPage extends Component<PageProps> {
     // Node-type toggles (Tag / Year / Place / Post) — show or hide each kind.
     this.$$('.tg-toggle').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const type = btn.dataset.type;
+        const type = btn.dataset.type ?? '';
         const nowOff = btn.getAttribute('aria-pressed') === 'true';
         btn.setAttribute('aria-pressed', String(!nowOff));
         btn.classList.toggle('is-off', nowOff);
@@ -224,7 +226,7 @@ export default class TagsPage extends Component<PageProps> {
     this._updateBreadcrumb(node);
   }
 
-  _updateBreadcrumb(node: GraphNode | null): void {
+  _updateBreadcrumb(node: GraphNode | null | undefined): void {
     const loaded = !this.state.loading && this.state.data && !this.state.error;
     
     let breadcrumb: HeaderCrumb[] = loaded ? [{ name: `All tags (${this.state.total})` }] : [];
@@ -321,7 +323,7 @@ export default class TagsPage extends Component<PageProps> {
         error: null,
       });
     } catch (err) {
-      this.setState({ loading: false, data: null, total: 0, error: err.message || 'Failed to load tags.' });
+      this.setState({ loading: false, data: null, total: 0, error: (err as Error).message || 'Failed to load tags.' });
     }
   }
 }

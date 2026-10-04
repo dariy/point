@@ -41,7 +41,7 @@ const setRunning = (v: boolean) => {
 };
 export const isSlideshowRunning = () => document.body.classList.contains(RUNNING_CLASS);
 const clampInterval = (n: number) => Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, Number.isFinite(n) ? n : DEFAULT_INTERVAL));
-const loadInterval = () => clampInterval(parseInt(localStorage.getItem('slideshow.interval'), 10));
+const loadInterval = () => clampInterval(parseInt(localStorage.getItem('slideshow.interval') ?? '', 10));
 const loadShuffle = () => localStorage.getItem('slideshow.shuffle') === 'true';
 // Loop defaults ON (the historical behaviour: the show wraps the feed forever).
 const loadLoop = () => localStorage.getItem('slideshow.loop') !== 'false';
@@ -62,16 +62,16 @@ export class Slideshow {
   _onPointer: () => void;
   _onNav: () => void;
   _onVisibility: () => void;
-  _btn: HTMLButtonElement | null;
+  _btn: HTMLButtonElement | null = null;
   _idleTimer: ReturnType<typeof setTimeout> | undefined;
-  _timer: ReturnType<typeof setTimeout> | null;
-  _armedVideo: HTMLVideoElement | null;
-  _onEnded: (() => void) | null;
-  _bar: HTMLDivElement | null;
-  _intervalLabel: HTMLElement | null;
-  _loopBtn: HTMLElement | null;
-  _shuffleBtn: HTMLElement | null;
-  _paused: boolean;
+  _timer: ReturnType<typeof setTimeout> | null = null;
+  _armedVideo: HTMLVideoElement | null = null;
+  _onEnded: (() => void) | null = null;
+  _bar: HTMLDivElement | null = null;
+  _intervalLabel: HTMLElement | null = null;
+  _loopBtn: HTMLElement | null = null;
+  _shuffleBtn: HTMLElement | null = null;
+  _paused = false;
   constructor(wrapper: HTMLElement, ctx: SlideshowController) {
     this.wrapper = wrapper;
     this.ctx = ctx;
@@ -251,11 +251,13 @@ export class Slideshow {
     this._timer = setTimeout(() => this._advance(), this.interval * 1000);
   }
   _disarm() {
-    clearTimeout(this._timer);
+    if (this._timer) clearTimeout(this._timer);
     this._timer = null;
     if (this._armedVideo) {
-      this._armedVideo.removeEventListener('ended', this._onEnded);
-      this._armedVideo.removeEventListener('error', this._onEnded);
+      if (this._onEnded) {
+        this._armedVideo.removeEventListener('ended', this._onEnded);
+        this._armedVideo.removeEventListener('error', this._onEnded);
+      }
       this._armedVideo.loop = true; // restore normal carousel looping
       this._armedVideo = null;
       this._onEnded = null;
@@ -289,11 +291,11 @@ export class Slideshow {
               aria-label="Shuffle" aria-pressed="${this.shuffle}">${raw(SHUFFLE_SVG)}</button>`);
     // Keep taps on the bar from reaching the viewer's close/hide handler.
     bar.addEventListener('click', e => e.stopPropagation());
-    bar.querySelectorAll<HTMLElement>('[data-step]').forEach((b: HTMLElement) => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step, 10))));
+    bar.querySelectorAll<HTMLElement>('[data-step]').forEach((b: HTMLElement) => b.addEventListener('click', () => this._changeInterval(parseInt(b.dataset.step ?? '', 10))));
     this._intervalLabel = bar.querySelector('.slideshow-interval');
-    this._loopBtn = bar.querySelector('.slideshow-loop');
+    this._loopBtn = bar.querySelector<HTMLElement>('.slideshow-loop')!;
     this._loopBtn.addEventListener('click', () => this._toggleLoop());
-    this._shuffleBtn = bar.querySelector('.slideshow-shuffle');
+    this._shuffleBtn = bar.querySelector<HTMLElement>('.slideshow-shuffle')!;
     this._shuffleBtn.addEventListener('click', () => this._toggleShuffle());
     this.wrapper.appendChild(bar);
     this._bar = bar;

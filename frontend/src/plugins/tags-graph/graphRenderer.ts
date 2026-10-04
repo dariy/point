@@ -72,7 +72,9 @@ export class GraphRenderer {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('GraphRenderer: no 2D context for the canvas');
+    this.ctx = ctx;
     this.colors = readColors(canvas);
   }
 
