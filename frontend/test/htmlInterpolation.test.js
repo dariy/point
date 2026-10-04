@@ -30,9 +30,13 @@ const SRC = new URL('../src', import.meta.url).pathname;
 /** Looks like an HTML element rather than prose that happens to contain "<". */
 const MARKUP = /<\/[a-z][a-z0-9-]*\s*>|<[a-z][a-z0-9-]*(\s[^<>]*)?\/?>/i;
 
-/** Every .js and .ts source; .d.ts holds no code. */
+/**
+ * Every .js and .ts source; .d.ts holds no code. eslintRules.test.js writes and
+ * deletes __rule_fixture_* files here in parallel, so skip them.
+ */
 function sourceFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
+    if (name.startsWith('__rule_fixture_')) return [];
     const full = join(dir, name);
     if (statSync(full).isDirectory()) return sourceFiles(full);
     return /\.[jt]s$/.test(name) && !name.endsWith('.d.ts') ? [full] : [];
