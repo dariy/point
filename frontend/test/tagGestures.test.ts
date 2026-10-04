@@ -1,7 +1,8 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click } from './helpers/dom.ts';
+import { setupDOM, click, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 import {
   gestureDirection,
   swipeTranslate,
@@ -14,6 +15,7 @@ import {
   THRESHOLD_PX,
   DAMPING,
 } from '../src/components/light/tags/tagGestures.ts';
+import type { DragAndDropHandlers } from '../src/components/light/tags/tagGestures.ts';
 
 describe('gestureDirection', () => {
   test('withholds a direction until the movement is big enough', () => {
@@ -182,19 +184,19 @@ describe('reorderPlan', () => {
 });
 
 describe('DOM-bound gestures', () => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM>;
 
   beforeEach(() => {
     dom = setupDOM();
-    globalThis.matchMedia = q => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} });
+    globalThis.matchMedia = (q: string) => mock<MediaQueryList>({ matches: true, media: q, addEventListener() {}, removeEventListener() {} });
     window.matchMedia = globalThis.matchMedia;
     // linkedom has no layout engine; give the measured bits a fixed size.
     const proto = window.HTMLElement.prototype;
     Object.defineProperty(proto, 'offsetWidth', {
       configurable: true,
-      get() { return this.classList?.contains('tm-actions') ? 100 : 0; },
+      get(this: HTMLElement) { return this.classList?.contains('tm-actions') ? 100 : 0; },
     });
-    proto.getBoundingClientRect = () => ({ top: 100, height: 40 });
+    proto.getBoundingClientRect = () => mock<DOMRect>({ top: 100, height: 40 });
   });
   afterEach(() => dom.cleanup());
 
@@ -205,18 +207,17 @@ describe('DOM-bound gestures', () => {
         <div class="tm-row" data-id="3" data-parent-id="1"><span class="nm">Japan</span><div class="tm-actions"><button>x</button></div></div>
         <div class="tm-row" data-id="4" data-parent-id=""><span class="nm">Loose</span><div class="tm-actions"><button>x</button></div></div>
       </div>`;
-    return document.getElementById('c');
+    return must(document.getElementById('c'), 'rows');
   };
-  const row = (c, id) => c.querySelector(`.tm-row[data-id="${id}"]`);
+  const row = (c: HTMLElement, id: number) => must(c.querySelector<HTMLElement>(`.tm-row[data-id="${id}"]`), `row ${id}`);
 
-  const touch = (el, type, x, y, count = 1) => {
+  const touch = (el: Element, type: string, x: number, y: number, count = 1) => {
     const e = new window.Event(type, { bubbles: true, cancelable: true });
     const list = new Array(count).fill({ clientX: x, clientY: y });
-    e.touches = list;
-    e.changedTouches = list;
+    Object.assign(e, { touches: list, changedTouches: list });
     el.dispatchEvent(e);
   };
-  const swipe = (el, fromX, toX, y = 50) => {
+  const swipe = (el: Element, fromX: number, toX: number, y = 50) => {
     touch(el, 'touchstart', fromX, y);
     touch(el, 'touchmove', toX, y);
     touch(el, 'touchend', toX, y);
@@ -224,14 +225,14 @@ describe('DOM-bound gestures', () => {
 
   describe('bindSwipeToReveal', () => {
     test('does nothing on desktop widths', () => {
-      globalThis.matchMedia = q => ({ matches: false, media: q });
+      globalThis.matchMedia = (q: string) => mock<MediaQueryList>({ matches: false, media: q });
       window.matchMedia = globalThis.matchMedia;
       assert.equal(bindSwipeToReveal(buildRows(), {}), null);
     });
 
     test('does nothing without matchMedia at all', () => {
-      delete globalThis.matchMedia;
-      delete window.matchMedia;
+      Reflect.deleteProperty(globalThis, 'matchMedia');
+      Reflect.deleteProperty(window, 'matchMedia');
       assert.equal(bindSwipeToReveal(buildRows(), {}), null);
     });
 
@@ -245,7 +246,7 @@ describe('DOM-bound gestures', () => {
 
     test('a right swipe reports a selection instead', () => {
       const c = buildRows();
-      const selected = [];
+      const selected: (string | undefined)[] = [];
       bindSwipeToReveal(c, { onSelect: r => selected.push(r.dataset.id) });
       swipe(row(c, 2), 100, 180);
       assert.deepEqual(selected, ['2']);
@@ -254,7 +255,7 @@ describe('DOM-bound gestures', () => {
 
     test('a vertical drag is left alone so the page can scroll', () => {
       const c = buildRows();
-      const selected = [];
+      const selected: (string | undefined)[] = [];
       bindSwipeToReveal(c, { onSelect: r => selected.push(r.dataset.id) });
       touch(row(c, 2), 'touchstart', 200, 50);
       touch(row(c, 2), 'touchmove', 198, 200);
@@ -324,7 +325,7 @@ describe('DOM-bound gestures', () => {
       const c = buildRows();
       bindSwipeToReveal(c, {});
       swipe(row(c, 2), 200, 140);
-      click(row(c, 2).querySelector('.nm'));
+      click(must(row(c, 2).querySelector('.nm'), 'name'));
       assert.ok(row(c, 2).classList.contains('tm-row--revealed'), 'still open');
       click(row(c, 3));
       assert.equal(row(c, 2).classList.contains('tm-row--revealed'), false);
@@ -343,7 +344,7 @@ describe('DOM-bound gestures', () => {
 
     test('cleanup detaches the listeners and shuts an open row', () => {
       const c = buildRows();
-      const cleanup = bindSwipeToReveal(c, {});
+      const cleanup = must(bindSwipeToReveal(c, {}), 'cleanup');
       swipe(row(c, 2), 200, 140);
       cleanup();
       assert.equal(row(c, 2).classList.contains('tm-row--revealed'), false);
@@ -354,14 +355,12 @@ describe('DOM-bound gestures', () => {
   });
 
   describe('bindDragAndDrop', () => {
-    const drag = (el, type, { clientY = 120, relatedTarget = null } = {}) => {
+    const drag = (el: Element, type: string, { clientY = 120, relatedTarget = null }: { clientY?: number, relatedTarget?: Element | null } = {}) => {
       const e = new window.Event(type, { bubbles: true, cancelable: true });
-      e.clientY = clientY;
-      e.relatedTarget = relatedTarget;
-      e.dataTransfer = { setData() {}, getData() {} };
+      Object.assign(e, { clientY, relatedTarget, dataTransfer: { setData() {}, getData() {} } });
       el.dispatchEvent(e);
     };
-    const handlers = (calls) => ({
+    const handlers = (calls: string[]): DragAndDropHandlers => ({
       siblingBefore: () => 99,
       onReparent: (d, t) => calls.push(`reparent ${d}->${t}`),
       onReorder: (d, p, a) => calls.push(`reorder ${d} under ${p} after ${a}`),
@@ -375,7 +374,7 @@ describe('DOM-bound gestures', () => {
     };
 
     test('dropping in the middle reparents', () => {
-      const c = buildDraggable(); const calls = [];
+      const c = buildDraggable(); const calls: string[] = [];
       bindDragAndDrop(c, handlers(calls));
       drag(row(c, 2), 'dragstart');
       drag(row(c, 3), 'dragover', { clientY: 120 });
@@ -384,7 +383,7 @@ describe('DOM-bound gestures', () => {
     });
 
     test('dropping below a sibling reorders after it', () => {
-      const c = buildDraggable(); const calls = [];
+      const c = buildDraggable(); const calls: string[] = [];
       bindDragAndDrop(c, handlers(calls));
       drag(row(c, 2), 'dragstart');
       drag(row(c, 3), 'dragover', { clientY: 135 });
@@ -393,7 +392,7 @@ describe('DOM-bound gestures', () => {
     });
 
     test('dropping above a sibling reorders after its predecessor', () => {
-      const c = buildDraggable(); const calls = [];
+      const c = buildDraggable(); const calls: string[] = [];
       bindDragAndDrop(c, handlers(calls));
       drag(row(c, 2), 'dragstart');
       drag(row(c, 3), 'dragover', { clientY: 102 });
@@ -402,7 +401,7 @@ describe('DOM-bound gestures', () => {
     });
 
     test('reordering across parents is rejected', () => {
-      const c = buildDraggable(); const calls = [];
+      const c = buildDraggable(); const calls: string[] = [];
       bindDragAndDrop(c, handlers(calls));
       drag(row(c, 2), 'dragstart');
       drag(row(c, 4), 'dragover', { clientY: 102 });
@@ -411,7 +410,7 @@ describe('DOM-bound gestures', () => {
     });
 
     test('dropping a row on itself does nothing', () => {
-      const c = buildDraggable(); const calls = [];
+      const c = buildDraggable(); const calls: string[] = [];
       bindDragAndDrop(c, handlers(calls));
       drag(row(c, 2), 'dragstart');
       drag(row(c, 2), 'drop', { clientY: 120 });
@@ -419,7 +418,7 @@ describe('DOM-bound gestures', () => {
     });
 
     test('a drop with no drag in progress does nothing', () => {
-      const c = buildDraggable(); const calls = [];
+      const c = buildDraggable(); const calls: string[] = [];
       bindDragAndDrop(c, handlers(calls));
       drag(row(c, 3), 'drop', { clientY: 120 });
       assert.deepEqual(calls, []);
@@ -437,7 +436,7 @@ describe('DOM-bound gestures', () => {
     });
 
     test('dragend clears the drag and its indicators', () => {
-      const c = buildDraggable(); const calls = [];
+      const c = buildDraggable(); const calls: string[] = [];
       bindDragAndDrop(c, handlers(calls));
       drag(row(c, 2), 'dragstart');
       drag(row(c, 3), 'dragover', { clientY: 102 });
@@ -471,10 +470,10 @@ describe('DOM-bound gestures', () => {
 
 describe('rowParentId', () => {
   test('reads a numeric parent id', () => {
-    assert.equal(rowParentId({ dataset: { parentId: '7' } }), 7);
+    assert.equal(rowParentId(mock<HTMLElement>({ dataset: { parentId: '7' } })), 7);
   });
 
   test('an empty attribute means top level', () => {
-    assert.equal(rowParentId({ dataset: { parentId: '' } }), null);
+    assert.equal(rowParentId(mock<HTMLElement>({ dataset: { parentId: '' } })), null);
   });
 });

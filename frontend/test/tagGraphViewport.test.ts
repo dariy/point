@@ -9,6 +9,9 @@ import {
   screenToWorld,
   zoomAt,
 } from '../src/plugins/tags-graph/viewport.ts';
+import type { GraphNode } from '../src/plugins/tags-graph/graphModel.ts';
+import { must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 
 /**
  * The /tags graph's view maths. world→screen is `s * scale + t`, and every
@@ -20,7 +23,7 @@ import {
 const SIZE = { width: 800, height: 520 };
 const IDENTITY = { scale: 1, tx: 0, ty: 0 };
 
-const node = (id, x, y, r = 10) => ({ id, x, y, r });
+const node = (id: string, x: number, y: number, r = 10) => mock<GraphNode>({ id, x, y, r });
 
 /** A handful of nodes spread well beyond the viewport, so fitting has work to do. */
 const scattered = () => [
@@ -35,7 +38,7 @@ const scattered = () => [
 describe('bounds', () => {
   test('cover every node including its radius', () => {
     const nodes = scattered();
-    const b = bounds(nodes);
+    const b = must(bounds(nodes), 'bounds');
     for (const n of nodes) {
       assert.ok(n.x - n.r >= b.minX - 1e-9 && n.x + n.r <= b.maxX + 1e-9);
       assert.ok(n.y - n.r >= b.minY - 1e-9 && n.y + n.r <= b.maxY + 1e-9);
@@ -44,8 +47,8 @@ describe('bounds', () => {
 
   test('a subset can only shrink the box', () => {
     const nodes = scattered();
-    const all = bounds(nodes);
-    const some = bounds(nodes.slice(1));
+    const all = must(bounds(nodes), 'bounds');
+    const some = must(bounds(nodes.slice(1)), 'bounds');
     assert.ok(some.minX >= all.minX && some.maxX <= all.maxX);
   });
 
@@ -59,8 +62,8 @@ describe('bounds', () => {
 describe('fit to view', () => {
   test('centres the graph in the viewport', () => {
     const nodes = scattered();
-    const v = fitTransform(nodes, SIZE);
-    const b = bounds(nodes);
+    const v = must(fitTransform(nodes, SIZE), 'view');
+    const b = must(bounds(nodes), 'bounds');
     const cx = (b.minX + b.maxX) / 2;
     const cy = (b.minY + b.maxY) / 2;
     assert.ok(Math.abs(cx * v.scale + v.tx - SIZE.width / 2) < 1e-6);
@@ -69,7 +72,7 @@ describe('fit to view', () => {
 
   test('after fitting, every node is on screen', () => {
     const nodes = scattered();
-    const v = fitTransform(nodes, SIZE);
+    const v = must(fitTransform(nodes, SIZE), 'view');
     for (const n of nodes) {
       const sx = n.x * v.scale + v.tx;
       const sy = n.y * v.scale + v.ty;
@@ -89,7 +92,7 @@ describe('fit to view', () => {
 
   test('the fit scale is exactly what fitting applies', () => {
     const nodes = scattered();
-    assert.strictEqual(fitTransform(nodes, SIZE).scale, fitScale(nodes, SIZE));
+    assert.strictEqual(must(fitTransform(nodes, SIZE), 'view').scale, fitScale(nodes, SIZE));
   });
 });
 
@@ -108,7 +111,7 @@ describe('screen ↔ world', () => {
 
 describe('zoom', () => {
   test('keeps the point under the cursor fixed', () => {
-    const view = fitTransform(scattered(), SIZE);
+    const view = must(fitTransform(scattered(), SIZE), 'view');
     const before = screenToWorld(view, 300, 200);
     const after = screenToWorld(zoomAt(view, 300, 200, 1.5, 0.05), 300, 200);
     assert.ok(Math.abs(before.x - after.x) < 1e-9, 'zoom anchored at the cursor');
@@ -118,7 +121,7 @@ describe('zoom', () => {
   test('will not zoom out past the caller floor', () => {
     const nodes = scattered();
     const floor = fitScale(nodes, SIZE);
-    let view = fitTransform(nodes, SIZE);
+    let view = must(fitTransform(nodes, SIZE), 'view');
     for (let i = 0; i < 40; i++) view = zoomAt(view, 400, 260, 0.5, floor);
     assert.ok(view.scale >= floor - 1e-9, 'clamped at the fit scale');
   });
@@ -148,7 +151,7 @@ describe('hit testing', () => {
   const row = () => [0, 1, 2, 3].map((i) => node('n' + i, i * 100, 100));
 
   test('a click on a node centre picks it', () => {
-    assert.strictEqual(pickNode(row(), IDENTITY, 100, 100).id, 'n1');
+    assert.strictEqual(must(pickNode(row(), IDENTITY, 100, 100), 'node').id, 'n1');
   });
 
   test('a click just inside the rim picks it', () => {
@@ -175,7 +178,7 @@ describe('hit testing', () => {
     const nodes = row();
     const view = { scale: 2, tx: 30, ty: -10 };
     // World (100,100) is now at screen (230,190).
-    assert.strictEqual(pickNode(nodes, view, 230, 190).id, 'n1');
+    assert.strictEqual(must(pickNode(nodes, view, 230, 190), 'node').id, 'n1');
     assert.strictEqual(pickNode(nodes, view, 100, 100), null, 'the old screen point is empty now');
   });
 
@@ -183,7 +186,7 @@ describe('hit testing', () => {
     const nodes = row();
     nodes[0].x = 100; // exactly on top of n1
     nodes[0].y = 100;
-    assert.strictEqual(pickNode(nodes, IDENTITY, 103, 100).id, 'n0', 'ties broken by distance');
+    assert.strictEqual(must(pickNode(nodes, IDENTITY, 103, 100), 'node').id, 'n0', 'ties broken by distance');
   });
 
   test('nothing to pick from picks nothing', () => {

@@ -1,5 +1,13 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import type * as TagLinks from '../src/utils/tagLinks.ts';
+import type { TagIndex, TagIndexEntry } from '../src/utils/tagLinks.ts';
+import { mock } from './helpers/mock.ts';
+import { must } from './helpers/dom.ts';
+
+/** An index from partial entries; getTagAncestors reads only tag, parentSlug and showInAncestors. */
+const indexOf = (entries: [string, Partial<TagIndexEntry>][]): TagIndex =>
+  new Map(entries.map(([slug, entry]) => [slug, mock<TagIndexEntry>(entry)]));
 
 /**
  * The pure logic in src/utils/tagLinks.ts: how a tag becomes a URL, a colour
@@ -12,10 +20,14 @@ import assert from 'node:assert';
  * files (parseTagUrl.test.ts, tagStrip.test.js); this covers the rest.
  */
 
-let tagHref, tagKind, renderTagLink, buildTagIndex, getTagAncestors;
+let tagHref: typeof TagLinks.tagHref;
+let tagKind: typeof TagLinks.tagKind;
+let renderTagLink: typeof TagLinks.renderTagLink;
+let buildTagIndex: typeof TagLinks.buildTagIndex;
+let getTagAncestors: typeof TagLinks.getTagAncestors;
 
 before(async () => {
-  globalThis.window = { location: { origin: 'https://example.com' } };
+  globalThis.window = mock<typeof window>({ location: mock<Location>({ origin: 'https://example.com' }) });
   ({ tagHref, tagKind, renderTagLink, buildTagIndex, getTagAncestors } =
     await import('../src/utils/tagLinks.ts'));
 });
@@ -49,10 +61,12 @@ describe('tagHref', () => {
   });
 
   test('a chain of nothing but empties collapses to the bare form', () => {
+    // @ts-expect-error null and undefined segments are bad input on purpose
     assert.strictEqual(tagHref('city', ['', null, undefined]), '/tags/city');
   });
 
   test('a null chain is tolerated', () => {
+    // @ts-expect-error a null chain is bad input on purpose
     assert.strictEqual(tagHref('city', null), '/tags/city');
   });
 });
@@ -90,6 +104,7 @@ describe('tagKind', () => {
   test('coordinates arriving as strings are not geo', () => {
     // The API sends numbers; a string here means something upstream stringified
     // the row, and drawing it on the map would place it at NaN.
+    // @ts-expect-error string coordinates are bad input on purpose
     assert.strictEqual(tagKind({ latitude: '45.5', longitude: '-73.5' }), 'tag');
   });
 
@@ -166,17 +181,17 @@ describe('renderTagLink', () => {
     const html = renderTagLink({ name: 'x', slug: 'x', url: '/t" onmouseover="alert(1)' });
     // The payload survives as text — what matters is that its quotes are
     // escaped, so it stays inside href and never becomes a second attribute.
-    const href = /href="([^"]*)"/.exec(html)[1];
+    const href = must(/href="([^"]*)"/.exec(String(html)), 'href')[1];
     assert.ok(!href.includes('"'), 'href value must contain no raw quote');
     assert.ok(href.includes('&quot;'), 'the quote should be escaped, not stripped');
     // The payload text (onmouseover=…) still appears — escaped, inside the
     // href value. That is the point: it is data, not a second attribute.
-    assert.ok(html.startsWith(`<a href="${href}" class=`), 'href must be the only attribute it produced');
+    assert.ok(String(html).startsWith(`<a href="${href}" class=`), 'href must be the only attribute it produced');
   });
 
   test('no class list is left with stray gaps', () => {
     // Empty options used to leave 'tag-link  tag-kind-tag  ' behind.
-    const cls = /class="([^"]*)"/.exec(renderTagLink('fern'))[1];
+    const cls = must(/class="([^"]*)"/.exec(String(renderTagLink('fern'))), 'class')[1];
     assert.strictEqual(cls, cls.trim());
     assert.ok(!cls.includes('  '), `double space in class list: ${cls}`);
   });
@@ -212,26 +227,26 @@ describe('buildTagIndex', () => {
   });
 
   test('post_count is exposed as count', () => {
-    assert.strictEqual(buildTagIndex(nav).get('canada').tag.count, 30);
+    assert.strictEqual(must(buildTagIndex(nav).get('canada'), 'canada').tag.count, 30);
   });
 
   test('each entry remembers its parent, roots have none', () => {
     const index = buildTagIndex(nav);
-    assert.strictEqual(index.get('location').parentSlug, null);
-    assert.strictEqual(index.get('canada').parentSlug, 'location');
-    assert.strictEqual(index.get('montreal').parentSlug, 'canada');
+    assert.strictEqual(must(index.get('location'), 'location').parentSlug, null);
+    assert.strictEqual(must(index.get('canada'), 'canada').parentSlug, 'location');
+    assert.strictEqual(must(index.get('montreal'), 'montreal').parentSlug, 'canada');
   });
 
   test('isLeaf marks the tags with nowhere further to drill', () => {
     const index = buildTagIndex(nav);
-    assert.strictEqual(index.get('location').isLeaf, false);
-    assert.strictEqual(index.get('montreal').isLeaf, true);
-    assert.strictEqual(index.get('fern').isLeaf, true);
+    assert.strictEqual(must(index.get('location'), 'location').isLeaf, false);
+    assert.strictEqual(must(index.get('montreal'), 'montreal').isLeaf, true);
+    assert.strictEqual(must(index.get('fern'), 'fern').isLeaf, true);
   });
 
   test('children are flattened to what the flyout renders', () => {
     assert.deepStrictEqual(
-      buildTagIndex(nav).get('location').children,
+      must(buildTagIndex(nav).get('location'), 'location').children,
       [{ name: 'Canada', slug: 'canada', count: 30 }],
     );
   });
@@ -240,11 +255,12 @@ describe('buildTagIndex', () => {
     const index = buildTagIndex([
       { name: 'Shown', slug: 'shown', post_count: 1 },
       { name: 'Hidden', slug: 'hidden', post_count: 1, show_in_ancestors: false },
+      // @ts-expect-error a null flag is bad input on purpose
       { name: 'Null', slug: 'nul', post_count: 1, show_in_ancestors: null },
     ]);
-    assert.strictEqual(index.get('shown').showInAncestors, true);
-    assert.strictEqual(index.get('hidden').showInAncestors, false);
-    assert.strictEqual(index.get('nul').showInAncestors, true);
+    assert.strictEqual(must(index.get('shown'), 'shown').showInAncestors, true);
+    assert.strictEqual(must(index.get('hidden'), 'hidden').showInAncestors, false);
+    assert.strictEqual(must(index.get('nul'), 'nul').showInAncestors, true);
   });
 
   test('an empty payload gives an empty index', () => {
@@ -268,7 +284,7 @@ describe('getTagAncestors', () => {
   const index = buildTagIndexFixture();
 
   function buildTagIndexFixture() {
-    return new Map([
+    return indexOf([
       ['location', { tag: { name: 'Location', slug: 'location', count: 40 }, parentSlug: null, showInAncestors: true }],
       ['canada', { tag: { name: 'Canada', slug: 'canada', count: 30 }, parentSlug: 'location', showInAncestors: true }],
       ['montreal', { tag: { name: 'Montréal', slug: 'montreal', count: 12 }, parentSlug: 'canada', showInAncestors: true }],
@@ -314,7 +330,7 @@ describe('getTagAncestors', () => {
   });
 
   test('a cycle terminates instead of hanging', () => {
-    const cyclic = new Map([
+    const cyclic = indexOf([
       ['a', { tag: { name: 'A', slug: 'a' }, parentSlug: 'b', showInAncestors: true }],
       ['b', { tag: { name: 'B', slug: 'b' }, parentSlug: 'a', showInAncestors: true }],
     ]);
@@ -322,14 +338,14 @@ describe('getTagAncestors', () => {
   });
 
   test('a tag parented to itself terminates', () => {
-    const selfLoop = new Map([
+    const selfLoop = indexOf([
       ['a', { tag: { name: 'A', slug: 'a' }, parentSlug: 'a', showInAncestors: true }],
     ]);
     assert.deepStrictEqual(getTagAncestors('a', selfLoop), []);
   });
 
   test('a parent missing from the index stops the walk', () => {
-    const orphan = new Map([
+    const orphan = indexOf([
       ['a', { tag: { name: 'A', slug: 'a' }, parentSlug: 'gone', showInAncestors: true }],
     ]);
     assert.deepStrictEqual(getTagAncestors('a', orphan), []);

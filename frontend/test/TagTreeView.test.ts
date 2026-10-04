@@ -10,28 +10,30 @@ import {
   renderRowBadges as _renderRowBadges,
   renderUnfiledGroup as _renderUnfiledGroup,
 } from '../src/components/light/tags/TagTreeView.ts';
+import type { TagNode, TagTreeViewState } from '../src/components/light/tags/TagTreeView.ts';
+import { fixtureTag, type TagFixture } from './helpers/tags.ts';
 
 // The renderers return the RawHtml html`` produces — a String object, which
 // assert.match and friends will not take. Every assertion below wants the
 // primitive, so the wrappers do that once here rather than at each call.
-const renderTagForest = (...a) => String(_renderTagForest(...a));
-const renderTagTree = (...a) => String(_renderTagTree(...a));
-const renderTagNode = (...a) => String(_renderTagNode(...a));
-const renderSelectCheckbox = (...a) => String(_renderSelectCheckbox(...a));
-const renderRowBadges = (...a) => String(_renderRowBadges(...a));
-const renderUnfiledGroup = (...a) => String(_renderUnfiledGroup(...a));
+const renderTagForest = (...a: Parameters<typeof _renderTagForest>) => String(_renderTagForest(...a));
+const renderTagTree = (...a: Parameters<typeof _renderTagTree>) => String(_renderTagTree(...a));
+const renderTagNode = (...a: Parameters<typeof _renderTagNode>) => String(_renderTagNode(...a));
+const renderSelectCheckbox = (...a: Parameters<typeof _renderSelectCheckbox>) => String(_renderSelectCheckbox(...a));
+const renderRowBadges = (...a: Parameters<typeof _renderRowBadges>) => String(_renderRowBadges(...a));
+const renderUnfiledGroup = (...a: Parameters<typeof _renderUnfiledGroup>) => String(_renderUnfiledGroup(...a));
 
 // No DOM stubs: TagTreeView is pure string rendering, which is the point of
 // having it out of the page.
-const view = (over = {}) => ({
-  expanded: new Set(),
+const view = (over: Partial<TagTreeViewState> = {}): TagTreeViewState => ({
+  expanded: new Set<number>(),
   unfiledExpanded: false,
   selectMode: false,
-  selectedIds: new Set(),
+  selectedIds: new Set<number>(),
   ...over,
 });
 
-const tag = (id, name, over = {}) => ({
+const tag = (id: number, name: string, over: TagFixture = {}) => fixtureTag({
   id, name, slug: name.toLowerCase(), post_count: 0, parents: [], ...over,
 });
 
@@ -101,7 +103,7 @@ describe('buildTagTree', () => {
       // C is also declared a parent of B — B must not be re-expanded under C.
       tag(4, 'B2', { parents: [{ id: 3, name: 'C' }] }),
     ]);
-    const depth = n => 1 + Math.max(0, ...n.childrenNodes.map(depth));
+    const depth = (n: TagNode): number => 1 + Math.max(0, ...n.childrenNodes.map(depth));
     assert.equal(depth(navRoots[0]), 4);
   });
 
@@ -120,7 +122,7 @@ describe('buildTagTree', () => {
   });
 
   test('handles a tag with no parents key at all', () => {
-    const { unfiled } = buildTagTree([{ id: 1, name: 'Bare', slug: 'bare' }]);
+    const { unfiled } = buildTagTree([fixtureTag({ id: 1, name: 'Bare', slug: 'bare' })]);
     assert.deepEqual(unfiled.map(t => t.id), [1]);
   });
 

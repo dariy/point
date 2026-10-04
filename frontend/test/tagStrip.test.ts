@@ -1,5 +1,6 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import type * as TagStrip from '../src/utils/tagStrip.ts';
 
 /**
  * The tag strip shows a post's *own* tags. Page endpoints (/api/pages/home,
@@ -7,7 +8,7 @@ import assert from 'node:assert';
  * can be matched against a whole subtree, and mark those extras `inherited`.
  */
 describe('renderTagStrip visibility filter', () => {
-  let renderTagStrip;
+  let renderTagStrip: typeof TagStrip.renderTagStrip;
 
   before(async () => {
     ({ renderTagStrip } = await import('../src/utils/tagStrip.ts'));

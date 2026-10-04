@@ -2,6 +2,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import { tick } from '../src/plugins/tags-graph/forceLayout.ts';
+import type { GraphNode, GraphLink, LinkKind } from '../src/plugins/tags-graph/graphModel.ts';
+import { mock } from './helpers/mock.ts';
 
 /**
  * One step of the /tags graph's force simulation. Four forces act per tick:
@@ -16,13 +18,13 @@ import { tick } from '../src/plugins/tags-graph/forceLayout.ts';
 
 const CENTRE = { cx: 400, cy: 260 };
 
-const node = (id, x, y, r = 10) => ({ id, x, y, vx: 0, vy: 0, r });
-const link = (source, target, kind) => ({ source, target, kind });
+const node = (id: string, x: number, y: number, r = 10) => mock<GraphNode>({ id, x, y, vx: 0, vy: 0, r });
+const link = (source: GraphNode, target: GraphNode, kind: LinkKind): GraphLink => ({ source, target, kind });
 
-const step = (nodes, links = [], { alpha = 1, pinned = null } = {}) =>
+const step = (nodes: GraphNode[], links: GraphLink[] = [], { alpha = 1, pinned = null }: { alpha?: number, pinned?: GraphNode | null } = {}) =>
   tick(nodes, links, { alpha, ...CENTRE, pinned });
 
-const gap = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const gap = (a: GraphNode, b: GraphNode) => Math.hypot(a.x - b.x, a.y - b.y);
 
 describe('force layout', () => {
   test('unlinked neighbours repel', () => {
@@ -97,7 +99,7 @@ describe('force layout', () => {
 
   /** A ring of linked nodes — enough structure for the forces to fight over. */
   function ring(count = 8) {
-    const nodes = [];
+    const nodes: GraphNode[] = [];
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2;
       nodes.push(node('t' + i, 400 + Math.cos(a) * 200, 260 + Math.sin(a) * 200));

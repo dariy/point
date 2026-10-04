@@ -23,10 +23,16 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, check, fire, type } from './helpers/dom.ts';
+import { setupDOM, click, check, fire, type, must } from './helpers/dom.ts';
 import { getToast, setToast, setUser } from '../src/store.ts';
+import { fixtureTag, type TagFixture } from './helpers/tags.ts';
+import type TagsManagerPageClass from '../src/pages/light/TagsManagerPage.ts';
+import type { User } from '../src/api/auth.ts';
+import type { PageProps } from '../src/router.ts';
+import { mock } from './helpers/mock.ts';
+import { jsonResponse, requestOf, type RecordedRequest, type Responder } from './helpers/fetch.ts';
 
-const tag = (id, name, over = {}) => ({
+const tag = (id: number, name: string, over: TagFixture = {}) => fixtureTag({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,
 });
 
@@ -51,30 +57,38 @@ const TAGS = [
 ];
 
 describe('TagsManagerPage — wiring', () => {
-  let dom, TagsManagerPage, page, requests, respond, navRefreshes;
+  let dom: ReturnType<typeof setupDOM>;
+  let TagsManagerPage: typeof TagsManagerPageClass;
+  let page: TagsManagerPageClass;
+  /** The page to unmount after the test; null when the test mounted none. */
+  let mounted: TagsManagerPageClass | null = null;
+  let requests: RecordedRequest[];
+  let respond: Responder;
+  let navRefreshes: number;
 
   function fakeFetch() {
     requests = [];
     respond = () => ({ ok: true, status: 200, body: { tags: TAGS, total: TAGS.length } });
-    globalThis.fetch = async (url, opts = {}) => {
-      requests.push({
-        url,
-        method: opts.method || 'GET',
-        body: opts.body ? JSON.parse(opts.body) : undefined,
-      });
-      const { ok, status, body } = respond(url, opts);
-      return { ok, status, headers: { get: () => 'application/json' }, json: async () => body };
+    globalThis.fetch = async (input: RequestInfo | URL, opts: RequestInit = {}) => {
+      const req = requestOf(input, opts, opts.method || 'GET');
+      requests.push(req);
+      return jsonResponse(respond(req.url, opts));
     };
   }
 
   const trace = () => requests.map(r => `${r.method} ${r.url}`);
   const toast = () => getToast();
-  const q = sel => dom.document.querySelector(sel);
-  const qa = sel => [...dom.document.querySelectorAll(sel)];
-  const settle = () => new Promise(r => setImmediate(r));
+  /** The element `sel` finds; the test fails when there is none. Typed as an input, the widest control. */
+  const q = <E extends Element = HTMLInputElement>(sel: string) => must(dom.document.querySelector<E>(sel), sel);
+  /** The element `sel` finds, or null — for the assertions that something is absent. */
+  const qOrNull = (sel: string) => dom.document.querySelector(sel);
+  /** The element `sel` finds inside the mounted page; the test fails when there is none. */
+  const inPage = (sel: string) => must(page.container.querySelector<HTMLElement>(sel), sel);
+  const qa = <E extends Element = HTMLInputElement>(sel: string) => [...dom.document.querySelectorAll<E>(sel)];
+  const settle = () => new Promise<void>(r => setImmediate(r));
 
   /** A button inside the page, by selector and data-id. */
-  const rowBtn = (sel, id) => qa(sel).find(b => b.dataset.id === String(id));
+  const rowBtn = (sel: string, id: number) => must(qa(sel).find(b => b.dataset.id === String(id)), `${sel} ${id}`);
 
   /** The tag names the tree or list is currently showing. */
   const treeNames = () => qa('.tm-tag-name').map(el => el.textContent);
@@ -86,20 +100,21 @@ describe('TagsManagerPage — wiring', () => {
     dom.location.pathname = '/light/tags';
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
-    page = new TagsManagerPage(el, {});
+    page = new TagsManagerPage(el, mock<PageProps>({}));
+    mounted = page;
     page.mount();
     await settle();
     return page;
   }
 
   /** Switch to the tabular view, which renders a different set of controls. */
-  const listView = () => click(page.container.querySelector('#view-list-btn'));
+  const listView = () => click(inPage('#view-list-btn'));
 
   beforeEach(async () => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
     fakeFetch();
     setToast(null);
-    setUser({ username: 'tester' });
+    setUser(mock<User>({ username: 'tester' }));
 
     navRefreshes = 0;
     dom.document.addEventListener('nav-changed', () => { navRefreshes++; });
@@ -108,9 +123,9 @@ describe('TagsManagerPage — wiring', () => {
   });
 
   afterEach(() => {
-    page?.unmount();
-    page = null;
-    delete globalThis.fetch;
+    mounted?.unmount();
+    mounted = null;
+    Reflect.deleteProperty(globalThis, 'fetch');
     dom.cleanup();
   });
 
@@ -131,10 +146,10 @@ describe('TagsManagerPage — wiring', () => {
   test('Expand all opens every branch, Collapse all shuts them', async () => {
     await mountPage();
 
-    click(page.container.querySelector('#expand-all-btn'));
+    click(inPage('#expand-all-btn'));
     assert.deepEqual(treeNames(), ['Food', 'Ramen', 'Travel', 'Kyoto', 'Nara', 'Osaka']);
 
-    click(page.container.querySelector('#collapse-all-btn'));
+    click(inPage('#collapse-all-btn'));
     assert.deepEqual(treeNames(), ['Food', 'Travel']);
   });
 
@@ -153,9 +168,9 @@ describe('TagsManagerPage — wiring', () => {
 
     const form = q('#tag-editor-form');
     assert.ok(form, 'the editor opens');
-    assert.equal(form.querySelector('[name="name"]').value, '', 'as a create form');
+    assert.equal(must(form.querySelector<HTMLInputElement>('[name="name"]'), 'name').value, '', 'as a create form');
     assert.deepEqual(
-      [...form.querySelectorAll('input[name="parent_ids"]:checked')].map(b => Number(b.value)),
+      [...form.querySelectorAll<HTMLInputElement>('input[name="parent_ids"]:checked')].map(b => Number(b.value)),
       [2],
       'pre-filed under the row you clicked — otherwise "add child" adds a root',
     );
@@ -183,7 +198,7 @@ describe('TagsManagerPage — wiring', () => {
     // this test is about the guarantee, not the mechanism.
     await mountPage();
     click(rowBtn('.tm-toggle', 1));
-    click(page.container.querySelector('#tm-select-btn'));
+    click(inPage('#tm-select-btn'));
 
     click(q('.tm-badge-via-btn'));
 
@@ -199,13 +214,13 @@ describe('TagsManagerPage — wiring', () => {
     requests.length = 0;
 
     click(rowBtn('.move-tag-btn', 3));           // Kyoto, seen under Travel
-    assert.ok(q('#tm-move-confirm-btn'), 'the move dialog is open');
+    assert.ok(qOrNull('#tm-move-confirm-btn'), 'the move dialog is open');
     const parents = qa('input[name="tm-move-parent"]');
     assert.ok(!parents.some(r => r.value === '3'), 'a tag cannot be moved under itself');
     assert.equal(parents.find(r => r.checked)?.value, '1',
       'the parent it was clicked under is preselected, so Move… opens on where it is');
 
-    check(parents.find(r => r.value === '2'), true);       // move it under Food
+    check(must(parents.find(r => r.value === '2'), 'Food'), true);       // move it under Food
     click(q('#tm-move-confirm-btn'));
     await settle();
 
@@ -220,7 +235,7 @@ describe('TagsManagerPage — wiring', () => {
 
     click(rowBtn('.merge-tag-btn', 3));
 
-    assert.ok(q('#tm-merge-confirm-btn'), 'the merge dialog is open');
+    assert.ok(qOrNull('#tm-merge-confirm-btn'), 'the merge dialog is open');
     assert.ok(!qa('input[name="tm-merge-winner"]').some(r => r.value === '3'),
       'the tag being merged away cannot be its own winner');
   });
@@ -232,7 +247,7 @@ describe('TagsManagerPage — wiring', () => {
     // it. Keeping it would leave the toolbar counting tags that may no longer
     // exist, and offering to act on them again.
     await mountPage();
-    click(page.container.querySelector('#tm-select-btn'));
+    click(inPage('#tm-select-btn'));
     check(q('#tm-select-all-cb'), true);
     assert.ok(page.state.selectedIds.size > 0, 'something is selected to act on');
     requests.length = 0;
@@ -245,28 +260,28 @@ describe('TagsManagerPage — wiring', () => {
     assert.equal(navRefreshes, 1, 'hidden tags leave the public nav, so it is told');
     assert.equal(page.state.selectMode, false, 'select mode is over');
     assert.equal(page.state.selectedIds.size, 0);
-    assert.equal(q('#tm-bulk-toolbar'), null, 'and the toolbar goes with it');
+    assert.equal(qOrNull('#tm-bulk-toolbar'), null, 'and the toolbar goes with it');
   });
 
   // ── The list view ──────────────────────────────────────────────────────────
 
   test('the view toggle swaps the tree for the table and back', async () => {
     await mountPage();
-    assert.ok(q('.tags-tree-container'));
+    assert.ok(qOrNull('.tags-tree-container'));
 
     listView();
-    assert.equal(q('.tags-tree-container'), null);
+    assert.equal(qOrNull('.tags-tree-container'), null);
     assert.equal(visibleRows().length, 7, 'every tag is a row — the table has no hierarchy to collapse');
 
-    click(page.container.querySelector('#view-tree-btn'));
-    assert.ok(q('.tags-tree-container'));
+    click(inPage('#view-tree-btn'));
+    assert.ok(qOrNull('.tags-tree-container'));
   });
 
   test('a column header sorts, and clicking it again reverses', async () => {
     await mountPage();
     listView();
 
-    const header = f => qa('.tm-sortable-header').find(th => th.dataset.field === f);
+    const header = (f: string) => must(qa('.tm-sortable-header').find(th => th.dataset.field === f), f);
     click(header('name'));
     assert.equal(page.state.sortField, 'name');
     assert.equal(page.state.sortOrder, 'asc');
@@ -300,7 +315,7 @@ describe('TagsManagerPage — wiring', () => {
     await mountPage();
     listView();
 
-    click(qa('.tm-parent-filter-btn').find(b => b.dataset.parentId === '2'));
+    click(must(qa('.tm-parent-filter-btn').find(b => b.dataset.parentId === '2'), 'button'));
 
     assert.deepEqual(visibleRows().map(String), ['4'], 'only what is filed under Food');
     const chip = q('.tm-filter-chip');
@@ -309,14 +324,14 @@ describe('TagsManagerPage — wiring', () => {
 
     click(chip);
     assert.equal(visibleRows().length, 7, 'removing the chip restores every row');
-    assert.equal(q('.tm-filter-chip'), null);
+    assert.equal(qOrNull('.tm-filter-chip'), null);
   });
 
   test('the same parent cannot be filtered on twice', async () => {
     await mountPage();
     listView();
 
-    const badge = qa('.tm-parent-filter-btn').find(b => b.dataset.parentId === '2');
+    const badge = must(qa('.tm-parent-filter-btn').find(b => b.dataset.parentId === '2'), 'element');
     click(badge);
     click(badge);
 
@@ -327,17 +342,17 @@ describe('TagsManagerPage — wiring', () => {
     await mountPage();
     listView();
 
-    assert.equal(q('.tm-clear-filters'), null, 'nothing to clear yet');
+    assert.equal(qOrNull('.tm-clear-filters'), null, 'nothing to clear yet');
 
     type(q('.tm-list-search'), 'ram');
-    click(qa('.tm-parent-filter-btn').find(b => b.dataset.parentId === '2'));
+    click(must(qa('.tm-parent-filter-btn').find(b => b.dataset.parentId === '2'), 'button'));
     const clear = q('.tm-clear-filters');
     assert.ok(clear && !clear.classList.contains('hidden'), 'Clear turns up when a filter is on');
 
     click(clear);
 
     assert.equal(q('.tm-list-search').value, '', 'the box is emptied');
-    assert.equal(q('.tm-filter-chip'), null, 'the chips go');
+    assert.equal(qOrNull('.tm-filter-chip'), null, 'the chips go');
     assert.equal(visibleRows().length, 7, 'and every row is back');
     assert.ok(clear.classList.contains('hidden'), 'with nothing left to clear');
   });
@@ -349,7 +364,7 @@ describe('TagsManagerPage — wiring', () => {
     listView();
     type(q('.tm-list-search'), 'ram');
 
-    click(qa('.tm-sortable-header').find(th => th.dataset.field === 'name'));
+    click(must(qa('.tm-sortable-header').find(th => th.dataset.field === 'name'), 'button'));
 
     assert.deepEqual(visibleRows().map(String), ['4'], 'still filtered after the sort');
     assert.equal(q('.tm-list-search').value, 'ram', 'and the box still shows why');
@@ -358,9 +373,9 @@ describe('TagsManagerPage — wiring', () => {
   // ── Drag and drop ──────────────────────────────────────────────────────────
 
   /** Drag `dragId`'s row onto `targetId`'s, dropping in the given zone. */
-  function drag(dragId, targetId, zone) {
-    const from = qa('.tm-row').find(r => r.dataset.id === String(dragId));
-    const to = qa('.tm-row').find(r => r.dataset.id === String(targetId));
+  function drag(dragId: number, targetId: number, zone: string) {
+    const from = must(qa('.tm-row').find(r => r.dataset.id === String(dragId)), 'element');
+    const to = must(qa('.tm-row').find(r => r.dataset.id === String(targetId)), 'element');
     const dataTransfer = { setData() {}, effectAllowed: '', dropEffect: '' };
     fire(from, 'dragstart', { dataTransfer });
     to.classList.add(`tm-drop-${zone}`);
@@ -372,9 +387,9 @@ describe('TagsManagerPage — wiring', () => {
 
     drag(2, 1, 'on');                       // Food onto Travel
 
-    assert.ok(q('#drop-move-btn'), 'a drop is a reparent, and reparenting asks first');
+    assert.ok(qOrNull('#drop-move-btn'), 'a drop is a reparent, and reparenting asks first');
     assert.match(q('.modal-header h3').textContent, /Move "Food" under "Travel"/);
-    assert.ok(q('#drop-also-btn'), 'with the choice of keeping the other parents');
+    assert.ok(qOrNull('#drop-also-btn'), 'with the choice of keeping the other parents');
 
     requests.length = 0;
     click(q('#drop-move-btn'));
@@ -387,47 +402,47 @@ describe('TagsManagerPage — wiring', () => {
 
   test('reordering within a parent moves the tag and reloads', async () => {
     await mountPage();
-    click(page.container.querySelector('#expand-all-btn'));
+    click(inPage('#expand-all-btn'));
     requests.length = 0;
 
     drag(6, 3, 'after');                    // Osaka after Kyoto, both under Travel
     await settle();
 
     assert.deepEqual(trace(), ['POST /api/tags/6/move', 'GET /api/tags?include_empty=true']);
-    assert.equal(requests[0].body.parent_id, 1,
+    assert.equal(requests[0].body?.parent_id, 1,
       'the move is scoped to the sibling group it happened in — other parents keep their order');
-    assert.equal(requests[0].body.after_id, 3);
+    assert.equal(requests[0].body?.after_id, 3);
   });
 
   test('dropping before a sibling lands the tag after the one preceding it', async () => {
     // 'after' can name the target directly; 'before' cannot — the API takes an
     // after_id, so the page has to look up which sibling the target follows.
     await mountPage();
-    click(page.container.querySelector('#expand-all-btn'));
+    click(inPage('#expand-all-btn'));
     requests.length = 0;
 
     drag(7, 6, 'before');                   // Nara before Osaka; Kyoto precedes Osaka
     await settle();
 
     assert.deepEqual(trace(), ['POST /api/tags/7/move', 'GET /api/tags?include_empty=true']);
-    assert.equal(requests[0].body.after_id, 3,
+    assert.equal(requests[0].body?.after_id, 3,
       'after Kyoto — the sibling Osaka follows, not the front of the group');
   });
 
   test('dropping before the first sibling puts the tag at the front', async () => {
     await mountPage();
-    click(page.container.querySelector('#expand-all-btn'));
+    click(inPage('#expand-all-btn'));
     requests.length = 0;
 
     drag(7, 3, 'before');                   // Nara before Kyoto, which is first
 
     await settle();
-    assert.equal(requests[0].body.after_id, null, 'nothing to follow means the front');
+    assert.equal(requests[0].body?.after_id, null, 'nothing to follow means the front');
   });
 
   test('reordering across parents is refused with an explanation', async () => {
     await mountPage();
-    click(page.container.querySelector('#expand-all-btn'));
+    click(inPage('#expand-all-btn'));
     requests.length = 0;
 
     drag(3, 4, 'after');                    // Kyoto (under Travel) after Ramen (under Food)
@@ -440,7 +455,7 @@ describe('TagsManagerPage — wiring', () => {
 
   test('a failed reorder says so and leaves the tree alone', async () => {
     await mountPage();
-    click(page.container.querySelector('#expand-all-btn'));
+    click(inPage('#expand-all-btn'));
     requests.length = 0;
     respond = () => ({ ok: false, status: 400, body: { detail: 'Order out of range' } });
 
@@ -456,11 +471,11 @@ describe('TagsManagerPage — wiring', () => {
 
   test('a section header folds its body away and turns its arrow', async () => {
     await mountPage();
-    click(page.container.querySelector('#add-root-tag-btn'));
+    click(inPage('#add-root-tag-btn'));
 
-    const toggle = qa('.tm-section-toggle').find(b => b.dataset.target === 'coords-body');
+    const toggle = must(qa('.tm-section-toggle').find(b => b.dataset.target === 'coords-body'), 'element');
     const body = q('#coords-body');
-    const arrow = toggle.querySelector('.tm-section-arrow');
+    const arrow = must(toggle.querySelector('.tm-section-arrow'), 'arrow');
     const wasHidden = body.classList.contains('hidden');
 
     click(toggle);
@@ -473,7 +488,7 @@ describe('TagsManagerPage — wiring', () => {
 
   test('Parse turns a pasted maps link into coordinates', async () => {
     await mountPage();
-    click(page.container.querySelector('#add-root-tag-btn'));
+    click(inPage('#add-root-tag-btn'));
     requests.length = 0;
     respond = () => ({ ok: true, status: 200, body: { lat: 34.69, lng: 135.5 } });
 
@@ -503,7 +518,7 @@ describe('TagsManagerPage — wiring', () => {
 
   test('an empty box on a new tag asks for nothing — there is nothing to geocode', async () => {
     await mountPage();
-    click(page.container.querySelector('#add-root-tag-btn'));
+    click(inPage('#add-root-tag-btn'));
     requests.length = 0;
 
     click(q('#gmaps-parse-btn'));
@@ -516,10 +531,10 @@ describe('TagsManagerPage — wiring', () => {
   test('the coordinate controls are locked while the lookup is in flight, and released after', async () => {
     await mountPage();
     click(rowBtn('.edit-tag-btn', 1));
-    let release;
-    const inFlight = new Promise(r => { release = r; });
+    let release = () => {};
+    const inFlight = new Promise<void>(r => { release = r; });
     const realFetch = globalThis.fetch;
-    globalThis.fetch = async (...args) => { await inFlight; return realFetch(...args); };
+    globalThis.fetch = async (...args: Parameters<typeof fetch>) => { await inFlight; return realFetch(...args); };
 
     const btn = q('#gmaps-parse-btn');
     click(btn);
@@ -556,7 +571,7 @@ describe('TagsManagerPage — wiring', () => {
     click(rowBtn('.edit-tag-btn', 1));
     requests.length = 0;
 
-    fire(page._modal, 'textarea:save');
+    fire(must(page._modal, 'modal'), 'textarea:save');
     await settle();
 
     assert.ok(trace().includes('PATCH /api/tags/1'), 'the save goes through');
@@ -565,7 +580,7 @@ describe('TagsManagerPage — wiring', () => {
 
   test('the nav-order field only appears when the tag is in the nav', async () => {
     await mountPage();
-    click(page.container.querySelector('#add-root-tag-btn'));
+    click(inPage('#add-root-tag-btn'));
 
     const row = q('#nav-order-row');
     const box = q('#in-nav-check');

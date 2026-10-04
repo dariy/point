@@ -10,28 +10,33 @@ import {
   createHotZone
 } from '../src/utils/tagFlyout.ts';
 import { setupScrollableStrip, setupTagStrip } from '../src/utils/tagStrip.ts';
+import type { TagIndexEntry } from '../src/utils/tagLinks.ts';
+import { must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 
 describe('tags flyout and UI', () => {
-  let anchorEl, excludeEl, navigateFn;
+  let anchorEl: HTMLElement;
+  let excludeEl: HTMLElement;
+  let navigateFn: () => void;
 
   beforeEach(() => {
     // Basic DOM mocking for these tests
-    global.window = {
-      location: { origin: 'https://example.com' },
+    global.window = mock<typeof window>({
+      location: mock<Location>({ origin: 'https://example.com' }),
       innerWidth: 1024,
       innerHeight: 768,
       addEventListener: () => {},
       removeEventListener: () => {},
-    };
-    const createEl = (tag) => {
+    });
+    const createEl = (tag: string) => {
       const e = {
         tagName: tag.toUpperCase(),
         className: '',
         classList: {
-          add: (c) => e.className += ` ${c}`,
-          remove: (c) => e.className = e.className.replace(new RegExp(`\\b${c}\\b`, 'g'), '').trim(),
-          contains: (c) => e.className.includes(c),
-          toggle: (c, state) => {
+          add: (c: string) => e.className += ` ${c}`,
+          remove: (c: string) => e.className = e.className.replace(new RegExp(`\\b${c}\\b`, 'g'), '').trim(),
+          contains: (c: string) => e.className.includes(c),
+          toggle: (c: string, state?: boolean): boolean => {
             const has = e.classList.contains(c);
             if (state === undefined) state = !has;
             if (state && !has) e.classList.add(c);
@@ -57,17 +62,18 @@ describe('tags flyout and UI', () => {
         querySelectorAll: () => [],
         getAttribute: () => null,
       };
-      return e;
+      // The one boundary cast: a hand-built fake stands in for an element.
+      return e as unknown as HTMLElement;
     };
 
-    global.document = {
+    global.document = mock<Document>({
       createElement: createEl,
       body: createEl('body'),
       documentElement: createEl('html'),
       head: createEl('head'),
       addEventListener: () => {},
       removeEventListener: () => {},
-    };
+    });
 
     anchorEl = document.createElement('div');
     excludeEl = document.createElement('div');
@@ -87,14 +93,14 @@ describe('tags flyout and UI', () => {
     // showCrumbDropdown will create it
     showCrumbDropdown(anchorEl, [{ name: 'Test', slug: 'test' }], navigateFn);
     assert.ok(flyoutEl() !== null);
-    assert.ok(flyoutEl().className.includes('tag-family-flyout'));
+    assert.ok(must(flyoutEl(), 'flyout').className.includes('tag-family-flyout'));
   });
 
   test('hideFlyout hides the flyout', () => {
     showCrumbDropdown(anchorEl, [{ name: 'Test', slug: 'test' }], navigateFn);
-    assert.ok(!flyoutEl().classList.contains('hidden'));
+    assert.ok(!must(flyoutEl(), 'flyout').classList.contains('hidden'));
     hideFlyout();
-    assert.ok(flyoutEl().classList.contains('hidden'));
+    assert.ok(must(flyoutEl(), 'flyout').classList.contains('hidden'));
     assert.ok(!anchorEl.classList.contains('is-flyout-open'));
   });
 
@@ -102,10 +108,10 @@ describe('tags flyout and UI', () => {
     showCrumbDropdown(anchorEl, [{ name: 'Test', slug: 'test' }], navigateFn);
     
     const root = document.createElement('div');
-    root.contains = (el) => el === anchorEl;
+    root.contains = (el: Node | null) => el === anchorEl;
     
     hideFlyoutWithin(root);
-    assert.ok(flyoutEl().classList.contains('hidden'));
+    assert.ok(must(flyoutEl(), 'flyout').classList.contains('hidden'));
   });
   
   test('hideFlyoutWithin ignores if trigger is not inside root', () => {
@@ -115,12 +121,12 @@ describe('tags flyout and UI', () => {
     root.contains = () => false;
     
     hideFlyoutWithin(root);
-    assert.ok(!flyoutEl().classList.contains('hidden'));
+    assert.ok(!must(flyoutEl(), 'flyout').classList.contains('hidden'));
   });
 
   test('showCrumbDropdown flat list', () => {
     showCrumbDropdown(anchorEl, [{ name: 'Test', slug: 'test', count: 5 }], navigateFn);
-    const flyout = flyoutEl();
+    const flyout = must(flyoutEl(), 'flyout');
     assert.ok(!flyout.classList.contains('hidden'));
     assert.ok(anchorEl.classList.contains('is-flyout-open'));
   });
@@ -137,14 +143,14 @@ describe('tags flyout and UI', () => {
       ]
     }, navigateFn);
     
-    const flyout = flyoutEl();
+    const flyout = must(flyoutEl(), 'flyout');
     assert.ok(!flyout.classList.contains('hidden'));
     assert.ok(anchorEl.classList.contains('is-flyout-open'));
   });
 
   test('attachFlyoutTrigger attaches hover/click listeners', () => {
-    let listeners = {};
-    anchorEl.addEventListener = (event, fn) => { listeners[event] = fn; };
+    const listeners: Record<string, EventListenerOrEventListenerObject> = {};
+    anchorEl.addEventListener = (event: string, fn: EventListenerOrEventListenerObject) => { listeners[event] = fn; };
     attachFlyoutTrigger(anchorEl, () => [], navigateFn);
     
     assert.ok(listeners['pointerenter']);
@@ -156,9 +162,12 @@ describe('tags flyout and UI', () => {
     const container = document.createElement('div');
     const link = document.createElement('a');
     link.getAttribute = () => '/tags/foo';
-    container.querySelectorAll = () => [link];
+    const links = [link];
+    container.querySelectorAll = () => mock<NodeListOf<Element>>({
+      length: links.length, forEach: cb => links.forEach((el, i) => cb(el, i, mock<NodeListOf<Element>>({}))), [Symbol.iterator]: () => links[Symbol.iterator](),
+    });
     
-    const index = new Map([['foo', { tag: { name: 'Foo', slug: 'foo', count: 1 } }]]);
+    const index = new Map([['foo', mock<TagIndexEntry>({ tag: { name: 'Foo', slug: 'foo', count: 1 } })]]);
     const cleanup = setupTagFlyout(container, index, navigateFn);
     
     assert.strictEqual(typeof cleanup, 'function');
@@ -175,9 +184,10 @@ describe('tags flyout and UI', () => {
     global.ResizeObserver = class {
       observe() { observed = true; }
       disconnect() {}
+      unobserve() {}
     };
     
-    global.requestAnimationFrame = (fn) => fn();
+    global.requestAnimationFrame = (fn: FrameRequestCallback) => { fn(0); return 0; };
     
     const cleanup = setupScrollableStrip(trackEl, scrollEl);
     assert.ok(observed);
@@ -190,7 +200,7 @@ describe('tags flyout and UI', () => {
     const track = document.createElement('div');
     const scroll = document.createElement('div');
     
-    container.querySelector = (sel) => {
+    container.querySelector = (sel: string) => {
       if (sel === '.tag-strip-track') return track;
       if (sel === '.tag-strip-scroll') return scroll;
       return null;
@@ -199,8 +209,9 @@ describe('tags flyout and UI', () => {
     global.ResizeObserver = class {
       observe() {}
       disconnect() {}
+      unobserve() {}
     };
-    global.requestAnimationFrame = (fn) => fn();
+    global.requestAnimationFrame = (fn: FrameRequestCallback) => { fn(0); return 0; };
     
     const cleanup = setupTagStrip(container, new Map(), navigateFn);
     assert.strictEqual(typeof cleanup, 'function');
@@ -208,20 +219,20 @@ describe('tags flyout and UI', () => {
   });
 
   test('createHotZone tracks mousemove', () => {
-    let listener = null;
-    document.addEventListener = (e, fn) => { listener = fn; };
-    document.removeEventListener = () => { listener = null; };
+    let listener: EventListener | undefined;
+    document.addEventListener = (e: string, fn: EventListenerOrEventListenerObject) => { listener = typeof fn === 'function' ? fn : undefined; };
+    document.removeEventListener = () => { listener = undefined; };
     
     let left = false;
     const hz = createHotZone(() => [anchorEl], () => { left = true; });
     assert.ok(listener);
     
     // Simulate move inside
-    listener({ clientX: 150, clientY: 110 });
+    must(listener, 'mousemove listener')(mock<MouseEvent>({ clientX: 150, clientY: 110 }));
     assert.ok(!left);
     
     // Simulate move outside
-    listener({ clientX: 300, clientY: 300 });
+    must(listener, 'mousemove listener')(mock<MouseEvent>({ clientX: 300, clientY: 300 }));
     assert.ok(left);
     
     hz.stop();

@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import { getChildrenOf, getSiblingBefore } from '../src/components/light/tags/tagOrdering.ts';
+import { fixtureTag } from './helpers/tags.ts';
 
 // Travel's stored child order is Japan, France, Peru — deliberately not the
 // order the tags appear in the flat list, and not alphabetical.
@@ -13,7 +14,7 @@ const tags = [
   { id: 5, name: 'Childless', children: [] },
   { id: 6, name: 'NoChildrenKey' },
   { id: 7, name: 'Dangling', children: [{ id: 999 }, { id: 2 }] },
-];
+].map(fixtureTag);
 
 describe('getChildrenOf', () => {
   test('returns children in the parent\'s stored order, not list order', () => {

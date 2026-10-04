@@ -9,30 +9,37 @@ import {
   renderFilterChips as _renderFilterChips,
   renderQuickFilters as _renderQuickFilters,
 } from '../src/components/light/tags/TagListView.ts';
+import type { TagListViewState } from '../src/components/light/tags/TagListView.ts';
+import type { TagStub } from '../src/api/tags.ts';
+import { mock } from './helpers/mock.ts';
+import { fixtureTag, type TagFixture } from './helpers/tags.ts';
 
 // The renderers return the RawHtml html`` produces — a String object, which
 // assert.match and friends will not take, so unwrap once here.
-const renderSortHeader = (/** @type {Parameters<typeof _renderSortHeader>} */ ...a) =>
+const renderSortHeader = (...a: Parameters<typeof _renderSortHeader>) =>
   String(_renderSortHeader(...a));
-const renderTagList = (/** @type {Parameters<typeof _renderTagList>} */ ...a) =>
+const renderTagList = (...a: Parameters<typeof _renderTagList>) =>
   String(_renderTagList(...a));
-const renderFilterChips = (/** @type {Parameters<typeof _renderFilterChips>} */ ...a) =>
+const renderFilterChips = (...a: Parameters<typeof _renderFilterChips>) =>
   String(_renderFilterChips(...a));
-const renderQuickFilters = (/** @type {Parameters<typeof _renderQuickFilters>} */ ...a) =>
+const renderQuickFilters = (...a: Parameters<typeof _renderQuickFilters>) =>
   String(_renderQuickFilters(...a));
 
 // No DOM stubs: TagListView is pure, same as TagTreeView.
-const view = (over = {}) => ({
+/** View fields; a filter parent may hold only the fields the filter reads. */
+type ViewFixture = Omit<Partial<TagListViewState>, 'filterParents'> & { filterParents?: Partial<TagStub>[] };
+
+const view = ({ filterParents = [], ...over }: ViewFixture = {}): TagListViewState => ({
   sortField: 'sort_order',
   sortOrder: 'asc',
   selectMode: false,
-  selectedIds: new Set(),
+  selectedIds: new Set<number>(),
   search: '',
-  filterParents: [],
+  filterParents: filterParents.map(p => mock<TagStub>(p)),
   ...over,
 });
 
-const tag = (id, name, over = {}) => ({
+const tag = (id: number, name: string, over: TagFixture = {}) => fixtureTag({
   id, name, slug: name.toLowerCase(), post_count: 0, parents: [], ...over,
 });
 
@@ -80,7 +87,7 @@ describe('matchesListFilter', () => {
   });
 
   test('handles a tag with no parents key', () => {
-    assert.equal(matchesListFilter({ id: 1, name: 'Bare', slug: 'bare' }, view({ search: 'bar' })), true);
+    assert.equal(matchesListFilter(fixtureTag({ id: 1, name: 'Bare', slug: 'bare' }), view({ search: 'bar' })), true);
   });
 
   test('the "hidden" quick filter matches a tag hidden on its own or via an ancestor', () => {
@@ -273,7 +280,7 @@ describe('renderTagList', () => {
   });
 
   test('the list embeds the same chips the page re-renders with', () => {
-    const filterParents = [{ id: 9, name: 'Japan' }, { id: 4, name: 'Peru' }];
+    const filterParents = [{ id: 9, name: 'Japan' }, { id: 4, name: 'Peru' }].map(p => mock<TagStub>(p));
     const chips = renderFilterChips(filterParents);
 
     assert.match(chips, /<svg/, 'the remove target is the icon, not a bare ×');
@@ -284,7 +291,7 @@ describe('renderTagList', () => {
   });
 
   test('chip names are escaped', () => {
-    assert.match(renderFilterChips([{ id: 1, name: '<img src=x>' }]), /&lt;img src=x&gt;/);
+    assert.match(renderFilterChips([mock<TagStub>({ id: 1, name: '<img src=x>' })]), /&lt;img src=x&gt;/);
   });
 
   test('the chips container is always present, even when empty', () => {

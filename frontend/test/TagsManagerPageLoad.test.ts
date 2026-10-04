@@ -21,10 +21,16 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, fire } from './helpers/dom.ts';
+import { setupDOM, click, fire, must } from './helpers/dom.ts';
 import { getToast, setToast, setUser } from '../src/store.ts';
+import { fixtureTag, type TagFixture } from './helpers/tags.ts';
+import type TagsManagerPageClass from '../src/pages/light/TagsManagerPage.ts';
+import type { User } from '../src/api/auth.ts';
+import type { PageProps } from '../src/router.ts';
+import { mock } from './helpers/mock.ts';
+import { jsonResponse, requestOf, type RecordedRequest, type Responder } from './helpers/fetch.ts';
 
-const tag = (id, name, over = {}) => ({
+const tag = (id: number, name: string, over: TagFixture = {}) => fixtureTag({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,
 });
 
@@ -36,36 +42,46 @@ const TAGS = [
 ];
 
 describe('TagsManagerPage — loading and data operations', () => {
-  let dom, TagsManagerPage, page, requests, respond, navRefreshes, onNavChanged;
+  let dom: ReturnType<typeof setupDOM>;
+  let TagsManagerPage: typeof TagsManagerPageClass;
+  let page: TagsManagerPageClass;
+  /** The page to unmount after the test; null when the test mounted none. */
+  let mounted: TagsManagerPageClass | null = null;
+  let requests: RecordedRequest[];
+  let respond: Responder;
+  let navRefreshes: number;
+  let onNavChanged: () => void;
 
   /** Record every request; reply with whatever `respond` currently returns. */
   function fakeFetch() {
     requests = [];
     respond = () => ({ ok: true, status: 200, body: { tags: TAGS, total: TAGS.length } });
-    globalThis.fetch = async (url, opts = {}) => {
-      requests.push({
-        url,
-        method: opts.method || 'GET',
-        body: opts.body ? JSON.parse(opts.body) : undefined,
-      });
-      const { ok, status, body } = respond(url, opts);
-      return { ok, status, headers: { get: () => 'application/json' }, json: async () => body };
+    globalThis.fetch = async (input: RequestInfo | URL, opts: RequestInit = {}) => {
+      const req = requestOf(input, opts, opts.method || 'GET');
+      requests.push(req);
+      return jsonResponse(respond(req.url, opts));
     };
   }
 
   /** `METHOD /path` for each request, in order. */
   const trace = () => requests.map(r => `${r.method} ${r.url}`);
   const toast = () => getToast();
-  const q = sel => dom.document.querySelector(sel);
-  const qa = sel => [...dom.document.querySelectorAll(sel)];
-  const settle = () => new Promise(r => setImmediate(r));
+  /** The element `sel` finds; the test fails when there is none. Typed as an input, the widest control. */
+  const q = <E extends Element = HTMLInputElement>(sel: string) => must(dom.document.querySelector<E>(sel), sel);
+  /** The element `sel` finds, or null — for the assertions that something is absent. */
+  const qOrNull = (sel: string) => dom.document.querySelector(sel);
+  /** The element `sel` finds inside the mounted page; the test fails when there is none. */
+  const inPage = (sel: string) => must(page.container.querySelector<HTMLElement>(sel), sel);
+  const qa = <E extends Element = HTMLInputElement>(sel: string) => [...dom.document.querySelectorAll<E>(sel)];
+  const settle = () => new Promise<void>(r => setImmediate(r));
 
   /** Mount the page as the router would, and wait for the first load. */
-  async function mountPage({ slug = undefined, path = '/light/tags' } = {}) {
+  async function mountPage({ slug = undefined, path = '/light/tags' }: { slug?: string, path?: string } = {}) {
     dom.location.pathname = path;
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
-    page = new TagsManagerPage(el, slug === undefined ? {} : { params: { slug } });
+    page = new TagsManagerPage(el, mock<PageProps>(slug === undefined ? {} : { params: { slug } }));
+    mounted = page;
     page.mount();
     await settle();
     return page;
@@ -81,19 +97,19 @@ describe('TagsManagerPage — loading and data operations', () => {
    * buttons on it — is not in the document until someone expands it.
    */
   function revealAll() {
-    click(page.container.querySelector('#expand-all-btn'));
-    click(page.container.querySelector('#unfiled-toggle-btn'));
+    click(inPage('#expand-all-btn'));
+    click(inPage('#unfiled-toggle-btn'));
   }
 
   /** The editor modal's fields, or null when no editor is open. */
   function editor() {
-    const form = q('#tag-editor-form');
+    const form = qOrNull('#tag-editor-form');
     if (!form) return null;
     return {
       form,
-      name: form.querySelector('[name="name"]').value,
-      slug: form.querySelector('#modal-slug').value,
-      checkedParents: [...form.querySelectorAll('input[name="parent_ids"]:checked')].map(b => Number(b.value)),
+      name: must(form.querySelector<HTMLInputElement>('[name="name"]'), 'name').value,
+      slug: must(form.querySelector<HTMLInputElement>('#modal-slug'), 'slug').value,
+      checkedParents: [...form.querySelectorAll<HTMLInputElement>('input[name="parent_ids"]:checked')].map(b => Number(b.value)),
     };
   }
 
@@ -101,7 +117,7 @@ describe('TagsManagerPage — loading and data operations', () => {
     dom = setupDOM('<!doctype html><html><body></body></html>', { path: '/light/tags' });
     fakeFetch();
     setToast(null);
-    setUser({ username: 'tester' });
+    setUser(mock<User>({ username: 'tester' }));
 
     // The nav is a sibling of this page in the app shell; the event is the only
     // thing the page says to it, so counting them is what "the nav was told" means.
@@ -115,9 +131,9 @@ describe('TagsManagerPage — loading and data operations', () => {
   afterEach(() => {
     // Unmount before the globals go: the admin layout holds store subscriptions
     // that re-render this page, and a leaked one renders into the next test's DOM.
-    page?.unmount();
-    page = null;
-    delete globalThis.fetch;
+    mounted?.unmount();
+    mounted = null;
+    Reflect.deleteProperty(globalThis, 'fetch');
     dom.cleanup();
   });
 
@@ -140,15 +156,16 @@ describe('TagsManagerPage — loading and data operations', () => {
     dom.location.pathname = '/light/tags';
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
-    page = new TagsManagerPage(el, {});
+    page = new TagsManagerPage(el, mock<PageProps>({}));
+    mounted = page;
     page.mount();
 
-    assert.ok(q('.loading-spinner'), 'the request is in flight');
+    assert.ok(qOrNull('.loading-spinner'), 'the request is in flight');
     assert.equal(renderedNames().length, 0);
 
     await settle();
 
-    assert.equal(q('.loading-spinner'), null, 'and gone once it lands');
+    assert.equal(qOrNull('.loading-spinner'), null, 'and gone once it lands');
     assert.ok(renderedNames().length > 0);
   });
 
@@ -254,20 +271,20 @@ describe('TagsManagerPage — loading and data operations', () => {
     await mountPage();
     revealAll();
 
-    click(qa('.edit-tag-btn').find(b => b.dataset.id === '3'));
+    click(must(qa('.edit-tag-btn').find(b => b.dataset.id === '3'), 'button'));
     assert.deepEqual(dom.history.entries, [['push', '/light/tags/kyoto']],
       'an open editor is a place you can link to and go back from');
 
     page._closeModal();
     assert.equal(dom.location.pathname, '/light/tags',
       'and closing it leaves the list URL, not the tag it just closed');
-    assert.deepEqual(dom.history.entries.at(-1), ['replace', '/light/tags']);
+    assert.deepEqual(dom.history.entries[dom.history.entries.length - 1], ['replace', '/light/tags']);
   });
 
   test('the header links to the tag being edited, not the site root', async () => {
     await mountPage({ slug: 'kyoto', path: '/light/tags/kyoto' });
 
-    assert.equal(page.container.querySelector('.public-home-link').getAttribute('href'), '/tags/kyoto',
+    assert.equal(inPage('.public-home-link').getAttribute('href'), '/tags/kyoto',
       'the View-public-site button follows the deep link');
   });
 
@@ -283,8 +300,8 @@ describe('TagsManagerPage — loading and data operations', () => {
   // ── _handleDelete ──────────────────────────────────────────────────────────
 
   /** Click a row's delete button and hand back the confirm dialog's parts. */
-  function clickDelete(id) {
-    click(qa('.delete-tag-btn').find(b => b.dataset.id === String(id)));
+  function clickDelete(id: number) {
+    click(must(qa('.delete-tag-btn').find(b => b.dataset.id === String(id)), 'button'));
     return {
       message: q('.modal-body p')?.textContent,
       ok: q('#confirm-ok-btn'),
@@ -327,7 +344,7 @@ describe('TagsManagerPage — loading and data operations', () => {
     await settle();
 
     assert.deepEqual(trace(), []);
-    assert.equal(q('#confirm-ok-btn'), null, 'and the dialog goes away');
+    assert.equal(qOrNull('#confirm-ok-btn'), null, 'and the dialog goes away');
   });
 
   test('a failed delete reports the server message and reloads nothing', async () => {
@@ -354,7 +371,7 @@ describe('TagsManagerPage — loading and data operations', () => {
       ? { ok: true, status: 200, body: {} }
       : { ok: true, status: 200, body: { tags: [tag(3, 'Kyoto', { nav_order: 1, post_count: 7 })], total: 1 } });
 
-    click(page.container.querySelector('#recalc-counts-btn'));
+    click(inPage('#recalc-counts-btn'));
     await settle();
 
     assert.deepEqual(trace(), ['POST /api/tags/recalculate-counts', 'GET /api/tags?include_empty=true'],
@@ -368,7 +385,7 @@ describe('TagsManagerPage — loading and data operations', () => {
     requests.length = 0;
     respond = () => ({ ok: false, status: 500, body: { detail: 'Recount timed out' } });
 
-    click(page.container.querySelector('#recalc-counts-btn'));
+    click(inPage('#recalc-counts-btn'));
     await settle();
 
     assert.deepEqual(trace(), ['POST /api/tags/recalculate-counts']);

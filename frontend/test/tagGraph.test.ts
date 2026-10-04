@@ -1,5 +1,10 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import type * as TagGraphModule from '../src/plugins/tags-graph/tagGraph.ts';
+import type { TagGraphHandlers } from '../src/plugins/tags-graph/tagGraph.ts';
+import type { GraphData, GraphNode } from '../src/plugins/tags-graph/graphModel.ts';
+import { must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 
 /**
  * TagGraph is the controller behind the public /tags page: it owns the graph,
@@ -16,7 +21,10 @@ import assert from 'node:assert';
  * read is the state the drawing would have used.
  */
 
-let TagGraph;
+let TagGraph: typeof TagGraphModule.TagGraph;
+
+/** What the stubbed prefers-reduced-motion query reports. */
+let reduceMotion = false;
 
 before(async () => {
   installDomStubs();
@@ -28,44 +36,45 @@ before(async () => {
 /** A 2D context whose every method is a no-op; the renderer only writes to it. */
 function stubCtx() {
   const noop = () => {};
-  return {
+  return mock<CanvasRenderingContext2D>({
     clearRect: noop, save: noop, restore: noop, beginPath: noop, arc: noop,
     moveTo: noop, lineTo: noop, fill: noop, stroke: noop, fillText: noop,
     strokeText: noop, setLineDash: noop, setTransform: noop,
     fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1,
-    font: '', textAlign: '', textBaseline: '',
-  };
+    font: '', textAlign: 'start', textBaseline: 'alphabetic',
+  });
 }
 
 function stubCanvas({ width = 800, height = 520 } = {}) {
-  return {
+  return mock<HTMLCanvasElement>({
     clientWidth: width,
     clientHeight: height,
     parentElement: null,
     width: 0,
     height: 0,
-    style: {},
-    getContext: () => stubCtx(),
-    getBoundingClientRect: () => ({ left: 0, top: 0, width, height }),
+    style: mock<CSSStyleDeclaration>({}),
+    // The one boundary cast: getContext is overloaded per context id, and the stub serves only '2d'.
+    getContext: (() => stubCtx()) as unknown as HTMLCanvasElement['getContext'],
+    getBoundingClientRect: () => mock<DOMRect>({ left: 0, top: 0, width, height }),
     addEventListener: () => {},
     removeEventListener: () => {},
     releasePointerCapture: () => {},
     setPointerCapture: () => {},
-  };
+  });
 }
 
 function installDomStubs() {
-  globalThis.window = {
+  globalThis.window = mock<typeof window>({
     devicePixelRatio: 1,
     innerWidth: 1024,
     innerHeight: 768,
     addEventListener: () => {},
     removeEventListener: () => {},
     // No custom properties: every colour falls back to its literal default.
-    getComputedStyle: () => ({ getPropertyValue: () => '' }),
-    matchMedia: () => ({ matches: globalThis.__reduceMotion === true }),
-  };
-  globalThis.__reduceMotion = false;
+    getComputedStyle: () => mock<CSSStyleDeclaration>({ getPropertyValue: () => '' }),
+    matchMedia: () => mock<MediaQueryList>({ matches: reduceMotion === true }),
+  });
+  reduceMotion = false;
   globalThis.requestAnimationFrame = () => 0;
   globalThis.cancelAnimationFrame = () => {};
 }
@@ -78,7 +87,7 @@ function installDomStubs() {
  *   post 1 ──membership── montreal, 2026
  *   post 2 ──membership── montreal
  */
-const FIXTURE = {
+const FIXTURE: GraphData = {
   tags: [
     { id: 1, name: 'Location', slug: 'location', post_count: 3 },
     { id: 2, name: 'Canada', slug: 'canada', post_count: 3 },
@@ -100,7 +109,7 @@ const FIXTURE = {
   ],
 };
 
-const makeGraph = (data = FIXTURE, opts = {}) => new TagGraph(stubCanvas(), data, opts);
+const makeGraph = (data: GraphData = FIXTURE, opts: TagGraphHandlers = {}) => new TagGraph(stubCanvas(), data, opts);
 
 // ── Visible set / legend toggles ─────────────────────────────────────────────
 
@@ -134,7 +143,7 @@ describe('hidden types', () => {
 
   test('hiding the kind of the selected node clears the selection', () => {
     const g = makeGraph();
-    let announced = 'untouched';
+    let announced: GraphNode | null | string = 'untouched';
     g.onSelect = (n) => { announced = n; };
     g.selectNodeBySlug('2026');
     assert.ok(g.selected, 'precondition: something is selected');
@@ -148,12 +157,12 @@ describe('hidden types', () => {
     const g = makeGraph();
     g.selectNodeBySlug('2026');
     g.setTypeHidden('post', true);
-    assert.strictEqual(g.selected.slug, '2026');
+    assert.strictEqual(must(g.selected, 'selected').slug, '2026');
   });
 
   test('hiding the hovered kind clears the hover', () => {
     const g = makeGraph();
-    g.hovered = g.nodeById.get('t4');
+    g.hovered = must(g.nodeById.get('t4'), 't4');
     g.setTypeHidden('year', true);
     assert.strictEqual(g.hovered, null);
   });
@@ -170,7 +179,7 @@ describe('hidden types', () => {
     g.scale = 1;
     g.tx = 0;
     g.ty = 0;
-    const post = g.nodes.find((n) => n.type === 'post');
+    const post = must(g.nodes.find((n) => n.type === 'post'), 'post');
     post.x = 500;
     post.y = 300;
     post.r = 10;
@@ -190,7 +199,7 @@ describe('hidden types', () => {
 describe('selectNodeBySlug', () => {
   test('selects the tag with that slug', () => {
     const g = makeGraph();
-    const n = g.selectNodeBySlug('canada');
+    const n = must(g.selectNodeBySlug('canada'), 'canada');
     assert.strictEqual(n.id, 't2');
     assert.strictEqual(g.selected, n);
   });
@@ -200,7 +209,7 @@ describe('selectNodeBySlug', () => {
       tags: [{ id: 1, name: 'Walk', slug: 'a-walk', post_count: 1 }],
       posts: [{ id: 10, title: 'A walk', slug: 'a-walk' }],
     });
-    assert.strictEqual(g.selectNodeBySlug('a-walk').type, 'tag');
+    assert.strictEqual(must(g.selectNodeBySlug('a-walk'), 'a-walk').type, 'tag');
   });
 
   test('an unknown slug selects nothing and reports it', () => {
@@ -223,13 +232,13 @@ describe('setFilter', () => {
   test('matches tag names case-insensitively, on a substring', () => {
     const g = makeGraph();
     g.setFilter('CANA');
-    assert.deepStrictEqual([...g.filterSet], ['t2']);
+    assert.deepStrictEqual([...must(g.filterSet, 'filter')], ['t2']);
   });
 
   test('never matches posts — the search is for tags', () => {
     const g = makeGraph();
     g.setFilter('walk');
-    assert.strictEqual(g.filterSet.size, 0, 'the post titled "A walk" must not match');
+    assert.strictEqual(must(g.filterSet, 'filter').size, 0, 'the post titled "A walk" must not match');
   });
 
   test('an empty or blank query clears the filter entirely', () => {
@@ -245,7 +254,7 @@ describe('setFilter', () => {
   test('matches across accents as typed', () => {
     const g = makeGraph();
     g.setFilter('montré');
-    assert.deepStrictEqual([...g.filterSet], ['t3']);
+    assert.deepStrictEqual([...must(g.filterSet, 'filter')], ['t3']);
   });
 });
 
@@ -260,21 +269,21 @@ describe('setFilter', () => {
 describe('focus precedence', () => {
   test('a selection wins over a live hover, so the highlight stays put', () => {
     const g = makeGraph();
-    g.hovered = g.nodeById.get('t1');
-    g.selected = g.nodeById.get('t3');
-    assert.ok(g._focusSets().focus.has('p10'), 'focus follows the selection, not the hover');
+    g.hovered = must(g.nodeById.get('t1'), 't1');
+    g.selected = must(g.nodeById.get('t3'), 't3');
+    assert.ok(must(g._focusSets(), 'focus sets').focus.has('p10'), 'focus follows the selection, not the hover');
   });
 
   test('with nothing selected, the hover drives it', () => {
     const g = makeGraph();
-    g.hovered = g.nodeById.get('t3');
-    assert.ok(g._focusSets().focus.has('p10'));
+    g.hovered = must(g.nodeById.get('t3'), 't3');
+    assert.ok(must(g._focusSets(), 'focus sets').focus.has('p10'));
   });
 
   test('with neither hover nor selection, the filter drives the highlight', () => {
     const g = makeGraph();
     g.setFilter('canada');
-    assert.ok(g._focusSets().focus.has('t2'));
+    assert.ok(must(g._focusSets(), 'focus sets').focus.has('t2'));
   });
 
   test('a filter that matches nothing dims nothing', () => {
@@ -300,7 +309,7 @@ describe('getSelectionStats', () => {
   test('the selected tag is not counted among its own tags', () => {
     const g = makeGraph();
     g.selectNodeBySlug('location');
-    const { tagCount } = g.getSelectionStats();
+    const { tagCount } = must(g.getSelectionStats(), 'stats');
     assert.strictEqual(tagCount, 1, 'only Canada — Location itself is excluded');
   });
 
@@ -317,7 +326,7 @@ describe('getSelectionStats', () => {
  * auto-framing would be the app fighting the reader.
  */
 describe('framing', () => {
-  let g;
+  let g: TagGraphModule.TagGraph;
   beforeEach(() => { g = makeGraph(); });
 
   test('fitting puts every visible node on screen', () => {
@@ -331,7 +340,7 @@ describe('framing', () => {
   });
 
   test('fitting frames the visible set, ignoring hidden nodes', () => {
-    const post = g.nodes.find((n) => n.type === 'post');
+    const post = must(g.nodes.find((n) => n.type === 'post'), 'post');
     post.x = 100000; // far off to one side
     post.y = 100000;
     g.setTypeHidden('post', true);
@@ -390,22 +399,22 @@ describe('navigation targets', () => {
   test('a tag node opens its tag page', () => {
     let href = null;
     const g = makeGraph(FIXTURE, { onNavigate: (h) => { href = h; } });
-    g._navigateTo(g.nodeById.get('t2'));
+    g._navigateTo(must(g.nodeById.get('t2'), 't2'));
     assert.strictEqual(href, '/tags/canada');
   });
 
   test('a geo or year node is still a tag page', () => {
-    const seen = [];
+    const seen: unknown[] = [];
     const g = makeGraph(FIXTURE, { onNavigate: (h) => seen.push(h) });
-    g._navigateTo(g.nodeById.get('t3'));
-    g._navigateTo(g.nodeById.get('t4'));
+    g._navigateTo(must(g.nodeById.get('t3'), 't3'));
+    g._navigateTo(must(g.nodeById.get('t4'), 't4'));
     assert.deepStrictEqual(seen, ['/tags/montreal', '/tags/2026']);
   });
 
   test('a post node opens the post', () => {
     let href = null;
     const g = makeGraph(FIXTURE, { onNavigate: (h) => { href = h; } });
-    g._navigateTo(g.nodeById.get('p10'));
+    g._navigateTo(must(g.nodeById.get('p10'), 'p10'));
     assert.strictEqual(href, '/posts/a-walk');
   });
 });
@@ -422,10 +431,10 @@ describe('navigation targets', () => {
  * these run through the assembled pair.
  */
 describe('pointer gestures', () => {
-  const down = (id, x, y) => ({ pointerId: id, clientX: x, clientY: y, pointerType: 'mouse' });
+  const down = (id: number, x: number, y: number) => mock<PointerEvent>({ pointerId: id, clientX: x, clientY: y, pointerType: 'mouse' });
 
   /** Nodes on a known grid so a coordinate means a specific node. */
-  function positioned(opts = {}) {
+  function positioned(opts: TagGraphHandlers = {}) {
     const g = makeGraph(FIXTURE, opts);
     g.scale = 1;
     g.tx = 0;
@@ -466,7 +475,7 @@ describe('pointer gestures', () => {
   });
 
   test('a first tap selects the node and announces it', () => {
-    let selected = 'untouched';
+    let selected: GraphNode | null | string = 'untouched';
     const g = positioned({ onSelect: (n) => { selected = n; } });
     g._controls.pointerDown(down(1, 50, 100));
     g._controls.pointerUp(down(1, 50, 100));
@@ -498,14 +507,14 @@ describe('pointer gestures', () => {
   });
 
   test('tapping empty space clears the selection', () => {
-    const cleared = [];
+    const cleared: (GraphNode | null)[] = [];
     const g = positioned({ onSelect: (n) => cleared.push(n) });
     g._controls.pointerDown(down(1, 50, 100));
     g._controls.pointerUp(down(1, 50, 100));
     g._controls.pointerDown(down(1, 600, 400));
     g._controls.pointerUp(down(1, 600, 400));
     assert.strictEqual(g.selected, null);
-    assert.strictEqual(cleared.at(-1), null);
+    assert.strictEqual(cleared[cleared.length - 1], null);
   });
 
   test('a drag past the slop is not a tap', () => {
@@ -546,7 +555,7 @@ describe('pointer gestures', () => {
   });
 
   test('hovering a node reports it and changes the cursor', () => {
-    const seen = [];
+    const seen: unknown[] = [];
     const g = positioned({ onHover: (n) => seen.push(n) });
     g._controls.pointerMove(down(9, 50, 100));
     assert.strictEqual(g.hovered, g.nodes[0]);
@@ -559,7 +568,7 @@ describe('pointer gestures', () => {
   });
 
   test('hover is only announced when it actually changes', () => {
-    const seen = [];
+    const seen: unknown[] = [];
     const g = positioned({ onHover: (n) => seen.push(n) });
     g._controls.pointerMove(down(9, 50, 100));
     g._controls.pointerMove(down(9, 52, 100)); // same node
@@ -632,10 +641,10 @@ describe('pointer gestures', () => {
   });
 
   test('the mouse leaving the canvas clears the hover', () => {
-    const seen = [];
+    const seen: unknown[] = [];
     const g = positioned({ onHover: (n) => seen.push(n) });
     g._controls.pointerMove(down(9, 50, 100));
-    g._controls._onLeave({ pointerType: 'mouse' });
+    g._controls._onLeave(mock<PointerEvent>({ pointerType: 'mouse' }));
     assert.strictEqual(g.hovered, null);
     assert.deepStrictEqual(seen, [g.nodes[0], null]);
   });
@@ -645,7 +654,7 @@ describe('pointer gestures', () => {
     // pointer left" would wipe the highlight the tap just put up.
     const g = positioned();
     g._controls.pointerMove(down(9, 50, 100));
-    g._controls._onLeave({ pointerType: 'touch' });
+    g._controls._onLeave(mock<PointerEvent>({ pointerType: 'touch' }));
     assert.strictEqual(g.hovered, g.nodes[0], 'the highlight must survive the finger lifting');
   });
 });
@@ -653,10 +662,10 @@ describe('pointer gestures', () => {
 // ── Wheel zoom ───────────────────────────────────────────────────────────────
 
 describe('wheel zoom', () => {
-  const wheel = (deltaY) => {
+  const wheel = (deltaY: number) => {
     let prevented = false;
     return {
-      event: { clientX: 400, clientY: 260, deltaY, preventDefault: () => { prevented = true; } },
+      event: mock<WheelEvent>({ clientX: 400, clientY: 260, deltaY, preventDefault: () => { prevented = true; } }),
       wasPrevented: () => prevented,
     };
   };
@@ -701,7 +710,7 @@ describe('wheel zoom', () => {
  */
 describe('reduced motion', () => {
   test('settles the layout without animating, then paints once', () => {
-    globalThis.__reduceMotion = true;
+    reduceMotion = true;
     try {
       const g = makeGraph();
       const scattered = g.nodes.map((n) => [n.x, n.y]);
@@ -720,7 +729,7 @@ describe('reduced motion', () => {
         assert.ok(sx >= 0 && sx <= 800, 'and it must be framed on screen');
       }
     } finally {
-      globalThis.__reduceMotion = false;
+      reduceMotion = false;
     }
   });
 
@@ -751,9 +760,9 @@ describe('lifecycle', () => {
   });
 
   test('destroy unbinds the pointer listeners', () => {
-    const removed = [];
+    const removed: string[] = [];
     const canvas = stubCanvas();
-    canvas.removeEventListener = (type) => removed.push(type);
+    canvas.removeEventListener = (type: string) => { removed.push(type); };
     new TagGraph(canvas, FIXTURE).destroy();
     assert.deepStrictEqual(
       removed.sort(),

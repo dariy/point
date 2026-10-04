@@ -14,7 +14,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, check, fire, selectOption } from './helpers/dom.ts';
+import { setupDOM, click, check, fire, selectOption, must } from './helpers/dom.ts';
 import { getToast, setToast } from '../src/store.ts';
 import { buildTagTree, renderTagForest } from '../src/components/light/tags/TagTreeView.ts';
 import { renderTagList } from '../src/components/light/tags/TagListView.ts';
@@ -22,8 +22,14 @@ import {
   selectableTags, selectAllState, renderBulkToolbar, applyRowSelection,
   updateBulkToolbar, setupSelectMode, LONG_PRESS_MS, INTERACTIVE, ROW_SELECTOR,
 } from '../src/components/light/tags/tagSelection.ts';
+import type { SelectModeState } from '../src/components/light/tags/tagSelection.ts';
+import type { TagStub } from '../src/api/tags.ts';
+import type { TagListViewState } from '../src/components/light/tags/TagListView.ts';
+import { mock } from './helpers/mock.ts';
+import { fixtureTag, type TagFixture } from './helpers/tags.ts';
+import { jsonResponse, requestOf, type RecordedRequest, type Responder } from './helpers/fetch.ts';
 
-const tag = (id, name, over = {}) => ({
+const tag = (id: number, name: string, over: TagFixture = {}) => fixtureTag({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,
 });
 
@@ -36,22 +42,30 @@ const FOREST = [
 ];
 
 describe('tagSelection', () => {
-  let dom, container, st, modeChanges, bulkDone, confirms, requests, respond;
+  let dom: ReturnType<typeof setupDOM>;
+  let container: HTMLElement;
+  /** The page state; its listView is the full view descriptor the page renders the list with. */
+  let st: Omit<SelectModeState, 'listView'> & { listView: TagListViewState };
+  let modeChanges: { selectMode: boolean, ids: number[] }[];
+  let bulkDone: number;
+  let confirms: { title: string, message: string, confirmText: string, variant: string }[];
+  let requests: RecordedRequest[];
+  let respond: Responder;
 
   /** Record every request; reply with whatever `respond` currently returns. */
   function fakeFetch() {
     requests = [];
     respond = () => ({ ok: true, status: 200, body: {} });
-    globalThis.fetch = async (url, opts = {}) => {
-      requests.push({ url, method: opts.method, body: opts.body ? JSON.parse(opts.body) : undefined });
-      const { ok, status, body } = respond(url, opts);
-      return { ok, status, headers: { get: () => 'application/json' }, json: async () => body };
+    globalThis.fetch = async (input: RequestInfo | URL, opts: RequestInit = {}) => {
+      const req = requestOf(input, opts);
+      requests.push(req);
+      return jsonResponse(respond(req.url, opts));
     };
   }
 
   /** The touch layout, where the row gestures apply. */
-  const setBreakpoint = matches => {
-    globalThis.matchMedia = q => ({
+  const setBreakpoint = (matches: boolean) => {
+    globalThis.matchMedia = (q: string) => mock<MediaQueryList>({
       matches: matches && q === '(max-width: 48em)', media: q,
       addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
     });
@@ -67,15 +81,15 @@ describe('tagSelection', () => {
     confirms = [];
     st = {
       selectMode: true,
-      selectedIds: new Set(),
+      selectedIds: new Set<number>(),
       tags: FOREST,
       view: 'tree',
-      listView: { search: '', filterParents: [], selectMode: true, selectedIds: new Set() },
+      listView: { search: '', filterParents: [], selectMode: true, selectedIds: new Set<number>() },
     };
   });
 
   afterEach(() => {
-    delete globalThis.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
     dom.cleanup();
   });
 
@@ -110,12 +124,15 @@ describe('tagSelection', () => {
     });
   }
 
-  const q = sel => container.querySelector(sel);
-  const qa = sel => [...container.querySelectorAll(sel)];
-  const rowsFor = id => qa(`.tm-row[data-id="${id}"], .tm-tag-row[data-id="${id}"]`);
-  const cbsFor = id => qa(`.tm-select-cb[data-id="${id}"]`);
+  /** The element `sel` finds; the test fails when there is none. Typed as an input, the widest control. */
+  const q = <E extends Element = HTMLInputElement>(sel: string) => must(container.querySelector<E>(sel), sel);
+  /** The element `sel` finds, or null — for the assertions that something is absent. */
+  const qOrNull = (sel: string) => container.querySelector(sel);
+  const qa = <E extends Element = HTMLInputElement>(sel: string) => [...container.querySelectorAll<E>(sel)];
+  const rowsFor = (id: number) => qa(`.tm-row[data-id="${id}"], .tm-tag-row[data-id="${id}"]`);
+  const cbsFor = (id: number) => qa(`.tm-select-cb[data-id="${id}"]`);
   const count = () => q('#tm-bulk-count').textContent;
-  const settle = () => new Promise(r => setImmediate(r));
+  const settle = () => new Promise<void>(r => setImmediate(r));
   const trace = () => requests.map(r => `${r.method} ${r.url}`);
 
   // ── selectableTags ─────────────────────────────────────────────────────────
@@ -141,7 +158,7 @@ describe('tagSelection', () => {
 
     test('the list view honours its parent chips', () => {
       assert.deepEqual(
-        selectableTags(TAGS, 'list', { search: '', filterParents: [{ id: 1 }] }).map(t => t.id), [2],
+        selectableTags(TAGS, 'list', { search: '', filterParents: [mock<TagStub>({ id: 1 })] }).map(t => t.id), [2],
       );
     });
   });
@@ -171,21 +188,21 @@ describe('tagSelection', () => {
   describe('renderBulkToolbar', () => {
     test('carries every control the page wires, with the actions disabled', () => {
       const el = dom.document.createElement('div');
-      el.innerHTML = renderBulkToolbar();
+      el.innerHTML = String(renderBulkToolbar());
       for (const id of ['#tm-select-all-cb', '#tm-bulk-count', '#tm-bulk-visibility-select',
         '#tm-bulk-apply-btn', '#tm-bulk-move-btn', '#tm-bulk-delete-btn', '#tm-bulk-done-btn']) {
         assert.ok(el.querySelector(id), `expected ${id}`);
       }
-      assert.equal(el.querySelector('#tm-bulk-count').textContent, '0 selected');
+      assert.equal(must(el.querySelector('#tm-bulk-count'), 'count').textContent, '0 selected');
       ['#tm-bulk-apply-btn', '#tm-bulk-move-btn', '#tm-bulk-delete-btn'].forEach(sel => {
-        assert.ok(el.querySelector(sel).hasAttribute('disabled'), `${sel} starts disabled`);
+        assert.ok(must(el.querySelector(sel), sel).hasAttribute('disabled'), `${sel} starts disabled`);
       });
     });
 
     test('the way out of select mode keeps its text when labels collapse', () => {
       const el = dom.document.createElement('div');
-      el.innerHTML = renderBulkToolbar();
-      const done = el.querySelector('#tm-bulk-done-btn');
+      el.innerHTML = String(renderBulkToolbar());
+      const done = must(el.querySelector('#tm-bulk-done-btn'), 'done button');
       assert.equal(done.querySelector('.btn-label'), null);
       assert.equal(done.textContent.trim(), 'Done');
     });
@@ -368,13 +385,13 @@ describe('tagSelection', () => {
       mount();
       click(q('#tm-bulk-move-btn'));
 
-      const overlay = dom.document.querySelector('.modal-overlay');
+      const overlay = must(dom.document.querySelector('.modal-overlay'), 'picker');
       assert.ok(overlay, 'the picker is on the page');
       const offered = [...overlay.querySelectorAll('.tm-picker-name')].map(el => el.textContent);
       assert.deepEqual(offered, ['Food', 'Lisbon', 'Travel'], 'sorted, and never the tag itself');
 
-      check(overlay.querySelector('input[value="1"]'), true);
-      click(overlay.querySelector('#tm-bulk-move-confirm-btn'));
+      check(must(overlay.querySelector<HTMLInputElement>('input[value="1"]'), 'Travel'), true);
+      click(must(overlay.querySelector('#tm-bulk-move-confirm-btn'), 'confirm'));
       await settle();
 
       assert.deepEqual(trace(), ['PUT /api/tags/3/parents']);
@@ -453,7 +470,7 @@ describe('tagSelection', () => {
       st.selectMode = false;
       mount();
       const row = rowsFor(4)[0];
-      fire(row.querySelector('button'), 'pointerdown');   // bubbles to the row
+      fire(must(row.querySelector('button'), 'row button'), 'pointerdown');   // bubbles to the row
       t.mock.timers.tick(LONG_PRESS_MS);
 
       assert.deepEqual(modeChanges, []);
@@ -483,7 +500,7 @@ describe('tagSelection', () => {
     test('tapping a control inside the row leaves the selection alone', () => {
       mount();
       const row = rowsFor(3)[0];
-      fire(row.querySelector('button'), 'click');          // bubbles to the row
+      fire(must(row.querySelector('button'), 'row button'), 'click');          // bubbles to the row
       assert.deepEqual([...st.selectedIds], []);
     });
 

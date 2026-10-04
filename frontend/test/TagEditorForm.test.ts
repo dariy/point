@@ -8,15 +8,16 @@ import {
   slugifyTagName,
   tagEditorSelection,
 } from '../src/components/light/tags/TagEditorForm.ts';
+import { fixtureTag, type TagFixture } from './helpers/tags.ts';
 
 // The renderers return the RawHtml html`` produces — a String object, which
 // assert.match and friends will not take, so unwrap once here.
-const renderTagEditorForm = (...a) => String(_renderTagEditorForm(...a));
-const renderVisibilitySection = (...a) => String(_renderVisibilitySection(...a));
-const renderTagToggles = (...a) => String(_renderTagToggles(...a));
+const renderTagEditorForm = (...a: Parameters<typeof _renderTagEditorForm>) => String(_renderTagEditorForm(...a));
+const renderVisibilitySection = (...a: Parameters<typeof _renderVisibilitySection>) => String(_renderVisibilitySection(...a));
+const renderTagToggles = (...a: Parameters<typeof _renderTagToggles>) => String(_renderTagToggles(...a));
 
 // Pure module — no DOM stubs.
-const tag = (id, name, over = {}) => ({ id, name, slug: name.toLowerCase(), parents: [], ...over });
+const tag = (id: number, name: string, over: TagFixture = {}) => fixtureTag({ id, name, slug: name.toLowerCase(), parents: [], ...over });
 
 describe('slugifyTagName', () => {
   test('lowercases and hyphenates', () => {
@@ -68,7 +69,7 @@ describe('tagEditorSelection', () => {
   });
 
   test('handles a tag with no parents or children keys', () => {
-    assert.deepEqual(tagEditorSelection({ id: 1, name: 'Bare' }, null), { selParents: [], selChildren: [] });
+    assert.deepEqual(tagEditorSelection(fixtureTag({ id: 1, name: 'Bare' }), null), { selParents: [], selChildren: [] });
   });
 });
 

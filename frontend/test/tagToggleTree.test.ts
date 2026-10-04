@@ -11,7 +11,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, fire, check } from './helpers/dom.ts';
+import { setupDOM, click, fire, check, must } from './helpers/dom.ts';
 import {
   syncIndeterminate,
   filterToggleTree,
@@ -19,8 +19,9 @@ import {
   setupTagToggleTrees,
 } from '../src/components/light/tags/tagToggleTree.ts';
 import { renderTagToggles } from '../src/components/light/tags/TagEditorForm.ts';
+import { fixtureTag, type TagFixture } from './helpers/tags.ts';
 
-const tag = (id, name, over = {}) => ({
+const tag = (id: number, name: string, over: TagFixture = {}) => fixtureTag({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,
 });
 
@@ -35,10 +36,11 @@ const FOREST = [
 ];
 
 describe('tagToggleTree', () => {
-  let dom, root;
+  let dom: ReturnType<typeof setupDOM>;
+  let root: HTMLElement;
 
   /** Mount toggle markup for `selected`, wrapped the way the modal wraps it. */
-  function mount(selectedIds = [], tags = FOREST) {
+  function mount(selectedIds: number[] = [], tags = FOREST) {
     root = dom.document.createElement('div');
     root.innerHTML = `
       <input type="text" class="tm-toggle-search">
@@ -49,21 +51,24 @@ describe('tagToggleTree', () => {
     return root;
   }
 
-  /** The checkbox for a tag, by name — ids are an implementation detail here. */
-  const cbFor = name => [...root.querySelectorAll('.tag-toggle input[type="checkbox"]')]
-    .find(cb => cb.closest('.tag-toggle').querySelector('span').textContent === name);
+  /** The element `selector` finds under the mounted root; the test fails when there is none. */
+  const $ = <E extends Element = HTMLElement>(selector: string) => must(root.querySelector<E>(selector), selector);
 
-  const isHidden = el => el.classList.contains('hidden');
+  /** The checkbox for a tag, by name — ids are an implementation detail here. */
+  const cbFor = (name: string) => must([...root.querySelectorAll<HTMLInputElement>('.tag-toggle input[type="checkbox"]')]
+    .find(cb => cb.closest('.tag-toggle')?.querySelector('span')?.textContent === name), name);
+
+  const isHidden = (el: Element) => el.classList.contains('hidden');
 
   /** Names of the nodes a user can actually see, in document order. */
   const visibleNames = () => [...root.querySelectorAll('.tag-toggle-node')]
     .filter(n => {
-      for (let el = n; el && el !== root; el = el.parentElement) {
+      for (let el: Element | null = n; el && el !== root; el = el.parentElement) {
         if (el.classList?.contains('hidden')) return false;
       }
       return true;
     })
-    .map(n => n.querySelector(':scope > .tag-toggle-row .tag-toggle span').textContent);
+    .map(n => must(n.querySelector(':scope > .tag-toggle-row .tag-toggle span'), 'name').textContent);
 
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom.cleanup(); });
@@ -73,7 +78,7 @@ describe('tagToggleTree', () => {
   describe('syncIndeterminate', () => {
     test('marks an unchecked ancestor whose descendant is checked', () => {
       mount([3]);                                  // Kyoto, two levels down
-      const tree = root.querySelector('.tag-toggle-tree.level-0');
+      const tree = $('.tag-toggle-tree.level-0');
       syncIndeterminate(tree);
 
       assert.equal(cbFor('Kyoto').checked, true);
@@ -86,7 +91,7 @@ describe('tagToggleTree', () => {
       // A browser paints indeterminate OVER checked, so setting both would hide
       // the stronger of the two states.
       mount([1, 3]);
-      syncIndeterminate(root.querySelector('.tag-toggle-tree.level-0'));
+      syncIndeterminate($('.tag-toggle-tree.level-0'));
 
       assert.equal(cbFor('Travel').checked, true);
       assert.equal(cbFor('Travel').indeterminate, false);
@@ -94,7 +99,7 @@ describe('tagToggleTree', () => {
 
     test('clears a flag that no longer holds', () => {
       mount([3]);
-      const tree = root.querySelector('.tag-toggle-tree.level-0');
+      const tree = $('.tag-toggle-tree.level-0');
       syncIndeterminate(tree);
       assert.equal(cbFor('Japan').indeterminate, true);
 
@@ -106,14 +111,14 @@ describe('tagToggleTree', () => {
 
     test('leaves an unrelated branch untouched', () => {
       mount([3]);
-      syncIndeterminate(root.querySelector('.tag-toggle-tree.level-0'));
+      syncIndeterminate($('.tag-toggle-tree.level-0'));
       assert.equal(cbFor('Food').indeterminate, false);
       assert.equal(cbFor('Ramen').indeterminate, false);
     });
 
     test('a leaf is never partial, checked or not', () => {
       mount([6]);
-      syncIndeterminate(root.querySelector('.tag-toggle-tree.level-0'));
+      syncIndeterminate($('.tag-toggle-tree.level-0'));
       assert.equal(cbFor('Ramen').indeterminate, false, 'checked leaf');
       assert.equal(cbFor('Osaka').indeterminate, false, 'unchecked leaf');
     });
@@ -135,15 +140,15 @@ describe('tagToggleTree', () => {
             </ul>
           </li>
         </ul>`;
-      assert.doesNotThrow(() => syncIndeterminate(root.querySelector('.tag-toggle-tree')));
+      assert.doesNotThrow(() => syncIndeterminate($('.tag-toggle-tree')));
     });
   });
 
   // ── filterToggleTree ───────────────────────────────────────────────────────
 
   describe('filterToggleTree', () => {
-    let container;
-    beforeEach(() => { mount(); container = root.querySelector('.tag-toggles-container'); });
+    let container: HTMLElement;
+    beforeEach(() => { mount(); container = $('.tag-toggles-container'); });
 
     test('reveals a match and its ancestors, and nothing else', () => {
       filterToggleTree(container, 'kyoto');
@@ -186,7 +191,7 @@ describe('tagToggleTree', () => {
     test('ignores a node whose label is missing', () => {
       const stray = dom.document.createElement('li');
       stray.className = 'tag-toggle-node';
-      container.querySelector('.tag-toggle-tree').appendChild(stray);
+      must(container.querySelector('.tag-toggle-tree'), 'tree').appendChild(stray);
       filterToggleTree(container, 'kyoto');
       assert.equal(isHidden(stray), true, 'no label, no match');
     });
@@ -197,8 +202,8 @@ describe('tagToggleTree', () => {
   describe('toggleBranch', () => {
     test('opens a collapsed branch, arrow and aria-expanded with it', () => {
       mount();
-      const btn = root.querySelector('[data-tt-toggle]');
-      const list = root.querySelector(`#${btn.dataset.ttToggle}`);
+      const btn = $('[data-tt-toggle]');
+      const list = $(`#${btn.dataset.ttToggle}`);
       assert.equal(isHidden(list), true, 'starts collapsed with nothing selected below');
 
       toggleBranch(root, btn);
@@ -209,8 +214,8 @@ describe('tagToggleTree', () => {
 
     test('shuts it again', () => {
       mount();
-      const btn = root.querySelector('[data-tt-toggle]');
-      const list = root.querySelector(`#${btn.dataset.ttToggle}`);
+      const btn = $('[data-tt-toggle]');
+      const list = $(`#${btn.dataset.ttToggle}`);
       toggleBranch(root, btn);
       toggleBranch(root, btn);
       assert.equal(isHidden(list), true);
@@ -221,7 +226,7 @@ describe('tagToggleTree', () => {
     test('does nothing when the button points at no list', () => {
       root = dom.document.createElement('div');
       root.innerHTML = `<button data-tt-toggle="missing" aria-expanded="false">▶</button>`;
-      const btn = root.querySelector('button');
+      const btn = $('button');
 
       assert.doesNotThrow(() => toggleBranch(root, btn));
       assert.equal(btn.getAttribute('aria-expanded'), 'false', 'no half-applied state');
@@ -256,8 +261,8 @@ describe('tagToggleTree', () => {
     test('wires the expand buttons', () => {
       mount();
       setupTagToggleTrees(root);
-      const btn = root.querySelector('[data-tt-toggle]');
-      const list = root.querySelector(`#${btn.dataset.ttToggle}`);
+      const btn = $('[data-tt-toggle]');
+      const list = $(`#${btn.dataset.ttToggle}`);
 
       click(btn);
       assert.equal(isHidden(list), false);
@@ -281,9 +286,9 @@ describe('tagToggleTree', () => {
       dom.document.body.appendChild(root);
       setupTagToggleTrees(root);
 
-      const parents = root.querySelector('#c-parents');
-      const children = root.querySelector('#c-children');
-      const search = root.querySelector('#s-parents');
+      const parents = $('#c-parents');
+      const children = $('#c-children');
+      const search = $<HTMLInputElement>('#s-parents');
       search.value = 'kyoto';
       fire(search, 'input');
 
@@ -299,7 +304,7 @@ describe('tagToggleTree', () => {
       dom.document.body.appendChild(root);
 
       assert.doesNotThrow(() => setupTagToggleTrees(root));
-      const input = root.querySelector('.tm-toggle-search');
+      const input = $<HTMLInputElement>('.tm-toggle-search');
       input.value = 'kyoto';
       assert.doesNotThrow(() => fire(input, 'input'), 'the listener was never bound');
     });
@@ -319,7 +324,7 @@ describe('tagToggleTree', () => {
       dom.document.body.appendChild(root);
       setupTagToggleTrees(root);
 
-      const cb = root.querySelector('input[type="checkbox"]');
+      const cb = $<HTMLInputElement>('input[type="checkbox"]');
       assert.doesNotThrow(() => check(cb));
       assert.equal(cb.indeterminate, false, 'nothing to recompute against');
     });

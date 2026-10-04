@@ -16,15 +16,18 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, check, selectOption, type } from './helpers/dom.ts';
+import { setupDOM, click, check, selectOption, type, must } from './helpers/dom.ts';
 import { getToast, onToast, setToast } from '../src/store.ts';
 import {
   candidateTags, parentsWith, positionOptions, bulkOutcome, pluralTags,
   runBulk, bulkVisibility, bulkDelete,
   openBulkMoveDialog, openMergeDialog, openMoveDialog, openDropOnConfirm,
 } from '../src/components/light/tags/tagFlows.ts';
+import type { ConfirmFn } from '../src/components/light/tags/tagFlows.ts';
+import { fixtureTag, type TagFixture } from './helpers/tags.ts';
+import { jsonResponse, requestOf, type RecordedRequest, type Responder } from './helpers/fetch.ts';
 
-const tag = (id, name, over = {}) => ({
+const tag = (id: number, name: string, over: TagFixture = {}) => fixtureTag({
   id, name, slug: name.toLowerCase(), parents: [], children: [], post_count: 0, ...over,
 });
 
@@ -39,28 +42,30 @@ const FOREST = [
 ];
 
 describe('tagFlows', () => {
-  let dom, requests, respond, done;
+  let dom: ReturnType<typeof setupDOM>;
+  let requests: RecordedRequest[];
+  let respond: Responder;
+  let done: number;
 
   /** Record every request; reply with whatever `respond` currently returns. */
   function fakeFetch() {
     requests = [];
     respond = () => ({ ok: true, status: 200, body: {} });
-    globalThis.fetch = async (url, opts = {}) => {
-      requests.push({
-        url,
-        method: opts.method,
-        body: opts.body ? JSON.parse(opts.body) : undefined,
-      });
-      const { ok, status, body } = respond(url, opts);
-      return { ok, status, headers: { get: () => 'application/json' }, json: async () => body };
+    globalThis.fetch = async (input: RequestInfo | URL, opts: RequestInit = {}) => {
+      const req = requestOf(input, opts);
+      requests.push(req);
+      return jsonResponse(respond(req.url, opts));
     };
   }
 
   /** `METHOD /path` for each request, in order — what each flow asserts on. */
   const trace = () => requests.map(r => `${r.method} ${r.url}`);
   const toast = () => getToast();
-  const q = sel => dom.document.querySelector(sel);
-  const qa = sel => [...dom.document.querySelectorAll(sel)];
+  /** The element `sel` finds; the test fails when there is none. Typed as an input, the widest control. */
+  const q = <E extends Element = HTMLInputElement>(sel: string) => must(dom.document.querySelector<E>(sel), sel);
+  /** The element `sel` finds, or null — for the assertions that something is absent. */
+  const qOrNull = (sel: string) => dom.document.querySelector(sel);
+  const qa = <E extends Element = HTMLInputElement>(sel: string) => [...dom.document.querySelectorAll<E>(sel)];
   const settle = () => new Promise(r => setImmediate(r));
 
   beforeEach(() => {
@@ -71,7 +76,7 @@ describe('tagFlows', () => {
   });
 
   afterEach(() => {
-    delete globalThis.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
     dom.cleanup();
   });
 
@@ -123,7 +128,7 @@ describe('tagFlows', () => {
     });
 
     test('treats a tag with no parents as unfiled rather than throwing', () => {
-      assert.deepEqual(parentsWith({ id: 3 }, 5), [5]);
+      assert.deepEqual(parentsWith(fixtureTag({ id: 3 }), 5), [5]);
     });
   });
 
@@ -194,7 +199,7 @@ describe('tagFlows', () => {
 
   describe('runBulk', () => {
     test('applies the op to every id, in order, then reports and hands back', async () => {
-      const seen = [];
+      const seen: number[] = [];
       await runBulk([3, 1, 2], async id => seen.push(id), n => `${n} ok.`, { onDone });
 
       assert.deepEqual(seen, [3, 1, 2]);
@@ -203,7 +208,7 @@ describe('tagFlows', () => {
     });
 
     test('one failure does not abandon the rest of the selection', async () => {
-      const seen = [];
+      const seen: number[] = [];
       await runBulk([1, 2, 3], async id => {
         seen.push(id);
         if (id === 2) throw new Error('nope');
@@ -215,7 +220,7 @@ describe('tagFlows', () => {
     });
 
     test('reports before handing back, so the toast is not lost to a re-render', async () => {
-      const order = [];
+      const order: string[] = [];
       onToast(() => order.push('toast'))();
       const unsub = onToast(() => order.push('toast'));
       await runBulk([1], async () => {}, () => 'ok', { onDone: () => order.push('done') });
@@ -267,10 +272,10 @@ describe('tagFlows', () => {
 
   describe('bulkDelete', () => {
     test('asks first, and writes nothing until the user agrees', () => {
-      let asked = null;
+      let asked: Parameters<ConfirmFn> | undefined;
       bulkDelete({ ids: [1, 3], confirm: (...args) => { asked = args; }, onDone });
 
-      const [title, message, confirmText, variant] = asked;
+      const [title, message, confirmText, variant] = must(asked, 'confirm args');
       assert.equal(title, 'Delete tags');
       assert.equal(message, 'Delete 2 tags? Posts will NOT be deleted.');
       assert.equal(confirmText, 'Delete');
@@ -279,9 +284,9 @@ describe('tagFlows', () => {
     });
 
     test('deletes each one once confirmed', async () => {
-      let accept;
+      let accept: (() => unknown) | undefined;
       bulkDelete({ ids: [1, 3], confirm: (...args) => { accept = args[4]; }, onDone });
-      await accept();
+      await must(accept, 'accept')();
 
       assert.deepEqual(trace(), ['DELETE /api/tags/1', 'DELETE /api/tags/3']);
       assert.equal(toast().message, '2 tags deleted.');
@@ -291,9 +296,10 @@ describe('tagFlows', () => {
     test('the count in the question matches the set it will act on', async () => {
       // Both come from the same snapshot, so a selection that changes behind
       // the dialog cannot make the message and the action disagree.
-      let asked, accept;
+      let asked: string | undefined;
+      let accept: (() => unknown) | undefined;
       bulkDelete({ ids: [4], confirm: (...args) => { asked = args[1]; accept = args[4]; }, onDone });
-      await accept();
+      await must(accept, 'accept')();
 
       assert.equal(asked, 'Delete 1 tag? Posts will NOT be deleted.');
       assert.deepEqual(trace(), ['DELETE /api/tags/4']);
@@ -305,13 +311,13 @@ describe('tagFlows', () => {
   describe('openBulkMoveDialog', () => {
     test('does nothing at all with an empty selection', () => {
       assert.equal(openBulkMoveDialog({ tags: FOREST, ids: [], onDone }), null);
-      assert.equal(q('.modal-overlay'), null);
+      assert.equal(qOrNull('.modal-overlay'), null);
       assert.equal(toast(), null, 'not even a complaint — the button is disabled anyway');
     });
 
     test('says so when the selection leaves no tag to move under', () => {
       assert.equal(openBulkMoveDialog({ tags: FOREST, ids: FOREST.map(t => t.id), onDone }), null);
-      assert.equal(q('.modal-overlay'), null);
+      assert.equal(qOrNull('.modal-overlay'), null);
       assert.deepEqual(toast(), { message: 'No tag left to move these under.', type: 'error' });
     });
 
@@ -327,7 +333,7 @@ describe('tagFlows', () => {
     test('re-files every selected tag under the one parent', async () => {
       openBulkMoveDialog({ tags: FOREST, ids: [3, 4], onDone });
 
-      check(qa('input[name="tm-bulk-parent"]').find(r => r.value === '5'));
+      check(must(qa('input[name="tm-bulk-parent"]').find(r => r.value === '5'), 'option'));
       click(q('#tm-bulk-move-confirm-btn'));
       await settle();
 
@@ -335,7 +341,7 @@ describe('tagFlows', () => {
       assert.deepEqual(requests[0].body, { ids: [5] }, 'one parent, replacing whatever was there');
       assert.equal(toast().message, '2 tags moved.');
       assert.equal(done, 1);
-      assert.equal(q('.modal-overlay'), null, 'the dialog closes before the requests start');
+      assert.equal(qOrNull('.modal-overlay'), null, 'the dialog closes before the requests start');
     });
 
     test('refuses to guess when no parent is chosen', async () => {
@@ -346,7 +352,7 @@ describe('tagFlows', () => {
 
       assert.deepEqual(toast(), { message: 'Select a parent first.', type: 'error' });
       assert.equal(requests.length, 0);
-      assert.ok(q('.modal-overlay'), 'and stays open so the user can pick one');
+      assert.ok(qOrNull('.modal-overlay'), 'and stays open so the user can pick one');
     });
   });
 
@@ -355,7 +361,7 @@ describe('tagFlows', () => {
   describe('openMergeDialog', () => {
     test('does nothing for a tag that is not there', () => {
       assert.equal(openMergeDialog({ tags: FOREST, loserId: 999, onDone }), null);
-      assert.equal(q('.modal-overlay'), null);
+      assert.equal(qOrNull('.modal-overlay'), null);
     });
 
     test('offers every other tag, and spells out what merging destroys', () => {
@@ -380,14 +386,14 @@ describe('tagFlows', () => {
     test('escapes the names it interpolates', () => {
       openMergeDialog({ tags: [tag(1, '<script>x</script>'), tag(2, 'Other')], loserId: 1, onDone });
 
-      assert.equal(q('script'), null, 'a tag name is never markup');
+      assert.equal(qOrNull('script'), null, 'a tag name is never markup');
       assert.match(q('.modal-header').innerHTML, /&lt;script&gt;/);
     });
 
     test('merges into the chosen winner, keeping the redirect by default', async () => {
       openMergeDialog({ tags: FOREST, loserId: 3, onDone });
 
-      check(qa('input[name="tm-merge-winner"]').find(r => r.value === '4'));
+      check(must(qa('input[name="tm-merge-winner"]').find(r => r.value === '4'), 'option'));
       click(q('#tm-merge-confirm-btn'));
       await settle();
 
@@ -400,12 +406,12 @@ describe('tagFlows', () => {
     test('sends keep_redirect false when the box is cleared', async () => {
       openMergeDialog({ tags: FOREST, loserId: 3, onDone });
 
-      check(qa('input[name="tm-merge-winner"]').find(r => r.value === '4'));
+      check(must(qa('input[name="tm-merge-winner"]').find(r => r.value === '4'), 'option'));
       check(q('#tm-merge-redirect'), false);
       click(q('#tm-merge-confirm-btn'));
       await settle();
 
-      assert.equal(requests[0].body.keep_redirect, false,
+      assert.equal(requests[0].body?.keep_redirect, false,
         'the flag is read off the dialog before it is torn down');
     });
 
@@ -413,7 +419,7 @@ describe('tagFlows', () => {
       openMergeDialog({ tags: FOREST, loserId: 3, onDone });
       respond = () => ({ ok: false, status: 409, body: { detail: 'Would create a cycle' } });
 
-      check(qa('input[name="tm-merge-winner"]').find(r => r.value === '4'));
+      check(must(qa('input[name="tm-merge-winner"]').find(r => r.value === '4'), 'option'));
       click(q('#tm-merge-confirm-btn'));
       await settle();
 
@@ -437,7 +443,7 @@ describe('tagFlows', () => {
   describe('openMoveDialog', () => {
     test('does nothing for a tag that is not there', () => {
       assert.equal(openMoveDialog({ tags: FOREST, tagId: 999, contextParentId: null, onDone }), null);
-      assert.equal(q('.modal-overlay'), null);
+      assert.equal(qOrNull('.modal-overlay'), null);
     });
 
     test('preselects the branch the user opened it from, and that group\'s positions', () => {
@@ -453,7 +459,7 @@ describe('tagFlows', () => {
       openMoveDialog({ tags: FOREST, tagId: 3, contextParentId: null, onDone });
       assert.deepEqual(qa('.tm-move-position-select option').map(o => o.textContent), ['At beginning']);
 
-      check(qa('input[name="tm-move-parent"]').find(r => r.value === '5'));
+      check(must(qa('input[name="tm-move-parent"]').find(r => r.value === '5'), 'option'));
 
       assert.deepEqual(qa('.tm-move-position-select option').map(o => o.textContent),
         ['At beginning', 'After "Ramen"'],
@@ -463,7 +469,7 @@ describe('tagFlows', () => {
     test('files the tag under the new parent, then orders it there', async () => {
       openMoveDialog({ tags: FOREST, tagId: 3, contextParentId: null, onDone });
 
-      check(qa('input[name="tm-move-parent"]').find(r => r.value === '5'));
+      check(must(qa('input[name="tm-move-parent"]').find(r => r.value === '5'), 'option'));
       selectOption(q('.tm-move-position-select'), '6');
       click(q('#tm-move-confirm-btn'));
       await settle();
@@ -492,7 +498,7 @@ describe('tagFlows', () => {
       click(q('#tm-move-confirm-btn'));
       await settle();
 
-      assert.strictEqual(requests[0].body.after_id, null);
+      assert.strictEqual(requests[0].body?.after_id, null);
     });
 
     test('a refused move reports it and reloads nothing', async () => {
@@ -523,7 +529,7 @@ describe('tagFlows', () => {
 
       assert.deepEqual(
         qa('.tm-picker-item').filter(i => !i.classList.contains('hidden'))
-          .map(i => i.querySelector('.tm-picker-name').textContent),
+          .map(i => must(i.querySelector('.tm-picker-name'), 'name').textContent),
         ['Ramen'],
       );
     });
@@ -535,7 +541,7 @@ describe('tagFlows', () => {
     test('does nothing when either end of the drag is unknown', () => {
       assert.equal(openDropOnConfirm({ tags: FOREST, dragId: 999, targetId: 1, onDone }), null);
       assert.equal(openDropOnConfirm({ tags: FOREST, dragId: 1, targetId: 999, onDone }), null);
-      assert.equal(q('.modal-overlay'), null);
+      assert.equal(qOrNull('.modal-overlay'), null);
     });
 
     test('names both tags and both outcomes, because neither is undoable', () => {
@@ -555,7 +561,7 @@ describe('tagFlows', () => {
       assert.deepEqual(trace(), ['PUT /api/tags/3/parents']);
       assert.deepEqual(requests[0].body, { ids: [5] }, 'Japan is dropped, as the button says');
       assert.equal(done, 1);
-      assert.equal(q('.modal-overlay'), null);
+      assert.equal(qOrNull('.modal-overlay'), null);
     });
 
     test('Also file keeps the parents it already had', async () => {
@@ -584,7 +590,7 @@ describe('tagFlows', () => {
       click(q('#drop-cancel-btn'));
       await settle();
 
-      assert.equal(q('.modal-overlay'), null);
+      assert.equal(qOrNull('.modal-overlay'), null);
       assert.equal(requests.length, 0);
       assert.equal(done, 0);
     });
@@ -612,8 +618,8 @@ describe('tagFlows', () => {
         dragId: 1, targetId: 2, onDone,
       });
 
-      assert.equal(q('b'), null, 'a tag name never becomes an element');
-      assert.equal(q('script'), null);
+      assert.equal(qOrNull('b'), null, 'a tag name never becomes an element');
+      assert.equal(qOrNull('script'), null);
       // Read back as text: the serializer re-encodes only what has to be, so
       // asserting on the entity spelling would test linkedom, not the escape.
       assert.match(q('.modal-header').textContent, /Move "A & <b>B<\/b>" under "<script>x<\/script>"\?/);

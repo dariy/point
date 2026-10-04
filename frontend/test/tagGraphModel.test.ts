@@ -2,6 +2,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import { buildGraph, expandFocus, nodeRadius, visibleSets } from '../src/plugins/tags-graph/graphModel.ts';
+import type { GraphData } from '../src/plugins/tags-graph/graphModel.ts';
+import { must } from './helpers/dom.ts';
 
 /**
  * graphModel.ts turns the /tags payload into the node/link graph everything
@@ -20,7 +22,7 @@ const SIZE = { width: 800, height: 520 };
  *   post 1 ──membership── montreal, 2026
  *   post 2 ──membership── montreal
  */
-const FIXTURE = {
+const FIXTURE: GraphData = {
   tags: [
     { id: 1, name: 'Location', slug: 'location', post_count: 3 },
     { id: 2, name: 'Canada', slug: 'canada', post_count: 3 },
@@ -42,7 +44,7 @@ const FIXTURE = {
   ],
 };
 
-const build = (data = FIXTURE) => buildGraph(data, SIZE);
+const build = (data: GraphData = FIXTURE) => buildGraph(data, SIZE);
 
 // ── Graph construction ───────────────────────────────────────────────────────
 
@@ -64,20 +66,20 @@ describe('graph construction', () => {
       posts: [{ id: 1, title: 'P', slug: 'p' }],
     });
     assert.strictEqual(g.nodes.length, 2, 'same numeric id must not collide');
-    assert.strictEqual(g.nodeById.get('t1').type, 'tag');
-    assert.strictEqual(g.nodeById.get('p1').type, 'post');
+    assert.strictEqual(must(g.nodeById.get('t1'), 't1').type, 'tag');
+    assert.strictEqual(must(g.nodeById.get('p1'), 'p1').type, 'post');
   });
 
   test('tags are classified into the shared colour buckets', () => {
     const g = build();
-    assert.strictEqual(g.nodeById.get('t1').type, 'tag');
-    assert.strictEqual(g.nodeById.get('t3').type, 'geo', 'has coordinates');
-    assert.strictEqual(g.nodeById.get('t4').type, 'year');
+    assert.strictEqual(must(g.nodeById.get('t1'), 't1').type, 'tag');
+    assert.strictEqual(must(g.nodeById.get('t3'), 't3').type, 'geo', 'has coordinates');
+    assert.strictEqual(must(g.nodeById.get('t4'), 't4').type, 'year');
   });
 
   test('a post falls back to its slug when it has no title', () => {
     const g = build({ tags: [], posts: [{ id: 1, slug: 'untitled-thing' }] });
-    assert.strictEqual(g.nodeById.get('p1').name, 'untitled-thing');
+    assert.strictEqual(must(g.nodeById.get('p1'), 'p1').name, 'untitled-thing');
   });
 
   test('both edge kinds are linked and labelled', () => {
@@ -88,16 +90,16 @@ describe('graph construction', () => {
 
   test('degree counts every incident edge', () => {
     const g = build();
-    assert.strictEqual(g.nodeById.get('t3').degree, 3, 'parent Canada + posts 10 and 11');
-    assert.strictEqual(g.nodeById.get('t1').degree, 1, 'one child, no posts of its own');
-    assert.strictEqual(g.nodeById.get('p10').degree, 2, 'tagged montreal and 2026');
-    assert.strictEqual(g.nodeById.get('p11').degree, 1);
+    assert.strictEqual(must(g.nodeById.get('t3'), 't3').degree, 3, 'parent Canada + posts 10 and 11');
+    assert.strictEqual(must(g.nodeById.get('t1'), 't1').degree, 1, 'one child, no posts of its own');
+    assert.strictEqual(must(g.nodeById.get('p10'), 'p10').degree, 2, 'tagged montreal and 2026');
+    assert.strictEqual(must(g.nodeById.get('p11'), 'p11').degree, 1);
   });
 
   test('neighbours are symmetric', () => {
     const g = build();
-    assert.ok(g.neighbors.get('t2').has('t3'));
-    assert.ok(g.neighbors.get('t3').has('t2'), 'edges must be walkable both ways');
+    assert.ok(must(g.neighbors.get('t2'), 't2').has('t3'));
+    assert.ok(must(g.neighbors.get('t3'), 't3').has('t2'), 'edges must be walkable both ways');
   });
 
   test('an edge naming a tag that does not exist is dropped, not fatal', () => {
@@ -108,7 +110,7 @@ describe('graph construction', () => {
       membershipEdges: [{ post: 999, tag: 1 }],
     });
     assert.strictEqual(g.links.length, 0);
-    assert.strictEqual(g.nodeById.get('t1').degree, 0);
+    assert.strictEqual(must(g.nodeById.get('t1'), 't1').degree, 0);
   });
 
   test('an empty payload builds an empty graph rather than throwing', () => {
@@ -154,7 +156,7 @@ describe('graph construction', () => {
 describe('node radius', () => {
   test('grows with degree', () => {
     const g = build();
-    assert.ok(g.nodeById.get('t3').r > g.nodeById.get('t1').r, 'the hub is bigger');
+    assert.ok(must(g.nodeById.get('t3'), 't3').r > must(g.nodeById.get('t1'), 't1').r, 'the hub is bigger');
   });
 
   test('posts are drawn smaller than tags at the same degree', () => {
