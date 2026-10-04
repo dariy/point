@@ -146,7 +146,7 @@ step_vendor_sinks() {
 
 # Ratchet: the count of .js test files must not go up. New tests are .ts.
 # Lower JS_TEST_BASELINE when a rename to .ts lowers the count.
-JS_TEST_BASELINE=69
+JS_TEST_BASELINE=48
 
 # Coverage is collected in the same pass (V8 instrumentation, no extra runner)
 # and written as lcov for the gate below and for codecov in CI.
