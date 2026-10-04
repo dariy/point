@@ -18,8 +18,22 @@
  */
 
 import { parseHTML } from 'linkedom';
+import { mock } from './mock.ts';
 
-const GLOBAL_KEYS = ['window', 'document', 'Event', 'MouseEvent', 'KeyboardEvent',
+/**
+ * The window that setupDOM installs. linkedom has its own DOM classes, not the
+ * lib DOM types; the code under test is written against the lib DOM types.
+ * parseHTML's result is cast to this type one time, in setupDOM, and nowhere
+ * else.
+ */
+export type HarnessWindow = Window & typeof globalThis;
+
+/** A history that records each navigation in `entries`. */
+export type HarnessHistory = History & { entries: (string | URL | null | undefined)[][] };
+
+type Undo = () => void;
+
+const GLOBAL_KEYS: string[] = ['window', 'document', 'Event', 'MouseEvent', 'KeyboardEvent',
   'CustomEvent', 'Node', 'HTMLElement', 'getComputedStyle', 'requestAnimationFrame',
   'cancelAnimationFrame', 'matchMedia', 'location', 'history', 'FormData', 'navigator',
   'ResizeObserver', 'localStorage', 'sessionStorage'];
@@ -30,7 +44,7 @@ const GLOBAL_KEYS = ['window', 'document', 'Event', 'MouseEvent', 'KeyboardEvent
  * Plain assignment is not enough: Node defines `navigator` as an accessor with
  * no setter, so `globalThis.navigator = …` throws in a module (strict mode).
  */
-function def(key, value) {
+function def(key: string, value: unknown) {
   Object.defineProperty(globalThis, key, {
     value, writable: true, configurable: true, enumerable: true,
   });
@@ -42,25 +56,29 @@ function def(key, value) {
  * as globals, so both have to exist standalone, not only on `window`.
  */
 function makeNavigation(path = '/') {
-  const location = { pathname: path, search: '', hash: '', href: 'http://localhost' + path };
-  const entries = [];
-  const history = {
+  const location = mock<Location>({ pathname: path, search: '', hash: '', href: 'http://localhost' + path });
+  const entries: HarnessHistory['entries'] = [];
+  const history = mock<HarnessHistory>({
     entries,
-    pushState(state, title, url) { entries.push(['push', url]); location.pathname = String(url); },
-    replaceState(state, title, url) { entries.push(['replace', url]); location.pathname = String(url); },
+    pushState(_state: unknown, _title: string, url?: string | URL | null) {
+      entries.push(['push', url]); location.pathname = String(url);
+    },
+    replaceState(_state: unknown, _title: string, url?: string | URL | null) {
+      entries.push(['replace', url]); location.pathname = String(url);
+    },
     back() { entries.push(['back']); },
-  };
+  });
   return { location, history };
 }
 
 export function setupDOM(html = '<!doctype html><html><body></body></html>', { path = '/', onLine = true } = {}) {
   const saved = new Map(GLOBAL_KEYS.map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
-  const win = parseHTML(html);
+  const win = parseHTML(html) as unknown as HarnessWindow;
 
   def('window', win);
   def('document', win.document);
   win.document.elementFromPoint = () => null;
-  for (const k of ['Event', 'MouseEvent', 'KeyboardEvent', 'CustomEvent', 'Node', 'HTMLElement']) {
+  for (const k of ['Event', 'MouseEvent', 'KeyboardEvent', 'CustomEvent', 'Node', 'HTMLElement'] as const) {
     if (win[k]) def(k, win[k]);
   }
 
@@ -76,9 +94,9 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
   def('getComputedStyle', win.getComputedStyle
     ? win.getComputedStyle.bind(win)
     : () => ({ getPropertyValue: () => '' }));
-  def('requestAnimationFrame', cb => { cb(0); return 0; });
+  def('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 0; });
   def('cancelAnimationFrame', () => {});
-  def('matchMedia', q => ({
+  def('matchMedia', (q: string) => ({
     matches: false, media: q,
     addEventListener() {}, removeEventListener() {},
     addListener() {}, removeListener() {},
@@ -106,8 +124,9 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
   const nav = makeNavigation(path);
   def('location', nav.location);
   def('history', nav.history);
-  win.location = nav.location;
-  win.history = nav.history;
+  // Window.location is typed as a setter that also takes a string; this window
+  // is a plain object, so assign the fake through Object.assign.
+  Object.assign(win, { location: nav.location, history: nav.history });
 
   const unpatch = combine(patchFormReflection(win), patchAbortSignal(win), patchTextSelection(win),
     patchSelectValue(win), patchLayoutGeometry(win));
@@ -121,22 +140,27 @@ export function setupDOM(html = '<!doctype html><html><body></body></html>', { p
     cleanup() {
       unpatch();
       for (const [k, descriptor] of saved) {
-        if (descriptor === undefined) delete globalThis[k];
+        if (descriptor === undefined) Reflect.deleteProperty(globalThis, k);
         else Object.defineProperty(globalThis, k, descriptor);
       }
     },
   };
 }
 
+function isParentNode(value: unknown): value is ParentNode {
+  return typeof value === 'object' && value !== null
+    && typeof (value as Partial<ParentNode>).querySelectorAll === 'function';
+}
+
 /** An in-memory Storage — the Web Storage API, minus persistence. */
-function makeStorage() {
-  const map = new Map();
+function makeStorage(): Storage {
+  const map = new Map<string, string>();
   return {
     get length() { return map.size; },
-    key: i => [...map.keys()][i] ?? null,
-    getItem: k => (map.has(String(k)) ? map.get(String(k)) : null),
-    setItem: (k, v) => { map.set(String(k), String(v)); },
-    removeItem: k => { map.delete(String(k)); },
+    key: (i: number) => [...map.keys()][i] ?? null,
+    getItem: (k: string) => map.get(String(k)) ?? null,
+    setItem: (k: string, v: string) => { map.set(String(k), String(v)); },
+    removeItem: (k: string) => { map.delete(String(k)); },
     clear: () => map.clear(),
   };
 }
@@ -150,17 +174,21 @@ function makeStorage() {
  * resize path call `trigger()` themselves.
  */
 class HarnessResizeObserver {
-  constructor(callback) {
+  static observers: HarnessResizeObserver[] = [];
+  callback: ResizeObserverCallback;
+  targets: Element[] = [];
+  disconnected = false;
+  constructor(callback: ResizeObserverCallback) {
     this.callback = callback;
-    this.targets = [];
-    this.disconnected = false;
     HarnessResizeObserver.observers.push(this);
   }
-  observe(el) { this.targets.push(el); }
-  unobserve(el) { this.targets = this.targets.filter(t => t !== el); }
+  observe(el: Element) { this.targets.push(el); }
+  unobserve(el: Element) { this.targets = this.targets.filter(t => t !== el); }
   disconnect() { this.targets = []; this.disconnected = true; }
   /** Run the callback as a resize would, with one entry per observed target. */
-  trigger() { this.callback(this.targets.map(target => ({ target })), this); }
+  trigger() {
+    this.callback(this.targets.map(target => mock<ResizeObserverEntry>({ target })), mock<ResizeObserver>(this));
+  }
 }
 
 /**
@@ -188,13 +216,16 @@ const HarnessFormData = (() => {
   // Captured once, at import: a nested setupDOM must not subclass the shim.
   const Native = globalThis.FormData;
 
-  const controlType = el => (
+  const controlType = (el: Element) => (
     el.tagName === 'INPUT' ? (el.getAttribute('type') || 'text').toLowerCase()
       : el.tagName.toLowerCase()
   );
 
-  function harvest(form, fd) {
-    for (const el of form.querySelectorAll('input, select, textarea')) {
+  function harvest(form: ParentNode, fd: FormData) {
+    // One element type for the three controls: each branch below reads only
+    // what its own control has.
+    type Control = HTMLInputElement & HTMLSelectElement & HTMLTextAreaElement;
+    for (const el of form.querySelectorAll<Control>('input, select, textarea')) {
       const name = el.getAttribute('name');
       if (!name || el.disabled) continue;
 
@@ -210,7 +241,7 @@ const HarnessFormData = (() => {
         // browser; linkedom reports no selection at all (see selectOption).
         const chosen = options.filter(o => o.selected);
         if (!chosen.length && !el.hasAttribute('multiple') && options.length) chosen.push(options[0]);
-        for (const opt of chosen) fd.append(name, opt.getAttribute('value') ?? opt.textContent);
+        for (const opt of chosen) fd.append(name, opt.getAttribute('value') ?? opt.textContent ?? '');
       } else {
         fd.append(name, el.value ?? '');
       }
@@ -218,9 +249,9 @@ const HarnessFormData = (() => {
   }
 
   return class FormData extends Native {
-    constructor(form) {
+    constructor(form?: unknown) {
       super();
-      if (form && typeof form.querySelectorAll === 'function') harvest(form, this);
+      if (isParentNode(form)) harvest(form, this);
       else if (form !== undefined) throw new TypeError('FormData: not a form element');
     }
   };
@@ -245,7 +276,7 @@ const HarnessFormData = (() => {
  * attribute, so that is unobservable — but it is why this lives in the test
  * harness and not in the source.
  */
-const combine = (...undos) => () => undos.forEach(fn => fn());
+const combine = (...undos: Undo[]): Undo => () => undos.forEach(fn => fn());
 
 /**
  * Make `addEventListener(..., { signal })` actually detach on abort.
@@ -256,7 +287,7 @@ const combine = (...undos) => () => undos.forEach(fn => fn());
  * depends on it — without this, a test cannot tell a correct teardown from a
  * listener leak, which is the exact bug the teardown exists to prevent.
  */
-function patchAbortSignal(win) {
+function patchAbortSignal(win: HarnessWindow): Undo {
   // The listener methods live on linkedom's DOMEventTarget, several links up
   // the prototype chain from any element.
   let proto = win.document && Object.getPrototypeOf(win.document);
@@ -266,7 +297,8 @@ function patchAbortSignal(win) {
   if (!proto) return () => {};
 
   const original = proto.addEventListener;
-  proto.addEventListener = function (type, callback, options) {
+  proto.addEventListener = function (this: EventTarget, type: string,
+    callback: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) {
     const signal = options && typeof options === 'object' ? options.signal : undefined;
     if (signal?.aborted) return;
     original.call(this, type, callback, options);
@@ -293,16 +325,17 @@ function patchAbortSignal(win) {
  * The caret is recorded rather than ignored so an assertion about it means
  * something; nothing here reads it back yet.
  */
-function patchTextSelection(win) {
-  const undo = [];
-  for (const ctorName of ['HTMLInputElement', 'HTMLTextAreaElement']) {
+function patchTextSelection(win: HarnessWindow): Undo {
+  const undo: Undo[] = [];
+  for (const ctorName of ['HTMLInputElement', 'HTMLTextAreaElement'] as const) {
     const proto = win[ctorName]?.prototype;
-    if (!proto || proto.setSelectionRange) continue;
-    proto.setSelectionRange = function (start, end) {
+    // Reflect.has, not `in`: the lib types say it is always there; linkedom says not.
+    if (!proto || Reflect.has(proto, 'setSelectionRange')) continue;
+    proto.setSelectionRange = function (this: HTMLInputElement, start: number | null, end: number | null) {
       this.selectionStart = start;
       this.selectionEnd = end;
     };
-    undo.push(() => { delete proto.setSelectionRange; });
+    undo.push(() => { Reflect.deleteProperty(proto, 'setSelectionRange'); });
   }
   return () => undo.forEach(fn => fn());
 }
@@ -320,22 +353,22 @@ function patchTextSelection(win) {
  * They stay writable so a test that wants to simulate a real viewport can
  * assign one and have the code under test read it back.
  */
-function patchLayoutGeometry(win) {
+function patchLayoutGeometry(win: HarnessWindow): Undo {
   const proto = win.HTMLElement?.prototype;
   if (!proto) return () => {};
   const METRICS = ['offsetTop', 'offsetLeft', 'offsetWidth', 'offsetHeight',
     'clientTop', 'clientLeft', 'clientWidth', 'clientHeight',
     'scrollWidth', 'scrollHeight'];
-  const undo = [];
+  const undo: Undo[] = [];
   for (const name of METRICS) {
     if (Object.getOwnPropertyDescriptor(proto, name)) continue;
-    const KEY = Symbol(name);
+    const values = new WeakMap<HTMLElement, number>();
     Object.defineProperty(proto, name, {
       configurable: true,
-      get() { return this[KEY] ?? 0; },
-      set(v) { this[KEY] = v; },
+      get(this: HTMLElement) { return values.get(this) ?? 0; },
+      set(this: HTMLElement, v: number) { values.set(this, v); },
     });
-    undo.push(() => { delete proto[name]; });
+    undo.push(() => { Reflect.deleteProperty(proto, name); });
   }
   return () => undo.forEach(fn => fn());
 }
@@ -355,19 +388,20 @@ function patchLayoutGeometry(win) {
  * / `option.selected` and the FormData shim above already agree on, so a form
  * read back after an assignment reports what a browser would submit.
  */
-function patchSelectValue(win) {
+function patchSelectValue(win: HarnessWindow): Undo {
   const proto = win.HTMLSelectElement?.prototype;
   const original = proto && Object.getOwnPropertyDescriptor(proto, 'value');
-  if (!original) return () => {};
+  if (!proto || !original?.get) return () => {};
+  const getOriginal = original.get;
   Object.defineProperty(proto, 'value', {
     configurable: true,
-    get() {
-      const current = original.get.call(this);
+    get(this: HTMLSelectElement) {
+      const current: unknown = getOriginal.call(this);
       if (current !== undefined && current !== null) return current;
       const first = this.querySelector('option');
       return first ? (first.getAttribute('value') ?? first.textContent) : '';
     },
-    set(v) {
+    set(this: HTMLSelectElement, v: unknown) {
       for (const option of this.querySelectorAll('option')) {
         const optionValue = option.getAttribute('value') ?? option.textContent;
         if (optionValue === String(v)) option.setAttribute('selected', '');
@@ -378,22 +412,22 @@ function patchSelectValue(win) {
   return () => { Object.defineProperty(proto, 'value', original); };
 }
 
-function patchFormReflection(win) {
-  const undo = [];
-  const reflect = (ctorName, prop, attr) => {
+function patchFormReflection(win: HarnessWindow): Undo {
+  const undo: Undo[] = [];
+  const reflect = (ctorName: 'HTMLInputElement' | 'HTMLOptionElement', prop: string, attr: string) => {
     const proto = win[ctorName]?.prototype;
     if (!proto || Object.getOwnPropertyDescriptor(proto, prop)) return;
-    const KEY = Symbol(prop);
+    const values = new WeakMap<Element, boolean>();
     Object.defineProperty(proto, prop, {
       configurable: true,
-      get() { return this[KEY] ?? this.hasAttribute(attr); },
-      set(v) {
-        this[KEY] = !!v;
+      get(this: Element) { return values.get(this) ?? this.hasAttribute(attr); },
+      set(this: Element, v: unknown) {
+        values.set(this, !!v);
         if (v) this.setAttribute(attr, '');
         else this.removeAttribute(attr);
       },
     });
-    undo.push(() => delete proto[prop]);
+    undo.push(() => { Reflect.deleteProperty(proto, prop); });
   };
 
   reflect('HTMLInputElement', 'checked', 'checked');
@@ -407,20 +441,20 @@ function patchFormReflection(win) {
   // checkbox that a browser would agree is exactly what the test expected.
   const inputProto = win.HTMLInputElement?.prototype;
   if (inputProto && !Object.getOwnPropertyDescriptor(inputProto, 'indeterminate')) {
-    const KEY = Symbol('indeterminate');
+    const values = new WeakMap<HTMLInputElement, boolean>();
     Object.defineProperty(inputProto, 'indeterminate', {
       configurable: true,
-      get() { return this[KEY] ?? false; },
-      set(v) { this[KEY] = !!v; },
+      get(this: HTMLInputElement) { return values.get(this) ?? false; },
+      set(this: HTMLInputElement, v: unknown) { values.set(this, !!v); },
     });
-    undo.push(() => delete inputProto.indeterminate);
+    undo.push(() => { Reflect.deleteProperty(inputProto, 'indeterminate'); });
   }
 
   return () => undo.forEach(fn => fn());
 }
 
 /** Dispatch a bubbling event of `type` on `el`, with optional extra props. */
-export function fire(el, type, props = {}) {
+export function fire(el: EventTarget, type: string, props: Record<string, unknown> = {}): Event {
   const evt = new globalThis.Event(type, { bubbles: true, cancelable: true });
   Object.assign(evt, props);
   el.dispatchEvent(evt);
@@ -428,12 +462,12 @@ export function fire(el, type, props = {}) {
 }
 
 /** Click helper — the overwhelmingly common case. */
-export function click(el, props = {}) {
+export function click(el: EventTarget, props: Record<string, unknown> = {}): Event {
   return fire(el, 'click', props);
 }
 
 /** Set an input's value and fire the `input` event the page listens for. */
-export function type(input, value) {
+export function type(input: HTMLInputElement | HTMLTextAreaElement, value: string): Event {
   input.value = value;
   return fire(input, 'input');
 }
@@ -445,7 +479,7 @@ export function type(input, value) {
  * ATTRIBUTE, and reports `undefined` when none does — a browser would report
  * the first option's value. Setting the attribute is what makes the two agree.
  */
-export function selectOption(select, value) {
+export function selectOption(select: HTMLSelectElement, value: string): HTMLSelectElement {
   select.querySelectorAll('option').forEach(o => {
     if (o.getAttribute('value') === value) o.setAttribute('selected', '');
     else o.removeAttribute('selected');
@@ -464,10 +498,11 @@ export function selectOption(select, value) {
  * the real confirm button does nothing. Set both, and for radios clear the
  * rest of the group so the attribute state stays as exclusive as the property.
  */
-export function check(el, on = true) {
-  const root = el.getRootNode?.() ?? document;
+export function check(el: HTMLInputElement, on = true): HTMLInputElement {
+  const node = el.getRootNode?.();
+  const root: ParentNode = isParentNode(node) ? node : document;
   if (on && el.type === 'radio' && el.name) {
-    root.querySelectorAll(`input[type="radio"][name="${el.name}"]`).forEach(other => {
+    root.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${el.name}"]`).forEach(other => {
       if (other !== el) { other.checked = false; other.removeAttribute('checked'); }
     });
   }

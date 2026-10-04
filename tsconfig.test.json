@@ -1,0 +1,8 @@
+{
+  // The test typecheck gate (`npm run typecheck`, scripts/check.sh::step_js_typecheck).
+  // It uses the root compiler options and checks only the TypeScript tests and
+  // their helpers. A .js test file stays unchecked until it moves to .ts.
+  "extends": "./tsconfig.json",
+  "include": ["frontend/test/**/*.ts", "frontend/types/**/*.d.ts"],
+  "exclude": ["node_modules"]
+}
