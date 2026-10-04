@@ -1,18 +1,21 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupDOM, click, fire } from './helpers/dom.ts';
+import { setupDOM, click, fire, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type { MediaItem } from '../src/utils/postMedia.ts';
+import type { Post, PostStub } from '../src/api/posts.ts';
 import { MediaViewer } from '../src/components/shared/MediaViewer.ts';
 import { ImmersiveSheetViewer } from '../src/plugins/immersive/ImmersiveSheetViewer.ts';
 import { setSettings } from '../src/store.ts';
 
 describe('MediaViewer', () => {
-  let dom;
-  let navs = [];
+  let dom: ReturnType<typeof setupDOM>;
+  let navs: string[] = [];
 
   beforeEach(() => {
     dom = setupDOM();
     navs = [];
-    dom.window.addEventListener('app:navigate', (e) => navs.push(e.detail.path));
+    dom.window.addEventListener('app:navigate', (e) => { if (e instanceof CustomEvent) navs.push(e.detail.path); });
     setSettings({ immersive_nav_direction: 'chronological' });
   });
 
@@ -21,20 +24,20 @@ describe('MediaViewer', () => {
   });
 
   test('wraps around if no nav targets (index wrapping on click)', () => {
-    const items = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
     const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });
     viewer.mount();
     
-    click(dom.document.querySelector('.immersive-nav-prev'));
+    click(must(dom.document.querySelector('.immersive-nav-prev'), '.immersive-nav-prev'));
     assert.ok(dom.document.querySelectorAll('.carousel-slide')[1].classList.contains('active'));
 
-    click(dom.document.querySelector('.immersive-nav-next'));
+    click(must(dom.document.querySelector('.immersive-nav-next'), '.immersive-nav-next'));
     assert.ok(dom.document.querySelectorAll('.carousel-slide')[0].classList.contains('active'));
     assert.strictEqual(navs.length, 0);
   });
 
   test('index clamping - _isBlocked returns true at edges with no adjacent posts', () => {
-    const items = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
     const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });
     viewer.mount();
     
@@ -47,12 +50,12 @@ describe('MediaViewer', () => {
   });
 
   test('index clamping - _isBlocked returns false if adjacent posts exist', () => {
-    const items = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
     const viewer = new MediaViewer(dom.document.body, { 
       items, 
       startIndex: 0, 
-      navPrev: { slug: 'prev' }, 
-      navNext: { slug: 'next' } 
+      navPrev: mock<PostStub>({ slug: 'prev' }), 
+      navNext: mock<PostStub>({ slug: 'next' }) 
     });
     viewer.mount();
     
@@ -63,9 +66,9 @@ describe('MediaViewer', () => {
   });
 
   test('prev/next across posts - navigates to adjacent posts', async () => {
-    const items = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
-    const prevPost = { slug: 'prev-post', title: 'Prev' };
-    const nextPost = { slug: 'next-post', title: 'Next' };
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }, { type: 'image', url: '/b.jpg' }];
+    const prevPost = mock<PostStub>({ slug: 'prev-post', title: 'Prev' });
+    const nextPost = mock<PostStub>({ slug: 'next-post', title: 'Next' });
     
     const viewer = new MediaViewer(dom.document.body, { 
       items, 
@@ -75,13 +78,13 @@ describe('MediaViewer', () => {
     });
     viewer.mount();
 
-    click(dom.document.querySelector('.immersive-nav-prev'));
+    click(must(dom.document.querySelector('.immersive-nav-prev'), '.immersive-nav-prev'));
     
     await new Promise(r => setTimeout(r, 350));
     assert.deepStrictEqual(navs, ['/posts/prev-post']);
 
-    click(dom.document.querySelector('.immersive-nav-next'));
-    click(dom.document.querySelector('.immersive-nav-next'));
+    click(must(dom.document.querySelector('.immersive-nav-next'), '.immersive-nav-next'));
+    click(must(dom.document.querySelector('.immersive-nav-next'), '.immersive-nav-next'));
 
     await new Promise(r => setTimeout(r, 350));
     assert.deepStrictEqual(navs, ['/posts/prev-post', '/posts/next-post']);
@@ -89,22 +92,22 @@ describe('MediaViewer', () => {
   
   test('feed navigation direction reverses navTargets', async () => {
     setSettings({ immersive_nav_direction: 'feed' });
-    const items = [{ type: 'image', url: '/a.jpg' }];
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }];
     const viewer = new MediaViewer(dom.document.body, { 
       items, 
       startIndex: 0, 
-      navPrev: { slug: 'older' }, 
-      navNext: { slug: 'newer' } 
+      navPrev: mock<PostStub>({ slug: 'older' }), 
+      navNext: mock<PostStub>({ slug: 'newer' }) 
     });
     viewer.mount();
 
-    click(dom.document.querySelector('.immersive-nav-next'));
+    click(must(dom.document.querySelector('.immersive-nav-next'), '.immersive-nav-next'));
     await new Promise(r => setTimeout(r, 350));
     assert.deepStrictEqual(navs, ['/posts/older']);
   });
 
   test('renders text, video, and audio items', () => {
-    const items = [
+    const items: MediaItem[] = [
       { type: 'html', html: '<p>Text slide</p>' },
       { type: 'video', url: '/v.mp4' },
       { type: 'audio', url: '/a.mp3' }
@@ -120,20 +123,20 @@ describe('MediaViewer', () => {
   });
 
   test('double tap to zoom', () => {
-    const items = [{ type: 'image', url: '/a.jpg' }];
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }];
     const viewer = new MediaViewer(dom.document.body, { items, startIndex: 0 });
     viewer.mount();
 
-    const img = dom.document.querySelector('.immersive-bg-image');
+    const img = must(dom.document.querySelector('.immersive-bg-image'), '.immersive-bg-image');
     Object.defineProperty(img, 'naturalWidth', { value: 1000, configurable: true });
-    img.getBoundingClientRect = () => ({ width: 500, height: 500 });
+    img.getBoundingClientRect = () => mock<DOMRect>({ width: 500, height: 500 });
     dom.window.innerWidth = 500;
     dom.window.innerHeight = 500;
 
-    const wrapper = dom.document.querySelector('.media-viewer-wrapper');
+    const wrapper = must(dom.document.querySelector('.media-viewer-wrapper'), '.media-viewer-wrapper');
     assert.ok(!wrapper.classList.contains('zoomed'));
     
-    viewer._gesture._opts.onDoubleTap(250, 250);
+    must(must(viewer._gesture, 'a gesture controller')._opts.onDoubleTap)(250, 250);
     
     assert.ok(wrapper.classList.contains('zoomed'));
     assert.strictEqual(viewer._zoomState.scale, 2);
@@ -145,7 +148,7 @@ describe('MediaViewer', () => {
 });
 
 describe('ImmersiveSheetViewer', () => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM>;
 
   beforeEach(() => {
     dom = setupDOM();
@@ -157,15 +160,15 @@ describe('ImmersiveSheetViewer', () => {
   });
 
   test('renders the swipe-up sheet overlay instead of standard chrome', () => {
-    const items = [{ type: 'image', url: '/a.jpg' }];
-    const post = { title: 'Sheet Post', excerpt: 'Sheet excerpt' };
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }];
+    const post = mock<Post>({ title: 'Sheet Post', excerpt: 'Sheet excerpt' });
     const viewer = new ImmersiveSheetViewer(dom.document.body, { items, post, startIndex: 0 });
     viewer.mount();
 
-    const wrapper = dom.document.querySelector('.media-viewer-wrapper');
+    const wrapper = must(dom.document.querySelector('.media-viewer-wrapper'), '.media-viewer-wrapper');
     assert.ok(wrapper.classList.contains('immersive-sheet-mode'));
 
-    const sheet = dom.document.querySelector('.immersive-sheet');
+    const sheet = must(dom.document.querySelector('.immersive-sheet'), '.immersive-sheet');
     assert.ok(sheet);
 
     assert.ok(sheet.innerHTML.includes('Sheet Post'));
@@ -173,20 +176,20 @@ describe('ImmersiveSheetViewer', () => {
   });
 
   test('swipe up opens the sheet', () => {
-    const items = [{ type: 'image', url: '/a.jpg' }];
-    const viewer = new ImmersiveSheetViewer(dom.document.body, { items, post: {}, startIndex: 0 });
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }];
+    const viewer = new ImmersiveSheetViewer(dom.document.body, { items, post: mock<Post>({}), startIndex: 0 });
     viewer.mount();
 
     assert.strictEqual(viewer._sheetOpen, false);
 
     viewer._onSwipeCommit('up');
     assert.strictEqual(viewer._sheetOpen, true);
-    assert.ok(dom.document.querySelector('.media-viewer-wrapper').classList.contains('sheet-open'));
+    assert.ok(must(dom.document.querySelector('.media-viewer-wrapper'), '.media-viewer-wrapper').classList.contains('sheet-open'));
   });
   
   test('keyboard up/down drives the sheet', () => {
-    const items = [{ type: 'image', url: '/a.jpg' }];
-    const viewer = new ImmersiveSheetViewer(dom.document.body, { items, post: {}, startIndex: 0 });
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }];
+    const viewer = new ImmersiveSheetViewer(dom.document.body, { items, post: mock<Post>({}), startIndex: 0 });
     viewer.mount();
 
     assert.strictEqual(viewer._sheetOpen, false);
@@ -200,7 +203,7 @@ describe('ImmersiveSheetViewer', () => {
 // must go through the URL policy, not the text policy — escapeHtml leaves
 // `javascript:` intact, so an attribute-safe value can still be scheme-unsafe.
 describe('MediaViewer slide escaping', () => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM>;
 
   beforeEach(() => {
     dom = setupDOM();
@@ -211,7 +214,7 @@ describe('MediaViewer slide escaping', () => {
     dom.cleanup();
   });
 
-  const mountWith = (item) => {
+  const mountWith = (item: MediaItem) => {
     const viewer = new MediaViewer(dom.document.body, { items: [item], startIndex: 0 });
     viewer.mount();
     return viewer;
@@ -220,19 +223,19 @@ describe('MediaViewer slide escaping', () => {
   test('a javascript: image url is neutralised to #', () => {
     mountWith({ type: 'image', url: 'javascript:alert(1)' });
 
-    assert.strictEqual(dom.document.querySelector('.immersive-bg-image').getAttribute('src'), '#');
+    assert.strictEqual(must(dom.document.querySelector('.immersive-bg-image'), '.immersive-bg-image').getAttribute('src'), '#');
   });
 
   test('a protocol-relative video url is neutralised to #', () => {
     mountWith({ type: 'video', url: '//evil.example/x.mp4' });
 
-    assert.strictEqual(dom.document.querySelector('video').getAttribute('src'), '#');
+    assert.strictEqual(must(dom.document.querySelector('video'), 'video').getAttribute('src'), '#');
   });
 
   test('an attribute-breakout audio url cannot add an event handler', () => {
     mountWith({ type: 'audio', url: '/a.mp3" onerror="alert(1)' });
 
-    const audio = dom.document.querySelector('audio');
+    const audio = must(dom.document.querySelector('audio'), 'audio');
     assert.strictEqual(audio.getAttribute('onerror'), null);
     assert.ok(!dom.document.body.innerHTML.includes('onerror="'));
   });
@@ -240,7 +243,7 @@ describe('MediaViewer slide escaping', () => {
   test('a script tag in alt text renders as an attribute value, not an element', () => {
     mountWith({ type: 'image', url: '/a.jpg', alt: '<script>alert(1)</script>' });
 
-    const img = dom.document.querySelector('img');
+    const img = must(dom.document.querySelector('img'), 'img');
     assert.strictEqual(dom.document.querySelector('script'), null);
     assert.strictEqual(img.getAttribute('alt'), '<script>alert(1)</script>');
     assert.strictEqual(img.getAttribute('src'), '/a.jpg');
@@ -249,7 +252,7 @@ describe('MediaViewer slide escaping', () => {
   test('an ordinary image slide is unaffected', () => {
     mountWith({ type: 'image', url: '/photo.jpg', alt: 'A photo' });
 
-    const img = dom.document.querySelector('img');
+    const img = must(dom.document.querySelector('img'), 'img');
     assert.strictEqual(img.getAttribute('src'), '/photo.jpg');
     assert.strictEqual(img.getAttribute('alt'), 'A photo');
   });

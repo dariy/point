@@ -1,5 +1,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
+import type { Media } from '../src/api/media.ts';
+import { jsonResponse as response } from './helpers/fetch.ts';
+import { mock } from './helpers/mock.ts';
 
 // Regression: the post editor used to build its path -> media map from
 // listMedia({ per_page: 200 }) — the first 200 media site-wide, ordered by
@@ -7,17 +10,16 @@ import assert from 'node:assert';
 // any of their metadata. getMediaByPaths asks for exactly the paths the post
 // references instead.
 describe('getMediaByPaths', () => {
-  const jsonResponse = (media) => ({
+  const jsonResponse = (media: Partial<Media>[]) => response({
     status: 200,
     ok: true,
-    headers: { get: () => 'application/json' },
-    json: async () => ({ media, total: media.length, page: 1, per_page: media.length, pages: 1 }),
+    body: { media, total: media.length, page: 1, per_page: media.length, pages: 1 },
   });
 
   test('sends each path as its own query key and keys the result by path', async () => {
-    let requested;
-    global.fetch = async (url) => {
-      requested = url;
+    let requested = '';
+    globalThis.fetch = async (url) => {
+      requested = String(url);
       return jsonResponse([
         { id: 1, path: '/2026/03/a.jpg' },
         { id: 2, path: '/2026/03/b, c.jpg' },
@@ -35,13 +37,14 @@ describe('getMediaByPaths', () => {
   });
 
   test('drops duplicates and empty paths', async () => {
-    let requested;
-    global.fetch = async (url) => {
-      requested = url;
+    let requested = '';
+    globalThis.fetch = async (url) => {
+      requested = String(url);
       return jsonResponse([]);
     };
 
     const { getMediaByPaths } = await import('../src/api/media.ts');
+    // @ts-expect-error a missing path is dropped, as an empty one is
     await getMediaByPaths(['/2026/03/a.jpg', '/2026/03/a.jpg', '', undefined]);
 
     const params = new URLSearchParams(requested.split('?')[1]);
@@ -49,9 +52,9 @@ describe('getMediaByPaths', () => {
   });
 
   test('batches so a long photo essay does not become one enormous URL', async () => {
-    const batches = [];
-    global.fetch = async (url) => {
-      batches.push(new URLSearchParams(url.split('?')[1]).getAll('paths'));
+    const batches: string[][] = [];
+    globalThis.fetch = async (url) => {
+      batches.push(new URLSearchParams(String(url).split('?')[1]).getAll('paths'));
       return jsonResponse([]);
     };
 
@@ -64,7 +67,7 @@ describe('getMediaByPaths', () => {
   });
 
   test('makes no request at all when there is nothing to resolve', async () => {
-    global.fetch = async () => {
+    globalThis.fetch = async () => {
       throw new Error('should not fetch');
     };
 

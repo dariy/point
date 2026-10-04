@@ -1,99 +1,68 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { raw } from '../src/utils/helpers.ts';
+import { memoryStorage, mock } from './helpers/mock.ts';
+import { StubElement, asElement, callListener, fire } from './helpers/stubElement.ts';
+import { must } from './helpers/dom.ts';
 
 // ── Minimal DOM so mediaPager.js runs under node ──────────────────────────────
 // Same approach as gridPager.test.js: the pager only touches inline styles,
 // classList, listeners and a couple of layout reads, so hand-rolled element
 // stubs are enough (the repo has no jsdom).
 
-function makeEl(extra = {}) {
-  const el = {
-    style: {
-      _p: new Map(),
-      setProperty(k, v) { this._p.set(k, v); },
-      removeProperty(k) { this._p.delete(k); },
-      getPropertyValue(k) { return this._p.get(k) ?? ''; },
-    },
-    dataset: {},
-    classList: {
-      _set: new Set(),
-      add(c) { this._set.add(c); },
-      remove(c) { this._set.delete(c); },
-      has(c) { return this._set.has(c); },
-    },
-    children: [],
-    listeners: {},
-    clientWidth: 800,
-    clientHeight: 600,
-    offsetWidth: 800,
-    offsetHeight: 600,
-    innerHTML: '',
-    disabled: false,
-    getBoundingClientRect: () => ({ top: 100, bottom: 700, left: 200, width: 800, height: 600 }),
-    addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); },
-    removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); },
-    appendChild(c) { this.children.push(c); c.parentElement = this; return c; },
-    remove() { const p = this.parentElement; if (p) p.children = p.children.filter((c) => c !== this); this.removed = true; },
-    querySelector: () => null,
-    setAttribute() {},
-    ...extra,
-  };
-  return el;
-}
+const makeEl = (extra: Partial<StubElement> = {}) => new StubElement({
+  getBoundingClientRect: () => ({ top: 100, bottom: 700, left: 200, width: 800, height: 600 }),
+  ...extra,
+});
 
-/** Dispatch to the handlers registered on a stub element. */
-function fire(el, type, event) {
-  for (const fn of el.listeners[type] || []) fn(event);
-}
-
-let MediaPager, getMediaZoom, setMediaZoom;
-let body, root, area, grid, keyHandlers;
+type MediaPagerModule = typeof import('../src/core/mediaPager.ts');
+let MediaPager: MediaPagerModule['MediaPager'];
+let getMediaZoom: MediaPagerModule['getMediaZoom'];
+let setMediaZoom: MediaPagerModule['setMediaZoom'];
+let body: StubElement, root: StubElement, area: StubElement, grid: StubElement;
+let keyHandlers: Record<string, EventListenerOrEventListenerObject[]>;
+const store = new Map<string, string>();
 
 before(async () => {
-  globalThis.localStorage = {
-    _m: new Map(),
-    getItem(k) { return this._m.has(k) ? this._m.get(k) : null; },
-    setItem(k, v) { this._m.set(k, String(v)); },
-    removeItem(k) { this._m.delete(k); },
-  };
-  globalThis.requestAnimationFrame = (fn) => fn();
-  globalThis.window = {
+  globalThis.localStorage = memoryStorage(store);
+  globalThis.requestAnimationFrame = (fn) => { fn(0); return 0; };
+  globalThis.window = mock<typeof window>({
     innerWidth: 800,
     innerHeight: 600,
     // 4 auto-fill columns and a 16px gap, i.e. an unzoomed 800px grid.
-    getComputedStyle: () => ({ columnGap: '16px', gridTemplateColumns: '200px 200px 200px 200px' }),
+    getComputedStyle: () => mock<CSSStyleDeclaration>({ columnGap: '16px', gridTemplateColumns: '200px 200px 200px 200px' }),
     scrollTo() {},
-    addEventListener(type, fn) { (keyHandlers[type] ||= []).push(fn); },
-    removeEventListener(type, fn) { keyHandlers[type] = (keyHandlers[type] || []).filter((f) => f !== fn); },
-  };
-  globalThis.document = {
-    body: null, // set per test
-    createElement: () => makeEl(),
+    addEventListener(type: string, fn: EventListenerOrEventListenerObject) { (keyHandlers[type] ||= []).push(fn); },
+    removeEventListener(type: string, fn: EventListenerOrEventListenerObject) { keyHandlers[type] = (keyHandlers[type] || []).filter((f) => f !== fn); },
+  });
+  globalThis.document = mock<Document>({
+    // body is set per test
+    createElement: () => asElement(makeEl()),
     querySelector: () => null,
     addEventListener() {},
     removeEventListener() {},
-  };
+  });
   ({ MediaPager, getMediaZoom, setMediaZoom } = await import('../src/core/mediaPager.ts'));
 });
 
 /** A pager wired to stub elements, recording every load and fetch it requests. */
 function setup() {
   keyHandlers = {};
-  localStorage._m.clear();
+  store.clear();
   body = makeEl();
-  document.body = body;
+  document.body = asElement(body);
   root = makeEl();
   area = makeEl();
   grid = makeEl();
 
-  const nav = [];
-  const fetched = [];
-  const zoomCommits = [];
+  const nav: number[] = [];
+  const fetched: number[] = [];
+  const zoomCommits: boolean[] = [];
   const pager = new MediaPager({
-    root: () => root,
-    area: () => area,
-    grid: () => grid,
-    fetchPage: async (p) => { fetched.push(p); return `<div class="media-grid">page ${p}</div>`; },
+    root: () => asElement(root),
+    area: () => asElement(area),
+    grid: () => asElement(grid),
+    fetchPage: async (p) => { fetched.push(p); return raw(`<div class="media-grid">page ${p}</div>`); },
     gotoPage: (p) => nav.push(p),
     onZoomCommit: () => zoomCommits.push(true),
     isAlive: () => true,
@@ -112,7 +81,7 @@ const arrows = () => body.children.filter((c) => String(c.className).startsWith(
 const target = { closest: () => null };
 
 /** Press and drag, without releasing — leaves the pager mid-drag. */
-function drag(from, to) {
+function drag(from: number, to: number) {
   fire(root, 'touchstart', { touches: [{ clientX: from, clientY: 300 }], target });
   fire(root, 'touchmove', {
     touches: [{ clientX: to, clientY: 300 }], target, cancelable: true, preventDefault() {},
@@ -120,18 +89,18 @@ function drag(from, to) {
 }
 
 /** Lift the finger at `to`. */
-function release(to) {
+function release(to: number) {
   fire(root, 'touchend', { changedTouches: [{ clientX: to, clientY: 300 }], target });
 }
 
 /** A full horizontal swipe: press, drag, release. */
-function swipe(from, to) {
+function swipe(from: number, to: number) {
   drag(from, to);
   release(to);
 }
 
-const key = (k, extra = {}) =>
-  (keyHandlers.keydown || []).forEach((fn) => fn({ key: k, preventDefault() {}, ...extra }));
+const key = (k: string, extra = {}) =>
+  (keyHandlers.keydown || []).forEach((fn) => callListener(fn, { key: k, preventDefault() {}, ...extra }));
 
 describe('MediaPager', () => {
   beforeEach(() => { keyHandlers = {}; });
@@ -217,7 +186,7 @@ describe('MediaPager', () => {
     const { pager, nav } = setup();
     pager.arm({ page: 2, pages: 4 }, 'k1');
     await flush();
-    const next = ghosts().find((g) => g.dataset.edge === 'next');
+    const next = must(ghosts().find((g) => g.dataset.edge === 'next'), 'the next ghost');
 
     swipe(400, 200); // 200px left — past the 50px commit threshold
 
@@ -241,7 +210,7 @@ describe('MediaPager', () => {
 
     drag(400, 200);
     // Damped, so the grid moves less than the finger did and never blanks out.
-    const tx = parseFloat(area.style.transform.match(/-?[\d.]+/)[0]);
+    const tx = parseFloat(must(String(area.style.transform).match(/-?[\d.]+/), 'a translate')[0]);
     assert.ok(tx > -200 && tx < -10, `damped drag, got ${tx}`);
     assert.ok(Number(area.style.opacity) >= 0.85, 'a blocked drag never fades the grid out');
 

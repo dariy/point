@@ -1,6 +1,9 @@
 import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type { Media } from '../src/api/media.ts';
+import type { EditorNode } from '../src/utils/postNodes.ts';
 
 /**
  * The admin's three image surfaces, on the thumbnail ladder.
@@ -18,10 +21,11 @@ import { setupDOM } from './helpers/dom.ts';
  * String() before it meets an assertion that wants a primitive.
  */
 
-let dom;
-let PostsListPage;
-let MediaBrowser;
-let VisualEditor;
+let dom: ReturnType<typeof setupDOM>;
+let PostsListPage: typeof import('../src/pages/light/PostsListPage.ts').default;
+let MediaBrowser: typeof import('../src/components/light/MediaBrowser.ts').MediaBrowser;
+let VisualEditor: typeof import('../src/components/light/VisualEditor.ts').VisualEditor;
+type ListPost = Parameters<InstanceType<typeof PostsListPage>['_renderCardRow']>[0];
 
 before(async () => {
   dom = setupDOM();
@@ -38,10 +42,13 @@ beforeEach(() => {
 afterEach(() => dom.cleanup());
 
 /** Every `<img …>` open tag in a chunk of markup. */
-const imgs = (html) => String(html).match(/<img\b[^>]*>/g) || [];
+const imgs = (html: unknown) => String(html).match(/<img\b[^>]*>/g) || [];
+
+/** The first `<img …>` open tag; fails the test when there is none. */
+const firstImg = (html: unknown) => must(imgs(html)[0], 'an <img>');
 
 /** render() output as a primitive, for assert.match and friends. */
-const str = (markup) => String(markup);
+const str = (markup: unknown) => String(markup);
 
 const POST = {
   id: 1,
@@ -53,15 +60,15 @@ const POST = {
 };
 
 describe('PostsListPage thumbnails', () => {
-  const page = (posts, over = {}) => {
-    const p = new PostsListPage(null, {});
-    p.state = { ...p.state, loading: false, posts, pagination: {}, ...over };
+  const page = (posts: Partial<ListPost>[]) => {
+    const p = new PostsListPage(mock<HTMLElement>({}), {});
+    p.state = { ...p.state, loading: false, posts: posts.map(post => mock<ListPost>(post)), pagination: {} };
     return p;
   };
 
   test('a card row asks for a candidate set scoped to its 48px thumb', () => {
-    const row = String(page([])._renderCardRow({ ...POST, media_url: '/2026/03/photo.jpg' }));
-    const [img] = imgs(row);
+    const row = String(page([])._renderCardRow(mock<ListPost>({ ...POST, media_url: '/2026/03/photo.jpg' })));
+    const img = firstImg(row);
     assert.ok(img, 'the card renders an <img>');
     assert.match(img, /src="\/2026\/03\/photo\.jpg\?s=512&amp;v=c0ffee01"/);
     assert.match(img, /srcset="[^"]*\?s=128&amp;v=c0ffee01 128w[^"]*\?s=1024&amp;v=c0ffee01 1024w"/);
@@ -71,7 +78,7 @@ describe('PostsListPage thumbnails', () => {
 
   test('a table row scopes to its 80px preview column', () => {
     const html = page([{ ...POST, media_url: '/2026/03/photo.jpg' }])._renderContent();
-    const [img] = imgs(html);
+    const img = firstImg(html);
     assert.match(img, /sizes="80px"/);
     assert.match(img, /srcset="[^"]+ 128w, [^"]+ 256w, [^"]+ 512w, [^"]+ 1024w"/);
   });
@@ -80,7 +87,7 @@ describe('PostsListPage thumbnails', () => {
     // The poster 404s for a video that never got one, and dropBrokenImages
     // strips the <img> back to the glyph — so it is still rendered optimistically.
     const html = page([{ ...POST, media_url: '/2026/03/clip.mp4' }])._renderContent();
-    const [img] = imgs(html);
+    const img = firstImg(html);
     assert.match(img, /class="post-preview-img post-preview-img--poster"/);
     assert.match(img, /srcset="/);
     assert.match(img, /sizes="40px"/);
@@ -93,13 +100,10 @@ describe('PostsListPage thumbnails', () => {
 });
 
 describe('MediaBrowser thumbnails', () => {
-  const browser = (over = {}) => {
-    const b = new MediaBrowser(null, {});
-    b.state = { ...b.state, ...over };
-    return b;
-  };
+  const browser = () => new MediaBrowser(mock<HTMLElement>({}), {});
+  const item = (over: Partial<Media> = {}) => mock<Media>({ ...IMAGE, ...over });
 
-  const IMAGE = {
+  const IMAGE: Partial<Media> = {
     id: 7,
     filename: 'photo.jpg',
     path: '/2026/03/photo.jpg',
@@ -112,13 +116,13 @@ describe('MediaBrowser thumbnails', () => {
 
   test('an image uses its real dimensions, so a portrait claims its true width', () => {
     // The rung caps the LONGEST side: 2000x3000 at rung 512 is 341 wide.
-    const [img] = imgs(browser()._renderItem(IMAGE, new Set()));
+    const img = firstImg(browser()._renderItem(item(), new Set()));
     assert.match(img, /srcset="[^"]*\?s=512&amp;v=c0ffee01 341w/);
     assert.match(img, /sizes="\(max-width: 48em\) 50vw, 220px"/);
   });
 
   test('the rungs come off the bare path, not the pre-sized thumbnail_path', () => {
-    const [img] = imgs(browser()._renderItem(IMAGE, new Set()));
+    const img = firstImg(browser()._renderItem(item(), new Set()));
     assert.doesNotMatch(img, /s=512&amp;v=c0ffee01\?/, 'no query is appended to a query');
     assert.doesNotMatch(img, /jpg\?s=\d+&amp;v=c0ffee01&amp;/);
   });
@@ -127,37 +131,36 @@ describe('MediaBrowser thumbnails', () => {
     // A 600px-wide upload has no 1024 rung on disk; the server would hand back
     // the original, so the original takes that slot under its own URL.
     const html = str(browser()._renderItem(
-      { ...IMAGE, width: 600, height: 400 },
+      item({ width: 600, height: 400 }),
       new Set(),
     ));
-    const [img] = imgs(html);
+    const img = firstImg(html);
     assert.match(img, /srcset="[^"]*, \/2026\/03\/photo\.jpg 600w"/);
     assert.doesNotMatch(img, /s=1024/);
   });
 
   test('a video with a poster renders it under the play glyph', () => {
     const html = str(browser()._renderItem(
-      {
-        ...IMAGE,
+      item({
         file_type: 'video',
         filename: 'clip.mp4',
         path: '/2026/03/clip.mp4',
         thumbnail_path: '/2026/03/clip.mp4?s=512&v=c0ffee01',
-      },
+      }),
       new Set(),
     ));
     assert.strictEqual(imgs(html).length, 1);
     assert.match(html, /file-icon--overlay/);
     // The stored dimensions describe the video, not the poster fitted into the
     // ladder's box, so the descriptors stay on the rungs.
-    assert.match(imgs(html)[0], /\?s=512&amp;v=c0ffee01 512w/);
+    assert.match(firstImg(html), /\?s=512&amp;v=c0ffee01 512w/);
   });
 
   test('a video with no poster keeps the bare glyph', () => {
     // thumbnail_path is null exactly when no admin browser has captured a frame,
     // and MediaBrowser reads that as "this video needs a capture".
     const html = str(browser()._renderItem(
-      { ...IMAGE, file_type: 'video', thumbnail_path: null },
+      item({ file_type: 'video', thumbnail_path: null }),
       new Set(),
     ));
     assert.strictEqual(imgs(html).length, 0);
@@ -166,7 +169,7 @@ describe('MediaBrowser thumbnails', () => {
 
   test('a non-visual file keeps its glyph', () => {
     const html = str(browser()._renderItem(
-      { ...IMAGE, file_type: 'audio', filename: 'song.mp3', thumbnail_path: null },
+      item({ file_type: 'audio', filename: 'song.mp3', thumbnail_path: null }),
       new Set(),
     ));
     assert.strictEqual(imgs(html).length, 0);
@@ -174,12 +177,14 @@ describe('MediaBrowser thumbnails', () => {
 });
 
 describe('VisualEditor thumbnails', () => {
-  const render = (nodes, mediaByPath = {}) =>
-    String(new VisualEditor(null, { nodes, mediaByPath }).render());
+  const render = (nodes: EditorNode[], mediaByPath: Record<string, Partial<Media>> = {}) => String(new VisualEditor(
+    mock<HTMLElement>({}),
+    { nodes, mediaByPath: Object.fromEntries(Object.entries(mediaByPath).map(([k, m]) => [k, mock<Media>(m)])) },
+  ).render());
 
   test('an editor card scopes to its 80px thumb and keeps data-full on the original', () => {
     const html = render([{ type: 'image', path: '/2026/03/photo.jpg' }]);
-    const [img] = imgs(html);
+    const img = firstImg(html);
     assert.match(img, /sizes="80px"/);
     assert.match(img, /srcset="[^"]+ 128w,/);
     assert.match(img, /data-full="\/2026\/03\/photo\.jpg"/, 'the lightbox still opens the original');
@@ -191,6 +196,6 @@ describe('VisualEditor thumbnails', () => {
       [{ type: 'image', path: '/2026/03/photo.jpg' }],
       { '/2026/03/photo.jpg': { id: 7, width: 2000, height: 3000 } },
     );
-    assert.match(imgs(html)[0], /\?s=512&amp;v=c0ffee01 341w/);
+    assert.match(firstImg(html), /\?s=512&amp;v=c0ffee01 341w/);
   });
 });

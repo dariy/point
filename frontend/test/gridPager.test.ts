@@ -1,38 +1,19 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { raw } from '../src/utils/helpers.ts';
 import { Pagination } from '../src/components/shared/Pagination.ts';
+import type { Post } from '../src/api/posts.ts';
+import type { GridPager as GridPagerClass } from '../src/core/gridPager.ts';
+import { must } from './helpers/dom.ts';
+import { memoryStorage, mock, nodeList } from './helpers/mock.ts';
+import { StubElement, asElement, asStub, callListener, fire } from './helpers/stubElement.ts';
 
 // ── Minimal DOM so gridPager.js runs under node ───────────────────────────────
 // The pager only ever touches inline styles, classList, listeners and a couple
 // of layout reads, so hand-rolled element stubs are enough (the repo has no
 // jsdom — see TagsManagerPage.test.js for the same approach).
 
-function makeEl(extra = {}) {
-  const el = {
-    style: { setProperty() {}, removeProperty() {} },
-    dataset: {},
-    classList: { _set: new Set(), add(c) { this._set.add(c); }, remove(c) { this._set.delete(c); }, has(c) { return this._set.has(c); } },
-    children: [],
-    listeners: {},
-    offsetWidth: 800,
-    offsetHeight: 600,
-    offsetTop: 0,
-    innerHTML: '',
-    addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); },
-    removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); },
-    appendChild(c) { this.children.push(c); c.parentElement = this; return c; },
-    remove() { const p = this.parentElement; if (p) p.children = p.children.filter((c) => c !== this); this.removed = true; },
-    querySelector: () => null,
-    setAttribute() {},
-    ...extra,
-  };
-  return el;
-}
-
-/** Dispatch to the handlers registered on a stub element. */
-function fire(el, type, event) {
-  for (const fn of el.listeners[type] || []) fn(event);
-}
+const makeEl = (extra: Partial<StubElement> = {}) => new StubElement(extra);
 
 /**
  * Put a phone-width paginator on the page: six controls to a line, each line
@@ -46,40 +27,38 @@ function fire(el, type, event) {
  *
  * @returns {() => void} restores the document stubs.
  */
-function stubWrappingPaginator(page, pages, total = pages * 10) {
+function stubWrappingPaginator(page: number, pages: number, total = pages * 10) {
   const restore = { qs: document.querySelector, qsa: document.querySelectorAll, ce: document.createElement };
-  const rows = (markup) =>
+  const rows = (markup: string) =>
     Math.ceil((markup.match(/class="page-btn|page-ellipsis/g) || []).length / 6) || 1;
-  const heightOf = (markup) => 30 * rows(markup);
+  const heightOf = (markup: string) => 30 * rows(markup);
 
-  const paginator = (markup) => makeEl({
-    _markup: markup,
-    getBoundingClientRect() {
-      return { width: 300, height: this.style.display === 'none' ? 0 : heightOf(this._markup) };
-    },
-    querySelector: (sel) => (sel === '.page-info' ? makeEl() : null),
-  });
-  const live = paginator(new Pagination(null, { page, pages, total }).render());
+  const paginator = (markup: string) => {
+    const el = makeEl({ querySelector: (sel) => (sel === '.page-info' ? makeEl() : null) });
+    el.getBoundingClientRect = () => ({ width: 300, height: el.style.display === 'none' ? 0 : heightOf(markup) });
+    return el;
+  };
+  const live = paginator(String(new Pagination(mock<HTMLElement>({}), { page, pages, total }).render()));
   // The band the grid is fitted around: whatever paginator is laid out in it.
-  const mount = makeEl({
-    getBoundingClientRect() {
-      return { width: 300, height: this.children.reduce((h, c) => h + c.getBoundingClientRect().height, 0) };
-    },
+  const mount = makeEl();
+  mount.getBoundingClientRect = () => ({
+    width: 300, height: mount.children.reduce((h, c) => h + (c.getBoundingClientRect().height ?? 0), 0),
   });
   mount.appendChild(live);
 
-  document.querySelector = (sel) => (sel === '#pagination-mount' ? mount : null);
-  document.querySelectorAll = (sel) => (sel.includes('.pagination') ? [live] : []);
+  document.querySelector = (sel: string) => (sel === '#pagination-mount' ? asElement(mount) : null);
+  document.querySelectorAll = (sel: string) => nodeList(sel.includes('.pagination') ? [asElement(live)] : []);
   document.createElement = () => {
     const el = makeEl();
+    let html = '';
     Object.defineProperty(el, 'innerHTML', {
-      get() { return this._html || ''; },
-      set(v) {
-        this._html = v;
-        this.firstElementChild = v.includes('class="pagination"') ? paginator(v) : null;
+      get() { return html; },
+      set(v: string) {
+        html = v;
+        el.firstElementChild = v.includes('class="pagination"') ? paginator(v) : null;
       },
     });
-    return el;
+    return asElement(el);
   };
   return () => {
     document.querySelector = restore.qs;
@@ -88,74 +67,95 @@ function stubWrappingPaginator(page, pages, total = pages * 10) {
   };
 }
 
-let GridPager;
-let body, gridMount, container, siteMain, keyHandlers;
-let dispatched = [];
+let GridPager: typeof GridPagerClass;
+let body: StubElement, gridMount: StubElement, container: StubElement, siteMain: StubElement;
+let keyHandlers: Record<string, EventListenerOrEventListenerObject[]>;
+let dispatched: Event[] = [];
+
+/** The `dir` of each vertical flick the pager forwarded. */
+const flickDirs = () => dispatched.map((e) => (e instanceof CustomEvent ? e.detail.dir : null));
+
+/** An <img> the media warm-up made: what it asked the browser for. */
+class FakeImage {
+  _src = '';
+  srcset = '';
+  sizes = '';
+  set src(v: string) { this._src = v; warmed.push(this); }
+  get src() { return this._src; }
+  decode() { return Promise.resolve(); }
+}
+const warmed: FakeImage[] = [];
+
+/** The page box. A test sets its scrollHeight; the lib type has it read-only. */
+const docEl = { scrollHeight: 600 }; // fits the viewport, like a DF grid
 
 before(async () => {
-  globalThis.localStorage = {
-    _m: new Map(),
-    getItem(k) { return this._m.has(k) ? this._m.get(k) : null; },
-    setItem(k, v) { this._m.set(k, String(v)); },
-    removeItem(k) { this._m.delete(k); },
-  };
-  globalThis.requestAnimationFrame = (fn) => fn();
-  globalThis.window = {
+  globalThis.localStorage = memoryStorage();
+  globalThis.requestAnimationFrame = (fn) => { fn(0); return 0; };
+  globalThis.window = mock<typeof window>({
     innerWidth: 800,
     innerHeight: 600,
     scrollY: 0,
-    getComputedStyle: () => ({ columnGap: '16px' }),
-    addEventListener(type, fn) { (keyHandlers[type] ||= []).push(fn); },
-    removeEventListener(type, fn) { keyHandlers[type] = (keyHandlers[type] || []).filter((f) => f !== fn); },
-    dispatchEvent(e) { dispatched.push(e); },
-  };
+    getComputedStyle: () => mock<CSSStyleDeclaration>({ columnGap: '16px' }),
+    addEventListener(type: string, fn: EventListenerOrEventListenerObject) { (keyHandlers[type] ||= []).push(fn); },
+    removeEventListener(type: string, fn: EventListenerOrEventListenerObject) {
+      keyHandlers[type] = (keyHandlers[type] || []).filter((f) => f !== fn);
+    },
+    dispatchEvent(e: Event) { dispatched.push(e); return true; },
+  });
   // Records what the media warm-up asks the browser for. The pager hands an
   // <img> a srcset and lets it pick, exactly as a card does, so the assertions
-  // are about the candidate set rather than about one URL.
-  globalThis.warmed = [];
-  globalThis.Image = class {
-    set src(v) { this._src = v; warmed.push(this); }
-    get src() { return this._src; }
-    decode() { return Promise.resolve(); }
-  };
-  globalThis.document = {
-    body: null, // set per test
-    documentElement: { scrollHeight: 600 }, // fits the viewport, like a DF grid
-    createElement: () => makeEl(),
+  // are about the candidate set rather than about one URL. defineProperty, not
+  // assignment: FakeImage holds only what the warm-up sets, not all of Image.
+  Object.defineProperty(globalThis, 'Image', { value: FakeImage, writable: true, configurable: true });
+  globalThis.document = mock<Document>({
+    // body is set per test
+    documentElement: mock<HTMLElement>(docEl),
+    createElement: () => asElement(makeEl()),
     querySelector: () => null,
     addEventListener() {},
     removeEventListener() {},
-  };
+  });
   ({ GridPager } = await import('../src/core/gridPager.ts'));
 });
 
 /** A pager wired to stub elements, recording every navigation it requests. */
-function setup({ page = 2, pages = 4, posts = [] } = {}) {
+function setup({ page = 2, pages = 4, posts = [] as Partial<Post>[] } = {}) {
   keyHandlers = {};
   dispatched = [];
   window.scrollY = 0;
-  document.documentElement.scrollHeight = 600;
+  docEl.scrollHeight = 600;
   body = makeEl();
-  document.body = body;
+  document.body = asElement(body);
   gridMount = makeEl({ offsetTop: 40 });
   gridMount.querySelector = () => makeEl(); // stands in for .posts-grid
   container = makeEl();
   container.appendChild(gridMount);
   siteMain = makeEl();
 
-  const nav = [];
-  const fetched = [];
+  const nav: number[] = [];
+  const fetched: number[] = [];
   const pager = new GridPager({
-    gridMount: () => gridMount,
-    gestureRoot: () => siteMain,
-    fetchPosts: async (p) => { fetched.push(p); return posts; },
+    gridMount: () => asElement(gridMount),
+    gestureRoot: () => asElement(siteMain),
+    fetchPosts: async (p) => { fetched.push(p); return posts.map((post) => mock<Post>(post)); },
     gotoPage: (p) => nav.push(p),
     onZoomCommit: () => {},
     isAlive: () => true,
-    emptyHtml: '<p class="empty-state">nothing</p>',
+    emptyHtml: raw('<p class="empty-state">nothing</p>'),
   });
   return { pager, nav, fetched, pagination: { page, pages, total: pages * 10 } };
 }
+
+/** The swipe callbacks the pager gave its gesture recogniser. */
+function swipeOpts(pager: GridPagerClass) {
+  const opts = must(pager._gesture, 'a gesture controller')._opts;
+  return { commit: must(opts.onSwipeCommit), move: must(opts.onSwipeMove) };
+}
+
+/** Send a keydown to the window listeners the pager bound. */
+const keydown = (event: object) =>
+  (keyHandlers.keydown || []).forEach((fn) => callListener(fn, { preventDefault() {}, ...event }));
 
 /** Let the preload's awaits settle. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -263,7 +263,7 @@ describe('GridPager', () => {
       pager.arm({ page: 2, pages: 40, total: 400 });
       await flush();
 
-      const prev = container.children.slice(1).find((g) => g.dataset.edge === 'prev');
+      const prev = must(container.children.slice(1).find((g) => g.dataset.edge === 'prev'), 'the prev ghost');
       assert.equal(prev.style.height, '630px');
     } finally {
       done();
@@ -315,7 +315,7 @@ describe('GridPager', () => {
     assert.deepEqual(fetched.sort((a, b) => a - b), [0, 2],
       'page 1 must preload the queue page beside it, not just page 2');
 
-    keyHandlers.keydown.forEach((fn) => fn({ key: 'ArrowLeft', preventDefault() {} }));
+    keydown({ key: 'ArrowLeft' });
     assert.deepEqual(nav, [0], 'left from page 1 should land on the queue');
   });
 
@@ -325,7 +325,7 @@ describe('GridPager', () => {
     await flush();
     assert.deepEqual(fetched, [0], 'nothing exists past the end of the queue');
 
-    keyHandlers.keydown.forEach((fn) => fn({ key: 'ArrowLeft', preventDefault() {} }));
+    keydown({ key: 'ArrowLeft' });
     assert.deepEqual(nav, [], 'left from the last queue page goes nowhere');
   });
 
@@ -340,7 +340,7 @@ describe('GridPager', () => {
   test('arrow keys page in both directions, and stop at the edges', async () => {
     const { pager, nav } = setup({ page: 2, pages: 3 });
     pager.arm({ page: 2, pages: 3 });
-    const key = (k) => keyHandlers.keydown.forEach((fn) => fn({ key: k, preventDefault() {} }));
+    const key = (k: string) => keydown({ key: k });
 
     key('ArrowRight');
     key('ArrowLeft');
@@ -349,16 +349,14 @@ describe('GridPager', () => {
 
     const last = setup({ page: 3, pages: 3 });
     last.pager.arm({ page: 3, pages: 3 });
-    keyHandlers.keydown.forEach((fn) => fn({ key: 'ArrowRight', preventDefault() {} }));
+    keydown({ key: 'ArrowRight' });
     assert.deepEqual(last.nav, []);
   });
 
   test('keys are ignored while the visitor is typing', () => {
     const { pager, nav } = setup({ page: 2, pages: 3 });
     pager.arm({ page: 2, pages: 3 });
-    keyHandlers.keydown.forEach((fn) => fn({
-      key: 'ArrowRight', target: { tagName: 'INPUT' }, preventDefault() {},
-    }));
+    keydown({ key: 'ArrowRight', target: { tagName: 'INPUT' } });
     assert.deepEqual(nav, [], 'the header search box owns its own arrow keys');
   });
 
@@ -424,17 +422,17 @@ describe('GridPager', () => {
     pager.arm({ page: 2, pages: 4 });
     await flush();
     const ghostCount = container.children.length;
-    const swipe = pager._gesture._opts;
+    const swipe = swipeOpts(pager);
 
-    swipe.onSwipeCommit('left');
+    swipe.commit('left');
     // The ghost stays on screen (centred) until the real grid mounts under it.
     assert.equal(container.children.length, ghostCount);
-    assert.equal(pager._committedGhost.style.transform, 'translateX(0)');
+    assert.equal(asStub(pager._committedGhost).style.transform, 'translateX(0)');
 
     // A second commit during the ~280ms hand-off is refused rather than
     // orphaning the first ghost as a permanent overlay.
     const held = pager._committedGhost;
-    swipe.onSwipeCommit('left');
+    swipe.commit('left');
     assert.equal(pager._committedGhost, held);
 
     await new Promise((resolve) => setTimeout(resolve, 320));
@@ -442,7 +440,7 @@ describe('GridPager', () => {
     assert.equal(pager.takeSeamless(), true);
 
     pager.finishHandoff();
-    assert.equal(held.removed, true);
+    assert.equal(asStub(held).removed, true);
   });
 
   test('a swipe past the last page rubber-bands home instead of navigating', async () => {
@@ -450,14 +448,14 @@ describe('GridPager', () => {
     pager.arm({ page: 3, pages: 3 });
     await flush();
 
-    const swipe = pager._gesture._opts;
-    swipe.onSwipeMove(-120, 5);
+    const swipe = swipeOpts(pager);
+    swipe.move(-120, 5);
     // Damped, so the grid trails the finger, and never fades to nothing.
-    const tx = Number(gridMount.style.transform.match(/-?[\d.]+/)[0]);
+    const tx = Number(must(String(gridMount.style.transform).match(/-?[\d.]+/), 'a translate')[0]);
     assert.ok(tx > -120 && tx < 0, `expected damped travel, got ${tx}`);
     assert.ok(Number(gridMount.style.opacity) >= 0.85);
 
-    swipe.onSwipeCommit('left');
+    swipe.commit('left');
     assert.deepEqual(nav, []);
     assert.equal(gridMount.style.transform, '');
   });
@@ -467,10 +465,10 @@ describe('GridPager', () => {
     pager.arm({ page: 2, pages: 4 });
     await flush();
 
-    const swipe = pager._gesture._opts;
-    swipe.onSwipeMove(10, 90);
+    const swipe = swipeOpts(pager);
+    swipe.move(10, 90);
     assert.equal(gridMount.style.transform, undefined);
-    swipe.onSwipeCommit('up');
+    swipe.commit('up');
     assert.deepEqual(nav, []);
   });
 
@@ -479,10 +477,10 @@ describe('GridPager', () => {
     pager.arm({ page: 2, pages: 4 });
     await flush();
 
-    const swipe = pager._gesture._opts;
-    swipe.onSwipeCommit('up');
-    swipe.onSwipeCommit('down');
-    assert.deepEqual(dispatched.map((e) => e.detail.dir), ['up', 'down']);
+    const swipe = swipeOpts(pager);
+    swipe.commit('up');
+    swipe.commit('down');
+    assert.deepEqual(flickDirs(), ['up', 'down']);
     assert.equal(dispatched[0].type, 'point:grid-swipe-vertical');
   });
 
@@ -492,34 +490,34 @@ describe('GridPager', () => {
     await flush();
 
     // A page twice the viewport, scrolled to the middle: neither edge is met.
-    document.documentElement.scrollHeight = 1200;
+    docEl.scrollHeight = 1200;
     window.scrollY = 300;
-    const swipe = pager._gesture._opts;
-    swipe.onSwipeCommit('up');
-    swipe.onSwipeCommit('down');
+    const swipe = swipeOpts(pager);
+    swipe.commit('up');
+    swipe.commit('down');
     assert.deepEqual(dispatched, []);
 
     window.scrollY = 0;          // at the top: only a flick down carries
-    swipe.onSwipeCommit('up');
-    swipe.onSwipeCommit('down');
-    assert.deepEqual(dispatched.map((e) => e.detail.dir), ['down']);
+    swipe.commit('up');
+    swipe.commit('down');
+    assert.deepEqual(flickDirs(), ['down']);
 
     window.scrollY = 600;        // at the bottom: only a flick up
-    swipe.onSwipeCommit('up');
-    swipe.onSwipeCommit('down');
-    assert.deepEqual(dispatched.map((e) => e.detail.dir), ['down', 'up']);
+    swipe.commit('up');
+    swipe.commit('down');
+    assert.deepEqual(flickDirs(), ['down', 'up']);
   });
 
   test('trackpad flicks page within range only', async () => {
     const { pager, nav } = setup({ page: 1, pages: 2 });
     pager.arm({ page: 1, pages: 2 });
-    const wheel = (deltaX) => fire(siteMain, 'wheel', {
+    const wheel = (deltaX: number) => fire(siteMain, 'wheel', {
       deltaX, deltaY: 0, target: { closest: () => null },
     });
 
     wheel(120);   // two fingers left ⇒ next page
     assert.deepEqual(nav, [2]);
-    pager._trackpad._lastFired = 0; // skip the cooldown
+    must(pager._trackpad, 'a trackpad detector')._lastFired = 0; // skip the cooldown
     wheel(-120);  // already on page 1 ⇒ nothing
     assert.deepEqual(nav, [2]);
   });

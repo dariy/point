@@ -1,13 +1,16 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
 
 /**
  * The folder chip strip replaces the folder tree on narrow screens. A row has
  * space for one level of the hierarchy, so the chips drill down: years at the
  * root, then the months of whichever year is in context.
  */
+type MediaFolders = typeof import('../src/utils/mediaFolders.ts');
+
 describe('folderChips', () => {
-  let folderChips, groupFoldersByYear;
+  let folderChips: MediaFolders['folderChips'], groupFoldersByYear: MediaFolders['groupFoldersByYear'];
 
   const FOLDERS = [
     { year: '2026', month: '08', path: '2026/08' },
@@ -46,8 +49,8 @@ describe('folderChips', () => {
 
   test('inside a month: the month is active, its year is not', () => {
     const chips = folderChips(FOLDERS, '2026/08');
-    const aug = chips.find((c) => c.label === 'Aug');
-    const year = chips.find((c) => c.kind === 'year');
+    const aug = must(chips.find((c) => c.label === 'Aug'));
+    const year = must(chips.find((c) => c.kind === 'year'));
     assert.ok(aug.active);
     assert.ok(!year.active);
     assert.strictEqual(chips[0].kind, 'back');
@@ -55,7 +58,7 @@ describe('folderChips', () => {
 
   test('month numbers become names', () => {
     const chips = folderChips([{ year: '2025', month: '12', path: '2025/12' }], '2025');
-    assert.strictEqual(chips.at(-1).label, 'Dec');
+    assert.strictEqual(chips[chips.length - 1].label, 'Dec');
   });
 
   test('an unknown folder falls back to the root chips', () => {

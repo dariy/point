@@ -8,16 +8,17 @@ import {
   thumbSrcset,
   thumbAttrs,
 } from '../src/utils/mediaUrl.ts';
+import { mock } from './helpers/mock.ts';
 
 /** Stand in for the document bootstrap the server injects. */
-function bootstrap(media) {
-  globalThis.window = media === undefined ? {} : { __MEDIA__: media };
+function bootstrap(media: Partial<MediaBootstrap> | undefined) {
+  globalThis.window = mock<typeof window>(media === undefined ? {} : { __MEDIA__: mock<MediaBootstrap>(media) });
 }
 
 describe('mediaUrl', () => {
   beforeEach(() => bootstrap({ gen: 'c0ffee01', sizes: [128, 256, 512, 1024] }));
   afterEach(() => {
-    delete globalThis.window;
+    Reflect.deleteProperty(globalThis, 'window');
   });
 
   describe('thumbLadder', () => {
@@ -31,6 +32,7 @@ describe('mediaUrl', () => {
       assert.deepStrictEqual(thumbLadder(), THUMB_SIZES);
       bootstrap({ gen: 'c0ffee01', sizes: [] });
       assert.deepStrictEqual(thumbLadder(), THUMB_SIZES);
+      // @ts-expect-error a malformed ladder from the server
       bootstrap({ gen: 'c0ffee01', sizes: 'nope' });
       assert.deepStrictEqual(thumbLadder(), THUMB_SIZES);
     });
@@ -62,7 +64,7 @@ describe('mediaUrl', () => {
       // still resolves — it just cannot be cached hard.
       bootstrap(undefined);
       assert.strictEqual(thumbUrl('/2026/03/photo.jpg', 512), '/2026/03/photo.jpg?s=512');
-      delete globalThis.window;
+      Reflect.deleteProperty(globalThis, 'window');
       assert.strictEqual(thumbUrl('/2026/03/photo.jpg', 512), '/2026/03/photo.jpg?s=512');
     });
 
@@ -76,13 +78,16 @@ describe('mediaUrl', () => {
       // number must not turn into a 400.
       assert.strictEqual(thumbUrl('/a.jpg', 200), '/a.jpg?s=256&v=c0ffee01');
       assert.strictEqual(thumbUrl('/a.jpg', 5000), '/a.jpg?s=1024&v=c0ffee01');
+      // @ts-expect-error a size that is not a number falls back to the default
       assert.strictEqual(thumbUrl('/a.jpg', 'huge'), `/a.jpg?s=${DEFAULT_THUMB_SIZE}&v=c0ffee01`);
       assert.strictEqual(thumbUrl('/a.jpg'), `/a.jpg?s=${DEFAULT_THUMB_SIZE}&v=c0ffee01`);
     });
 
     test('returns "" for an empty path', () => {
       assert.strictEqual(thumbUrl(''), '');
+      // @ts-expect-error a null path reads as empty
       assert.strictEqual(thumbUrl(null), '');
+      // @ts-expect-error a missing path reads as empty
       assert.strictEqual(thumbUrl(undefined), '');
     });
   });
@@ -192,6 +197,7 @@ describe('mediaUrl', () => {
 
     test('renders nothing for an empty path, so no bare <img> is emitted', () => {
       assert.strictEqual(String(thumbAttrs('')), '');
+      // @ts-expect-error a null path reads as empty
       assert.strictEqual(String(thumbAttrs(null)), '');
     });
   });

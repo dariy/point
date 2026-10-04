@@ -2,6 +2,7 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { preCacheImages, clearImageCache } from '../src/utils/imageCache.ts';
+import { mock } from './helpers/mock.ts';
 
 /**
  * imageCache writes the two caches the service worker reads (sw.js,
@@ -14,17 +15,18 @@ import { preCacheImages, clearImageCache } from '../src/utils/imageCache.ts';
  */
 
 /** A CacheStorage recording what was added, and how many adds were in flight. */
-function fakeCaches({ fail = () => false } = {}) {
-  const stores = new Map();
+function fakeCaches({ fail = (_url: string): boolean => false } = {}) {
+  const stores = new Map<string, string[]>();
   const storage = {
     inFlight: 0,
     peakInFlight: 0,
-    deleted: [],
-    async open(name) {
-      if (!stores.has(name)) stores.set(name, []);
-      const urls = stores.get(name);
-      return {
-        async add(url) {
+    deleted: [] as string[],
+    async open(name: string) {
+      const urls = stores.get(name) ?? [];
+      stores.set(name, urls);
+      return mock<Cache>({
+        async add(input: RequestInfo | URL) {
+          const url = String(input);
           storage.inFlight++;
           storage.peakInFlight = Math.max(storage.peakInFlight, storage.inFlight);
           // Yield so concurrent adds actually overlap.
@@ -33,24 +35,31 @@ function fakeCaches({ fail = () => false } = {}) {
           if (fail(url)) throw new Error(`404 ${url}`);
           urls.push(url);
         },
-      };
+      });
     },
-    async delete(name) {
+    async delete(name: string) {
       storage.deleted.push(name);
       return stores.delete(name);
     },
-    contents(name) {
+    contents(name: string) {
       return stores.get(name) || null;
     },
   };
   return storage;
 }
 
-const urls = (n, prefix = '/2026/03/p') =>
+/** Install a fake CacheStorage as the global `caches`, and return it. */
+function installCaches(opts?: Parameters<typeof fakeCaches>[0]) {
+  const storage = fakeCaches(opts);
+  globalThis.caches = mock<CacheStorage>(storage);
+  return storage;
+}
+
+const urls = (n: number, prefix = '/2026/03/p') =>
   Array.from({ length: n }, (_, i) => `${prefix}${i}.jpg?s=512&v=abc`);
 
 describe('preCacheImages', () => {
-  let warn;
+  let warn: typeof console.warn;
 
   beforeEach(() => {
     warn = console.warn;
@@ -59,20 +68,20 @@ describe('preCacheImages', () => {
 
   afterEach(() => {
     console.warn = warn;
-    delete globalThis.caches;
+    Reflect.deleteProperty(globalThis, 'caches');
   });
 
   test("type 'full' writes to point-images-full-v1 and reports progress", async () => {
-    globalThis.caches = fakeCaches();
-    const seen = [];
+    const caches = installCaches();
+    const seen: unknown[] = [];
 
     await preCacheImages(['/2026/03/a.jpg', '/2026/03/b.jpg'], 'full', (p) => seen.push(p));
 
-    assert.deepStrictEqual(globalThis.caches.contents('point-images-full-v1'), [
+    assert.deepStrictEqual(caches.contents('point-images-full-v1'), [
       '/2026/03/a.jpg',
       '/2026/03/b.jpg',
     ]);
-    assert.strictEqual(globalThis.caches.contents('point-images-v1'), null);
+    assert.strictEqual(caches.contents('point-images-v1'), null);
     assert.deepStrictEqual(seen, [
       { completed: 1, total: 2, current: '/2026/03/a.jpg' },
       { completed: 2, total: 2, current: '/2026/03/b.jpg' },
@@ -80,15 +89,15 @@ describe('preCacheImages', () => {
   });
 
   test('defaults to the thumbnail cache', async () => {
-    globalThis.caches = fakeCaches();
+    const caches = installCaches();
     await preCacheImages(['/2026/03/a.jpg?s=256&v=abc']);
-    assert.deepStrictEqual(globalThis.caches.contents('point-images-v1'), [
+    assert.deepStrictEqual(caches.contents('point-images-v1'), [
       '/2026/03/a.jpg?s=256&v=abc',
     ]);
   });
 
   test('reports every URL even when some fail, and keeps the rest', async () => {
-    globalThis.caches = fakeCaches({ fail: (url) => url.includes('p1') });
+    const caches = installCaches({ fail: (url: string) => url.includes('p1') });
     let completed = 0;
 
     await preCacheImages(urls(3), 'thumbnails', (p) => {
@@ -96,41 +105,42 @@ describe('preCacheImages', () => {
     });
 
     assert.strictEqual(completed, 3, 'a failed fetch still advances the bar');
-    assert.deepStrictEqual(globalThis.caches.contents('point-images-v1'), [
+    assert.deepStrictEqual(caches.contents('point-images-v1'), [
       '/2026/03/p0.jpg?s=512&v=abc',
       '/2026/03/p2.jpg?s=512&v=abc',
     ]);
   });
 
   test('fetches concurrently, but bounded', async () => {
-    globalThis.caches = fakeCaches();
+    const caches = installCaches();
     const list = urls(40);
 
     await preCacheImages(list, 'thumbnails');
 
-    assert.strictEqual(globalThis.caches.contents('point-images-v1').length, 40);
+    assert.strictEqual(caches.contents('point-images-v1')?.length, 40);
     assert.ok(
-      globalThis.caches.peakInFlight > 1,
+      caches.peakInFlight > 1,
       'a serial walk makes a ladder-sized snapshot glacial',
     );
     assert.ok(
-      globalThis.caches.peakInFlight <= 5,
-      `too many in flight: ${globalThis.caches.peakInFlight}`,
+      caches.peakInFlight <= 5,
+      `too many in flight: ${caches.peakInFlight}`,
     );
   });
 
   test('an empty list opens no workers and reports nothing', async () => {
-    globalThis.caches = fakeCaches();
+    const caches = installCaches();
     let calls = 0;
     await preCacheImages([], 'full', () => calls++);
     assert.strictEqual(calls, 0);
-    assert.deepStrictEqual(globalThis.caches.contents('point-images-full-v1'), []);
+    assert.deepStrictEqual(caches.contents('point-images-full-v1'), []);
   });
 
   test('a non-function progress argument is ignored rather than thrown at', async () => {
-    globalThis.caches = fakeCaches();
+    const caches = installCaches();
+    // @ts-expect-error a progress argument that is not a function
     await preCacheImages(['/2026/03/a.jpg'], 'full', 'not a callback');
-    assert.deepStrictEqual(globalThis.caches.contents('point-images-full-v1'), [
+    assert.deepStrictEqual(caches.contents('point-images-full-v1'), [
       '/2026/03/a.jpg',
     ]);
   });
@@ -144,27 +154,27 @@ describe('preCacheImages', () => {
 
 describe('clearImageCache', () => {
   afterEach(() => {
-    delete globalThis.caches;
+    Reflect.deleteProperty(globalThis, 'caches');
   });
 
   test("'all' drops both caches, so a generation roll cannot orphan entries", async () => {
-    globalThis.caches = fakeCaches();
+    const caches = installCaches();
     await preCacheImages(['/2026/03/a.jpg?s=512&v=old'], 'thumbnails');
     await preCacheImages(['/2026/03/a.jpg'], 'full');
 
     await clearImageCache('all');
 
-    assert.deepStrictEqual(globalThis.caches.deleted, [
+    assert.deepStrictEqual(caches.deleted, [
       'point-images-v1',
       'point-images-full-v1',
     ]);
-    assert.strictEqual(globalThis.caches.contents('point-images-v1'), null);
-    assert.strictEqual(globalThis.caches.contents('point-images-full-v1'), null);
+    assert.strictEqual(caches.contents('point-images-v1'), null);
+    assert.strictEqual(caches.contents('point-images-full-v1'), null);
   });
 
   test('clears one cache at a time when asked', async () => {
-    globalThis.caches = fakeCaches();
+    const caches = installCaches();
     await clearImageCache('thumbnails');
-    assert.deepStrictEqual(globalThis.caches.deleted, ['point-images-v1']);
+    assert.deepStrictEqual(caches.deleted, ['point-images-v1']);
   });
 });

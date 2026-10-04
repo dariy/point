@@ -1,0 +1,14 @@
+{
+  "id": "da4e24c0-a86d-4959-9823-a39ecf131c08",
+  "status": "running",
+  "startedAt": "2026-10-04T20:35:07.730Z",
+  "updatedAt": "2026-10-04T20:35:07.730Z",
+  "agentPlugin": "claude",
+  "trackerPlugin": "beads-rust-bv",
+  "executionScopes": [],
+  "currentIteration": 0,
+  "maxIterations": 0,
+  "totalTasks": 0,
+  "tasksCompleted": 0,
+  "cwd": "/home/light/src/point"
+}

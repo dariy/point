@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { mock } from './helpers/mock.ts';
 
 /**
  * The service worker's media branch (sw.js, serveMedia).
@@ -26,11 +27,13 @@ const SW_SOURCE = readFileSync(
 
 /** A Cache holding whole URLs as keys, matching the Cache API's semantics. */
 class FakeCache {
-  constructor(entries = {}) {
+  entries: Map<string, Response>;
+
+  constructor(entries: Record<string, Response> = {}) {
     this.entries = new Map(Object.entries(entries));
   }
 
-  async match(url, { ignoreSearch = false } = {}) {
+  async match(url: string, { ignoreSearch = false } = {}) {
     if (this.entries.has(url)) return this.entries.get(url);
     if (!ignoreSearch) return undefined;
     const bare = String(url).split('?')[0];
@@ -47,14 +50,17 @@ class FakeCache {
  * every browser of a reader who has never pressed "Update Offline Data".
  */
 class FakeCacheStorage {
-  constructor(caches = {}, { rejectUnknown = false } = {}) {
+  caches: Map<string | undefined, FakeCache>;
+  rejectUnknown: boolean;
+
+  constructor(caches: Record<string, Record<string, Response>> = {}, { rejectUnknown = false } = {}) {
     this.caches = new Map(
       Object.entries(caches).map(([name, entries]) => [name, new FakeCache(entries)]),
     );
     this.rejectUnknown = rejectUnknown;
   }
 
-  async match(url, { cacheName, ignoreSearch } = {}) {
+  async match(url: string, { cacheName, ignoreSearch }: { cacheName?: string; ignoreSearch?: boolean } = {}) {
     const cache = this.caches.get(cacheName);
     if (!cache) {
       if (this.rejectUnknown) throw new Error(`no such cache: ${cacheName}`);
@@ -68,9 +74,24 @@ class FakeCacheStorage {
  * Evaluate sw.js against stub globals and hand back the context, so the test can
  * both call into the worker and see what it did.
  */
-function loadSW({ caches = new FakeCacheStorage(), onLine = true, fetch } = {}) {
-  const fetchCalls = [];
-  const sandbox = {
+/** What the request stand-in holds: the fields serveMedia reads. */
+interface SWRequest { url: string; method: string }
+
+/** The sw.js functions under test, as they land on the context's global object. */
+interface SWGlobals {
+  isMediaPath(path: string): boolean;
+  serveMedia(request: SWRequest): Promise<Response>;
+}
+
+interface LoadSWOptions {
+  caches?: FakeCacheStorage;
+  onLine?: boolean;
+  fetch?: (request: SWRequest) => Promise<Response>;
+}
+
+function loadSW({ caches = new FakeCacheStorage(), onLine = true, fetch }: LoadSWOptions = {}) {
+  const fetchCalls: string[] = [];
+  const sandbox: Record<string, unknown> = {
     self: {
       addEventListener() {},
       skipWaiting() {},
@@ -79,7 +100,7 @@ function loadSW({ caches = new FakeCacheStorage(), onLine = true, fetch } = {}) 
     },
     caches,
     navigator: { onLine },
-    fetch: async (request) => {
+    fetch: async (request: SWRequest) => {
       fetchCalls.push(request.url);
       if (fetch) return fetch(request);
       return new Response('network', { status: 200 });
@@ -94,16 +115,16 @@ function loadSW({ caches = new FakeCacheStorage(), onLine = true, fetch } = {}) 
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(SW_SOURCE, sandbox);
-  return { sw: sandbox, fetchCalls };
+  return { sw: mock<SWGlobals>(sandbox), fetchCalls };
 }
 
-const request = (url) => ({ url, method: 'GET' });
-const body = (response) => response.text();
+const request = (url: string): SWRequest => ({ url, method: 'GET' });
+const body = (response: Response) => response.text();
 
-const rung = (size) => `https://example.test/2026/03/p.jpg?s=${size}&v=abc123`;
+const rung = (size: number) => `https://example.test/2026/03/p.jpg?s=${size}&v=abc123`;
 
 describe('sw.js — isMediaPath', () => {
-  let sw;
+  let sw: SWGlobals;
   beforeEach(() => {
     sw = loadSW().sw;
   });

@@ -31,3 +31,32 @@ export function spy<A extends unknown[] = unknown[], R = undefined>(
   };
   return Object.assign(fn, { calls });
 }
+
+/** An in-memory Storage over `store`. A test can read or clear `store` directly. */
+export function memoryStorage(store = new Map<string, string>()): Storage {
+  return {
+    get length() { return store.size; },
+    key: (i: number) => [...store.keys()][i] ?? null,
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, String(v)); },
+    removeItem: (k: string) => { store.delete(k); },
+    clear: () => store.clear(),
+  };
+}
+
+/** Use an array where the code under test expects a NodeList. */
+export function nodeList<T extends Node>(items: T[]): NodeListOf<T> {
+  const item = (i: number): T => {
+    const it = items[i];
+    if (!it) throw new RangeError(`no node at ${i}`);
+    return it;
+  };
+  const list: NodeListOf<T> = mock<NodeListOf<T>>({
+    ...items,
+    length: items.length,
+    item,
+    forEach(cb, thisArg) { items.forEach((n, i) => cb.call(thisArg, n, i, list)); },
+    [Symbol.iterator]: () => items[Symbol.iterator](),
+  });
+  return list;
+}

@@ -1,35 +1,31 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { memoryStorage, mock, nodeList } from './helpers/mock.ts';
 
 // ── Minimal globals so gridFit.ts's zoom helpers run under node ────────────────
 // tokenPx() appends a probe and reads offsetWidth; a stub that returns 0 makes
 // maxZoomCols fall back to window.innerWidth (maxW || innerWidth), which is
 // exactly the path we want to exercise deterministically.
-const store = new Map();
-globalThis.localStorage = {
-  getItem: (k) => (store.has(k) ? store.get(k) : null),
-  setItem: (k, v) => store.set(k, String(v)),
-  removeItem: (k) => store.delete(k),
-};
-globalThis.window = {
-  innerWidth: 1200, innerHeight: 800, getComputedStyle: () => ({}),
-  dispatchEvent() {}, // applyZoomVar announces every change to the footer slider
-};
-globalThis.CustomEvent = class { constructor(type, init) { Object.assign(this, { type }, init); } };
-const bodyVars = new Map();
-globalThis.document = {
-  body: {
-    classList: { add() {}, remove() {} },
-    style: {
-      setProperty(k, v) { bodyVars.set(k, v); },
-      removeProperty(k) { bodyVars.delete(k); },
-    },
-    appendChild() {}, // tokenPx() appends a measurement probe here
-  },
-  createElement: () => ({ style: {}, remove() {}, offsetWidth: 0 }),
-  appendChild() {},
+const store = new Map<string, string>();
+globalThis.localStorage = memoryStorage(store);
+globalThis.window = mock<typeof window>({
+  innerWidth: 1200, innerHeight: 800, getComputedStyle: () => mock<CSSStyleDeclaration>({}),
+  dispatchEvent: () => true, // applyZoomVar announces every change to the footer slider
+});
+const bodyVars = new Map<string, string | null>();
+globalThis.document = mock<Document>({
+  body: mock<HTMLElement>({
+    classList: mock<DOMTokenList>({ add() {}, remove() {} }),
+    style: mock<CSSStyleDeclaration>({
+      setProperty(k: string, v: string | null) { bodyVars.set(k, v); },
+      removeProperty(k: string) { bodyVars.delete(k); return ''; },
+    }),
+    appendChild: <T extends Node>(node: T) => node, // tokenPx() appends a measurement probe here
+  }),
+  createElement: () => mock<HTMLElement>({ style: mock<CSSStyleDeclaration>({}), remove() {}, offsetWidth: 0 }),
+  appendChild: <T extends Node>(node: T) => node,
   querySelector: () => null,
-};
+});
 
 const {
   getZoom, setZoom, clampZoom, maxZoomCols, createFitLatch,
@@ -215,9 +211,9 @@ describe('resize gate', () => {
  */
 describe('card image sizes', () => {
   /** A card image, with just enough element for applyCardImageSizes. */
-  const img = (hero = false) => ({
+  const img = (hero = false) => mock<HTMLImageElement>({
     sizes: '',
-    closest: (sel) => (hero && sel === '.featured-post' ? {} : null),
+    closest: (sel: string) => (hero && sel === '.featured-post' ? mock<Element>({}) : null),
   });
 
   test('a measured grid names the track width, in px', () => {
@@ -237,7 +233,7 @@ describe('card image sizes', () => {
     applyCardImageSizes(320, 1000);
     const regular = img();
     const featured = img(true);
-    const root = { querySelectorAll: () => [regular, featured] };
+    const root = mock<ParentNode>({ querySelectorAll: () => nodeList([regular, featured]) });
 
     applyCardImageSizes(700, 700, root);   // the same grid, one column wide now
     assert.equal(regular.sizes, '700px');
@@ -247,7 +243,7 @@ describe('card image sizes', () => {
   test('an unchanged shape does not touch the DOM', () => {
     applyCardImageSizes(320, 1000);
     let queried = 0;
-    applyCardImageSizes(320, 1000, { querySelectorAll: () => { queried++; return []; } });
+    applyCardImageSizes(320, 1000, mock<ParentNode>({ querySelectorAll: () => { queried++; return nodeList<Element>([]); } }));
     assert.equal(queried, 0, 'every resize would otherwise walk every card');
   });
 });

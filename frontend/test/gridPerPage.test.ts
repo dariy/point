@@ -1,5 +1,6 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { memoryStorage, mock } from './helpers/mock.ts';
 
 // ── Minimal globals so gridFit.ts's viewport fit runs under node ──────────────
 // The point of these tests is the *height* the fit divides. The layout box is
@@ -8,47 +9,42 @@ import assert from 'node:assert';
 // fit leaves no slack for the difference. Here they are deliberately all
 // different, so whichever one the code picks is visible in the result.
 
-const store = new Map();
-globalThis.localStorage = {
-  getItem: (k) => (store.has(k) ? store.get(k) : null),
-  setItem: (k, v) => store.set(k, String(v)),
-  removeItem: (k) => store.delete(k),
-};
+const store = new Map<string, string>();
+globalThis.localStorage = memoryStorage(store);
 
 /** expr → px, as the browser would resolve it on tokenPx()'s probe. */
-let probeTable = {};
+let probeTable: Record<string, number> = {};
 
-globalThis.window = {
+globalThis.window = mock<typeof window>({
   innerWidth: 1200,
   innerHeight: 1000,          // the layout viewport — NOT what the box gets
-  getComputedStyle: () => ({}),
-  dispatchEvent() {},
-};
-globalThis.CustomEvent = class { constructor(type, init) { Object.assign(this, { type }, init); } };
+  getComputedStyle: () => mock<CSSStyleDeclaration>({}),
+  dispatchEvent: () => true,
+});
 
-globalThis.document = {
-  body: {
-    classList: { contains: () => false, add() {}, remove() {} },
-    style: { setProperty() {}, removeProperty() {} },
-    appendChild() {},         // tokenPx() appends its probe here
-  },
+globalThis.document = mock<Document>({
+  body: mock<HTMLElement>({
+    classList: mock<DOMTokenList>({ contains: () => false, add() {}, remove() {} }),
+    style: mock<CSSStyleDeclaration>({ setProperty() {}, removeProperty: () => '' }),
+    appendChild: <T extends Node>(node: T) => node, // tokenPx() appends its probe here
+  }),
   // tokenPx writes `width:<expr>;height:<expr>` through cssText; the stub
   // resolves both sides off the same table, which is what a browser does for
   // every unit except the viewport ones — see the dvh/dvw note in tokenPx.
   createElement: () => {
-    const el = { remove() {}, offsetWidth: 0, offsetHeight: 0 };
-    el.style = {
-      set cssText(v) {
+    const el = { remove() {}, offsetWidth: 0, offsetHeight: 0, style: mock<CSSStyleDeclaration>({}) };
+    el.style = mock<CSSStyleDeclaration>({
+      set cssText(v: string) {
         const expr = /width:([^;]*)/.exec(v)?.[1] ?? '';
         const px = probeTable[expr] || 0;
         el.offsetWidth = px;
         el.offsetHeight = probeTable[`h:${expr}`] ?? px;
       },
-    };
-    return el;
+    });
+    return mock<HTMLElement>(el);
   },
   querySelector: () => null,
-};
+});
 
 const { computePerPage, layoutViewportHeight } = await import('../src/utils/gridFit.ts');
 
@@ -58,7 +54,7 @@ const { computePerPage, layoutViewportHeight } = await import('../src/utils/grid
  * height is a round number. `heights` overrides what the viewport units resolve
  * to (empty ⇒ the unit is unsupported, exactly as an old engine reports it).
  */
-function layout(heights, { colW = 300, cardH = 100 } = {}) {
+function layout(heights: Record<string, number>, { colW = 300, cardH = 100 } = {}) {
   probeTable = {
     'var(--content-max-width)': 0,
     'var(--spacing-md)': 0,

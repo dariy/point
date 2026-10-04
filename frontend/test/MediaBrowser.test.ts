@@ -16,24 +16,53 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, fire, type, check } from './helpers/dom.ts';
+import { setupDOM, click, fire, type, check, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 import { getToast, setToast } from '../src/store.ts';
+import type { MediaBrowser as MediaBrowserClass } from '../src/components/light/MediaBrowser.ts';
 
-const settle = () => new Promise(r => setImmediate(r));
+const settle = () => new Promise<void>(r => setImmediate(r));
 
 const IMAGE = { id: 1, filename: 'harbour.jpg', path: '/2024/08/harbour.jpg', file_type: 'image', file_size: 1024, uploaded_at: '2024-08-01T10:00:00Z', is_public: true, thumbnail_path: '/2024/08/harbour.jpg?s=512', width: 1600, height: 1200, metadata: { Make: 'Canon' } };
 const VIDEO = { id: 2, filename: 'clip.mp4', path: '/2024/08/clip.mp4', file_type: 'video', file_size: 4096, uploaded_at: '2024-08-02T10:00:00Z', is_public: false, thumbnail_path: null };
 const AUDIO = { id: 3, filename: 'note.mp3', path: '/2024/08/note.mp3', file_type: 'audio', file_size: 512, uploaded_at: '2024-08-03T10:00:00Z', is_public: true, thumbnail_path: null };
 
+/** One request the fake fetch saw. */
+interface SentRequest {
+  url: string;
+  path: string;
+  query: string;
+  method: string;
+  body: unknown;
+  params: URLSearchParams;
+}
+
+/** What a route sees of a request. */
+interface RouteRequest { path: string; method: string; body: unknown }
+
+/** A route returns the JSON payload, or a `fail()` reply. */
+type Route = (req: RouteRequest) => unknown;
+
+/** A non-2xx reply from a route. */
+interface FailReply { __response: true; status: number; payload: { message: string } }
+
+const isFailReply = (v: unknown): v is FailReply =>
+  typeof v === 'object' && v !== null && '__response' in v;
+
 describe('MediaBrowser', () => {
-  let dom, MediaBrowser, browser, requests, routes, navigations;
+  let dom: ReturnType<typeof setupDOM>;
+  let MediaBrowser: typeof MediaBrowserClass;
+  let browser: MediaBrowserClass | null;
+  let requests: SentRequest[];
+  let routes: Record<string, Route>;
+  let navigations: string[];
 
   function fakeFetch() {
     requests = [];
-    globalThis.fetch = async (url, opts = {}) => {
+    globalThis.fetch = async (url: RequestInfo | URL, opts: RequestInit = {}) => {
       const method = opts.method || 'GET';
-      const [path, query = ''] = String(url).split('?');
-      let body;
+      const [path = '', query = ''] = String(url).split('?');
+      let body: unknown;
       if (typeof opts.body === 'string') { try { body = JSON.parse(opts.body); } catch { body = opts.body; } }
       else body = opts.body;
       requests.push({ url: String(url), path, query, method, body, params: new URLSearchParams(query) });
@@ -41,46 +70,55 @@ describe('MediaBrowser', () => {
       const key = Object.keys(routes)
         .filter(k => { const [m, p] = k.split(' '); return m === method && path.startsWith(p); })
         .sort((a, b) => b.length - a.length)[0];
-      const result = key ? await routes[key]({ path, method, body }) : {};
-      const { status = 200, payload = result } = result?.__response ? result : {};
-      return {
+      const result: unknown = key ? await routes[key]({ path, method, body }) : {};
+      const { status, payload } = isFailReply(result) ? result : { status: 200, payload: result };
+      return mock<Response>({
         ok: status < 400,
         status,
-        headers: { get: () => 'application/json' },
+        headers: mock<Headers>({ get: () => 'application/json' }),
         json: async () => payload,
         text: async () => JSON.stringify(payload),
-      };
+      });
     };
   }
 
-  const fail = (status, message) => ({ __response: true, status, payload: { message } });
+  const fail = (status: number, message: string): FailReply => ({ __response: true, status, payload: { message } });
 
-  async function mountBrowser(props = {}) {
+  async function mountBrowser(props: ConstructorParameters<typeof MediaBrowserClass>[1] = {}) {
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
-    browser = new MediaBrowser(el, props);
-    browser.mount();
+    const mounted = new MediaBrowser(el, props);
+    browser = mounted;
+    mounted.mount();
     await settle();
     await settle();
-    return browser;
+    return mounted;
   }
 
-  const q = sel => browser.container.querySelector(sel);
-  const qa = sel => [...browser.container.querySelectorAll(sel)];
-  const sent = (method, path) => requests.filter(r => r.method === method && r.path === path);
-  const lastList = () => sent('GET', '/api/media').at(-1);
-  const dialog = () => dom.document.querySelector('.confirm-dialog, .prompt-dialog, .modal-overlay');
+  /** The mounted browser; fails the test when none is. */
+  const mb = () => must(browser, 'a mounted MediaBrowser');
+  const q = (sel: string) => mb().container.querySelector<HTMLElement>(sel);
+  /** The element at `sel`; fails the test when there is none. */
+  const el = <T extends HTMLElement = HTMLElement>(sel: string) => must(mb().container.querySelector<T>(sel), sel);
+  const qa = <T extends HTMLElement = HTMLElement>(sel: string) => [...mb().container.querySelectorAll<T>(sel)];
+  const sent = (method: string, path: string) => requests.filter(r => r.method === method && r.path === path);
+  const last = <T>(list: T[]) => must(list[list.length - 1], 'a last entry');
+  const lastList = () => last(sent('GET', '/api/media'));
+  const dialog = () => dom.document.querySelector<HTMLElement>('.confirm-dialog, .prompt-dialog, .modal-overlay');
+
+  /** The open dialog; fails the test when there is none. */
+  const openDialog = () => must(dialog(), 'a dialog');
+  /** The text field of the open prompt dialog. */
+  const dialogInput = () => must(openDialog().querySelector('input'), 'a dialog input');
 
   function acceptDialog() {
-    const el = dialog();
-    assert.ok(el, 'expected a dialog');
-    click(el.querySelector('.btn-danger, .btn-warning, .btn-primary, .confirm-dialog__confirm'));
+    click(must(openDialog().querySelector('.btn-danger, .btn-warning, .btn-primary, .confirm-dialog__confirm'), 'a confirm button'));
   }
 
   beforeEach(async () => {
     dom = setupDOM();
     navigations = [];
-    dom.window.addEventListener('app:navigate', e => navigations.push(e.detail.path));
+    dom.window.addEventListener('app:navigate', e => { if (e instanceof CustomEvent) navigations.push(e.detail.path); });
     routes = {
       'GET /api/media/folders': () => ({ folders: [{ year: '2024', month: '08', path: '2024/08' }, { year: '2024', month: '07', path: '2024/07' }] }),
       'GET /api/media': () => ({ media: [IMAGE, VIDEO, AUDIO], page: 1, pages: 2, total: 30 }),
@@ -99,7 +137,7 @@ describe('MediaBrowser', () => {
     try { browser?.unmount(); } catch { /* torn down mid-flight */ }
     browser = null;
     dom.cleanup();
-    delete globalThis.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
   });
 
   // ── Loading and rendering ─────────────────────────────────────────────────
@@ -109,7 +147,7 @@ describe('MediaBrowser', () => {
       await mountBrowser();
 
       assert.equal(sent('GET', '/api/media/folders').length, 1);
-      assert.equal(browser.state.media.length, 3);
+      assert.equal(mb().state.media.length, 3);
       assert.equal(qa('.media-item').length, 3);
     });
 
@@ -118,7 +156,7 @@ describe('MediaBrowser', () => {
 
       assert.ok(q('.media-item[data-id="1"] img'), 'the image has a preview');
       assert.equal(q('.media-item[data-id="2"] img'), null);
-      assert.match(q('.media-item[data-id="2"] .file-icon').textContent, /▶/);
+      assert.match(el('.media-item[data-id="2"] .file-icon').textContent, /▶/);
     });
 
     test('a private file is flagged as such', async () => {
@@ -133,8 +171,8 @@ describe('MediaBrowser', () => {
 
       await mountBrowser();
 
-      assert.equal(browser.state.error, 'storage offline');
-      assert.match(q('.error-state').textContent, /storage offline/);
+      assert.equal(mb().state.error, 'storage offline');
+      assert.match(el('.error-state').textContent, /storage offline/);
     });
 
     test('an empty library says so', async () => {
@@ -150,8 +188,8 @@ describe('MediaBrowser', () => {
 
       await mountBrowser();
 
-      assert.deepEqual(browser.state.folders, []);
-      assert.equal(browser.state.media.length, 3);
+      assert.deepEqual(mb().state.folders, []);
+      assert.equal(mb().state.media.length, 3);
     });
   });
 
@@ -161,13 +199,13 @@ describe('MediaBrowser', () => {
     test('the type filter narrows both the listing and the folder tree', async () => {
       await mountBrowser();
 
-      const select = q('.mb-type-filter');
+      const select = el<HTMLSelectElement>('.mb-type-filter');
       select.value = 'video';
       fire(select, 'change');
       await settle();
 
       assert.equal(lastList().params.get('file_type'), 'video');
-      assert.equal(sent('GET', '/api/media/folders').at(-1).params.get('file_type'), 'video');
+      assert.equal(last(sent('GET', '/api/media/folders')).params.get('file_type'), 'video');
     });
 
     test('picking a folder chip scopes the listing to it', async () => {
@@ -178,24 +216,24 @@ describe('MediaBrowser', () => {
       click(chip);
       await settle();
 
-      assert.equal(browser.state.selectedFolder, '2024');
+      assert.equal(mb().state.selectedFolder, '2024');
       assert.equal(lastList().params.get('folder'), '2024');
     });
 
     test('a breadcrumb walks back out of a folder', async () => {
       await mountBrowser({ pickerMode: true });
-      browser.setState({ selectedFolder: '2024/08' });
+      mb().setState({ selectedFolder: '2024/08' });
 
       click(qa('.mb-breadcrumb-item')[0]);
       await settle();
 
-      assert.equal(browser.state.selectedFolder, null);
+      assert.equal(mb().state.selectedFolder, null);
     });
 
     test('paging asks for the next page of the same listing', async () => {
       await mountBrowser();
 
-      await browser._load({ page: 2 });
+      await mb()._load({ page: 2 });
 
       assert.equal(lastList().params.get('page'), '2');
     });
@@ -207,9 +245,9 @@ describe('MediaBrowser', () => {
     test('every image asks which posts use it, and the answer is shown', async () => {
       await mountBrowser();
 
-      assert.equal(sent('GET', '/api/posts').at(-1).params.get('q'), '/2024/08/harbour.jpg');
-      assert.deepEqual(browser.state.referringPostsState[1].posts.map(p => p.id), [5]);
-      assert.match(q('#ref-panel-1').textContent, /Harbour lights/);
+      assert.equal(last(sent('GET', '/api/posts')).params.get('q'), '/2024/08/harbour.jpg');
+      assert.deepEqual(mb().state.referringPostsState[1].posts.map((p: { id: number }) => p.id), [5]);
+      assert.match(el('#ref-panel-1').textContent, /Harbour lights/);
     });
 
     test('a video is not searched for — only images can be used in a post body', async () => {
@@ -222,8 +260,8 @@ describe('MediaBrowser', () => {
       routes['GET /api/posts'] = () => fail(500, 'search is down');
       await mountBrowser();
 
-      assert.equal(browser.state.referringPostsState[1].error, 'search is down');
-      assert.match(q('#ref-panel-1 .referring-posts-error').textContent, /search is down/);
+      assert.equal(mb().state.referringPostsState[1].error, 'search is down');
+      assert.match(el('#ref-panel-1 .referring-posts-error').textContent, /search is down/);
     });
 
     test('an image used nowhere gets no panel at all', async () => {
@@ -246,49 +284,49 @@ describe('MediaBrowser', () => {
     test('the picker selects by clicking an item, and remembers the object', async () => {
       await mountBrowser({ pickerMode: true });
 
-      click(q('.media-item[data-id="1"]'));
+      click(el('.media-item[data-id="1"]'));
 
-      assert.deepEqual([...browser.state.selectedIds], [1]);
-      assert.deepEqual(browser.getSelectedItems().map(m => m.id), [1]);
+      assert.deepEqual([...mb().state.selectedIds], [1]);
+      assert.deepEqual(mb().getSelectedItems().map(m => m.id), [1]);
     });
 
     test('clicking again deselects and forgets it', async () => {
       await mountBrowser({ pickerMode: true });
 
-      browser._toggleSelection(1);
-      browser._toggleSelection(1);
+      mb()._toggleSelection(1);
+      mb()._toggleSelection(1);
 
-      assert.equal(browser.state.selectedIds.size, 0);
-      assert.deepEqual(browser.getSelectedItems(), []);
+      assert.equal(mb().state.selectedIds.size, 0);
+      assert.deepEqual(mb().getSelectedItems(), []);
     });
 
     test('the checkbox is a second way in to the same selection', async () => {
       await mountBrowser({ pickerMode: true });
 
-      fire(q('.media-item-check[data-id="3"]'), 'change');
+      fire(el('.media-item-check[data-id="3"]'), 'change');
 
-      assert.deepEqual([...browser.state.selectedIds], [3]);
+      assert.deepEqual([...mb().state.selectedIds], [3]);
     });
 
     test('a selection survives a folder change, which is the point of keeping the objects', async () => {
       await mountBrowser({ pickerMode: true });
-      browser._toggleSelection(1);
+      mb()._toggleSelection(1);
 
       routes['GET /api/media'] = () => ({ media: [AUDIO], page: 1, pages: 1, total: 1 });
-      await browser._load({ page: 1 });
+      await mb()._load({ page: 1 });
 
-      assert.deepEqual(browser.getSelectedItems().map(m => m.id), [1]);
+      assert.deepEqual(mb().getSelectedItems().map(m => m.id), [1]);
     });
 
     test('standalone: the selection bar reports the count and offers the actions', async () => {
       await mountBrowser();
-      browser.setState({ selectMode: true, selectedIds: new Set([1, 2]) });
+      mb().setState({ selectMode: true, selectedIds: new Set([1, 2]) });
 
-      assert.match(q('.mb-selection-count').textContent, /2 selected/);
-      assert.equal(q('#mb-sel-delete').disabled, false);
+      assert.match(el('.mb-selection-count').textContent, /2 selected/);
+      assert.equal(el<HTMLButtonElement>('#mb-sel-delete').disabled, false);
 
-      click(q('#mb-sel-cancel'));
-      assert.equal(browser.state.selectMode, false);
+      click(el('#mb-sel-cancel'));
+      assert.equal(mb().state.selectMode, false);
     });
   });
 
@@ -298,28 +336,28 @@ describe('MediaBrowser', () => {
     test('a single image is handed to the new-post editor', async () => {
       await mountBrowser();
 
-      click(q('.create-post-btn[data-id="1"]'));
+      click(el('.create-post-btn[data-id="1"]'));
 
       assert.equal(globalThis.sessionStorage.getItem('newPostInitialContent'), '/2024/08/harbour.jpg');
-      assert.equal(navigations.at(-1), '/light/posts/new');
+      assert.equal(last(navigations), '/light/posts/new');
     });
 
     test('a whole selection becomes one post, one path per line', async () => {
       await mountBrowser();
-      browser.setState({ selectMode: true });
-      browser._toggleSelection(1);
-      browser._toggleSelection(3);
+      mb().setState({ selectMode: true });
+      mb()._toggleSelection(1);
+      mb()._toggleSelection(3);
 
-      await browser._createPostFromSelected();
+      await mb()._createPostFromSelected();
 
       assert.equal(globalThis.sessionStorage.getItem('newPostInitialContent'), '/2024/08/harbour.jpg\n/2024/08/note.mp3');
-      assert.equal(browser.state.selectMode, false);
+      assert.equal(mb().state.selectMode, false);
     });
 
     test('an empty selection says so rather than opening a blank post', async () => {
       await mountBrowser();
 
-      await browser._createPostFromSelected();
+      await mb()._createPostFromSelected();
 
       assert.equal(getToast().type, 'error');
       assert.equal(navigations.length, 0);
@@ -332,8 +370,8 @@ describe('MediaBrowser', () => {
     test('a single file is confirmed first, then deleted and the list refreshed', async () => {
       await mountBrowser();
 
-      click(q('.delete-media-btn[data-id="1"]'));
-      assert.match(dialog().textContent, /harbour\.jpg/);
+      click(el('.delete-media-btn[data-id="1"]'));
+      assert.match(openDialog().textContent, /harbour\.jpg/);
       assert.equal(sent('DELETE', '/api/media/1').length, 0);
 
       acceptDialog();
@@ -346,8 +384,8 @@ describe('MediaBrowser', () => {
     test('cancelling deletes nothing', async () => {
       await mountBrowser();
 
-      click(q('.delete-media-btn[data-id="1"]'));
-      click(dialog().querySelector('.btn-secondary, .confirm-dialog__cancel'));
+      click(el('.delete-media-btn[data-id="1"]'));
+      click(must(openDialog().querySelector('.btn-secondary, .confirm-dialog__cancel'), 'a cancel button'));
       await settle();
 
       assert.equal(sent('DELETE', '/api/media/1').length, 0);
@@ -357,7 +395,7 @@ describe('MediaBrowser', () => {
       routes['DELETE /api/media/1'] = () => fail(409, 'still in use');
       await mountBrowser();
 
-      await browser._deleteMedia(1);
+      await mb()._deleteMedia(1);
 
       assert.equal(getToast().type, 'error');
     });
@@ -365,23 +403,23 @@ describe('MediaBrowser', () => {
     test('a bulk delete names the count and tallies the failures', async () => {
       routes['DELETE /api/media/3'] = () => fail(500, 'nope');
       await mountBrowser();
-      browser.setState({ selectMode: true, selectedIds: new Set([1, 3]) });
+      mb().setState({ selectMode: true, selectedIds: new Set([1, 3]) });
 
-      browser._deleteSelected();
+      mb()._deleteSelected();
       await settle();
-      assert.match(dialog().textContent, /Delete 2 files/);
+      assert.match(openDialog().textContent, /Delete 2 files/);
       acceptDialog();
       await settle();
 
       assert.match(getToast().message, /Deleted 1, 1 failed/);
-      assert.equal(browser.state.selectMode, false);
-      assert.deepEqual(browser.getSelectedItems(), []);
+      assert.equal(mb().state.selectMode, false);
+      assert.deepEqual(mb().getSelectedItems(), []);
     });
 
     test('a bulk delete with nothing selected asks nothing', async () => {
       await mountBrowser();
 
-      browser._deleteSelected();
+      mb()._deleteSelected();
       await settle();
 
       assert.equal(dialog(), null);
@@ -391,14 +429,15 @@ describe('MediaBrowser', () => {
   describe('renaming', () => {
     test('a new name is sanitised and sent', async () => {
       await mountBrowser();
-      browser._renameMedia = async (id, name) => { browser._renamed = [id, name]; };
+      let renamed: [number, string] | null = null;
+      mb()._renameMedia = async (id, name) => { renamed = [id, name]; };
 
-      click(q('.rename-media-btn[data-id="1"]'));
-      const input = dialog().querySelector('input');
+      click(el('.rename-media-btn[data-id="1"]'));
+      const input = dialogInput();
       type(input, 'sea front!!.jpg');
       acceptDialog();
 
-      assert.deepEqual(browser._renamed, [1, 'sea frontjpg']);
+      assert.deepEqual(renamed, [1, 'sea frontjpg']);
     });
 
     test('the prompt is prefilled with the real filename, not an escaped copy', async () => {
@@ -411,18 +450,18 @@ describe('MediaBrowser', () => {
         page: 1, pages: 1, total: 1,
       });
       await mountBrowser();
-      const btn = q('.rename-media-btn[data-id="1"]');
+      const btn = el('.rename-media-btn[data-id="1"]');
       assert.equal(btn.getAttribute('data-name'), 'a & b.png');
 
       click(btn);
-      assert.equal(dialog().querySelector('input').value, 'a & b.png');
+      assert.equal(dialogInput().value, 'a & b.png');
     });
 
     test('a name with nothing usable left in it is refused', async () => {
       await mountBrowser();
 
-      click(q('.rename-media-btn[data-id="1"]'));
-      type(dialog().querySelector('input'), '!!!');
+      click(el('.rename-media-btn[data-id="1"]'));
+      type(dialogInput(), '!!!');
       acceptDialog();
       await settle();
 
@@ -435,7 +474,7 @@ describe('MediaBrowser', () => {
 
       // Sanitiser-clean to begin with, so accepting the prefilled value is
       // genuinely a no-op rather than a rename to a slightly different string.
-      browser._showRenamePrompt(1, 'harbour jpg');
+      mb()._showRenamePrompt(1, 'harbour jpg');
       acceptDialog();
       await settle();
 
@@ -445,10 +484,10 @@ describe('MediaBrowser', () => {
     test('the rename reaches the API and refreshes the listing', async () => {
       await mountBrowser();
 
-      await browser._renameMedia(1, 'sea front');
+      await mb()._renameMedia(1, 'sea front');
       await settle();
 
-      assert.equal(sent('POST', '/api/media/1/rename').at(-1).body.new_filename, 'sea front');
+      assert.deepEqual(last(sent('POST', '/api/media/1/rename')).body, { new_filename: 'sea front' });
       assert.match(getToast().message, /renamed/i);
     });
 
@@ -456,7 +495,7 @@ describe('MediaBrowser', () => {
       routes['POST /api/media/1/rename'] = () => fail(409, 'name taken');
       await mountBrowser();
 
-      await browser._renameMedia(1, 'sea front');
+      await mb()._renameMedia(1, 'sea front');
 
       assert.equal(getToast().type, 'error');
     });
@@ -465,17 +504,17 @@ describe('MediaBrowser', () => {
   // ── Uploading ─────────────────────────────────────────────────────────────
 
   describe('uploading', () => {
-    const file = name => new File([''], name, { type: 'image/jpeg' });
+    const file = (name: string) => new File([''], name, { type: 'image/jpeg' });
 
     test('files go up one at a time and the list is refreshed', async () => {
       await mountBrowser();
 
-      await browser._uploadFiles([file('a.jpg'), file('b.jpg')]);
+      await mb()._uploadFiles([file('a.jpg'), file('b.jpg')]);
       await settle();
 
       assert.equal(sent('POST', '/api/media/upload').length, 2);
       assert.match(getToast().message, /Uploaded 2/);
-      assert.equal(browser.state.uploading, false);
+      assert.equal(mb().state.uploading, false);
     });
 
     test('a failure is counted, not fatal', async () => {
@@ -483,7 +522,7 @@ describe('MediaBrowser', () => {
       routes['POST /api/media/upload'] = () => (++n === 1 ? fail(413, 'too large') : { id: 9, path: '/2024/08/b.jpg' });
       await mountBrowser();
 
-      await browser._uploadFiles([file('a.jpg'), file('b.jpg')]);
+      await mb()._uploadFiles([file('a.jpg'), file('b.jpg')]);
       await settle();
 
       assert.match(getToast().message, /Uploaded 1, 1 failed/);
@@ -493,7 +532,7 @@ describe('MediaBrowser', () => {
     test('uploading nothing is a no-op', async () => {
       await mountBrowser();
 
-      await browser._uploadFiles([]);
+      await mb()._uploadFiles([]);
 
       assert.equal(sent('POST', '/api/media/upload').length, 0);
     });
@@ -501,19 +540,19 @@ describe('MediaBrowser', () => {
     test('the picker pre-selects what was just uploaded', async () => {
       await mountBrowser({ pickerMode: true });
 
-      await browser._uploadFiles([file('new.jpg')]);
+      await mb()._uploadFiles([file('new.jpg')]);
       await settle();
 
-      assert.deepEqual(browser.getSelectedItems().map(m => m.id), [9]);
-      assert.ok(browser.state.selectedIds.has(9));
+      assert.deepEqual(mb().getSelectedItems().map(m => m.id), [9]);
+      assert.ok(mb().state.selectedIds.has(9));
     });
 
     test('the hidden file input is what the host page\'s Upload button reaches', async () => {
       await mountBrowser();
       let clicked = false;
-      q('#mb-file-input').addEventListener('click', () => { clicked = true; });
+      el('#mb-file-input').addEventListener('click', () => { clicked = true; });
 
-      browser.openFilePicker();
+      mb().openFilePicker();
 
       assert.equal(clicked, true);
     });
@@ -525,45 +564,45 @@ describe('MediaBrowser', () => {
     test('the panel starts hidden and the info button opens it', async () => {
       await mountBrowser();
 
-      assert.equal(q('#exif-panel-1').hidden, true);
-      click(q('.exif-toggle-btn[data-id="1"]'));
-      assert.equal(q('#exif-panel-1').hidden, false);
+      assert.equal(el('#exif-panel-1').hidden, true);
+      click(el('.exif-toggle-btn[data-id="1"]'));
+      assert.equal(el('#exif-panel-1').hidden, false);
     });
 
     test('the stored fields are shown as editable rows', async () => {
       await mountBrowser();
 
-      assert.equal(q('#exif-panel-1 .exif-key').value, 'Make');
-      assert.equal(q('#exif-panel-1 .exif-val').value, 'Canon');
+      assert.equal(el<HTMLInputElement>('#exif-panel-1 .exif-key').value, 'Make');
+      assert.equal(el<HTMLInputElement>('#exif-panel-1 .exif-val').value, 'Canon');
     });
 
     test('a row can be added and removed', async () => {
       await mountBrowser();
-      const rows = () => browser.container.querySelectorAll('#exif-panel-1 .exif-rows tr').length;
+      const rows = () => mb().container.querySelectorAll('#exif-panel-1 .exif-rows tr').length;
       const before = rows();
 
-      click(q('#exif-panel-1 .exif-add-btn'));
+      click(el('#exif-panel-1 .exif-add-btn'));
       assert.equal(rows(), before + 1);
 
-      click([...browser.container.querySelectorAll('#exif-panel-1 .exif-delete-btn')].at(-1));
+      click(last(qa('#exif-panel-1 .exif-delete-btn')));
       assert.equal(rows(), before);
     });
 
     test('saving sends the non-empty fields', async () => {
       await mountBrowser();
 
-      click(q('#exif-panel-1 .exif-save-btn'));
+      click(el('#exif-panel-1 .exif-save-btn'));
       await settle();
 
-      assert.deepEqual(sent('PUT', '/api/media/1/exif').at(-1).body, { Make: 'Canon' });
+      assert.deepEqual(last(sent('PUT', '/api/media/1/exif')).body, { Make: 'Canon' });
       assert.match(getToast().message, /EXIF saved/);
     });
 
     test('a value with punctuation in it is refused before anything is sent', async () => {
       await mountBrowser();
-      type(q('#exif-panel-1 .exif-val'), 'Canon <script>');
+      type(el('#exif-panel-1 .exif-val'), 'Canon <script>');
 
-      click(q('#exif-panel-1 .exif-save-btn'));
+      click(el('#exif-panel-1 .exif-save-btn'));
       await settle();
 
       assert.match(getToast().message, /Invalid characters in: Make/);
@@ -574,7 +613,7 @@ describe('MediaBrowser', () => {
       routes['PUT /api/media/1/exif'] = () => fail(500, 'file is read-only');
       await mountBrowser();
 
-      click(q('#exif-panel-1 .exif-save-btn'));
+      click(el('#exif-panel-1 .exif-save-btn'));
       await settle();
 
       assert.equal(getToast().type, 'error');
@@ -584,12 +623,12 @@ describe('MediaBrowser', () => {
       routes['POST /api/media/1/revert-exif'] = () => ({ metadata: { Make: 'Nikon', Lens: '50mm' } });
       await mountBrowser();
 
-      click(q('#exif-panel-1 .exif-revert-btn'));
-      assert.match(dialog().textContent, /overwrite your edits/);
+      click(el('#exif-panel-1 .exif-revert-btn'));
+      assert.match(openDialog().textContent, /overwrite your edits/);
       acceptDialog();
       await settle();
 
-      assert.deepEqual(qa('#exif-panel-1 .exif-key').map(i => i.value), ['Make', 'Lens']);
+      assert.deepEqual(qa<HTMLInputElement>('#exif-panel-1 .exif-key').map(i => i.value), ['Make', 'Lens']);
       assert.match(getToast().message, /reverted/i);
     });
 
@@ -597,7 +636,7 @@ describe('MediaBrowser', () => {
       routes['POST /api/media/1/revert-exif'] = () => fail(500, 'no original kept');
       await mountBrowser();
 
-      click(q('#exif-panel-1 .exif-revert-btn'));
+      click(el('#exif-panel-1 .exif-revert-btn'));
       acceptDialog();
       await settle();
 
@@ -608,12 +647,12 @@ describe('MediaBrowser', () => {
       routes['POST /api/media/1/reextract'] = () => ({ metadata: { Make: 'Leica' } });
       await mountBrowser();
 
-      click(q('#exif-panel-1 .exif-reextract-btn'));
-      assert.match(dialog().textContent, /overwrite manual EXIF edits/);
+      click(el('#exif-panel-1 .exif-reextract-btn'));
+      assert.match(openDialog().textContent, /overwrite manual EXIF edits/);
       acceptDialog();
       await settle();
 
-      assert.deepEqual(qa('#exif-panel-1 .exif-key').map(i => i.value), ['Make']);
+      assert.deepEqual(qa<HTMLInputElement>('#exif-panel-1 .exif-key').map(i => i.value), ['Make']);
       assert.match(getToast().message, /re-extracted/i);
     });
 
@@ -621,7 +660,7 @@ describe('MediaBrowser', () => {
       routes['POST /api/media/1/reextract'] = () => ({ metadata: {} });
       await mountBrowser();
 
-      click(q('#exif-panel-1 .exif-reextract-btn'));
+      click(el('#exif-panel-1 .exif-reextract-btn'));
       acceptDialog();
       await settle();
 
@@ -632,7 +671,7 @@ describe('MediaBrowser', () => {
       routes['POST /api/media/1/reextract'] = () => fail(500, 'file missing');
       await mountBrowser();
 
-      click(q('#exif-panel-1 .exif-reextract-btn'));
+      click(el('#exif-panel-1 .exif-reextract-btn'));
       acceptDialog();
       await settle();
 
@@ -653,7 +692,7 @@ describe('MediaBrowser', () => {
     test('the offer appears only when a video on the page lacks a poster', async () => {
       await mountBrowser();
 
-      assert.match(q('.mb-posters-btn').textContent, /Poster 1 video/);
+      assert.match(el('.mb-posters-btn').textContent, /Poster 1 video/);
     });
 
     test('nothing to backfill, nothing offered', async () => {
@@ -672,20 +711,20 @@ describe('MediaBrowser', () => {
     test('a run that decodes nothing says so instead of claiming success', async () => {
       await mountBrowser();
 
-      await browser._backfillPosters();
+      await mb()._backfillPosters();
       await settle();
 
       // No decoder in this environment, so every capture fails — which is the
       // branch that has to report rather than silently do nothing.
       assert.match(getToast().message, /could not be decoded/);
-      assert.equal(browser.state.capturingPosters, false);
+      assert.equal(mb().state.capturingPosters, false);
     });
 
     test('a run already in flight is not started twice', async () => {
       await mountBrowser();
-      browser.state.capturingPosters = true;
+      mb().state.capturingPosters = true;
 
-      await browser._backfillPosters();
+      await mb()._backfillPosters();
 
       assert.equal(getToast(), null);
     });
@@ -694,12 +733,17 @@ describe('MediaBrowser', () => {
   // ── Copying paths ─────────────────────────────────────────────────────────
 
   describe('copying a path', () => {
+    /** Install a clipboard on the harness navigator, or take it away. */
+    const setClipboard = (clipboard: Partial<Clipboard> | undefined) => {
+      Object.assign(globalThis.navigator, { clipboard: clipboard && mock<Clipboard>(clipboard) });
+    };
+
     test('the path goes to the clipboard', async () => {
-      let copied = null;
-      globalThis.navigator.clipboard = { writeText: async t => { copied = t; } };
+      let copied: string | null = null;
+      setClipboard({ writeText: async t => { copied = t; } });
       await mountBrowser();
 
-      click(q('.copy-path-btn[data-path="/2024/08/harbour.jpg"]'));
+      click(el('.copy-path-btn[data-path="/2024/08/harbour.jpg"]'));
       await settle();
 
       assert.equal(copied, '/2024/08/harbour.jpg');
@@ -707,20 +751,20 @@ describe('MediaBrowser', () => {
     });
 
     test('a rejected clipboard write is reported', async () => {
-      globalThis.navigator.clipboard = { writeText: async () => { throw new Error('denied'); } };
+      setClipboard({ writeText: async () => { throw new Error('denied'); } });
       await mountBrowser();
 
-      click(q('.copy-path-btn[data-path="/2024/08/harbour.jpg"]'));
+      click(el('.copy-path-btn[data-path="/2024/08/harbour.jpg"]'));
       await settle();
 
       assert.equal(getToast().message, 'Copy failed');
     });
 
     test('no clipboard at all — over plain HTTP — says why', async () => {
-      globalThis.navigator.clipboard = undefined;
+      setClipboard(undefined);
       await mountBrowser();
 
-      click(q('.copy-path-btn[data-path="/2024/08/harbour.jpg"]'));
+      click(el('.copy-path-btn[data-path="/2024/08/harbour.jpg"]'));
       await settle();
 
       assert.match(getToast().message, /requires HTTPS/);
@@ -731,21 +775,19 @@ describe('MediaBrowser', () => {
 
   describe('teardown', () => {
     /** Drop `files` on the document, the way a drag from the desktop ends. */
-    const dropFiles = (files) => {
-      const evt = new globalThis.Event('drop', { bubbles: true, cancelable: true });
-      evt.dataTransfer = { types: ['Files'], files };
-      dom.document.dispatchEvent(evt);
+    const dropFiles = (files: Partial<File>[]) => {
+      fire(dom.document, 'drop', { dataTransfer: { types: ['Files'], files } });
     };
 
     test('unmounting drops the drag listeners it registered', async () => {
       await mountBrowser();
-      const uploaded = [];
-      browser._uploadFiles = (files) => uploaded.push(files);
+      const uploaded: File[][] = [];
+      mb()._uploadFiles = async (files) => { uploaded.push(files); };
 
       dropFiles([{ name: 'a.jpg' }]);
       assert.equal(uploaded.length, 1, 'the browser answers a desktop drop while mounted');
 
-      browser.unmount();
+      mb().unmount();
       dropFiles([{ name: 'b.jpg' }]);
       browser = null;
 
@@ -754,11 +796,11 @@ describe('MediaBrowser', () => {
 
     test('re-rendering does not accumulate a second set of drop handlers', async () => {
       await mountBrowser();
-      const uploaded = [];
-      browser._uploadFiles = (files) => uploaded.push(files);
+      const uploaded: File[][] = [];
+      mb()._uploadFiles = async (files) => { uploaded.push(files); };
 
-      browser.setState({ view: 'list' });
-      browser.setState({ view: 'grid' });
+      mb().setState({ view: 'list' });
+      mb().setState({ view: 'grid' });
       dropFiles([{ name: 'a.jpg' }]);
 
       assert.equal(uploaded.length, 1, 'one upload, not one per render');
