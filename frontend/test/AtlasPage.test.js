@@ -86,6 +86,30 @@ describe('AtlasPage lazy cloud loading', () => {
     return tag;
   }
 
+  test('_repositionCloud moves satellites and edges to the anchor offsets', () => {
+    const page = loaded();
+    const at = (x, y) => ({ x, y, add: ([dx, dy]) => at(x + dx, y + dy) });
+    page._map = {
+      latLngToContainerPoint: () => at(100, 100),
+      containerPointToLatLng: p => [p.x, p.y],
+    };
+    const moved = {};
+    const marker = key => ({ setLatLng: ll => { moved[key] = ll; } });
+    let edgeEnds = null;
+    page._cloud = {
+      anchorLatLng: [0, 0],
+      nodePos: new Map([['t5', { dx: 10, dy: -5 }], ['p10', { dx: -20, dy: 0 }]]),
+      sats: [{ key: 't5', marker: marker('t5') }, { key: 'gone', marker: marker('gone') }],
+      edges: [
+        { a: 'p10', b: 't5', line: { setLatLngs: ends => { edgeEnds = ends; } } },
+        { a: 'p10', b: 'gone', line: { setLatLngs: () => assert.fail('an edge to a missing node must not move') } },
+      ],
+    };
+    page._repositionCloud();
+    assert.deepEqual(moved, { t5: [110, 95] });
+    assert.deepEqual(edgeEnds, [[80, 100], [110, 95]]);
+  });
+
   test('_buildIndexes indexes only tag (marker) nodes', () => {
     const page = loaded();
     assert.equal(page._tagsById.size, 2);
