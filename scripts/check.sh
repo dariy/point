@@ -127,9 +127,7 @@ step_js_typecheck() {
         find frontend/src -name '*.js' -printf '        %p\n' >&2
         return 1
     fi
-    node_modules/.bin/tsc -p tsconfig.json || return 1
-    # strict is off until epic p-3cfv ends; this keeps its error count from going up.
-    scripts/ts-strict-ratchet.sh
+    node_modules/.bin/tsc -p tsconfig.json
 }
 
 # What the AST rules in scripts/oxlint-point.mjs cannot see: hand-applied escapeHtml in

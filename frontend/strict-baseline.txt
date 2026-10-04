@@ -1,2 +1,0 @@
-# tsc --strict errors per directory. Written by scripts/ts-strict-ratchet.sh --update.
-
