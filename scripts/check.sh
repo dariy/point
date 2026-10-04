@@ -144,15 +144,25 @@ step_vendor_sinks() {
     "$SCRIPT_DIR/check-vendor-sinks.sh"
 }
 
+# Ratchet: the count of .js test files must not go up. New tests are .ts.
+# Lower JS_TEST_BASELINE when a rename to .ts lowers the count.
+JS_TEST_BASELINE=107
+
 # Coverage is collected in the same pass (V8 instrumentation, no extra runner)
 # and written as lcov for the gate below and for codecov in CI.
 step_js_test() {
     cd "$ROOT_DIR"
+    local js_tests
+    js_tests=$(find frontend/test -maxdepth 1 -name '*.test.js' | wc -l)
+    if [ "$js_tests" -gt "$JS_TEST_BASELINE" ]; then
+        echo "  FAIL  $js_tests .js test files, baseline $JS_TEST_BASELINE (write new tests as .ts)" >&2
+        return 1
+    fi
     node --test --experimental-test-coverage \
         --test-coverage-include='frontend/src/**' \
         --test-reporter=spec --test-reporter-destination=stdout \
         --test-reporter=lcov --test-reporter-destination=coverage-frontend.lcov \
-        frontend/test/*.test.js
+        frontend/test/*.test.[jt]s
 }
 
 step_js_coverage() {
