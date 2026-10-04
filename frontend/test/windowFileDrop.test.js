@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupDOM } from './helpers/dom.js';
+import { setupDOM } from './helpers/dom.ts';
 import { attachWindowFileDrop } from '../src/utils/windowFileDrop.ts';
 
 /** A drag event carrying a dataTransfer linkedom does not model itself. */

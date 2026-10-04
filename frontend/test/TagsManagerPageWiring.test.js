@@ -23,7 +23,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, check, fire, type } from './helpers/dom.js';
+import { setupDOM, click, check, fire, type } from './helpers/dom.ts';
 import { getToast, setToast, setUser } from '../src/store.ts';
 
 const tag = (id, name, over = {}) => ({

@@ -31,7 +31,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, check, fire, type } from './helpers/dom.js';
+import { setupDOM, click, check, fire, type } from './helpers/dom.ts';
 import { getSettings, getToast, setSettings, setToast, setUser } from '../src/store.ts';
 
 /** Home, About > Team, Blog — one nested branch, roots either side of it. */

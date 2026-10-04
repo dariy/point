@@ -11,7 +11,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, fire, check } from './helpers/dom.js';
+import { setupDOM, click, fire, check } from './helpers/dom.ts';
 import {
   syncIndeterminate,
   filterToggleTree,

@@ -6,7 +6,7 @@ describe('SyncQueueSection', () => {
   let SyncQueueSection;
 
   before(async () => {
-    const domHelper = await import('./helpers/dom.js');
+    const domHelper = await import('./helpers/dom.ts');
     dom = domHelper.setupDOM();
     ({ SyncQueueSection } = await import('../src/components/light/sections/SyncQueueSection.ts'));
   });

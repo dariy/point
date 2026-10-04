@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.js';
+import { setupDOM } from './helpers/dom.ts';
 import { reconcileList, setKey, KEY_ATTR } from '../src/utils/reconcileList.ts';
 
 /**

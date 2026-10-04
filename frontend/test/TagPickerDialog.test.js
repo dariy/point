@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, type, check } from './helpers/dom.js';
+import { setupDOM, click, type, check } from './helpers/dom.ts';
 import { html, raw } from '../src/utils/helpers.ts';
 
 /** Let the confirm handler's async body settle. */

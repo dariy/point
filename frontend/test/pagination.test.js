@@ -1,7 +1,7 @@
 import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click } from './helpers/dom.js';
+import { setupDOM, click } from './helpers/dom.ts';
 
 /**
  * The paginator normally runs 1…pages. The owner's home feed lowers its left

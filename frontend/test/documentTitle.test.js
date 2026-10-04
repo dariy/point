@@ -1,6 +1,6 @@
 import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupDOM } from './helpers/dom.js';
+import { setupDOM } from './helpers/dom.ts';
 
 /**
  * The tab title is set per page but reset centrally.

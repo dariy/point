@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { setupDOM, fire, click } from './helpers/dom.js';
+import { setupDOM, fire, click } from './helpers/dom.ts';
 import { setNavTags, setRoute, setSettings } from '../src/store.ts';
 import { PostCard } from '../src/components/public/PostCard.ts';
 

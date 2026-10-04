@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";
-import { setupDOM } from "./helpers/dom.js";
+import { setupDOM } from "./helpers/dom.ts";
 import { BackupsSection } from "../src/components/light/sections/BackupsSection.ts";
 import * as gestures from "../src/core/gestures.ts";
 

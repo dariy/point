@@ -17,7 +17,7 @@ describe('OfflineDataSection', () => {
   let OfflineDataSection;
 
   before(async () => {
-    const domHelper = await import('./helpers/dom.js');
+    const domHelper = await import('./helpers/dom.ts');
     dom = domHelper.setupDOM();
     globalThis.window.__MEDIA__ = { gen: 'c0ffee01', sizes: [128, 256, 512, 1024] };
     ({ OfflineDataSection } = await import(

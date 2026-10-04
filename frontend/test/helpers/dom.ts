@@ -8,7 +8,7 @@
  * this provides, without a browser.
  *
  * Usage:
- *   import { setupDOM } from './helpers/dom.js';
+ *   import { setupDOM } from './helpers/dom.ts';
  *   const dom = setupDOM();            // installs globals
  *   ...
  *   dom.cleanup();                     // restores whatever was there before

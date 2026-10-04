@@ -15,7 +15,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, check, fire, type } from './helpers/dom.js';
+import { setupDOM, click, check, fire, type } from './helpers/dom.ts';
 
 const TAGS = [
   { id: 1, name: 'Travel',  slug: 'travel',  parents: [], children: [{ id: 3 }], post_count: 0 },

@@ -16,7 +16,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.js';
+import { setupDOM } from './helpers/dom.ts';
 import { OWNER_USERNAME } from '../src/utils/passwordForm.ts';
 
 /** Render a page component and hand back its markup as a string. */

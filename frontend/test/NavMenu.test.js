@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupDOM } from './helpers/dom.js';
+import { setupDOM } from './helpers/dom.ts';
 import { NavMenu } from '../src/plugins/nav-menu/NavMenu.ts';
 import { setUser, store } from '../src/store.ts';
 import { pluginHost } from '../src/core/pluginHost.ts';

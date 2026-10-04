@@ -11,7 +11,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, fire } from './helpers/dom.js';
+import { setupDOM, fire } from './helpers/dom.ts';
 
 const settle = () => new Promise(r => setImmediate(r));
 const escape = () => fire(document, 'keydown', { key: 'Escape' });

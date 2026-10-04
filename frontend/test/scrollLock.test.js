@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click } from './helpers/dom.js';
+import { setupDOM, click } from './helpers/dom.ts';
 
 /**
  * The body scroll lock overlays take out while they are open.

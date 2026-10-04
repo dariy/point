@@ -5,7 +5,7 @@ import { linkify as _linkify } from "../src/utils/helpers.ts";
 // linkify returns the RawHtml html`` produces; assert.equal wants a primitive.
 const linkify = (...a) => String(_linkify(...a));
 import { beforeEach, afterEach } from "node:test";
-import { setupDOM } from "./helpers/dom.js";
+import { setupDOM } from "./helpers/dom.ts";
 
 test("helpers", async (t) => {
   let dom;

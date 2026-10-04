@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.js';
+import { setupDOM } from './helpers/dom.ts';
 import { captureInteraction, preserveInteraction } from '../src/utils/preserveInteraction.ts';
 
 /**
@@ -14,7 +14,7 @@ import { captureInteraction, preserveInteraction } from '../src/utils/preserveIn
  *
  * linkedom has no focus model, so the harness supplies the two halves a browser
  * has: el.focus() setting document.activeElement, and setSelectionRange()
- * (patched in helpers/dom.js) recording the caret.
+ * (patched in helpers/dom.ts) recording the caret.
  */
 
 let dom;

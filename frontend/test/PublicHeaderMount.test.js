@@ -10,7 +10,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click } from './helpers/dom.js';
+import { setupDOM, click } from './helpers/dom.ts';
 import { setSettings, setUser } from '../src/store.ts';
 import { pluginHost } from '../src/core/pluginHost.ts';
 

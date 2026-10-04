@@ -9,7 +9,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.js';
+import { setupDOM } from './helpers/dom.ts';
 
 function markupOf(PageClass, state) {
   const page = new PageClass(document.createElement('div'), {});

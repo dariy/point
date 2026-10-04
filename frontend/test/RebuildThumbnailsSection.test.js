@@ -10,7 +10,7 @@ describe('RebuildThumbnailsSection', () => {
   let click;
 
   before(async () => {
-    const domHelper = await import('./helpers/dom.js');
+    const domHelper = await import('./helpers/dom.ts');
     dom = domHelper.setupDOM();
     click = domHelper.click;
 

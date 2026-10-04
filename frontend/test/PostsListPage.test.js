@@ -16,7 +16,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, fire, type, check } from './helpers/dom.js';
+import { setupDOM, click, fire, type, check } from './helpers/dom.ts';
 import { getToast, setSettings, setToast, setUser } from '../src/store.ts';
 import { clearPostReadCache } from '../src/api/posts.ts';
 
