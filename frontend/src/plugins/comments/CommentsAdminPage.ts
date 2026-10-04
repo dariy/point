@@ -22,12 +22,38 @@ import {
   X_SVG,
 } from "../../utils/icons.ts";
 
-function textOf(html: string) {
+interface RemarkUser {
+  id: string;
+  name?: string;
+  time?: string;
+}
+
+interface RemarkComment {
+  id: string;
+  text?: string;
+  title?: string;
+  time?: string;
+  user?: RemarkUser;
+  locator?: { url?: string; title?: string };
+}
+
+interface ConfirmOpts {
+  title: string;
+  message: string;
+  confirmText: string;
+  onConfirm: () => void;
+}
+
+function errMessage(err: unknown) {
+  return (err as { message?: string }).message;
+}
+
+function textOf(html: string | undefined) {
   return parseMarkup(html || "", "text/html").body.textContent.trim();
 }
 
 export default class CommentsAdminPage extends Component {
-  _swipeCleanup: (() => void) | null;
+  _swipeCleanup: (() => void) | null = null;
   constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
@@ -48,9 +74,9 @@ export default class CommentsAdminPage extends Component {
    * outlives all of it.
    */
   actions = {
-    delete(e, el) { this._deleteComment(this.state.comments[Number(el.dataset.i)]); },
-    block(e, el) { this._blockUser(this.state.comments[Number(el.dataset.i)]?.user); },
-    unblock(e, el) { this._unblock(this.state.blocked[Number(el.dataset.i)]); },
+    delete(this: CommentsAdminPage, _e: Event, el: Element) { this._deleteComment(this.state.comments[Number((el as HTMLElement).dataset.i)]); },
+    block(this: CommentsAdminPage, _e: Event, el: Element) { this._blockUser(this.state.comments[Number((el as HTMLElement).dataset.i)]?.user); },
+    unblock(this: CommentsAdminPage, _e: Event, el: Element) { this._unblock(this.state.blocked[Number((el as HTMLElement).dataset.i)]); },
   };
 
   render() {
@@ -111,12 +137,12 @@ export default class CommentsAdminPage extends Component {
       </div>`;
   }
 
-  _renderRecent(comments) {
+  _renderRecent(comments: RemarkComment[]) {
     const { selectMode, selectedIds } = this.state;
     if (!comments.length) return html`<p class="empty-state">No comments yet.</p>`;
 
     const tableRows = comments
-      .map((c, i) => {
+      .map((c: RemarkComment, i: number) => {
         const url = c.locator?.url || "";
         const name = c.user?.name || c.user?.id || "unknown";
         const isChecked = selectedIds.has(i);
@@ -155,7 +181,7 @@ export default class CommentsAdminPage extends Component {
       </div>`;
 
     const cardRows = comments
-      .map((c, i) => {
+      .map((c: RemarkComment, i: number) => {
         const url = c.locator?.url || "";
         const name = c.user?.name || c.user?.id || "unknown";
         const isChecked = selectedIds.has(i);
@@ -187,12 +213,12 @@ export default class CommentsAdminPage extends Component {
     return html`${tableHTML}${cardHTML}`;
   }
 
-  _renderBlocked(blocked) {
+  _renderBlocked(blocked: RemarkUser[]) {
     const { selectMode, selectedIds } = this.state;
     if (!blocked.length) return html`<p class="empty-state">No blocked users.</p>`;
 
     const tableRows = blocked
-      .map((u, i) => {
+      .map((u: RemarkUser, i: number) => {
         const isChecked = selectedIds.has(i);
         return html`
         <tr data-i="${i}" class="post-row-main">
@@ -223,7 +249,7 @@ export default class CommentsAdminPage extends Component {
       </div>`;
 
     const cardRows = blocked
-      .map((u, i) => {
+      .map((u: RemarkUser, i: number) => {
         const isChecked = selectedIds.has(i);
         return html`
         <div class="post-card${isChecked ? " is-selected" : ""}" data-i="${i}">
@@ -288,16 +314,17 @@ export default class CommentsAdminPage extends Component {
           this.state.tab === "recent"
             ? this.state.comments
             : this.state.blocked;
-        const selectedIds = new Set();
-        if (e.target.checked) items.forEach((_, i) => selectedIds.add(i));
+        const selectedIds = new Set<number>();
+        if ((e.target as HTMLInputElement).checked) items.forEach((_: unknown, i: number) => selectedIds.add(i));
         this.setState({ selectMode: selectedIds.size > 0, selectedIds });
       });
 
     this.container.querySelectorAll(".select-row-cb").forEach((cb) => {
       cb.addEventListener("change", (e) => {
-        const i = Number(e.target.dataset.i);
+        const target = e.target as HTMLInputElement;
+        const i = Number(target.dataset.i);
         const selectedIds = new Set(this.state.selectedIds);
-        if (e.target.checked) selectedIds.add(i);
+        if (target.checked) selectedIds.add(i);
         else selectedIds.delete(i);
         this.setState({ selectedIds });
       });
@@ -326,12 +353,12 @@ export default class CommentsAdminPage extends Component {
     let startY = 0;
     let dragging = false;
     let decided = false;
-    let openCard = null;
+    let openCard: HTMLElement | null = null;
     let actionsWidth = 0;
     let dx = 0;
     const THRESHOLD_PX = 30;
 
-    const abortControllers = [];
+    const abortControllers: AbortController[] = [];
 
     const closeOpen = () => {
       if (!openCard) return;
@@ -445,7 +472,7 @@ export default class CommentsAdminPage extends Component {
       "click",
       (e) => {
         if (!openCard) return;
-        if (openCard.contains(e.target)) return;
+        if (openCard.contains(e.target as Node)) return;
         closeOpen();
       },
       { signal: containerAc.signal },
@@ -475,8 +502,9 @@ export default class CommentsAdminPage extends Component {
         comments: comments || [],
         blocked: blocked || [],
       });
-    } catch (err) {
+    } catch (e) {
       if (this._unmounted) return;
+      const err = e as { status?: number; message?: string };
       const msg =
         err.status === 503 || err.status === 502
           ? "The comments engine is not reachable. Is remark42 configured (REMARK_SECRET/REMARK_URL)?"
@@ -485,7 +513,7 @@ export default class CommentsAdminPage extends Component {
     }
   }
 
-  _confirm({ title, message, confirmText, onConfirm }) {
+  _confirm({ title, message, confirmText, onConfirm }: ConfirmOpts) {
     const mount = document.createElement("div");
     document.body.appendChild(mount);
     const dialog = new ConfirmDialog(mount, {
@@ -506,20 +534,20 @@ export default class CommentsAdminPage extends Component {
     dialog.mount();
   }
 
-  async _run(fn, okMsg) {
+  async _run(fn: () => Promise<unknown>, okMsg: string) {
     try {
       await fn();
       setToast({ message: okMsg, type: "success" });
       this._load();
     } catch (err) {
       setToast({
-        message: err.message || "Action failed.",
+        message: errMessage(err) || "Action failed.",
         type: "error",
       });
     }
   }
 
-  _deleteComment(c) {
+  _deleteComment(c: RemarkComment | undefined) {
     if (!c) return;
     this._confirm({
       title: "Delete comment",
@@ -536,7 +564,7 @@ export default class CommentsAdminPage extends Component {
     });
   }
 
-  _blockUser(user) {
+  _blockUser(user: RemarkUser | undefined) {
     if (!user?.id) return;
     this._confirm({
       title: "Block user",
@@ -553,7 +581,7 @@ export default class CommentsAdminPage extends Component {
     });
   }
 
-  _unblock(user) {
+  _unblock(user: RemarkUser | undefined) {
     if (!user?.id) return;
     this._run(
       () =>
@@ -588,7 +616,7 @@ export default class CommentsAdminPage extends Component {
           this._load();
         } catch (err) {
           setToast({
-            message: err.message || "Delete failed.",
+            message: errMessage(err) || "Delete failed.",
             type: "error",
           });
         }
@@ -624,7 +652,7 @@ export default class CommentsAdminPage extends Component {
           this._load();
         } catch (err) {
           setToast({
-            message: err.message || "Block failed.",
+            message: errMessage(err) || "Block failed.",
             type: "error",
           });
         }
@@ -656,7 +684,7 @@ export default class CommentsAdminPage extends Component {
           this._load();
         } catch (err) {
           setToast({
-            message: err.message || "Unblock failed.",
+            message: errMessage(err) || "Unblock failed.",
             type: "error",
           });
         }

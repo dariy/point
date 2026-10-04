@@ -16,9 +16,16 @@ export interface AdminNavMenu extends NavMenuConfig {
 }
 
 /** The fields an admin save sends. */
+/** One authored custom link in a save payload; children nest by depth. */
+export interface NavMenuItemInput {
+  name: string;
+  url: string;
+  children: NavMenuItemInput[];
+}
+
 export interface NavMenuUpdate {
   mode: string;
-  items: NavTagNode[];
+  items: NavMenuItemInput[];
   custom_markdown?: string;
   inline_max?: number;
   more_title?: string;

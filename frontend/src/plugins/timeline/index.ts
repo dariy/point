@@ -83,11 +83,11 @@ export class Timeline extends Component<TimelineProps> {
   _resizeObserver: ResizeObserver | undefined;
   _gestureController: GestureController | undefined;
   _popoverGesture: GestureController | null | undefined;
-  _isDragging: boolean;
-  _isPinching: boolean;
-  _ignoreNextClick: boolean;
-  _swipeDxBase: number;
-  _swipeDyBase: number;
+  _isDragging = false;
+  _isPinching = false;
+  _ignoreNextClick = false;
+  _swipeDxBase = 0;
+  _swipeDyBase = 0;
   _onMouseMove: ((e: MouseEvent) => void) | undefined;
   _onMouseUp: (() => void) | undefined;
   _emitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -98,8 +98,8 @@ export class Timeline extends Component<TimelineProps> {
   _animRaf: number | null | undefined;
   _lastCollision: Collision | undefined;
   _getX: ((year: number) => number) | undefined;
-  _velocity: number;
-  _lastPanTime: number;
+  _velocity = 0;
+  _lastPanTime = 0;
   _canvas: HTMLCanvasElement | undefined;
 
   constructor(container: HTMLElement, props: TimelineProps = {}) {
@@ -203,7 +203,7 @@ export class Timeline extends Component<TimelineProps> {
         this.setScope(pending);
       }
     } catch (err) {
-      if (err.status !== 404) {
+      if ((err as { status?: number }).status !== 404) {
         console.error("Timeline fetch failed:", err);
       }
       if (!this._unmounted) {
@@ -443,11 +443,11 @@ export class Timeline extends Component<TimelineProps> {
     });
     this.$(".timeline-nav-btn.prev")?.addEventListener("click", () => {
       const track = this.$(".timeline-track");
-      this._onPan(track.clientWidth * 0.5);
+      if (track) this._onPan(track.clientWidth * 0.5);
     });
     this.$(".timeline-nav-btn.next")?.addEventListener("click", () => {
       const track = this.$(".timeline-track");
-      this._onPan(-track.clientWidth * 0.5);
+      if (track) this._onPan(-track.clientWidth * 0.5);
     });
     trackWrapper.addEventListener("keydown", e => {
       if (e.key === "Escape") {
@@ -506,6 +506,7 @@ export class Timeline extends Component<TimelineProps> {
   }
   _ensureVisible(el: HTMLElement): void {
     const trackWrapper = this.$(".timeline-track-wrapper");
+    if (!trackWrapper) return;
     const rect = el.getBoundingClientRect();
     const trackRect = trackWrapper.getBoundingClientRect();
     if (rect.left < trackRect.left + 40) {
@@ -530,8 +531,8 @@ export class Timeline extends Component<TimelineProps> {
     }
   }
   _expandCluster(el: HTMLElement): void {
-    const minYear = parseInt(el.dataset.min, 10);
-    const maxYear = parseInt(el.dataset.max, 10);
+    const minYear = parseInt(el.dataset.min ?? "", 10);
+    const maxYear = parseInt(el.dataset.max ?? "", 10);
     if (this.props.mode === "filter") {
       // Center on the cluster, then emit via _emitRange so the current zoom/pan is
       // stashed in restoreView — otherwise the remount resets to single-year zoom.
@@ -673,16 +674,18 @@ export class Timeline extends Component<TimelineProps> {
       console.error("Failed to load locations:", err);
       setHTML(popoverEl, html`<p class="error">Failed to load locations.</p>`);
     }
-    this._popoverCloseHandler = (e: MouseEvent) => {
+    const closeHandler = (e: MouseEvent) => {
       if (!popoverEl.contains(e.target as Node) && !el.contains(e.target as Node)) {
         this._closePopover();
       }
     };
-    this._popoverScrollHandler = () => this._closePopover();
+    const scrollHandler = () => this._closePopover();
+    this._popoverCloseHandler = closeHandler;
+    this._popoverScrollHandler = scrollHandler;
     setTimeout(() => {
       if (!this._unmounted) {
-        document.addEventListener("click", this._popoverCloseHandler);
-        window.addEventListener("scroll", this._popoverScrollHandler, {
+        document.addEventListener("click", closeHandler);
+        window.addEventListener("scroll", scrollHandler, {
           passive: true
         });
       }
@@ -736,16 +739,18 @@ export class Timeline extends Component<TimelineProps> {
         }
       }
     });
-    this._popoverCloseHandler = (e: MouseEvent) => {
+    const closeHandler = (e: MouseEvent) => {
       if (!popoverEl.contains(e.target as Node) && !el.contains(e.target as Node)) {
         this._closePopover();
       }
     };
-    this._popoverScrollHandler = () => this._closePopover();
+    const scrollHandler = () => this._closePopover();
+    this._popoverCloseHandler = closeHandler;
+    this._popoverScrollHandler = scrollHandler;
     setTimeout(() => {
       if (!this._unmounted) {
-        document.addEventListener("click", this._popoverCloseHandler);
-        window.addEventListener("scroll", this._popoverScrollHandler, {
+        document.addEventListener("click", closeHandler);
+        window.addEventListener("scroll", scrollHandler, {
           passive: true
         });
       }
@@ -1082,7 +1087,7 @@ export class Timeline extends Component<TimelineProps> {
     if (zoom < MIN_ZOOM) {
       if (scaleDelta <= 1) return;
       this._zoomToFit(this.state.extent.min, this.state.extent.max);
-      this._gestureController.setZoomed(this.state.zoom > 1);
+      this._gestureController?.setZoomed(this.state.zoom > 1);
       return;
     }
     const maxZoom = this._computeMaxZoom();
@@ -1091,7 +1096,7 @@ export class Timeline extends Component<TimelineProps> {
     // Zooming out past the minimum snaps back to the collapsed state.
     if (rawZoom < MIN_ZOOM) {
       this._initCollapsed();
-      this._gestureController.setZoomed(false);
+      this._gestureController?.setZoomed(false);
       return;
     }
     const newZoom = Math.max(MIN_ZOOM, Math.min(maxZoom, rawZoom));
@@ -1103,7 +1108,7 @@ export class Timeline extends Component<TimelineProps> {
     const maxPanXz = trackWidth / 2 - EDGE_PAD;
     this.state.panX = Math.min(maxPanXz, Math.max(maxPanXz - usableWidth * newZoom, newPanX));
     this._layout();
-    this._gestureController.setZoomed(newZoom > 1);
+    this._gestureController?.setZoomed(newZoom > 1);
     this._debounceEmitRange();
   }
   _onPan(dx: number, isMomentum = false): void {
@@ -1132,7 +1137,7 @@ export class Timeline extends Component<TimelineProps> {
     if (zoom < 0.001) {
       if (Math.abs(dx) > 1) {
         this._zoomToFit(this.state.extent.min, this.state.extent.max);
-        this._gestureController.setZoomed(this.state.zoom > 1);
+        this._gestureController?.setZoomed(this.state.zoom > 1);
       }
       return;
     }
@@ -1287,8 +1292,8 @@ export class Timeline extends Component<TimelineProps> {
       if (!desired.has(k)) el.remove();
     }
     for (const [k, info] of desired) {
-      if (existing.has(k)) {
-        const el = existing.get(k);
+      const el = existing.get(k);
+      if (el) {
         el.style.left = `${info.x}px`;
         el.classList.toggle("active", info.active);
         const wasExpanded = el.dataset.expanded === "true";
@@ -1308,9 +1313,8 @@ export class Timeline extends Component<TimelineProps> {
           const parent = prevCollision.clusters.find(c => year >= c.minYear && year <= c.maxYear);
           if (parent) {
             const parentKey = `c:${parent.minYear}-${parent.maxYear}`;
-            if (existing.has(parentKey)) {
-              initialX = parseFloat(existing.get(parentKey).style.left);
-            }
+            const parentEl = existing.get(parentKey);
+            if (parentEl) initialX = parseFloat(parentEl.style.left);
           }
         }
         el.style.left = `${initialX}px`;
@@ -1363,7 +1367,8 @@ export class Timeline extends Component<TimelineProps> {
   }
   _collide(pills: TimelinePill[], getX: (year: number) => number): Collision {
     if (this.state.zoom < 0.01) {
-      const totalPosts = this.props.total > 0 ? this.props.total : pills.reduce((sum, p) => sum + p.post_count, 0);
+      const total = this.props.total ?? 0;
+      const totalPosts = total > 0 ? total : pills.reduce((sum, p) => sum + p.post_count, 0);
       return {
         visible: [],
         clusters: [{
@@ -1391,9 +1396,13 @@ export class Timeline extends Component<TimelineProps> {
       if (left < lastRight + minGap) {
         if (!currentCluster) {
           const lastPill = result.visible.pop();
-          currentCluster = {
+          currentCluster = lastPill ? {
             pills: [lastPill, p],
             minYear: lastPill.year,
+            maxYear: p.year
+          } : {
+            pills: [p],
+            minYear: p.year,
             maxYear: p.year
           };
         } else {
@@ -1417,6 +1426,7 @@ export class Timeline extends Component<TimelineProps> {
   _measurePillWidth(name: string): number {
     if (!this._canvas) this._canvas = document.createElement("canvas");
     const ctx = this._canvas.getContext("2d");
+    if (!ctx) return 24;
     ctx.font = "14px system-ui, -apple-system, sans-serif";
     const metrics = ctx.measureText(name);
     return metrics.width + 24;

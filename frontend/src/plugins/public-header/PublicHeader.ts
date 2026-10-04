@@ -77,15 +77,15 @@ interface SlotMount {
 }
 
 export class PublicHeader extends Component<PublicHeaderProps> {
-  _hasTrail: boolean;
-  _group: HTMLElement | null;
-  _inner: HTMLElement | null;
-  _slotMounts: SlotMount[];
-  _docListeners: [string, EventListener][];
-  _renderGen: number;
-  _fold: HeaderFold | null;
-  _dfPlugin: SlotMount | null;
-  _typeaheadActive: boolean;
+  _hasTrail = false;
+  _group: HTMLElement | null = null;
+  _inner: HTMLElement | null = null;
+  _slotMounts: SlotMount[] = [];
+  _docListeners: [string, EventListener][] = [];
+  _renderGen = 0;
+  _fold: HeaderFold | null = null;
+  _dfPlugin: SlotMount | null = null;
+  _typeaheadActive = false;
   render() {
     const {
       settings = {},
@@ -227,7 +227,8 @@ export class PublicHeader extends Component<PublicHeaderProps> {
         });
       });
     });
-    this._group = this.$('.site-header-group');
+    const group = this.$('.site-header-group')!;
+    this._group = group;
     this._inner = this.$('.site-header-inner');
 
     // Render generation: slot fills are async, so a fill that resolves after a
@@ -239,7 +240,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     // One fold controller owns the header's space; components and plugins
     // contribute ordered fold ops (see utils/headerFold.ts for the order map).
     this._fold = new HeaderFold({
-      observe: this._group,
+      observe: group,
       fits: () => this._rowFits()
     });
     this._registerCoreFolds();
@@ -258,7 +259,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     this.mountChild(SiteCrumb, '.site-crumb-mount', {
       settings: this.props.settings || {},
       hasTrail: this._hasTrail,
-      group: this._group,
+      group,
       fold: this._fold
     });
     if (pluginHost.hasSlot('breadcrumbs')) {
@@ -310,7 +311,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     const searchForm = this.$('#header-search');
     if (searchForm) {
       const input = searchForm.querySelector('input[type="search"]') as HTMLInputElement;
-      const toggleBtn = searchForm.querySelector('.search-toggle-btn');
+      const toggleBtn = searchForm.querySelector('.search-toggle-btn')!;
       const closeSearch = () => {
         searchForm.classList.remove('is-active');
         input.tabIndex = -1;
@@ -328,7 +329,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
         this._hideTypeahead();
         closeSearch();
       };
-      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      let debounceTimer: ReturnType<typeof setTimeout> | undefined;
       input.addEventListener('input', () => {
         const q = input.value.trim();
         clearTimeout(debounceTimer);
@@ -366,7 +367,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
         if (e.key === 'Escape') closeSearch();
       });
       this._onDocument('click', e => {
-        if (searchForm.classList.contains('is-active') && !searchForm.contains(e.target)) closeSearch();
+        if (searchForm.classList.contains('is-active') && !searchForm.contains(e.target as Node)) closeSearch();
       });
     }
 
@@ -398,7 +399,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
         }
       });
       this._onDocument('click', e => {
-        if (!navBurger.contains(e.target)) this._closeBurger();
+        if (!navBurger.contains(e.target as Node)) this._closeBurger();
       });
     }
 
@@ -445,6 +446,8 @@ export class PublicHeader extends Component<PublicHeaderProps> {
    */
   _registerCoreFolds() {
     const group = this._group;
+    const fold = this._fold;
+    if (!group || !fold) return;
     const checkEllipsis = () => {
       const folded = group.querySelectorAll('.crumb-pair.folded');
       folded.forEach(p => p.classList.remove('show-ellipsis'));
@@ -452,14 +455,14 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     };
 
     // 10 — ornament: the subtitle goes first.
-    this._fold.register(10, {
+    fold.register(10, {
       reset: () => group.classList.remove('fold-title'),
       ops: () => [() => group.classList.add('fold-title')]
     });
 
     // 20 — history: facet pairs, then ancestor tag pairs, left to right. The
     // blog-title (site) pair is spared here; it folds at 50.
-    this._fold.register(20, {
+    fold.register(20, {
       reset: () => {
         group.querySelectorAll('.crumb-pair.folded').forEach(p => {
           p.classList.remove('folded', 'show-ellipsis');
@@ -480,7 +483,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     });
 
     // 40 — the nav zone collapses into the burger.
-    this._fold.register(40, {
+    fold.register(40, {
       // Don't close an open burger here: every relayout runs reset, and opening
       // the burger dropdown can itself trigger one (a scrollbar appearing shifts
       // the observed width), which would slam the menu shut the instant it
@@ -492,7 +495,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
 
     // 50 — brand: the blog-title crumb folds, leaving the logo as the brand.
     // (Unfolding is covered by stage 20's reset, which unfolds every pair.)
-    this._fold.register(50, {
+    fold.register(50, {
       ops: () => {
         const sitePair = group.querySelector('#site-crumb-pair');
         return sitePair ? [() => {
@@ -503,7 +506,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     });
 
     // 60 — last resort: ellipsize the current crumb (click opens the full path).
-    this._fold.register(60, {
+    fold.register(60, {
       reset: () => group.classList.remove('fold-current'),
       ops: () => [() => group.classList.add('fold-current')]
     });
@@ -530,7 +533,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
   }
   _saveRecentSearch(q: string) {
     const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
-    const next = [q, ...recent.filter(s => s !== q)].slice(0, 5);
+    const next = [q, ...recent.filter((s: string) => s !== q)].slice(0, 5);
     localStorage.setItem('recentSearches', JSON.stringify(next));
   }
   async _showTypeahead(q: string, input: HTMLInputElement) {
@@ -609,7 +612,8 @@ export class PublicHeader extends Component<PublicHeaderProps> {
           });
           input.value = '';
         } else {
-          navigate(item.getAttribute('href'));
+          const href = item.getAttribute('href');
+          if (href) navigate(href);
         }
         this._hideTypeahead();
       });
