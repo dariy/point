@@ -1406,7 +1406,7 @@ The Oxlint rule `point/restricted-syntax` (`scripts/oxlint-point.mjs`, enabled i
 `.oxlintrc.json`) is what keeps the funnel a funnel: a bare `.innerHTML =`,
 `.outerHTML =` or `insertAdjacentHTML(` anywhere under `frontend/src` or
 `demo/mock` is an error, as is `raw()` around a template literal or a call, or
-an interpolation into an unquoted attribute. `frontend/test/eslintRules.test.js`
+an interpolation into an unquoted attribute. `frontend/test/eslintRules.test.ts`
 proves each of those rules still fires, in `.js` and `.ts`, and through each
 TypeScript cast (`as`, `!`, `satisfies`, `<T>`).
 

@@ -1,5 +1,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
+import type * as TagLinks from '../src/utils/tagLinks.ts';
 
 /**
  * Flyout tag links carry an ancestor trail as a `?path=` query
@@ -9,10 +11,10 @@ import assert from 'node:assert';
  * "/tags/mountains%3Fpath%3Dnature" URL (point-jrmy).
  */
 describe('parseTagUrl', () => {
-  let parseTagUrl, tagHref;
+  let parseTagUrl: typeof TagLinks.parseTagUrl, tagHref: typeof TagLinks.tagHref;
 
   before(async () => {
-    globalThis.window = { location: { origin: 'https://example.com' } };
+    globalThis.window = mock<typeof window>({ location: mock<Location>({ origin: 'https://example.com' }) });
     ({ parseTagUrl, tagHref } = await import('../src/utils/tagLinks.ts'));
   });
 

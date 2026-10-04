@@ -1,6 +1,10 @@
 import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupDOM } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type * as DocumentTitle from '../src/utils/documentTitle.ts';
+import type * as Router from '../src/router.ts';
+import type * as Store from '../src/store.ts';
 
 /**
  * The tab title is set per page but reset centrally.
@@ -11,17 +15,19 @@ import { setupDOM } from './helpers/dom.ts';
  * drive the real router over a stand-in route table rather than the real pages.
  */
 describe('document title', () => {
-  let dom;
-  let setPageTitle;
-  let siteTitle;
-  let router;
-  let setSettings;
-  let mounted;
+  let dom: ReturnType<typeof setupDOM>;
+  let setPageTitle: typeof DocumentTitle.setPageTitle;
+  let siteTitle: typeof DocumentTitle.siteTitle;
+  let router: typeof Router.router;
+  let setSettings: typeof Store.setSettings;
+  let mounted: string[];
 
   /** A page class that records its mount and optionally names itself. */
-  const page = (title) => ({
+  const page = (title: string | null) => ({
     default: class {
-      constructor(el, props) { this.el = el; this.props = props; }
+      el: HTMLElement;
+      props: Router.PageProps;
+      constructor(el: HTMLElement, props: Router.PageProps) { this.el = el; this.props = props; }
       mount() { mounted.push(title || '(untitled)'); if (title) setPageTitle(title); }
       unmount() {}
     },
@@ -40,7 +46,7 @@ describe('document title', () => {
 
   before(async () => {
     // /light routes ask the server whether setup is complete before rendering.
-    global.fetch = async () => ({
+    global.fetch = async () => mock<Response>({
       ok: true,
       status: 200,
       json: async () => ({ setup_complete: true }),

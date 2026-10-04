@@ -10,14 +10,29 @@ import { routes } from "../../demo/mock/routes.js";
 // that the mock narrows results the same way the backend does: a query that
 // matches nothing must come back empty rather than returning the whole site.
 
-/** Call a mock endpoint the way shim.js does, and return its body. */
-function call(method, path, { state, query = {}, params = {} } = {}) {
-  const entry = routes.find(([m, p]) => m === method && p === path);
-  assert.ok(entry, `no mock route for ${method} ${path}`);
-  return entry[2]({ state, query, params, body: null }).body;
+/** The fields of a mock response body that these tests read. */
+interface Body {
+  posts: { id: number }[];
+  tags: { slug: string; effective_hidden?: boolean; hidden_via?: number }[];
+  total: number;
+  pages: number;
 }
 
-const post = (id, extra = {}) => ({
+/**
+ * A mock route handler. The demo's JS route table holds handlers of several
+ * shapes, so the compiler cannot call an entry; this is the one cast.
+ */
+type Handler = (req: { state: unknown; query: object; params: object; body: null }) => { body: Body };
+
+/** Call a mock endpoint the way shim.js does, and return its body. */
+function call(method: string, path: string, { state, query = {}, params = {} }: { state?: unknown; query?: object; params?: object } = {}) {
+  const entry = routes.find(([m, p]) => m === method && p === path);
+  assert.ok(entry, `no mock route for ${method} ${path}`);
+  const handler = entry[2] as unknown as Handler;
+  return handler({ state, query, params, body: null }).body;
+}
+
+const post = (id: number, extra = {}) => ({
   id,
   slug: `post-${id}`,
   title: `Post ${id}`,
@@ -27,7 +42,7 @@ const post = (id, extra = {}) => ({
   ...extra,
 });
 
-const tag = (id, name, slug, extra = {}) => ({
+const tag = (id: number, name: string, slug: string, extra = {}) => ({
   id,
   name,
   slug,
@@ -53,7 +68,7 @@ function searchState() {
 }
 
 describe("GET /api/posts?q=", () => {
-  const search = (q, query = {}) =>
+  const search = (q: string, query = {}) =>
     call("GET", "/api/posts", { state: searchState(), query: { q, ...query } }).posts.map((p) => p.id);
 
   test("matches the title, case-insensitively", () => {
@@ -108,7 +123,7 @@ describe("GET /api/posts?q=", () => {
 
 describe("GET /api/tags?q=", () => {
   const state = searchState();
-  const search = (query) => call("GET", "/api/tags", { state, query }).tags.map((t) => t.slug);
+  const search = (query: object) => call("GET", "/api/tags", { state, query }).tags.map((t) => t.slug);
 
   test("matches name or slug", () => {
     assert.deepEqual(search({ q: "kyo" }), ["kyoto"]);

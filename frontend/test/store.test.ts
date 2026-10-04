@@ -25,16 +25,11 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.ts';
+import { spy } from './helpers/mock.ts';
 import { store } from '../src/store.ts';
 import { Component } from '../src/components/Component.ts';
 import { html } from '../src/utils/helpers.ts';
 
-/** A subscriber that records what it was called with. */
-const spy = () => {
-  const fn = (...args) => { fn.calls.push(args); };
-  fn.calls = [];
-  return fn;
-};
 
 /** A key no other test touches — the store is a process-wide singleton. */
 let n = 0;
@@ -180,7 +175,7 @@ describe('Store.subscribeSelector', () => {
     store.set(key, { blog_title: 'Point', posts_per_page: 12 });
 
     const seen = spy();
-    store.subscribeSelector(key, (s) => s.blog_title, seen);
+    store.subscribeSelector(key, (s: { blog_title?: string }) => s.blog_title, seen);
 
     store.merge(key, { posts_per_page: 24 });
     assert.equal(seen.calls.length, 0, 'an unrelated setting is not our business');
@@ -194,7 +189,7 @@ describe('Store.subscribeSelector', () => {
     store.set(key, { a: 1 });
 
     const seen = spy();
-    store.subscribeSelector(key, (s) => s.a, seen);
+    store.subscribeSelector(key, (s: { a?: unknown }) => s.a, seen);
 
     assert.equal(seen.calls.length, 0);
     store.set(key, { a: 1 });
@@ -204,7 +199,7 @@ describe('Store.subscribeSelector', () => {
   test('tolerates a key that has never been written', () => {
     const key = freshKey();
     const seen = spy();
-    store.subscribeSelector(key, (s) => s?.a, seen);
+    store.subscribeSelector(key, (s?: { a?: unknown }) => s?.a, seen);
 
     store.set(key, { a: 1 });
 
@@ -215,7 +210,7 @@ describe('Store.subscribeSelector', () => {
     const key = freshKey();
     store.set(key, { a: 1 });
     const seen = spy();
-    const unsub = store.subscribeSelector(key, (s) => s.a, seen);
+    const unsub = store.subscribeSelector(key, (s: { a?: unknown }) => s.a, seen);
 
     unsub();
     store.merge(key, { a: 2 });
@@ -225,7 +220,7 @@ describe('Store.subscribeSelector', () => {
 });
 
 describe('Component.subscribeStoreSelector', () => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM>;
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom.cleanup(); });
 
@@ -236,7 +231,7 @@ describe('Component.subscribeStoreSelector', () => {
    * and a string key; this test is about how long the subscription lives, not
    * about any real key, so it binds a throwaway one in the same shape.
    */
-  const onKeySelector = key => (select, cb) => store.subscribeSelector(key, select, cb);
+  const onKeySelector = (key: string) => (select: Function, cb: Function) => store.subscribeSelector(key, select, cb);
 
   test('is released and retaken per render, like subscribeStore', () => {
     const key = freshKey();
@@ -246,7 +241,7 @@ describe('Component.subscribeStoreSelector', () => {
     class C extends Component {
       render() { return html`<p>x</p>`; }
       afterRender() {
-        this.subscribeStoreSelector(onKeySelector(key), (s) => s.title, seen);
+        this.subscribeStoreSelector(onKeySelector(key), (s: { title?: string }) => s.title, seen);
       }
     }
 

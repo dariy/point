@@ -1,39 +1,43 @@
 /* global globalThis */
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
 
 // ── Minimal globals ──────────────────────────────────────────────────────────
 // pointerMode touches three things: the <html> class list, localStorage, and
 // window event listeners. Fake all three so the verdict can be driven by hand.
-const stored = new Map();
-globalThis.localStorage = {
-  getItem: (k) => (stored.has(k) ? stored.get(k) : null),
-  setItem: (k, v) => stored.set(k, String(v)),
-  removeItem: (k) => stored.delete(k),
-};
+const stored = new Map<string, string>();
+globalThis.localStorage = mock<Storage>({
+  getItem: (k: string) => (stored.get(k) ?? null),
+  setItem: (k: string, v: string) => { stored.set(k, String(v)); },
+  removeItem: (k: string) => { stored.delete(k); },
+});
 
-const classes = new Set();
-globalThis.document = {
-  documentElement: {
-    classList: {
-      add: (c) => classes.add(c),
-      remove: (c) => classes.delete(c),
-      contains: (c) => classes.has(c),
-    },
-  },
-};
+const classes = new Set<string>();
+globalThis.document = mock<Document>({
+  documentElement: mock<HTMLElement>({
+    classList: mock<DOMTokenList>({
+      add: (c: string) => { classes.add(c); },
+      remove: (c: string) => { classes.delete(c); },
+      contains: (c: string) => classes.has(c),
+    }),
+  }),
+});
 
-let listeners = {};
-globalThis.window = {
-  addEventListener: (type, fn) => {
+let listeners: Record<string, EventListenerOrEventListenerObject[]> = {};
+globalThis.window = mock<typeof window>({
+  addEventListener: (type: string, fn: EventListenerOrEventListenerObject) => {
     (listeners[type] ||= []).push(fn);
   },
-  matchMedia: () => ({ matches: false }),
-};
+  matchMedia: () => mock<MediaQueryList>({ matches: false }),
+});
 
 const { initPointerMode, hasFinePointer, eventPointerType } = await import('../src/utils/pointerMode.ts');
 
-const fire = (type, event = {}) => (listeners[type] || []).forEach((fn) => fn(event));
+const fire = (type: string, event: Partial<PointerEvent | KeyboardEvent> = {}) => (listeners[type] || []).forEach((fn) => {
+  if (typeof fn === 'function') fn(mock<Event>(event));
+  else fn.handleEvent(mock<Event>(event));
+});
 const mouse = () => fire('pointerdown', { pointerType: 'mouse' });
 const finger = () => {
   fire('touchstart', {});
@@ -117,18 +121,18 @@ describe('eventPointerType', () => {
     // sent every tap down the mouse path — crumb and nav dropdowns could not be
     // opened by touch at all, the tap just followed the link.
     finger();
-    assert.equal(eventPointerType({ pointerType: 'mouse' }), 'touch');
+    assert.equal(eventPointerType(mock<PointerEvent>({ pointerType: 'mouse' })), 'touch');
   });
 
   test('a real mouse click still reads as a mouse', () => {
     mouse();
-    assert.equal(eventPointerType({ pointerType: 'mouse' }), 'mouse');
+    assert.equal(eventPointerType(mock<PointerEvent>({ pointerType: 'mouse' })), 'mouse');
   });
 
   test('keyboard activation belongs to no pointer', () => {
     finger();
     fire('keydown', { key: 'Enter' });
-    assert.equal(eventPointerType({ pointerType: '' }), null);
+    assert.equal(eventPointerType(mock<PointerEvent>({ pointerType: '' })), null);
   });
 
   test('a stale gesture does not decide a later click', () => {
@@ -136,8 +140,8 @@ describe('eventPointerType', () => {
     const now = Date.now;
     Date.now = () => now() + 5000;
     try {
-      assert.equal(eventPointerType({ pointerType: 'mouse' }), 'mouse');
-      assert.equal(eventPointerType({}), null);
+      assert.equal(eventPointerType(mock<PointerEvent>({ pointerType: 'mouse' })), 'mouse');
+      assert.equal(eventPointerType(mock<PointerEvent>({})), null);
     } finally {
       Date.now = now;
     }

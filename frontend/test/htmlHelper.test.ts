@@ -38,8 +38,8 @@ test('html template helper', async (t) => {
     ];
     for (const c of checks) {
       const parts = [c.prev, '">'];
-      parts.raw = parts;
-      const out = html(parts, c.val);
+      const strings: TemplateStringsArray = Object.assign(parts, { raw: parts });
+      const out = html(strings, c.val);
       assert.strictEqual(out.toString(), c.expected);
     }
   });

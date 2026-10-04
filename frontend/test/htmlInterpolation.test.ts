@@ -24,6 +24,7 @@ import assert from 'node:assert';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseSync } from 'oxc-parser';
+import type { Node, TemplateLiteral } from 'oxc-parser';
 
 const SRC = new URL('../src', import.meta.url).pathname;
 
@@ -31,10 +32,10 @@ const SRC = new URL('../src', import.meta.url).pathname;
 const MARKUP = /<\/[a-z][a-z0-9-]*\s*>|<[a-z][a-z0-9-]*(\s[^<>]*)?\/?>/i;
 
 /**
- * Every .js and .ts source; .d.ts holds no code. eslintRules.test.js writes and
+ * Every .js and .ts source; .d.ts holds no code. eslintRules.test.ts writes and
  * deletes __rule_fixture_* files here in parallel, so skip them.
  */
-function sourceFiles(dir) {
+function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     if (name.startsWith('__rule_fixture_')) return [];
     const full = join(dir, name);
@@ -49,43 +50,48 @@ function sourceFiles(dir) {
  * problem — those already have rules — so recursion stops at any tagged
  * template or call expression.
  */
-function untaggedLiteralsIn(node, out = []) {
+function untaggedLiteralsIn(node: unknown, out: TemplateLiteral[] = []): TemplateLiteral[] {
   if (!node || typeof node !== 'object') return out;
   if (Array.isArray(node)) {
     for (const n of node) untaggedLiteralsIn(n, out);
     return out;
   }
-  if (!node.type) return out;
+  if (!isNode(node)) return out;
   if (node.type === 'TaggedTemplateExpression' || node.type === 'CallExpression') return out;
   if (node.type === 'TemplateLiteral') out.push(node);
-  for (const key of Object.keys(node)) {
+  for (const [key, child] of Object.entries(node)) {
     if (key === 'loc' || key === 'range' || key === 'parent') continue;
-    untaggedLiteralsIn(node[key], out);
+    untaggedLiteralsIn(child, out);
   }
   return out;
 }
 
+/** An object with a non-empty `type` is an AST node. */
+function isNode(value: object): value is Node {
+  return 'type' in value && Boolean(value.type);
+}
+
 /** oxc gives byte offsets only; the report wants a line. */
-function lineOf(source, offset) {
+function lineOf(source: string, offset: number) {
   return source.slice(0, offset).split('\n').length;
 }
 
-function walk(node, visit) {
+function walk(node: unknown, visit: (node: Node) => void) {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) {
     for (const n of node) walk(n, visit);
     return;
   }
-  if (!node.type) return;
+  if (!isNode(node)) return;
   visit(node);
-  for (const key of Object.keys(node)) {
+  for (const [key, child] of Object.entries(node)) {
     if (key === 'loc' || key === 'range' || key === 'parent') continue;
-    walk(node[key], visit);
+    walk(child, visit);
   }
 }
 
 test('no untagged markup literal is interpolated into html``', () => {
-  const offences = [];
+  const offences: string[] = [];
   for (const file of sourceFiles(SRC)) {
     const source = readFileSync(file, 'utf8');
     if (!source.includes('html`')) continue;

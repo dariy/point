@@ -11,9 +11,14 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 
-let dom;
+type TrustedTypes = NonNullable<Window['trustedTypes']>;
+type PolicyRules = Parameters<TrustedTypes['createPolicy']>[1];
+type CreatePolicy = (name: string, rules: PolicyRules) => TrustedTypePolicy;
+
+let dom: ReturnType<typeof setupDOM>;
 beforeEach(() => { dom = setupDOM(); });
 afterEach(() => { dom.cleanup(); });
 
@@ -22,14 +27,14 @@ let freshCount = 0;
 const freshHelpers = () => import(`../src/utils/helpers.ts?tt=${++freshCount}`);
 
 /** A stand-in for window.trustedTypes that records what it was asked for. */
-function fakeTrustedTypes({ createPolicy } = {}) {
-  const calls = [];
+function fakeTrustedTypes({ createPolicy }: { createPolicy?: CreatePolicy } = {}) {
+  const calls: { name: string; rules: PolicyRules }[] = [];
   const tt = {
     calls,
-    createPolicy(name, rules) {
+    createPolicy(name: string, rules: PolicyRules): TrustedTypePolicy {
       calls.push({ name, rules });
       if (createPolicy) return createPolicy(name, rules);
-      return { name, createHTML: (s) => `TRUSTED:${rules.createHTML(s)}` };
+      return mock<TrustedTypePolicy>({ createHTML: (s: string) => `TRUSTED:${must(rules.createHTML)(s)}` });
     },
   };
   globalThis.window.trustedTypes = tt;
@@ -98,7 +103,7 @@ describe('the script sinks', () => {
   // Without Trusted Types there is no policy to run the check, so the guard is
   // only claimed for the browsers that enforce it — assert it there.
   test('the policy refuses a script URL that is not a same-origin path', async () => {
-    fakeTrustedTypes({ createPolicy: (name, rules) => rules });
+    fakeTrustedTypes({ createPolicy: (_name, rules) => mock<TrustedTypePolicy>(rules) });
     const { setScriptSrc } = await freshHelpers();
     const el = dom.document.createElement('script');
     for (const bad of ['https://evil.example/x.js', '//evil.example/x.js', 'data:text/javascript,0', 'x.js']) {
@@ -141,7 +146,7 @@ describe('the Trusted Types policy', () => {
     const tt = fakeTrustedTypes();
     const { html, setHTML } = await freshHelpers();
     setHTML(dom.document.createElement('div'), html`<p>${'a&b'}</p>`);
-    const { createHTML } = tt.calls[0].rules;
+    const createHTML = must(tt.calls[0].rules.createHTML);
     assert.strictEqual(createHTML('<p>x</p>'), '<p>x</p>');
   });
 

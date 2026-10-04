@@ -453,6 +453,15 @@ function patchFormReflection(win: HarnessWindow): Undo {
   return () => undo.forEach(fn => fn());
 }
 
+/**
+ * Return `value`, or fail the test when it is null or undefined. Use it for a
+ * query that must find an element, in place of a non-null `!`.
+ */
+export function must<T>(value: T | null | undefined, what = 'value'): T {
+  if (value == null) throw new Error(`expected ${what}, got ${value}`);
+  return value;
+}
+
 /** Dispatch a bubbling event of `type` on `el`, with optional extra props. */
 export function fire(el: EventTarget, type: string, props: Record<string, unknown> = {}): Event {
   const evt = new globalThis.Event(type, { bubbles: true, cancelable: true });

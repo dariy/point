@@ -9,7 +9,7 @@ import assert from 'node:assert';
  * Every public surface that shows a tag goes through these — the pills, the
  * strip, the Atlas cloud, the graph, the breadcrumb — so a change here is a
  * change everywhere at once. parseTagUrl and renderTagStrip have their own
- * files (parseTagUrl.test.js, tagStrip.test.js); this covers the rest.
+ * files (parseTagUrl.test.ts, tagStrip.test.js); this covers the rest.
  */
 
 let tagHref, tagKind, renderTagLink, buildTagIndex, getTagAncestors;

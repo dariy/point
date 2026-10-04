@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { linkify as _linkify } from "../src/utils/helpers.ts";
 
 // linkify returns the RawHtml html`` produces; assert.equal wants a primitive.
-const linkify = (...a) => String(_linkify(...a));
+const linkify = (...a: Parameters<typeof _linkify>) => String(_linkify(...a));
 import { beforeEach, afterEach } from "node:test";
 import { setupDOM } from "./helpers/dom.ts";
 
 test("helpers", async (t) => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM> | undefined;
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom?.cleanup(); });
 
@@ -109,8 +109,8 @@ test("helpers", async (t) => {
 
   await t.test("navigate", async (t) => {
     const { navigate } = await import("../src/utils/helpers.ts");
-    let navEvent = null;
-    const handler = (e) => navEvent = e.detail;
+    let navEvent: unknown = null;
+    const handler = (e: Event) => navEvent = (e as CustomEvent).detail;
     window.addEventListener("app:navigate", handler);
     navigate("/foo", { replace: true });
     window.removeEventListener("app:navigate", handler);
@@ -126,7 +126,7 @@ test("helpers", async (t) => {
     
     setCanonical("https://example.com/bar");
     link = document.querySelector('link[rel="canonical"]');
-    assert.equal(link.getAttribute("href"), "https://example.com/bar");
+    assert.equal(link?.getAttribute("href"), "https://example.com/bar");
     
     removeCanonical();
     assert.ok(!document.querySelector('link[rel="canonical"]'));

@@ -2,7 +2,12 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 import { reconcileList, setKey, KEY_ATTR } from '../src/utils/reconcileList.ts';
+import type { ReconcileOps } from '../src/utils/reconcileList.ts';
+
+/** One recorded op call: the op name, then its arguments. */
+type LogEntry = [string, ...unknown[]];
 
 /**
  * reconcileList — the keyed list update the in-place render path is built on.
@@ -14,13 +19,13 @@ import { reconcileList, setKey, KEY_ATTR } from '../src/utils/reconcileList.ts';
  * comparisons are for.
  */
 
-let dom;
+let dom: ReturnType<typeof setupDOM>;
 
 beforeEach(() => { dom = setupDOM(); });
 afterEach(() => dom.cleanup());
 
 /** A container already showing `keys`, as a first render would have left it. */
-function showing(keys) {
+function showing(keys: (string | number)[]) {
   const container = document.createElement('div');
   for (const key of keys) {
     const el = document.createElement('span');
@@ -32,30 +37,30 @@ function showing(keys) {
   return container;
 }
 
-const keysOf = (container) =>
+const keysOf = (container: HTMLElement) =>
   Array.from(container.children).map((el) => el.getAttribute(KEY_ATTR));
 
 /** The default ops: a node per item, labelled with its index. */
-const ops = (log = []) => ({
-  create(item, i) {
+const ops = (log: LogEntry[] = []): ReconcileOps => ({
+  create(item: string, i: number) {
     const el = document.createElement('span');
     el.textContent = String(item);
     el.dataset.index = String(i);
     log.push(['create', item, i]);
     return el;
   },
-  update(node, item, i) {
+  update(node: HTMLElement, item: string, i: number) {
     node.dataset.index = String(i);
     log.push(['update', item, i]);
   },
-  remove(node, key) { log.push(['remove', key]); },
+  remove(_node: HTMLElement, key: string) { log.push(['remove', key]); },
 });
 
 describe('reconcileList', () => {
   test('an unchanged list touches nothing', () => {
     const container = showing(['a', 'b', 'c']);
     const before = Array.from(container.children);
-    const log = [];
+    const log: LogEntry[] = [];
 
     const result = reconcileList(container, ['a', 'b', 'c'], (x) => x, ops(log));
 
@@ -95,7 +100,7 @@ describe('reconcileList', () => {
   test('removes from the middle without moving the survivors', () => {
     const container = showing(['a', 'b', 'c', 'd']);
     const [a, b, c, d] = Array.from(container.children);
-    const log = [];
+    const log: LogEntry[] = [];
 
     const result = reconcileList(container, ['a', 'c', 'd'], (x) => x, ops(log));
 
@@ -124,14 +129,14 @@ describe('reconcileList', () => {
     const container = showing(['a', 'b', 'c']);
     reconcileList(container, ['c', 'b', 'a'], (x) => x, ops());
     assert.deepEqual(
-      Array.from(container.children).map((el) => `${el.getAttribute(KEY_ATTR)}:${el.dataset.index}`),
+      Array.from(container.children as HTMLCollectionOf<HTMLElement>).map((el) => `${el.getAttribute(KEY_ATTR)}:${el.dataset.index}`),
       ['c:0', 'b:1', 'a:2'],
     );
   });
 
   test('a wholesale replacement removes then creates, and reports both', () => {
     const container = showing(['a', 'b']);
-    const log = [];
+    const log: LogEntry[] = [];
 
     const result = reconcileList(container, ['x', 'y'], (x) => x, ops(log));
 
@@ -200,7 +205,9 @@ describe('reconcileList', () => {
   });
 
   test('create is not optional', () => {
-    assert.throws(() => reconcileList(showing([]), ['a'], (x) => x, {}), /ops.create is required/);
-    assert.throws(() => reconcileList(null, [], (x) => x, ops()), /no container/);
+    assert.throws(() => reconcileList(showing([]), ['a'], (x) => x, mock<ReconcileOps>({})), /ops.create is required/);
+    assert.throws(() => reconcileList(
+      // @ts-expect-error a missing container is the input under test
+      null, [], (x) => x, ops()), /no container/);
   });
 });

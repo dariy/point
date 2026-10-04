@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { renderCopyright as render } from "../src/utils/copyright.ts";
+import type { StoreSettings } from "../src/utils/helpers.ts";
 
 // renderCopyright returns the RawHtml html`` produces; String() to compare.
-const renderCopyright = (settings) => String(render(settings));
+const renderCopyright = (settings: StoreSettings) => String(render(settings));
 
 test("renderCopyright", async (t) => {
   await t.test("defaults to author with powered by engine", () => {

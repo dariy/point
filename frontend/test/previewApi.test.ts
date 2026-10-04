@@ -1,20 +1,21 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
 
 // Regression: previewPost used to fetch '/posts/preview/<token>' (missing the
 // /api prefix), so the server answered with the SPA fallback page instead of
 // post JSON and the preview page rendered empty ('Preview: undefined').
 describe('previewPost', () => {
   test('requests the /api path and URL-encodes the token', async () => {
-    let requested;
-    global.fetch = async (url) => {
+    let requested: RequestInfo | URL | undefined;
+    global.fetch = async (url: RequestInfo | URL) => {
       requested = url;
-      return {
+      return mock<Response>({
         status: 200,
         ok: true,
-        headers: { get: () => 'application/json' },
+        headers: mock<Headers>({ get: () => 'application/json' }),
         json: async () => ({ title: 'Draft post' }),
-      };
+      });
     };
 
     const { previewPost } = await import('../src/api/posts.ts');

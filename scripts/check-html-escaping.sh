@@ -15,7 +15,7 @@
 #      the frontend — so a new one is a deliberate act, not a quiet edit.
 #
 # A third shape needs a parser rather than a grep, so it lives in
-# frontend/test/htmlInterpolation.test.js: markup in a plain template literal
+# frontend/test/htmlInterpolation.test.ts: markup in a plain template literal
 # interpolated into html``, which the tag escapes into visible text.
 #
 # Usage: scripts/check-html-escaping.sh

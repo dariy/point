@@ -23,17 +23,18 @@ const ROOT = new URL('../..', import.meta.url).pathname;
 let seq = 0;
 
 /** Messages reported for a snippet, linted as a frontend/src file of type `ext`. */
-function lint(code, ext) {
+function lint(code: string, ext: string): string[] {
   const rel = `frontend/src/__rule_fixture_${process.pid}_${seq++}__.${ext}`;
   writeFileSync(ROOT + rel, code);
   try {
-    let out;
+    let out: string;
     try {
       out = execFileSync('node_modules/.bin/oxlint', ['-f', 'json', rel], { cwd: ROOT, encoding: 'utf8' });
     } catch (e) {
-      out = e.stdout; // exit 1 on any error diagnostic
+      if (!(e instanceof Error) || !('stdout' in e)) throw e;
+      out = String(e.stdout); // exit 1 on any error diagnostic
     }
-    return JSON.parse(out).diagnostics.map((d) => d.message);
+    return JSON.parse(out).diagnostics.map((d: { message: string }) => d.message);
   } finally {
     rmSync(ROOT + rel, { force: true });
   }
@@ -42,28 +43,28 @@ function lint(code, ext) {
 const PRELUDE = "import { html, raw, setHTML, insertHTML } from './utils/helpers.ts';\nimport { store } from './store.ts';\nconst SVG = '<svg></svg>';\n";
 
 for (const ext of ['js', 'ts']) {
-  const messages = (snippet) => lint(PRELUDE + snippet, ext);
+  const messages = (snippet: string) => lint(PRELUDE + snippet, ext);
 
   describe(`html\`\` lint rules (.${ext})`, () => {
     describe('what must be rejected', () => {
       test('raw() around a template literal — markup assembled on the spot', () => {
         const m = messages('export const f = (x) => html`<p>${raw(`<b>${x}</b>`)}</p>`;');
-        assert.ok(m.some((s) => /raw\(\) must not wrap a template literal/.test(s)), m.join(' | '));
+        assert.ok(m.some((s: string) => /raw\(\) must not wrap a template literal/.test(s)), m.join(' | '));
       });
 
       test('raw() around a call — a value the reader cannot check here', () => {
         const m = messages('export const f = (x) => html`<p>${raw(x.toUpperCase())}</p>`;');
-        assert.ok(m.some((s) => /raw\(\) must not wrap a call/.test(s)), m.join(' | '));
+        assert.ok(m.some((s: string) => /raw\(\) must not wrap a call/.test(s)), m.join(' | '));
       });
 
       test('interpolation into an unquoted attribute', () => {
         const m = messages('export const f = (u) => html`<a href=${u}>x</a>`;');
-        assert.ok(m.some((s) => /must be quoted/.test(s)), m.join(' | '));
+        assert.ok(m.some((s: string) => /must be quoted/.test(s)), m.join(' | '));
       });
 
       test('a bare innerHTML assignment', () => {
         const m = messages('export const f = (el, s) => { el.innerHTML = s; };');
-        assert.ok(m.some((s) => /Use setHTML/.test(s)), m.join(' | '));
+        assert.ok(m.some((s: string) => /Use setHTML/.test(s)), m.join(' | '));
       });
 
       // The funnel, not the tag, is what the Trusted Types policy is attached to:
@@ -72,29 +73,29 @@ for (const ext of ['js', 'ts']) {
       // it through to fail in a browser.
       test('an innerHTML assignment through the tag but around the funnel', () => {
         const m = messages('export const f = (el, s) => { el.innerHTML = html`<p>${s}</p>`; };');
-        assert.ok(m.some((s) => /Use setHTML/.test(s)), m.join(' | '));
+        assert.ok(m.some((s: string) => /Use setHTML/.test(s)), m.join(' | '));
       });
 
       test('an outerHTML assignment', () => {
         const m = messages('export const f = (el, s) => { el.outerHTML = html`<p>${s}</p>`; };');
-        assert.ok(m.some((s) => /outerHTML bypasses/.test(s)), m.join(' | '));
+        assert.ok(m.some((s: string) => /outerHTML bypasses/.test(s)), m.join(' | '));
       });
 
       test('a bare insertAdjacentHTML', () => {
         const m = messages("export const f = (el, s) => el.insertAdjacentHTML('beforeend', s);");
-        assert.ok(m.some((s) => /Use insertHTML/.test(s)), m.join(' | '));
+        assert.ok(m.some((s: string) => /Use insertHTML/.test(s)), m.join(' | '));
       });
 
       test('an insertAdjacentHTML through the tag but around the funnel', () => {
         const m = messages("export const f = (el, s) => el.insertAdjacentHTML('beforeend', html`<p>${s}</p>`);");
-        assert.ok(m.some((s) => /Use insertHTML/.test(s)), m.join(' | '));
+        assert.ok(m.some((s: string) => /Use insertHTML/.test(s)), m.join(' | '));
       });
     });
 
     describe('what must keep working', () => {
-      const clean = (snippet) => {
+      const clean = (snippet: string) => {
         const m = messages(snippet);
-        assert.deepEqual(m.filter((s) => /raw\(\)|must be quoted|innerHTML|outerHTML|insertAdjacentHTML/.test(s)), []);
+        assert.deepEqual(m.filter((s: string) => /raw\(\)|must be quoted|innerHTML|outerHTML|insertAdjacentHTML/.test(s)), []);
       };
 
       test('raw() around a module-level constant — the SVG blobs', () =>
@@ -120,7 +121,7 @@ for (const ext of ['js', 'ts']) {
 
 // One fixture per security selector. W() marks the node a cast wraps: the spot
 // where a wrapper separates two parts the selector names.
-const SELECTORS = [
+const SELECTORS: [string, string, RegExp][] = [
   ['innerHTML write', 'el => { W(el.innerHTML) = s; }', /Use setHTML.*bare innerHTML/],
   ['outerHTML write', 'el => { W(el.outerHTML) = s; }', /outerHTML bypasses/],
   ['insertAdjacentHTML call', "el => W(el.insertAdjacentHTML)('beforeend', s)", /bare insertAdjacentHTML/],
@@ -135,7 +136,7 @@ const SELECTORS = [
   ['unquoted attribute', 'u => W(html)`<a href=${u}>x</a>`', /must be quoted/],
 ];
 
-const WRAPS = {
+const WRAPS: Record<string, (x: string) => string> = {
   bare: (x) => x,
   as: (x) => `(${x} as any)`,
   '!': (x) => `(${x})!`,
@@ -146,7 +147,7 @@ const WRAPS = {
 describe('security selectors match through TypeScript casts', () => {
   for (const [name, body, re] of SELECTORS) {
     for (const [wrap, fn] of Object.entries(WRAPS)) {
-      const code = `${PRELUDE}const s = '';\nexport const f = ${body.replace(/W\(((?:[^()]|\([^()]*\))*)\)/, (_, inner) => fn(inner))};\n`;
+      const code = `${PRELUDE}const s = '';\nexport const f = ${body.replace(/W\(((?:[^()]|\([^()]*\))*)\)/, (_: string, inner: string) => fn(inner))};\n`;
       for (const ext of wrap === 'bare' ? ['js', 'ts'] : ['ts']) {
         test(`${name} — ${wrap} (.${ext})`, () => {
           const m = lint(code, ext);

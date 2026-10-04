@@ -1,7 +1,7 @@
 // The `point/restricted-syntax` rule: ESLint's no-restricted-syntax, which
 // Oxlint does not have natively. Each entry is an esquery selector and the
 // message reported where it matches. .oxlintrc.json turns the rule on;
-// frontend/test/eslintRules.test.js proves every selector still fires.
+// frontend/test/eslintRules.test.ts proves every selector still fires.
 //
 // A TypeScript cast is an AST node — TSAsExpression (`x as T`),
 // TSNonNullExpression (`x!`), TSSatisfiesExpression (`x satisfies T`) and

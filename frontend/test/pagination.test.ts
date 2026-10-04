@@ -1,7 +1,8 @@
 import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click } from './helpers/dom.ts';
+import { setupDOM, click, must } from './helpers/dom.ts';
+import type { Pagination as PaginationClass, PaginationProps } from '../src/components/shared/Pagination.ts';
 
 /**
  * The paginator normally runs 1…pages. The owner's home feed lowers its left
@@ -10,16 +11,17 @@ import { setupDOM, click } from './helpers/dom.ts';
  * rather than a hard-coded 1.
  */
 describe('Pagination', () => {
-  let Pagination;
+  let Pagination: typeof PaginationClass;
 
   before(async () => {
     ({ Pagination } = await import('../src/components/shared/Pagination.ts'));
   });
 
   // render() returns the RawHtml html`` produces; String() for assert equality.
-  const html = (props) => String(new Pagination(null, props).render());
+  // @ts-expect-error render() alone needs no container
+  const html = (props: PaginationProps) => String(new Pagination(null, props).render());
   /** The page numbers the paginator offers, in order. */
-  const items = (props) =>
+  const items = (props: PaginationProps) =>
     [...html(props).matchAll(/data-page="(-?\d+)"[^>]*>(-?\d+)</g)].map((m) => Number(m[2]));
 
   test('a plain feed still runs 1…pages', () => {
@@ -65,30 +67,30 @@ describe('Pagination', () => {
   // ── Navigation ────────────────────────────────────────────────────────────
 
   describe('mounted', () => {
-    let dom;
+    let dom: ReturnType<typeof setupDOM>;
     beforeEach(() => { dom = setupDOM(); });
     afterEach(() => { dom.cleanup(); });
 
     /** Mount a paginator and return it with the pages it reported. */
-    const mount = (props) => {
+    const mount = (props: PaginationProps) => {
       const el = dom.document.createElement('div');
       dom.document.body.appendChild(el);
-      const asked = [];
-      const c = new Pagination(el, { ...props, onPage: (p) => asked.push(p) });
+      const asked: number[] = [];
+      const c = new Pagination(el, { ...props, onPage: (p: number) => asked.push(p) });
       c.mount();
       return { c, asked };
     };
 
     test('clicking a page number reports it', () => {
       const { c, asked } = mount({ page: 1, pages: 3, total: 30 });
-      click(c.$('[data-page="3"]'));
+      click(must(c.$('[data-page="3"]')));
       assert.deepEqual(asked, [3]);
     });
 
     test('the arrows step either way', () => {
       const { c, asked } = mount({ page: 2, pages: 3, total: 30 });
-      click(c.$('.page-next'));
-      click(c.$('.page-prev'));
+      click(must(c.$('.page-next')));
+      click(must(c.$('.page-prev')));
       assert.deepEqual(asked, [3, 1]);
     });
 
@@ -96,7 +98,7 @@ describe('Pagination', () => {
       // page 0 with minPage 1: the prev arrow renders disabled, and its target
       // is below the left edge either way.
       const { c, asked } = mount({ page: 1, pages: 3, total: 30 });
-      click(c.$('.page-prev'));
+      click(must(c.$('.page-prev')));
       assert.deepEqual(asked, []);
     });
 
@@ -104,7 +106,7 @@ describe('Pagination', () => {
       const { c, asked } = mount({ page: 1, pages: 5, total: 50 });
       c.setProps({ page: 2 });
       c.setProps({ page: 3 });
-      click(c.$('.page-next'));
+      click(must(c.$('.page-next')));
       assert.deepEqual(asked, [4], 'exactly once — not once per render');
     });
 

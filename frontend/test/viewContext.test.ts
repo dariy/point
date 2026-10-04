@@ -1,19 +1,21 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
+import type { ViewContext as ViewContextClass } from '../src/utils/viewContext.ts';
 
 // ViewContext serializes { tag, years, query, page, postSlug } back to a URL.
 // The cases that matter here are the ones where a search has to *leave* the
 // view it was issued from — the /tags module and an open post both used to
 // short-circuit toUrl() before the search branch could run.
 describe('ViewContext.toUrl', () => {
-  let ViewContext;
+  let ViewContext: typeof ViewContextClass;
 
   before(async () => {
-    global.window = { location: { pathname: '/', search: '' } };
+    global.window = mock<typeof window>({ location: mock<Location>({ pathname: '/', search: '' }) });
     ({ ViewContext } = await import('../src/utils/viewContext.ts'));
   });
 
-  const url = (pathname, query = {}) => new ViewContext(pathname, query).toUrl();
+  const url = (pathname: string, query: Record<string, string> = {}) => new ViewContext(pathname, query).toUrl();
 
   test('search from the home view', () => {
     assert.strictEqual(url('/', { q: 'ukraine' }), '/search?q=ukraine');

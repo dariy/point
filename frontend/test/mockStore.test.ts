@@ -21,7 +21,7 @@ describe("byNewest", () => {
       { id: 2, published_at: "2024-06-01T00:00:00Z" },
       { id: 3, published_at: "2021-03-01T00:00:00Z" },
     ];
-    assert.deepEqual(rows.sort(byNewest).map((r) => r.id), [2, 3, 1]);
+    assert.deepEqual(rows.sort(byNewest).map((r: { id: number }) => r.id), [2, 3, 1]);
   });
 
   test("falls back to created_at when published_at is null", () => {
@@ -30,7 +30,7 @@ describe("byNewest", () => {
       { id: 1, published_at: null, created_at: "2025-01-01T00:00:00Z" },
       { id: 2, published_at: "2020-01-01T00:00:00Z" },
     ];
-    assert.deepEqual(rows.sort(byNewest).map((r) => r.id), [1, 2]);
+    assert.deepEqual(rows.sort(byNewest).map((r: { id: number }) => r.id), [1, 2]);
   });
 
   test("treats an unparseable date as oldest rather than producing NaN", () => {
@@ -99,40 +99,47 @@ describe("hiddenSets", () => {
 describe("feedPosts", () => {
   test("a guest gets published posts that no tag withholds", () => {
     const state = visibilityState();
-    assert.deepEqual(feedPosts(state).map((p) => p.id), [1]);
+    assert.deepEqual(feedPosts(state).map((p: { id: number }) => p.id), [1]);
   });
 
   test("the owner additionally gets the hidden ones, but never the queue", () => {
     // Drafts and the scheduled queue are not feed content for anybody: the
     // queue is a separate read, left of page 1.
     const state = visibilityState({ authenticated: true });
-    assert.deepEqual(feedPosts(state).map((p) => p.id), [1, 3, 4, 7]);
+    assert.deepEqual(feedPosts(state).map((p: { id: number }) => p.id), [1, 3, 4, 7]);
   });
 });
 
 describe("scheduledQueue", () => {
   test("is soonest-first, and empty for a guest", () => {
     assert.deepEqual(
-      scheduledQueue(visibilityState({ authenticated: true })).map((p) => p.id),
+      scheduledQueue(visibilityState({ authenticated: true })).map((p: { id: number }) => p.id),
       [8, 6],
     );
     assert.deepEqual(scheduledQueue(visibilityState()), []);
   });
 });
 
+/**
+ * paginate() under the "posts" key. The demo's JS puts the rows under a
+ * computed key, which the compiler cannot follow, so this is the one cast.
+ */
+const paged = (rows: { id: number }[], query: { page?: number; per_page?: number }) =>
+  paginate(rows, query, "posts") as unknown as { page: number; pages: number; total: number; posts: { id: number }[] };
+
 describe("paginate", () => {
   test("slices the requested page under the collection key", () => {
     const rows = Array.from({ length: 25 }, (_, i) => ({ id: i + 1 }));
-    const out = paginate(rows, { page: 2, per_page: 10 }, "posts");
+    const out = paged(rows, { page: 2, per_page: 10 });
     assert.equal(out.page, 2);
     assert.equal(out.pages, 3);
     assert.equal(out.total, 25);
-    assert.deepEqual(out.posts.map((r) => r.id), [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    assert.deepEqual(out.posts.map((r: { id: number }) => r.id), [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
   });
 
   test("reports one page for an empty collection", () => {
     // pages: 0 makes paginators render "page 1 of 0".
-    const out = paginate([], {}, "posts");
+    const out = paged([], {});
     assert.equal(out.pages, 1);
     assert.deepEqual(out.posts, []);
   });
@@ -145,7 +152,7 @@ describe("feedPage", () => {
 
   test("nests pagination the way the public payloads do", () => {
     const out = feedPage(owner, rows, [], { page: 2 }, 6);
-    assert.deepEqual(out.posts.map((r) => r.id), [7]);
+    assert.deepEqual(out.posts.map((r: { id: number }) => r.id), [7]);
     assert.deepEqual(out.pagination, {
       page: 2,
       pages: 2,
@@ -167,7 +174,7 @@ describe("feedPage", () => {
 
   test("page 0 serves the queue, and reports which half it came from", () => {
     const out = feedPage(owner, rows, queue, { page: 0 }, 6);
-    assert.deepEqual(out.posts.map((r) => r.id), [100, 101, 102]);
+    assert.deepEqual(out.posts.map((r: { id: number }) => r.id), [100, 101, 102]);
     assert.equal(out.pagination.scheduled, true);
     assert.equal(out.pagination.total, 7);
   });
