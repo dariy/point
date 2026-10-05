@@ -116,17 +116,20 @@ step_js_lint() {
         demo/mock demo/*.ts demo/scripts/*.ts
 }
 
-# frontend/src is TypeScript: tsc with no emit. A .js file under frontend/src
-# fails this step, so the move to TypeScript cannot go back. JS stays only in
-# frontend/vendor/. tsconfig.test.json
+# All first-party JS is TypeScript: tsc with no emit. A tracked .js, .mjs or
+# .cjs file outside frontend/vendor/ fails this step, so the move to
+# TypeScript cannot go back. Generated bundles are gitignored, so git ls-files
+# does not list them. tsconfig.test.json
 # checks the .ts tests, the E2E tests and their helpers; tsconfig.scripts.json
 # checks scripts/*.ts; tsconfig.demo.json checks demo/. Part of --lint,
 # because a broken type is a static error like any other.
 step_js_typecheck() {
     cd "$ROOT_DIR"
-    if [ -n "$(find frontend/src -name '*.js' -print -quit)" ]; then
-        echo "  FAIL  .js file under frontend/src (write it as .ts):" >&2
-        find frontend/src -name '*.js' -printf '        %p\n' >&2
+    local js_files
+    js_files=$(git ls-files '*.js' '*.mjs' '*.cjs' | grep -v '^frontend/vendor/' || true)
+    if [ -n "$js_files" ]; then
+        echo "  FAIL  tracked JS file outside frontend/vendor/ (write it as .ts):" >&2
+        printf '        %s\n' $js_files >&2
         return 1
     fi
     node_modules/.bin/tsc -p tsconfig.json
@@ -147,25 +150,15 @@ step_vendor_sinks() {
     "$SCRIPT_DIR/check-vendor-sinks.sh"
 }
 
-# Ratchet: the count of .js test files must not go up. New tests are .ts.
-# Lower JS_TEST_BASELINE when a rename to .ts lowers the count.
-JS_TEST_BASELINE=0
-
 # Coverage is collected in the same pass (V8 instrumentation, no extra runner)
 # and written as lcov for the gate below and for codecov in CI.
 step_js_test() {
     cd "$ROOT_DIR"
-    local js_tests
-    js_tests=$(find frontend/test -maxdepth 1 -name '*.test.js' | wc -l)
-    if [ "$js_tests" -gt "$JS_TEST_BASELINE" ]; then
-        echo "  FAIL  $js_tests .js test files, baseline $JS_TEST_BASELINE (write new tests as .ts)" >&2
-        return 1
-    fi
     node --test --experimental-test-coverage \
         --test-coverage-include='frontend/src/**' \
         --test-reporter=spec --test-reporter-destination=stdout \
         --test-reporter=lcov --test-reporter-destination=coverage-frontend.lcov \
-        frontend/test/*.test.[jt]s
+        frontend/test/*.test.ts
 }
 
 step_js_coverage() {

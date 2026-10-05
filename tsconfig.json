@@ -6,14 +6,15 @@
   // names the real file, `./x.ts` or `./x.js` (allowImportingTsExtensions).
   //
   // The service worker is frontend/sw.ts; scripts/build-js.sh writes the served
-  // frontend/sw.js from it. scripts/check.sh fails on a .js file under frontend/src.
+  // frontend/sw.js from it. scripts/check.sh fails on a tracked .js, .mjs or .cjs
+  // file outside frontend/vendor/.
   //
   // strict is on (epic p-3cfv). Fix a strict error with a real guard; a non-null
   // `!` is only for a DOM element that is certain to exist.
   //
-  // frontend/test/** is not in this checked set. tsconfig.test.json checks it,
-  // with these options, and includes only frontend/test/**/*.ts: a .js test is
-  // unchecked until it moves to .ts (epic p-ts-tests-mf3t). The linkedom DOM
+  // frontend/test/** is not in this checked set. tsconfig.test.json checks it
+  // (and frontend/e2e/), tsconfig.scripts.json checks scripts/*.ts and
+  // tsconfig.demo.json checks demo/, all with these options. The linkedom DOM
   // mismatch has one cast, in frontend/test/helpers/dom.ts; partial mocks use
   // mock<T>() from frontend/test/helpers/mock.ts.
   "compilerOptions": {
