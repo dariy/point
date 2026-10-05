@@ -56,3 +56,11 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - Any new module path with its own timeline must be added to the module check in `toUrl`, or it falls back to `/`.
 ---
+
+## 2026-10-05 - p-3j64
+- request(): `...init` now spreads before the merged `headers`, so Accept and X-Point-Revelio survive a caller's init.headers; caller headers still win. sw.ts buildTagTree nodes now carry sort_order.
+- Files: frontend/src/api/client.ts, frontend/sw.ts, frontend/test/apiClientHeaders.test.ts
+- **Learnings:**
+  - Do not run check.sh twice at once: parallel runs share ports and gave false js-lint/typecheck/e2e failures.
+  - client.ts exports named `api`, not a default.
+---

@@ -448,6 +448,7 @@ async function serveFromOfflineStore(request: Request) {
             slug: t.slug,
             post_count: t.post_count,
             is_featured: t.is_featured,
+            sort_order: t.sort_order,
             children: buildTagTree(t.id),
           }),
         )

@@ -42,6 +42,7 @@ class ApiClient {
 
     const opts: RequestInit = {
       credentials: 'include',
+      ...init,
       headers: {
         Accept: 'application/json',
         // Owner browsing as a guest — see utils/revelio.ts. Merged before the
@@ -50,7 +51,6 @@ class ApiClient {
         // Callers pass a plain object; a Headers or tuple list would not spread.
         ...(init.headers as Record<string, string> | undefined),
       },
-      ...init,
     };
 
     let response;
