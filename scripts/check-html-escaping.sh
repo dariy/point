@@ -1,7 +1,7 @@
 #!/bin/bash
 # The html`` convention, asserted against the tree rather than trusted.
 #
-# scripts/oxlint-point.mjs catches the shapes a parser can see: raw() around a call or a
+# scripts/oxlint-point.ts catches the shapes a parser can see: raw() around a call or a
 # template literal, an interpolation in an unquoted attribute, a bare innerHTML.
 # This covers the two things it cannot:
 #

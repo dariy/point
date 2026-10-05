@@ -4,7 +4,7 @@
     "correctness": "off"
   },
   "jsPlugins": [
-    "./scripts/oxlint-point.mjs"
+    "./scripts/oxlint-point.ts"
   ],
   "ignorePatterns": [
     "data/**",
@@ -190,7 +190,7 @@
     },
     {
       "files": [
-        "scripts/**/*.mjs",
+        "scripts/**/*.ts",
         "demo/**/*.mjs"
       ],
       "globals": {

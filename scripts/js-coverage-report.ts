@@ -13,7 +13,7 @@
 // Both are ratchets. Lower them as coverage improves; never raise one to make
 // a red build green.
 //
-// Usage: node scripts/js-coverage-report.mjs <lcov-file>
+// Usage: node scripts/js-coverage-report.ts <lcov-file>
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
@@ -27,7 +27,7 @@ const SRC_DIR = join(ROOT, "frontend", "src");
 
 const lcovPath = process.argv[2];
 if (!lcovPath) {
-  console.error("usage: node scripts/js-coverage-report.mjs <lcov-file>");
+  console.error("usage: node scripts/js-coverage-report.ts <lcov-file>");
   process.exit(2);
 }
 
@@ -126,7 +126,7 @@ if (unreached.length > UNREACHED_MAX) {
 
 if (failed) {
   console.error(
-    "\nAdd tests, or justify moving a ratchet in scripts/js-coverage-report.mjs.",
+    "\nAdd tests, or justify moving a ratchet in scripts/js-coverage-report.ts.",
   );
   process.exit(1);
 }

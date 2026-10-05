@@ -2,7 +2,7 @@
 #
 # Each has ONE number, and the authoritative, build-failing copy of each lives
 # in the script CI and scripts/check.sh both call — scripts/coverage-gate.sh
-# for Go, scripts/js-coverage-report.mjs for JS. The targets here drive
+# for Go, scripts/js-coverage-report.ts for JS. The targets here drive
 # codecov's PR status checks; keep them in sync with those scripts. This repo
 # previously carried an aspirational 80% in .coverage-thresholds.json against a
 # 40% patch target here, with neither enforcing anything.
@@ -11,7 +11,7 @@
 #
 # Note the JS number covers only files a test actually imports — V8 does not
 # instrument unimported modules, so 58 of 122 src files are absent from it
-# entirely. js-coverage-report.mjs ratchets that count separately; codecov
+# entirely. js-coverage-report.ts ratchets that count separately; codecov
 # cannot see it.
 coverage:
   status:

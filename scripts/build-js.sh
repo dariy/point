@@ -98,7 +98,7 @@ build_set() {
   # remaining "$@" = extra esbuild flags (e.g. --minify)
 
   manifest="$js_dir/plugin-manifest.json"
-  # The esbuild metafile is a build intermediate: build-plugin-manifest.mjs is
+  # The esbuild metafile is a build intermediate: build-plugin-manifest.ts is
   # its only consumer. It must NOT live in $js_dir — the server exposes that
   # whole directory at /assets/js (routes.go: e.Static), and the metafile spells
   # out the full module graph. Keep it outside the served tree.
@@ -125,7 +125,7 @@ build_set() {
       --outdir="$js_dir"
 
   if [ "$PLUGIN_COUNT" -gt 0 ]; then
-    node "$SCRIPT_DIR/build-plugin-manifest.mjs" "$meta" "$manifest"
+    node "$SCRIPT_DIR/build-plugin-manifest.ts" "$meta" "$manifest"
   else
     echo '{}' > "$manifest"
     echo "No plugin entries — wrote empty $manifest"

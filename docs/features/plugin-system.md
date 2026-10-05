@@ -44,7 +44,7 @@ All five phases of the original refactor are done.
 - `scripts/build-js.sh`: core `app.js` stays a **single unsplit bundle** (the PWA service
   worker precaches it; splitting the core would break offline for zero win). A second
   esbuild pass builds plugin entries with `--splitting --format=esm`, hashed into
-  `frontend/js/p/<id>-<hash>.js`; `scripts/build-plugin-manifest.mjs` writes
+  `frontend/js/p/<id>-<hash>.js`; `scripts/build-plugin-manifest.ts` writes
   `frontend/js/plugin-manifest.json` (id → chunk), which the Go server reads at startup.
 - `scripts/build-css.sh` emits per-plugin CSS to `frontend/css/p/<id>.css`, auto-wired
   into the manifest (`css` field). Never edit generated CSS bundles.

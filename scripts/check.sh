@@ -109,16 +109,16 @@ step_govulncheck() {
     govulncheck ./...
 }
 
-# The lockfile-pinned Oxlint (.oxlintrc.json, plugin scripts/oxlint-point.mjs).
+# The lockfile-pinned Oxlint (.oxlintrc.json, plugin scripts/oxlint-point.ts).
 step_js_lint() {
     cd "$ROOT_DIR"
-    node_modules/.bin/oxlint frontend/src frontend/sw.ts scripts/*.mjs \
+    node_modules/.bin/oxlint frontend/src frontend/sw.ts scripts/*.ts \
         demo/mock demo/*.mjs demo/scripts/*.mjs
 }
 
 # frontend/src is TypeScript: tsc with no emit. A .js file under frontend/src
 # fails this step, so the move to TypeScript cannot go back. JS stays only in
-# frontend/vendor/, scripts/*.mjs and demo/. tsconfig.test.json
+# frontend/vendor/ and demo/. tsconfig.test.json
 # checks the .ts tests, the E2E tests and their helpers. Part of --lint,
 # because a broken type is a static error like any other.
 step_js_typecheck() {
@@ -132,7 +132,7 @@ step_js_typecheck() {
     node_modules/.bin/tsc -p tsconfig.test.json
 }
 
-# What the AST rules in scripts/oxlint-point.mjs cannot see: hand-applied escapeHtml in
+# What the AST rules in scripts/oxlint-point.ts cannot see: hand-applied escapeHtml in
 # an interpolation, and growth in the set of raw() exceptions.
 step_html_escaping() {
     "$SCRIPT_DIR/check-html-escaping.sh"
@@ -166,7 +166,7 @@ step_js_test() {
 }
 
 step_js_coverage() {
-    node "$SCRIPT_DIR/js-coverage-report.mjs" "$ROOT_DIR/coverage-frontend.lcov"
+    node "$SCRIPT_DIR/js-coverage-report.ts" "$ROOT_DIR/coverage-frontend.lcov"
 }
 
 # Builds its own binary and serves it on E2E_PORT (default 8005).
@@ -196,7 +196,7 @@ if [ -n "$CHANGED" ]; then
     while IFS= read -r f; do
         case "$f" in
             api/*|scripts/check-sql-layer.sh|scripts/coverage-gate.sh) go=1 ;;
-            frontend/*|demo/*|scripts/*.mjs|package.json|package-lock.json|.oxlintrc.json|tsconfig.json)
+            frontend/*|demo/*|scripts/*.ts|package.json|package-lock.json|.oxlintrc.json|tsconfig.json)
                 js=1; e2e=1 ;;
             scripts/check-html-escaping.sh|scripts/check-vendor-sinks.sh) js=1 ;;
             scripts/run-e2e.sh|scripts/build-css.sh|scripts/build-js.sh) e2e=1 ;;

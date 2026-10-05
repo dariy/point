@@ -10,7 +10,7 @@ import { basename, dirname } from "node:path";
 
 const [metaPath, outPath] = process.argv.slice(2);
 if (!metaPath || !outPath) {
-  console.error("usage: build-plugin-manifest.mjs <meta.json> <out.json>");
+  console.error("usage: build-plugin-manifest.ts <meta.json> <out.json>");
   process.exit(1);
 }
 

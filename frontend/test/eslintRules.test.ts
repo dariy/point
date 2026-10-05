@@ -8,7 +8,7 @@
  * each one gets a fixture proving it still fires, and the shapes that must keep
  * working get one proving they do not.
  *
- * The rules run in Oxlint (.oxlintrc.json, scripts/oxlint-point.mjs). Every
+ * The rules run in Oxlint (.oxlintrc.json, scripts/oxlint-point.ts). Every
  * fixture is linted twice, as a .js file and as a .ts file, and each selector
  * also gets a .ts fixture per TypeScript cast — `as`, `!`, `satisfies`, `<T>` —
  * because a cast is an AST node that sits between the parts a selector names.
