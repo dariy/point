@@ -255,8 +255,13 @@ describe('Trusted Types', () => {
     const sel = '.codejar-editor.language-css';
     // ThemesPage mounts the editor only after its three API calls resolve, and
     // only when custom-css is in the page's plugin manifest. Wait for it, and
-    // on a miss report which of those conditions failed.
-    await page.waitForSelector(sel, { timeout: 10000 }).catch(async () => {
+    // on a miss report which of those conditions failed. Under the full
+    // check.sh the Go and JS lanes load the machine, and the page was seen
+    // with an empty body after the wait. So the first miss reloads the page
+    // once and waits again; only a second miss fails the test.
+    const mounted = await page.waitForSelector(sel, { timeout: 10000 }).then(() => true, () => false);
+    if (!mounted) await violationsAt(path, 1500);
+    await page.waitForSelector(sel, { timeout: 15000 }).catch(async () => {
       const state = await page.evaluate(() => ({
         url: location.href,
         customCss: (window.__PLUGINS__ || []).some((e) => e.id === 'custom-css'),
