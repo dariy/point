@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { parseNodes, serializeNodes, firstImagePath } from '../src/utils/postNodes.ts';
+import type { EditorNode } from '../src/utils/postNodes.ts';
 
 describe('parseNodes', () => {
   test('a bare media path on its own line becomes an image node', () => {
@@ -34,7 +35,7 @@ describe('parseNodes', () => {
 
   test('empty content has no nodes', () => {
     assert.deepStrictEqual(parseNodes(''), []);
-    assert.deepStrictEqual(parseNodes(null), []);
+    assert.deepStrictEqual(parseNodes(undefined), []);
     assert.deepStrictEqual(parseNodes('\n\n---\n\n'), []);
   });
 
@@ -50,7 +51,7 @@ describe('serializeNodes', () => {
   });
 
   test('a fenced block round trips with its class', () => {
-    const nodes = [{ type: 'text', text: 'Watch out', blockClass: 'note' }];
+    const nodes: EditorNode[] = [{ type: 'text', text: 'Watch out', blockClass: 'note' }];
     assert.deepStrictEqual(parseNodes(serializeNodes(nodes)), nodes);
   });
 

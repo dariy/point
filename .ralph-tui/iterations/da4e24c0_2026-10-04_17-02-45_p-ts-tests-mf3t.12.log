@@ -1,0 +1,31 @@
+# Iteration 7 Log
+
+## Metadata
+
+- **Task ID**: p-ts-tests-mf3t.12
+- **Task Title**: refactor(ts): convert demo/ to TS
+- **Description**: Convert the demo code to TS and add it to a typecheck.
+## Where
+- `demo/mock/banner.js`
+- `demo/mock/entry.js`
+- `demo/mock/routes.js`
+- `demo/mock/shim.js`
+- `demo/mock/store.js`
+- `demo/scripts/buil...
+- **Status**: failed
+- **Task Completed**: No
+- **Promise Detected**: No
+- **Started At**: 2026-10-04T21:02:45.725Z
+- **Ended At**: 2026-10-04T21:02:49.084Z
+- **Duration**: 3s
+- **Input Tokens**: 0
+- **Output Tokens**: 0
+- **Total Tokens**: 0
+- **Agent**: claude
+- **Model**: claude-opus-5-5
+- **Sandbox Mode**: auto
+- **Sandbox Network**: Enabled
+--- RAW OUTPUT ---
+You've hit your monthly spend limit · raise it at claude.ai/settings/usage?from=cc_cli_limit_message · your session limit resets 7:40pm (America/Toronto)
+
+[91m[Error: rate_limit][0m

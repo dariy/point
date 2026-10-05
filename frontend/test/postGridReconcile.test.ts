@@ -1,7 +1,10 @@
 import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type { PostGrid as PostGridClass } from '../src/components/public/PostGrid.ts';
+import type { Post } from '../src/api/posts.ts';
 import { setKey } from '../src/utils/reconcileList.ts';
 
 /**
@@ -21,15 +24,30 @@ import { setKey } from '../src/utils/reconcileList.ts';
  * PostCards keep both their nodes and their place in _children.
  */
 
-let PostGrid;
-let dom;
+/** The stand-in for a mounted PostCard: it records only its unmount. */
+interface FakeCard {
+  container: HTMLElement;
+  props: unknown;
+  unmounted: boolean;
+  unmount(): void;
+}
+
+/** A PostGrid whose child cards are FakeCards. */
+type GridUnderTest = Omit<PostGridClass, '_cards' | '_children' | 'mountChild'> & {
+  _cards: FakeCard[];
+  _children: FakeCard[];
+  mountChild(Cls: unknown, target: HTMLElement, props: unknown): FakeCard;
+};
+
+let PostGrid: typeof PostGridClass;
+let dom: ReturnType<typeof setupDOM>;
 
 before(async () => { ({ PostGrid } = await import('../src/components/public/PostGrid.ts')); });
 beforeEach(() => { dom = setupDOM(); });
 afterEach(() => dom.cleanup());
 
 /** A grid already showing `posts`, without running the real mount path. */
-function gridShowing(posts) {
+function gridShowing(posts: Post[]) {
   const container = document.createElement('div');
   document.body.appendChild(container);
 
@@ -37,14 +55,14 @@ function gridShowing(posts) {
   grid.className = 'posts-grid';
   if (posts.length) container.appendChild(grid);
 
-  const g = Object.create(PostGrid.prototype);
+  const g: GridUnderTest = Object.create(PostGrid.prototype);
   g.container = container;
   g.props = { posts };
   g._children = [];
   // Appending is the one path that mounts a real child; stub it out so the test
   // stays about the reconcile decision rather than PostCard's markup.
-  g.mountChild = (Cls, target, props) => {
-    const card = { container: target, props, unmounted: false, unmount() { this.unmounted = true; } };
+  g.mountChild = (_Cls, target, props) => {
+    const card: FakeCard = { container: target, props, unmounted: false, unmount() { this.unmounted = true; } };
     g._children.push(card);
     return card;
   };
@@ -61,8 +79,11 @@ function gridShowing(posts) {
   return { grid, g };
 }
 
-const P = (...ids) => ids.map((id) => ({ id }));
-const idsIn = (grid) => Array.from(grid.children).map((el) => el.dataset.rkey);
+const P = (...ids: number[]) => ids.map((id) => mock<Post>({ id }));
+const idsIn = (grid: HTMLElement) =>
+  Array.from(grid.children, (el) => (el as HTMLElement).dataset.rkey);
+/** The grid child at `i`, as the HTMLElement the grid made it. */
+const child = (grid: HTMLElement, i: number) => must(grid.children[i]) as HTMLElement;
 
 describe('PostGrid.reconcile', () => {
   test('appends the posts a wider fit added, leaving the existing cards alone', () => {
@@ -74,9 +95,9 @@ describe('PostGrid.reconcile', () => {
     // The first three nodes are the same objects — never re-rendered, so their
     // images never repaint.
     assert.deepEqual(Array.from(grid.children).slice(0, 3), before);
-    assert.equal(g.props.posts.length, 5);
-    assert.ok(grid.children[3].classList.contains('is-entering'));
-    assert.ok(grid.children[4].classList.contains('is-entering'));
+    assert.equal(g.props.posts?.length, 5);
+    assert.ok(child(grid, 3).classList.contains('is-entering'));
+    assert.ok(child(grid, 4).classList.contains('is-entering'));
   });
 
   test('drops the posts a narrower fit no longer holds, unmounting their cards', () => {
@@ -88,20 +109,20 @@ describe('PostGrid.reconcile', () => {
     assert.deepEqual(dropped.map((c) => c.unmounted), [true, true]);
     assert.equal(g._children.length, 3, 'unmounted cards leave the child list');
     assert.equal(g._cards.length, 3);
-    assert.equal(g.props.posts.length, 3);
+    assert.equal(g.props.posts?.length, 3);
   });
 
   test('clears the surplus marks a zoom step left on cards that did fit', () => {
     const { grid, g } = gridShowing(P(1, 2, 3));
-    grid.children[2].classList.add('is-zoom-surplus');
+    child(grid, 2).classList.add('is-zoom-surplus');
 
     assert.equal(g.reconcile(P(1, 2, 3, 4)), true);
-    assert.equal(grid.children[2].classList.contains('is-zoom-surplus'), false);
+    assert.equal(child(grid, 2).classList.contains('is-zoom-surplus'), false);
   });
 
   test('keeps data-index true for a card the change moved', () => {
     const { grid, g } = gridShowing(P(1, 2, 3));
-    const third = grid.children[2];
+    const third = child(grid, 2);
 
     assert.equal(g.reconcile(P(2, 3)), true);
     assert.deepEqual(idsIn(grid), ['2', '3']);
@@ -127,15 +148,15 @@ describe('PostGrid.reconcile', () => {
   });
 
   test('refuses a list that moves the hero, since it re-flows the whole grid', () => {
-    const { g } = gridShowing([{ id: 1 }, { id: 2, is_featured: true }]);
-    assert.equal(g.reconcile([{ id: 1, is_featured: true }, { id: 2 }]), false);
+    const { g } = gridShowing([mock<Post>({ id: 1 }), mock<Post>({ id: 2, is_featured: true })]);
+    assert.equal(g.reconcile([mock<Post>({ id: 1, is_featured: true }), mock<Post>({ id: 2 })]), false);
   });
 
   test('refuses to promote a card that is already on screen to the hero slot', () => {
     // Same hero INDEX, different hero post: card 2 would keep the regular-card
     // markup and isHero=false it was mounted with.
-    const { g } = gridShowing([{ id: 1, is_featured: true }, { id: 2 }]);
-    assert.equal(g.reconcile([{ id: 2, is_featured: true }, { id: 1 }]), false);
+    const { g } = gridShowing([mock<Post>({ id: 1, is_featured: true }), mock<Post>({ id: 2 })]);
+    assert.equal(g.reconcile([mock<Post>({ id: 2, is_featured: true }), mock<Post>({ id: 1 })]), false);
   });
 
   test('an unchanged list is a no-op that still reports success', () => {

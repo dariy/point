@@ -11,9 +11,15 @@
 import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, must } from './helpers/dom.ts';
+import type { FieldGroupsInput } from '../src/components/light/postEditorFields.ts';
+import type { Post } from '../src/api/posts.ts';
 
-let dom, buildFieldGroups, renderGroup;
+type Fields = typeof import('../src/components/light/postEditorFields.ts');
+
+let dom: ReturnType<typeof setupDOM>;
+let buildFieldGroups: Fields['buildFieldGroups'];
+let renderGroup: Fields['renderGroup'];
 
 before(async () => {
   dom = setupDOM();
@@ -24,15 +30,16 @@ before(async () => {
 beforeEach(() => { dom = setupDOM(); });
 afterEach(() => dom.cleanup());
 
-const build = (post = {}, over = {}) =>
+const build = (post: Partial<Post> = {}, over: Partial<FieldGroupsInput> = {}) =>
   buildFieldGroups({ post, isNew: false, editorMode: 'text', igStatus: {}, ...over });
 
 /** One group as it reaches the DOM. */
-const rendered = (key, post, over) => String(renderGroup(key, build(post, over)[key], false));
+const rendered = (key: string, post: Partial<Post>, over?: Partial<FieldGroupsInput>) =>
+  String(renderGroup(key, must(build(post, over)[key]), false));
 
 /** The text inside the collapsed summary span. */
-const summaryOf = (markup) =>
-  markup.match(/<span class="details-group-summary"[^>]*>([\s\S]*?)<\/span>/)[1];
+const summaryOf = (markup: string) =>
+  must(markup.match(/<span class="details-group-summary"[^>]*>([\s\S]*?)<\/span>/)?.[1]);
 
 describe('post editor field groups', () => {
   test('a slug with a quote is escaped once, not twice', () => {
@@ -47,7 +54,7 @@ describe('post editor field groups', () => {
 
   test('an ampersand in a tag name survives as one ampersand', () => {
     assert.strictEqual(
-      summaryOf(rendered('tags', { tags: [{ name: 'a & b' }] })),
+      summaryOf(rendered('tags', { tags: [{ name: 'a & b', slug: 'a-b' }] })),
       'a &amp; b',
     );
   });
@@ -73,12 +80,12 @@ describe('post editor field groups', () => {
  * escapeHtml leaves `javascript:` and `data:` perfectly intact.
  */
 describe('settings field inputs', () => {
-  let renderFields;
+  let renderFields: typeof import('../src/components/light/settingsFields.ts').renderFields;
   before(async () => {
     ({ renderFields } = await import('../src/components/light/settingsFields.ts'));
   });
 
-  const preview = (url) =>
+  const preview = (url: string) =>
     (String(renderFields(['logo_url'], { logo_url: url }, {}).inputs).match(/<img[^>]*>/) || [''])[0];
 
   test('a real logo URL is left alone', () => {

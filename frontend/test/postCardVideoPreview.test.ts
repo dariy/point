@@ -3,14 +3,16 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { setupDOM, fire, click } from './helpers/dom.ts';
+import { setupDOM, fire, click, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type { Post } from '../src/api/posts.ts';
 import { setNavTags, setRoute, setSettings } from '../src/store.ts';
 import { PostCard } from '../src/components/public/PostCard.ts';
 
 /**
  * PostCard video preview — the clip a card plays before the reader opens it.
  *
- * Sibling of postCardMedia.test.js, which covers what a card costs on load.
+ * Sibling of postCardMedia.test.ts, which covers what a card costs on load.
  * This file covers the other half of that bargain: nothing streams until the
  * reader points at one specific card, and everything is torn down again the
  * moment they point away. Those are afterRender behaviours, so unlike the
@@ -36,17 +38,24 @@ import { PostCard } from '../src/components/public/PostCard.ts';
  * post-grid.css and asserted directly, at the end of this file.
  */
 
-const POST = {
+const POST: Post = mock<Post>({
   id: 1,
   slug: 'a-post',
   title: 'A Post',
   tags: [],
   published_at: '2026-03-01T00:00:00Z',
   media_url: '/2026/03/clip.mp4',
-};
+});
+
+/** A <video> with the media API linkedom omits, and a count of each call. */
+type InstrumentedVideo = HTMLVideoElement & { playCalls: number; pauseCalls: number; loadCalls: number };
+
+type Settings = Parameters<typeof setSettings>[0];
 
 describe('PostCard video preview', () => {
-  let dom, videos, navigations;
+  let dom: ReturnType<typeof setupDOM>;
+  let videos: InstrumentedVideo[];
+  let navigations: string[];
 
   /**
    * Give every <video> the media API linkedom omits.
@@ -56,18 +65,18 @@ describe('PostCard video preview', () => {
    * stopped must have paused and dropped its stream, not merely left the
    * element out of the DOM with a download still running behind it.
    */
-  function instrumentVideos(document) {
-    const made = [];
+  function instrumentVideos(document: Document) {
+    const made: InstrumentedVideo[] = [];
     const create = document.createElement.bind(document);
-    document.createElement = (tag, ...rest) => {
-      const el = create(tag, ...rest);
+    document.createElement = (tag: string, options?: ElementCreationOptions) => {
+      const el = create(tag, options);
       if (String(tag).toLowerCase() !== 'video') return el;
-      el.playCalls = el.pauseCalls = el.loadCalls = 0;
-      el.play = () => { el.playCalls++; return Promise.resolve(); };
-      el.pause = () => { el.pauseCalls++; };
-      el.load = () => { el.loadCalls++; };
-      made.push(el);
-      return el;
+      const v = Object.assign(el as HTMLVideoElement, { playCalls: 0, pauseCalls: 0, loadCalls: 0 });
+      v.play = () => { v.playCalls++; return Promise.resolve(); };
+      v.pause = () => { v.pauseCalls++; };
+      v.load = () => { v.loadCalls++; };
+      made.push(v);
+      return v;
     };
     return made;
   }
@@ -76,7 +85,7 @@ describe('PostCard video preview', () => {
     dom = setupDOM();
     videos = instrumentVideos(dom.document);
     navigations = [];
-    dom.window.addEventListener('app:navigate', (e) => navigations.push(e.detail.path));
+    dom.window.addEventListener('app:navigate', (e) => navigations.push((e as CustomEvent<{ path: string }>).detail.path));
     setRoute({ pathname: '/', query: {} });
     setNavTags([]);
   });
@@ -86,19 +95,19 @@ describe('PostCard video preview', () => {
   });
 
   /** Mount one card, hover-autoplay on unless the test says otherwise. */
-  function mount(post = POST, settings = { enable_video_hover_autoplay: true }) {
-    setSettings(settings);
+  function mount(post: Post = POST, settings: Partial<Settings> = { enable_video_hover_autoplay: true }) {
+    setSettings(mock<Settings>(settings));
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
     const component = new PostCard(el, { post });
     component.mount();
-    return { component, card: el.querySelector('.post-card') };
+    return { component, card: must(el.querySelector<HTMLElement>('.post-card')) };
   }
 
-  const videoIn = (card) => card.querySelector('video');
+  const videoIn = (card: Element) => card.querySelector<InstrumentedVideo>('video');
 
-  const hoverIn = (card) => fire(card, 'pointerenter', { pointerType: 'mouse' });
-  const hoverOut = (card) => fire(card, 'pointerleave', { pointerType: 'mouse' });
+  const hoverIn = (card: Element) => fire(card, 'pointerenter', { pointerType: 'mouse' });
+  const hoverOut = (card: Element) => fire(card, 'pointerleave', { pointerType: 'mouse' });
 
   /**
    * One finger tap, in the order a browser emits it.
@@ -108,7 +117,7 @@ describe('PostCard video preview', () => {
    * not mouse-gated. Every touch assertion here runs through this sequence so
    * that regression cannot pass.
    */
-  function tap(card) {
+  function tap(card: Element) {
     fire(card, 'pointerdown', { pointerType: 'touch' });
     fire(card, 'pointerleave', { pointerType: 'touch' });
     click(card);
@@ -122,7 +131,7 @@ describe('PostCard video preview', () => {
       const { card } = mount();
       hoverIn(card);
 
-      const v = videoIn(card);
+      const v = must(videoIn(card));
       assert.ok(v, 'hover should build a <video>');
       assert.equal(v.src, '/2026/03/clip.mp4');
       assert.equal(v.playCalls, 1);
@@ -134,7 +143,7 @@ describe('PostCard video preview', () => {
     test('hovering out pauses, drops the stream and removes the element', () => {
       const { card } = mount();
       hoverIn(card);
-      const v = videoIn(card);
+      const v = must(videoIn(card));
       hoverOut(card);
 
       assert.equal(videoIn(card), null, 'element should leave the DOM');
@@ -153,14 +162,14 @@ describe('PostCard video preview', () => {
 
     test('the poster stays painted underneath, so a blocked clip shows something', () => {
       const { card } = mount();
-      const bg = card.querySelector('.post-card-background');
+      const bg = must(card.querySelector('.post-card-background'));
       hoverIn(card);
       // The poster is an <img> beside the clip now, not a background-image on
       // the box the clip is appended to — so it is the element that has to
       // survive the hover, not a style attribute.
       const poster = bg.querySelector('img');
       assert.ok(poster, 'the poster image should still be in the card');
-      assert.match(poster.getAttribute('src'), /clip\.mp4\?s=\d+/);
+      assert.match(String(poster.getAttribute('src')), /clip\.mp4\?s=\d+/);
       assert.equal(bg.getAttribute('style'), null, 'nothing paints via inline style');
       assert.equal(bg.lastElementChild, videoIn(card),
         'the clip is stacked on the poster by document order, so it goes last');
@@ -168,7 +177,7 @@ describe('PostCard video preview', () => {
 
     test('a video with no stored poster leaves the card blank, not broken', () => {
       const { card } = mount();
-      const poster = card.querySelector('.post-card-background img');
+      const poster = must(card.querySelector('.post-card-background img'));
       // Every rung 404s for a video that never got a poster frame; an <img>
       // that fails paints the browser's broken-image glyph unless it goes.
       poster.dispatchEvent(new dom.window.Event('error'));
@@ -184,7 +193,7 @@ describe('PostCard video preview', () => {
       tap(card);
 
       assert.ok(videoIn(card), 'the tap that reveals the overlay should play the clip');
-      assert.equal(videoIn(card).playCalls, 1);
+      assert.equal(must(videoIn(card)).playCalls, 1);
       assert.ok(card.classList.contains('is-touched'), 'overlay should be revealed');
       assert.deepEqual(navigations, [], 'first tap must not navigate');
     });
@@ -192,7 +201,7 @@ describe('PostCard video preview', () => {
     test('the tap that opens the post stops the preview', () => {
       const { card } = mount();
       tap(card);
-      const v = videoIn(card);
+      const v = must(videoIn(card));
       tap(card);
 
       assert.deepEqual(navigations, ['/posts/a-post'], 'second tap opens the post');
@@ -203,7 +212,7 @@ describe('PostCard video preview', () => {
     test('tapping away stops the preview along with the overlay', () => {
       const { card } = mount();
       tap(card);
-      const v = videoIn(card);
+      const v = must(videoIn(card));
       tapAway();
 
       assert.equal(card.classList.contains('is-touched'), false);
@@ -217,7 +226,7 @@ describe('PostCard video preview', () => {
       const second = mount({ ...POST, id: 2, slug: 'other-post' });
 
       tap(first.card);
-      const v = videoIn(first.card);
+      const v = must(videoIn(first.card));
       tap(second.card);
 
       assert.equal(first.card.classList.contains('is-touched'), false);
@@ -234,7 +243,7 @@ describe('PostCard video preview', () => {
       // open. This is what the mouse gate on pointerleave is for.
       const { card } = mount();
       tap(card);
-      const v = videoIn(card);
+      const v = must(videoIn(card));
 
       fire(card, 'pointerdown', { pointerType: 'touch' });
       fire(card, 'pointerleave', { pointerType: 'touch' }); // finger drags away; no click follows
@@ -261,7 +270,7 @@ describe('PostCard video preview', () => {
     // is a label over moving footage, so the card is marked `is-playing` and the
     // stylesheet fades it out — but only on the element's own `playing` event,
     // since a call to play() is a request the browser is free to refuse.
-    const startedPlaying = (card) => fire(videoIn(card), 'playing');
+    const startedPlaying = (card: Element) => fire(must(videoIn(card)), 'playing');
 
     test('a running preview marks the card, hiding the glyph', () => {
       const { card } = mount();
@@ -315,7 +324,7 @@ describe('PostCard video preview', () => {
     test('falls back to a paused video element if the poster 404s', () => {
       const { card } = mount();
       
-      const poster = card.querySelector('.post-card-background img');
+      const poster = must(card.querySelector('.post-card-background img'));
       assert.ok(poster, 'the poster image is initially rendered');
       assert.equal(videoIn(card), null, 'no video element yet');
 
@@ -324,7 +333,7 @@ describe('PostCard video preview', () => {
       assert.equal(card.querySelector('.post-card-background img'), null,
         'the broken image is removed');
       
-      const v = videoIn(card);
+      const v = must(videoIn(card));
       assert.ok(v, 'a paused video fallback is appended');
       assert.equal(v.muted, true);
       assert.equal(v.playsInline, true);
@@ -336,7 +345,7 @@ describe('PostCard video preview', () => {
     test('a regular image missing its poster frame stays unpainted', () => {
       const { card } = mount({ ...POST, media_url: '/2026/03/photo.jpg' });
       
-      const poster = card.querySelector('.post-card-background img');
+      const poster = must(card.querySelector('.post-card-background img'));
       fire(poster, 'error');
 
       assert.equal(card.querySelector('.post-card-background img'), null);
@@ -382,7 +391,7 @@ describe('PostCard video preview', () => {
     test('unmounting stops a preview that is still running', () => {
       const { component, card } = mount();
       hoverIn(card);
-      const v = videoIn(card);
+      const v = must(videoIn(card));
 
       component.unmount();
 
@@ -402,13 +411,13 @@ describe('PostCard video preview', () => {
       tap(second.card);
 
       assert.ok(videoIn(second.card), 'second card should still be playing');
-      assert.equal(videoIn(second.card).pauseCalls, 0);
+      assert.equal(must(videoIn(second.card)).pauseCalls, 0);
     });
 
     test('re-rendering does not leave a preview from the previous render playing', () => {
       const { component, card } = mount();
       hoverIn(card);
-      const v = videoIn(card);
+      const v = must(videoIn(card));
 
       component.setProps({ showViewCount: true });
 
@@ -444,8 +453,8 @@ describe('PostCard video preview — layout rules', () => {
    * modelled — the inner rules simply read as top-level, which is accurate
    * enough here because none of the selectors below are nested in one.
    */
-  function declsFor(selector) {
-    const decls = new Map();
+  function declsFor(selector: string) {
+    const decls = new Map<string, string>();
     for (const [, sel, body] of CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       if (!sel.split(',').some((s) => s.trim() === selector)) continue;
       for (const d of body.split(';')) {

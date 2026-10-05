@@ -8,8 +8,10 @@ import {
   mediaTypeFromPath,
   stripHtml,
 } from '../src/utils/postMedia.ts';
+import type { MediaItem } from '../src/utils/postMedia.ts';
+import { must } from './helpers/dom.ts';
 
-const types = (items) => items.map((i) => i.type);
+const types = (items: MediaItem[]) => items.map((i) => i.type);
 
 /**
  * mediaFromHtml builds the immersive viewer's slide list. A post with mixed
@@ -99,7 +101,7 @@ describe('mediaFromHtml — captions', () => {
     const html = '<figure><img src="/a.jpg"><figcaption>A caption</figcaption></figure>';
     const items = mediaFromHtml(html);
     assert.deepStrictEqual(types(items), ['html']);
-    assert.ok(items[0].html.includes('A caption'));
+    assert.ok(must(items[0]?.html).includes('A caption'));
   });
 
   test('an image whose only text is its own URL is media, not text', () => {

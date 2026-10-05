@@ -2,9 +2,10 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 import { pluginHost } from '../src/core/pluginHost.ts';
 import { mergeSettings } from '../src/store.ts';
+import type { default as PostEditPageClass } from '../src/pages/light/PostEditPage.ts';
 
 describe('PostEditPage', () => {
-  let PostEditPage;
+  let PostEditPage: typeof PostEditPageClass;
 
   before(async () => {
     // Mock CustomElementRegistry

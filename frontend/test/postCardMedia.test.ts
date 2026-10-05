@@ -17,12 +17,16 @@ import assert from 'node:assert';
  * wide alone on a phone and 320px wide three-across on a desktop.
  *
  * render() is a pure props → markup function, so it is exercised directly with
- * a null container, no DOM needed. The playback behaviour that the poster frame
+ * an empty container, no DOM needed. The playback behaviour that the poster frame
  * defers to — hover and tap previews — lives in afterRender and is covered
- * against a real DOM in postCardVideoPreview.test.js.
+ * against a real DOM in postCardVideoPreview.test.ts.
  */
 
-let PostCard;
+import type { PostCard as PostCardClass } from '../src/components/public/PostCard.ts';
+import type { Post } from '../src/api/posts.ts';
+import { mock } from './helpers/mock.ts';
+
+let PostCard: typeof PostCardClass;
 
 const POST = {
   id: 1,
@@ -33,7 +37,7 @@ const POST = {
 };
 
 // render() returns the RawHtml html`` produces; String() for the assertions.
-const render = (post) => String(new PostCard(null, { post }).render());
+const render = (post: Partial<Post>) => String(new PostCard(mock<HTMLElement>({}), { post: mock<Post>(post) }).render());
 
 describe('PostCard media', () => {
   before(async () => {
