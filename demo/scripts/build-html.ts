@@ -82,7 +82,7 @@ async function main() {
     // Stamped like the app.js and stylesheet URLs in the template: plugin
     // entries are unhashed too, and pluginHost.js import()s them at a fixed
     // path, so without this they outlive a redeploy in a visitor's cache and
-    // reach for chunk names the new build no longer has. shim.js matches on
+    // reach for chunk names the new build no longer has. shim.ts matches on
     // pathname, so the query is invisible to interception.
     if (chunks[p.id]) entry.entry = `/assets/js/p/${chunks[p.id]}?v=${VERSION}`;
     if (cssIds.has(p.id)) entry.css = `/assets/css/p/${p.id}.css?v=${VERSION}`;

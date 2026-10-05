@@ -113,12 +113,12 @@ step_govulncheck() {
 step_js_lint() {
     cd "$ROOT_DIR"
     node_modules/.bin/oxlint frontend/src frontend/sw.ts scripts/*.ts \
-        demo/mock demo/*.mjs demo/scripts/*.mjs
+        demo/mock demo/*.ts demo/scripts/*.ts
 }
 
 # frontend/src is TypeScript: tsc with no emit. A .js file under frontend/src
 # fails this step, so the move to TypeScript cannot go back. JS stays only in
-# frontend/vendor/ and demo/. tsconfig.test.json
+# frontend/vendor/. tsconfig.test.json
 # checks the .ts tests, the E2E tests and their helpers; tsconfig.scripts.json
 # checks scripts/*.ts. Part of --lint,
 # because a broken type is a static error like any other.

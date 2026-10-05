@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Restructures an already-generated demo instance onto the tag tree in
- * demo/world.mjs, without regenerating any prose.
+ * demo/world.ts, without regenerating any prose.
  *
  * The first demo generation let the model invent its own keywords per photo.
  * That produced ~100 topical tags of which roughly 80 named a single post — a
@@ -16,11 +16,11 @@
  * of sitting below the fold of a page nobody scrolls.
  *
  * A fresh `demo/scripts/make-content.sh` run produces this shape directly —
- * generate-content.mjs shares the same module. This script exists so the
+ * generate-content.ts shares the same module. This script exists so the
  * existing bundle can be restructured without a Gemini key or new photographs.
  *
  * Usage:
- *   node demo/scripts/retag-content.mjs --base=http://127.0.0.1:8002 \
+ *   node demo/scripts/retag-content.ts --base=http://127.0.0.1:8002 \
  *     --session=<token> --db=/path/to/scratch/point.db
  */
 
@@ -33,7 +33,7 @@ import {
   countryOf,
   postTags,
   toTopic,
-} from "../world.mjs";
+} from "../world.ts";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -164,7 +164,7 @@ const YEAR_NAMES = new Set(YEARS.map(String));
 
 /**
  * Deals each of a city's posts a year from that city's own window (see
- * LOCATIONS in demo/world.mjs), cycling so the posts spread evenly across it.
+ * LOCATIONS in demo/world.ts), cycling so the posts spread evenly across it.
  *
  * The first generation dealt location and year from two round-robins whose
  * lengths happen to be coprime (4 and 7), so 28 posts landed on all 28
@@ -193,7 +193,7 @@ function yearScheduler() {
 function restamp(stamp, year) {
   if (typeof stamp !== "string" || !/^\d{4}-/.test(stamp)) return stamp;
   const moved = `${year}${stamp.slice(4)}`;
-  // Same clamp generate-content.mjs applies: the current year is only partly
+  // Same clamp generate-content.ts applies: the current year is only partly
   // elapsed, and a post dated in the future sorts above everything and reads
   // as a bug.
   const ceiling = new Date(Date.now() - 3600_000);
@@ -211,7 +211,7 @@ async function main() {
   posts.sort((a, b) => a.id - b.id);
 
   // Timestamps are captured before any write and restored after: the archive
-  // spans 2020–2026 only because generate-content.mjs backdated it
+  // spans 2020–2026 only because generate-content.ts backdated it
   // directly in SQLite, and a PUT through the API has no way to preserve that.
   const db = new DatabaseSync(DB_PATH);
   const stamps = new Map(
@@ -298,7 +298,7 @@ async function main() {
   const thin = [...used].filter((t) => counts.get(t) < 2);
   if (thin.length) {
     console.error(`\nFAIL — topic(s) on fewer than 2 posts: ${thin.join(", ")}`);
-    console.error("Nothing was deleted. Widen TOPIC_ALIASES in demo/world.mjs.");
+    console.error("Nothing was deleted. Widen TOPIC_ALIASES in demo/world.ts.");
     process.exit(1);
   }
 

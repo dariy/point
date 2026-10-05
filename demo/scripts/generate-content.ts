@@ -14,13 +14,13 @@
  * server-side at publish time and a past `scheduled_at` publishes immediately,
  * so backdating is applied directly to the database at the end.
  *
- * Not every post comes out published. `visibilityPlan` (demo/world.mjs) deals
+ * Not every post comes out published. `visibilityPlan` (demo/world.ts) deals
  * the batch across the four states an archive can hold — published, scheduled,
  * hidden, and hidden by its tag — so the demo has something to conceal when the
  * revelio switch is thrown.
  *
  * Usage:
- *   node demo/scripts/generate-content.mjs \
+ *   node demo/scripts/generate-content.ts \
  *     --base=http://localhost:8002 --session=<token> \
  *     --db=/path/to/scratch/point.db --gemini-key=<key> [--count=28]
  *
@@ -43,7 +43,7 @@ import {
   postTags,
   toTopic,
   visibilityPlan,
-} from "../world.mjs";
+} from "../world.ts";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -74,8 +74,8 @@ for (const [name, value] of [
 
 // ── Demo world ────────────────────────────────────────────────────────────
 //
-// Locations, years and the topical vocabulary live in demo/world.mjs,
-// shared with retag-content.mjs so the two cannot describe different
+// Locations, years and the topical vocabulary live in demo/world.ts,
+// shared with retag-content.ts so the two cannot describe different
 // worlds.
 
 /**

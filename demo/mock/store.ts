@@ -1,7 +1,7 @@
 /**
  * In-memory data model for the static demo.
  *
- * Seeded from recorded fixtures (demo/scripts/record-fixtures.mjs) and mutated
+ * Seeded from recorded fixtures (demo/scripts/record-fixtures.ts) and mutated
  * in place, so create/edit/delete in the demo actually change what the rest of
  * the UI shows. A reload re-seeds from the fixture and the demo is pristine
  * again. That is the whole reset story — there is no server to roll back.
@@ -22,19 +22,19 @@
  *
  * The theme catalogue is the one collection that does not come from the fixture
  * at all: the backend derives it from the theme files on every request, so the
- * demo reads the build's equivalent (demo/scripts/build-themes.mjs) instead of
+ * demo reads the build's equivalent (demo/scripts/build-themes.ts) instead of
  * a recording that would freeze the list.
  *
  * Entities (posts/tags/media/settings) live here as mutable collections.
  * Genuinely derived views — the tag graph, the timeline — stay as recorded
  * blobs; recomputing them in the browser would be a second implementation of
  * real backend work that no demo visitor would notice. The Atlas's per-place
- * cloud is the exception and is computed (routes.js atlasCloud): it is one
+ * cloud is the exception and is computed (routes.ts atlasCloud): it is one
  * payload per place *and* per timeline range, so there is no single blob to
  * record.
  */
 
-import { applyDemoSettings, applyDemoSettingsDeep } from "../settings.mjs";
+import { applyDemoSettings, applyDemoSettingsDeep } from "../settings.ts";
 
 let fixtures = null;
 let themeCatalog = null;
@@ -220,7 +220,7 @@ function storedContent(fx) {
 
 /**
  * Write the content stores back, called after every request that could have
- * changed them (shim.js dispatch).
+ * changed them (shim.ts dispatch).
  *
  * Serialising the whole of both on each write rather than tracking a diff:
  * a hundred kilobytes of JSON.stringify is a fraction of a millisecond and the
@@ -341,12 +341,12 @@ function initialTheme(themes, fx) {
 /**
  * Structured-clone the seed so mutations never touch the imported module.
  *
- * The demo's own settings (demo/settings.mjs) are overlaid on every settings
+ * The demo's own settings (demo/settings.ts) are overlaid on every settings
  * map on the way in — they were already baked into the fixture at record time,
  * so this only bites when that file has been edited since, which is the point:
  * change a demo string, rebuild, see it. Nothing here re-records.
  *
- * `catalog` is the build's theme list (demo/scripts/build-themes.mjs); the
+ * `catalog` is the build's theme list (demo/scripts/build-themes.ts); the
  * fixture's own list is the fallback for a build that predates it.
  */
 function seed(fx, catalog) {
@@ -423,7 +423,7 @@ function seed(fx, catalog) {
 
 /**
  * The theme catalogue the build derived from frontend/themes/
- * (demo/scripts/build-themes.mjs), fetched rather than bundled so it stays the
+ * (demo/scripts/build-themes.ts), fetched rather than bundled so it stays the
  * same list the CSS files next to it describe.
  *
  * Fetched through the *patched* window.fetch, which passes /assets/ straight to
@@ -481,7 +481,7 @@ export function nextId(collection) {
   return collection.reduce((max, row) => Math.max(max, row.id || 0), 0) + 1;
 }
 
-// Who may see which posts and tags is worked out in routes.js (hiddenSets and
+// Who may see which posts and tags is worked out in routes.ts (hiddenSets and
 // friends), not here: it is a walk over the tag graph rather than a property of
 // a row, and the same walk answers for tags, for posts, and for the scheduled
 // queue.
@@ -538,7 +538,7 @@ export function withinYears(rows, query) {
   );
 }
 
-// The feed's own pagination lives in routes.js (feedPage): it spans both halves
+// The feed's own pagination lives in routes.ts (feedPage): it spans both halves
 // of the feed — the published pages and the scheduled queue left of page 1 —
 // which needs the queue, and the queue is a visibility question.
 

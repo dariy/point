@@ -20,8 +20,8 @@
  * there; see THEME_CSS below.
  */
 
-import { routes } from "./routes.js";
-import { getState, resetState, storeContent } from "./store.js";
+import { routes } from "./routes.ts";
+import { getState, resetState, storeContent } from "./store.ts";
 
 const state = await getState();
 

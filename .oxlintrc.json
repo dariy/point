@@ -83,7 +83,7 @@
     {
       "files": [
         "frontend/src/**/*.ts",
-        "demo/mock/**/*.js"
+        "demo/mock/**/*.ts"
       ],
       "globals": {
         "globalThis": "readonly",
@@ -191,7 +191,8 @@
     {
       "files": [
         "scripts/**/*.ts",
-        "demo/**/*.mjs"
+        "demo/*.ts",
+        "demo/scripts/*.ts"
       ],
       "globals": {
         "process": "readonly",
@@ -207,7 +208,7 @@
     },
     {
       "files": [
-        "demo/scripts/test.mjs"
+        "demo/scripts/test.ts"
       ],
       "globals": {
         "process": "readonly",

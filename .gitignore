@@ -76,7 +76,7 @@ demo/dist/
 demo/.scratch/
 # Transcoded demo media, reused across builds (demo/scripts/build.sh).
 demo/.media-cache/
-# Recorded demo fixtures. Regenerate with demo/scripts/record-fixtures.mjs
+# Recorded demo fixtures. Regenerate with demo/scripts/record-fixtures.ts
 # against an instance whose content you intend to publish: the recording is a
 # copy of that instance's posts, tags and media metadata.
 demo/mock/fixtures/fixtures.json

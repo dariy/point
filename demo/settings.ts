@@ -3,9 +3,9 @@
  *
  * These are applied twice, on purpose:
  *
- *   - `demo/scripts/record-fixtures.mjs` bakes them into the fixture bundle, so
+ *   - `demo/scripts/record-fixtures.ts` bakes them into the fixture bundle, so
  *     a recorded bundle is already demo-correct standing alone.
- *   - `demo/mock/store.js` re-applies them over whatever was recorded when the
+ *   - `demo/mock/store.ts` re-applies them over whatever was recorded when the
  *     store seeds, so editing this file and rebuilding (`demo/scripts/run.sh`)
  *     is enough to change the running demo. Re-recording — which needs a live
  *     instance, picsum.photos and a Gemini key — is not.

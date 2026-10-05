@@ -155,4 +155,4 @@ output is worth quoting when the change touches JS.
 > and several minutes of network. A clean clone therefore cannot build the demo, while it
 > can always run `./scripts/run.sh`. If you *do* have fixtures on disk,
 > `demo/scripts/run.sh` serves the same UI on :8002 with a fuller archive behind it, and
-> `node demo/scripts/test.mjs --base=http://localhost:8002` checks it headlessly.
+> `node demo/scripts/test.ts --base=http://localhost:8002` checks it headlessly.

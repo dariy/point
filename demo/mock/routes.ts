@@ -11,7 +11,7 @@
  *
  * Coverage is deliberately partial. The full REST surface is ~110 endpoints;
  * this covers what the UI actually exercises. Everything else falls through to
- * the shim's soft default rather than erroring — see shim.js.
+ * the shim's soft default rather than erroring — see shim.ts.
  */
 
 import {
@@ -25,7 +25,7 @@ import {
   storePlugins,
   toListShape,
   withinYears,
-} from "./store.js";
+} from "./store.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -1385,7 +1385,7 @@ export const routes = [
       state.activeTheme = { ...theme };
       state.settings.active_css_theme = theme.name;
       state.publicSettings.active_css_theme = theme.name;
-      // Outlive this document: shim.js composes theme.css from the store, and
+      // Outlive this document: shim.ts composes theme.css from the store, and
       // the store is re-seeded by every full page load — including the walk
       // from /light back out to the public site.
       storeThemeName(theme.name);

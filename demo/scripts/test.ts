@@ -18,7 +18,7 @@
  *
  * Run against a served build with the backend STOPPED:
  *   npx serve -s demo/dist -l 3000
- *   node demo/scripts/test.mjs --base=http://localhost:3000
+ *   node demo/scripts/test.ts --base=http://localhost:3000
  */
 
 import { chromium } from "playwright";
@@ -52,7 +52,7 @@ const IGNORED_CONSOLE = [
   /favicon/i,
 ];
 
-/** The demo's hidden place — demo/world.mjs PRIVATE_LOCATION. */
+/** The demo's hidden place — demo/world.ts PRIVATE_LOCATION. */
 const HIDDEN_TAG = "mirandela";
 
 /** What the client adds to every request with revelio off (utils/revelio.ts). */
@@ -324,7 +324,7 @@ async function main() {
   }
 
   // The catalogue is built from frontend/themes/ rather than recorded, so every
-  // shipped theme is offered. A missing one means build-themes.mjs did not run
+  // shipped theme is offered. A missing one means build-themes.ts did not run
   // and the fixture's frozen list is being served instead.
   const shipped = await page.evaluate(async () => {
     const res = await fetch("/assets/themes/index.json");

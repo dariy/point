@@ -3,12 +3,12 @@
  * Writes a one-to-two paragraph excerpt onto every post in the recorded
  * fixtures.
  *
- * The demo's posts carry an image and nothing else: `generate-content.mjs`
+ * The demo's posts carry an image and nothing else: `generate-content.ts`
  * puts Gemini's prose in `excerpt` (the body is only the photograph), but the
  * recorded bundle has `excerpt: null` on all 28 — a `PUT /api/posts/:id` that
  * omits `excerpt` clears it, because the handler's partial-PUT merge covers
  * title/content/slug/formatter/status/type and not excerpt, so
- * `retag-content.mjs` blanked the field on the pass that restructured the tags.
+ * `retag-content.ts` blanked the field on the pass that restructured the tags.
  * Without it the post cards preview nothing and the Sheet viewer — the reason
  * the body holds only a photograph — opens on a title and a tag row.
  *
@@ -23,17 +23,17 @@
  * blobs (`posts`, `postDetail`, the prerendered `pages`) gets the same text.
  *
  * Usage:
- *   node demo/scripts/fill-excerpts.mjs                  # fill empty excerpts
- *   node demo/scripts/fill-excerpts.mjs --force          # rewrite all of them
- *   node demo/scripts/fill-excerpts.mjs --dry-run        # print, write nothing
+ *   node demo/scripts/fill-excerpts.ts                  # fill empty excerpts
+ *   node demo/scripts/fill-excerpts.ts --force          # rewrite all of them
+ *   node demo/scripts/fill-excerpts.ts --dry-run        # print, write nothing
  *
- * Run it after record-fixtures.mjs and before build.sh.
+ * Run it after record-fixtures.ts and before build.sh.
  */
 
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { LOCATIONS, TOPICS, YEARS, countryOf } from "../world.mjs";
+import { LOCATIONS, TOPICS, YEARS, countryOf } from "../world.ts";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -75,7 +75,7 @@ function sample(rand, list, n) {
 // ── Vocabulary ────────────────────────────────────────────────────────────
 
 /**
- * One clause per topic in `world.mjs`'s controlled vocabulary, so a post's
+ * One clause per topic in `world.ts`'s controlled vocabulary, so a post's
  * prose talks about the things its tags claim it is about. Two variants each:
  * with 28 posts drawing 2–4 topics, a single variant repeats often enough to
  * read as a template.
@@ -171,7 +171,7 @@ const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Lowercases only the leading letter — `toLowerCase()` would eat a mid-sentence "I". */
 const decapitalize = (s) => s.charAt(0).toLowerCase() + s.slice(1);
 
-/** Splits a post's tag names into the four facets `world.mjs` assigns. */
+/** Splits a post's tag names into the four facets `world.ts` assigns. */
 function facets(post) {
   const names = (post.tags || []).map((t) => (typeof t === "string" ? t : t.name));
   const city = names.find((n) => CITY_NAMES.has(n));
@@ -273,7 +273,7 @@ async function main() {
     return;
   }
 
-  // Compact, matching record-fixtures.mjs — the file is a build input, not a
+  // Compact, matching record-fixtures.ts — the file is a build input, not a
   // file anyone reads.
   await writeFile(FIXTURES, JSON.stringify(fx));
   console.log(`· wrote ${FIXTURES}`);

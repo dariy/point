@@ -10,6 +10,6 @@
  * not a copy of it.
  */
 
-import "./shim.js";
-import "./banner.js";
+import "./shim.ts";
+import "./banner.ts";
 import "../../frontend/src/app.ts";

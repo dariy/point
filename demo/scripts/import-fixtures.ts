@@ -2,13 +2,13 @@
 /**
  * Rebuilds a Point instance from a recorded fixture bundle.
  *
- * The inverse of record-fixtures.mjs, and the reason the scratch instance is
+ * The inverse of record-fixtures.ts, and the reason the scratch instance is
  * genuinely disposable: `demo/mock/fixtures/fixtures.json` plus the original
  * photographs is enough to stand the archive back up, so content that took a
  * Gemini run to write survives the loss of the database it was written into.
  *
  * That is what makes *adding* to the demo possible. Growing the archive used to
- * mean re-running generate-content.mjs from scratch — new photographs and new
+ * mean re-running generate-content.ts from scratch — new photographs and new
  * prose for every post, including the ones that were already good. Importing
  * first and generating on top (`make-content.sh --add=N`) leaves every existing
  * post exactly as it was recorded.
@@ -18,10 +18,10 @@
  * edit. The exceptions are the three timestamp columns and `view_count`, which
  * the API owns and would otherwise reset to "just now" — collapsing a 2020-2026
  * archive onto today. Those are restored directly in SQLite at the end, the
- * same way generate-content.mjs backdates.
+ * same way generate-content.ts backdates.
  *
  * Usage:
- *   node demo/scripts/import-fixtures.mjs \
+ *   node demo/scripts/import-fixtures.ts \
  *     --base=http://localhost:8002 --session=<token> \
  *     --db=/path/to/scratch/point.db [--media=/path/to/originals]
  *
@@ -101,7 +101,7 @@ async function api(method, path, body) {
  * off both its country and the flat `city` index, so there is no creation order
  * that would let one pass do it.
  *
- * Fields are copied verbatim rather than rebuilt from world.mjs. The recorded
+ * Fields are copied verbatim rather than rebuilt from world.ts. The recorded
  * tree already *is* that world, plus the texture a run through the API leaves
  * on it — `kind: ""` and `in_breadcrumbs: false` on the tags the post endpoint
  * auto-created, which is exactly what would be lost by regenerating them.

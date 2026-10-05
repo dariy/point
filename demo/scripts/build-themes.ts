@@ -16,7 +16,7 @@
  * colour literals behind the admin swatch, and the presence of a dark block.
  *
  * Usage:
- *   node demo/scripts/build-themes.mjs --src=frontend/themes --out=<dist>/assets/themes/index.json
+ *   node demo/scripts/build-themes.ts --src=frontend/themes --out=<dist>/assets/themes/index.json
  */
 
 import fs from "node:fs";
@@ -32,7 +32,7 @@ const args = Object.fromEntries(
 const SRC = args.src;
 const OUT = args.out;
 if (!SRC || !OUT) {
-  console.error("usage: build-themes.mjs --src=<themes dir> --out=<index.json>");
+  console.error("usage: build-themes.ts --src=<themes dir> --out=<index.json>");
   process.exit(1);
 }
 
@@ -76,7 +76,7 @@ for (const file of files) {
 
   const name = TITLE_RE.exec(content)?.[1] || slug;
 
-  // shim.js resolves the active theme to /assets/themes/<name.toLowerCase()>.css,
+  // shim.ts resolves the active theme to /assets/themes/<name.toLowerCase()>.css,
   // the same lowercase mapping the backend uses to find the file. A title that
   // does not match its filename would fetch a 404 and fall back to the baked-in
   // theme.css — the page stays styled, so the failure is silent.

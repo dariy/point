@@ -18,7 +18,7 @@
  *   demo value.
  *
  * Usage:
- *   node demo/scripts/record-fixtures.mjs --base=http://localhost:8001 \
+ *   node demo/scripts/record-fixtures.ts --base=http://localhost:8001 \
  *        --session=<token> [--out=demo/mock/fixtures]
  *
  * The session token is a raw (unhashed) value from the `sessions` table. Any
@@ -31,7 +31,7 @@ import {
   REPLACE_SETTINGS,
   ADD_SETTINGS,
   SETTINGS_MARKER,
-} from "../settings.mjs";
+} from "../settings.ts";
 
 // ── Args ──────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ const DROP_SETTING_KEYS = [
 ];
 
 // REPLACE_SETTINGS / ADD_SETTINGS / SETTINGS_MARKER are what the demo *says*
-// rather than what it hides, so they live in demo/settings.mjs — the build
+// rather than what it hides, so they live in demo/settings.ts — the build
 // re-applies them from there, which is what makes editing a demo string a
 // rebuild rather than a re-record.
 
@@ -237,7 +237,7 @@ async function main() {
     nav: await get("/api/pages/nav"),
   };
 
-  // Tag pages are SYNTHESIZED by the mock (see mock/routes.js) rather than
+  // Tag pages are SYNTHESIZED by the mock (see mock/routes.ts) rather than
   // recorded: the payload is just {tag, posts, pagination, breadcrumbs,
   // nav_children, menu}, all derivable from the tag and post stores. Recording
   // ~250 of them would multiply the bundle, and synthesis has the better

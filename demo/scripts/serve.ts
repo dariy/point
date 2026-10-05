@@ -13,7 +13,7 @@
  * So the rules are read from the build itself rather than restated here: local
  * serving and the deployed site cannot drift apart.
  *
- * Usage: node demo/scripts/serve.mjs [--dir=demo/dist] [--host=127.0.0.1] [--port=8002]
+ * Usage: node demo/scripts/serve.ts [--dir=demo/dist] [--host=127.0.0.1] [--port=8002]
  */
 
 import { createServer } from "node:http";
