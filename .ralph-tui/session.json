@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "9d137dcd-f738-41f8-a7b3-ed89bef44bf9",
+  "sessionId": "55037591-b47d-4a0e-80fd-322da6d5e2c8",
   "status": "running",
-  "startedAt": "2026-10-05T01:23:26.483Z",
-  "updatedAt": "2026-10-05T01:25:19.962Z",
+  "startedAt": "2026-10-05T12:57:04.530Z",
+  "updatedAt": "2026-10-05T12:59:08.329Z",
   "currentIteration": 0,
   "maxIterations": 0,
   "tasksCompleted": 0,
@@ -137,7 +137,7 @@
       {
         "id": "p-hosting-ready-vyok",
         "title": "epic(hosting): managed-hosting readiness — setup claim token, backups on by default, real 404s (review 2026-09-28)",
-        "status": "open",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -4559,7 +4559,7 @@
       {
         "id": "p-ts-tests-mf3t.7",
         "title": "test(ts): convert the post tests",
-        "status": "in_progress",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -4577,7 +4577,7 @@
       {
         "id": "p-ts-tests-mf3t.8",
         "title": "test(ts): convert the page and plugin tests",
-        "status": "in_progress",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -4595,13 +4595,13 @@
       {
         "id": "p-ts-tests-mf3t.9",
         "title": "test(ts): convert the E2E tests",
-        "status": "in_progress",
+        "status": "completed",
         "completedInSession": false
       },
       {
         "id": "p-ts-tests-mf3t.10",
         "title": "refactor(ts): convert the service worker to sw.ts",
-        "status": "in_progress",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -5420,7 +5420,7 @@
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [
-    "p-hosting-ready-vyok"
+    "p-j3i6"
   ],
   "subagentPanelVisible": false
 }

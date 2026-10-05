@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"point-api/internal/plugins"
+	"point-api/internal/services"
 
 	"golang.org/x/term"
 )
@@ -40,7 +41,7 @@ func execCreateAPIKey(svcs *AppServices, name string, password []byte) error {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 
-	rawKey, _, err := svcs.ApiKey.GenerateAPIKey(ctx, user.ID, name, nil)
+	rawKey, _, err := svcs.ApiKey.GenerateAPIKey(ctx, user.ID, name, services.ScopeGeneral, nil)
 	if err != nil {
 		return fmt.Errorf("failed to generate API key: %w", err)
 	}

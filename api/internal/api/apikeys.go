@@ -39,6 +39,7 @@ func (h *ApiKeyHandler) ListKeys(c echo.Context) error {
 
 type CreateApiKeyRequest struct {
 	Name      string     `json:"name"`
+	Scope     string     `json:"scope"`
 	ExpiresAt *time.Time `json:"expires_at"`
 }
 
@@ -53,7 +54,11 @@ func (h *ApiKeyHandler) CreateKey(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
 	}
 
-	rawKey, apiKey, err := h.apiKeyService.GenerateAPIKey(c.Request().Context(), userID, req.Name, req.ExpiresAt)
+	if req.Scope != "" && !services.ValidScope(req.Scope) {
+		return echo.NewHTTPError(http.StatusBadRequest, "scope must be general or lightroom")
+	}
+
+	rawKey, apiKey, err := h.apiKeyService.GenerateAPIKey(c.Request().Context(), userID, req.Name, req.Scope, req.ExpiresAt)
 	if err != nil {
 		return MapError(err)
 	}

@@ -16,6 +16,16 @@ import (
 	"point-api/internal/utils"
 )
 
+// API key scopes. A general key has the access of its owner; a lightroom key
+// may only create new media, posts and tags (see api.lightroomAllowed).
+const (
+	ScopeGeneral   = "general"
+	ScopeLightroom = "lightroom"
+)
+
+// ValidScope reports whether s names a known API key scope.
+func ValidScope(s string) bool { return s == ScopeGeneral || s == ScopeLightroom }
+
 type ApiKeyService struct {
 	repo repository.Repository
 	// settings resolves the api-keys plugin toggle on every validation. The
@@ -29,7 +39,7 @@ func NewApiKeyService(repo repository.Repository, settings *SettingsService) *Ap
 }
 
 // GenerateAPIKey generates a new high-entropy API key, stores its hash, and returns the raw key.
-func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name string, expiresAt *time.Time) (string, models.ApiKey, error) {
+func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name, scope string, expiresAt *time.Time) (string, models.ApiKey, error) {
 	// Generate raw key: point_pat_ + 32 random bytes hex
 	// 32 bytes hex = 64 chars. Total length = 10 + 64 = 74 chars.
 	b := make([]byte, 32)
@@ -44,6 +54,13 @@ func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name s
 	// Prefix: first 16 chars of the raw key (point_pat_ + 6 chars)
 	prefix := rawKey[:16]
 
+	if scope == "" {
+		scope = ScopeGeneral
+	}
+	if !ValidScope(scope) {
+		return "", models.ApiKey{}, wrapKind(ErrInvalidInput, fmt.Errorf("unknown API key scope %q", scope))
+	}
+
 	var expiresAtNull sql.NullTime
 	if expiresAt != nil {
 		expiresAtNull = sql.NullTime{Time: *expiresAt, Valid: true}
@@ -55,6 +72,7 @@ func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name s
 		KeyHash:   keyHash,
 		Prefix:    prefix,
 		ExpiresAt: expiresAtNull,
+		Scope:     scope,
 	}
 
 	apiKey, err := s.repo.CreateAPIKey(ctx, params)

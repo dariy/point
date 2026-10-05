@@ -449,6 +449,10 @@ var schema = []struct{ name, sql string }{
 		"create_jobs_due_index",
 		`CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(next_run_at, id) WHERE state = 'queued'`,
 	},
+	{
+		"add_api_keys_scope",
+		`ALTER TABLE api_keys ADD COLUMN scope TEXT NOT NULL DEFAULT 'general'`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

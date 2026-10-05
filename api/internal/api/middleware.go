@@ -42,6 +42,20 @@ func extractSessionID(v interface{}) int64 {
 	return 0
 }
 
+// lightroomAllowed reports whether a lightroom-scoped key may call the route:
+// create-only, so POST to the create endpoints for posts, tags and media.
+// c.Path() is the registered route pattern, so a lookalike URL cannot match.
+func lightroomAllowed(c echo.Context) bool {
+	if c.Request().Method != http.MethodPost {
+		return false
+	}
+	switch c.Path() {
+	case "/api/posts", "/api/tags", "/api/media/upload", "/api/media/upload/multiple":
+		return true
+	}
+	return false
+}
+
 func AuthMiddleware(authService *services.AuthService, apiKeyService *services.ApiKeyService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -52,6 +66,9 @@ func AuthMiddleware(authService *services.AuthService, apiKeyService *services.A
 					key := h[len(prefix):]
 					apiKey, err := apiKeyService.ValidateAPIKey(c.Request().Context(), key)
 					if err == nil {
+						if apiKey.Scope == services.ScopeLightroom && !lightroomAllowed(c) {
+							return echo.NewHTTPError(http.StatusForbidden, "this API key can only create posts, tags and media")
+						}
 						c.Set("user", apiKey)
 						return next(c)
 					}
@@ -170,7 +187,9 @@ func OptionalAuthMiddleware(authService *services.AuthService, apiKeyService *se
 				if len(h) > len(prefix) && h[:len(prefix)] == prefix {
 					key := h[len(prefix):]
 					apiKey, err := apiKeyService.ValidateAPIKey(c.Request().Context(), key)
-					if err == nil {
+					// A lightroom key is create-only: it must not widen what a
+					// read shows, so it gets the guest view here.
+					if err == nil && apiKey.Scope != services.ScopeLightroom {
 						setUser(apiKey)
 						return next(c)
 					}

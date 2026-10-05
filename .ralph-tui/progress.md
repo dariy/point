@@ -10,9 +10,12 @@ after each iteration and it's included in prompts for context.
 ---
 
 
-## 2026-10-04 - p-hosting-ready-vyok
-- Epic closure only. Children .1, .2 and .3 were already closed. Docs acceptance was verified.
-- Files changed: none (code)
+## 2026-10-05 - p-j3i6
+- Added a `scope` to API keys: `general` (full access) and `lightroom` (create-only).
+- A lightroom key may only POST `/api/posts`, `/api/tags`, `/api/media/upload` and `/api/media/upload/multiple`. Other routes answer 403. On OptionalAuth reads it gets the guest view. The MCP path accepts only general keys.
+- Files: api/sql/{schema,queries}.sql, api/internal/migrations/migrations.go (`add_api_keys_scope`), api/internal/models (sqlc regen), services/apikey_service.go, api/{middleware,apikeys,mappers}.go, mcp/server.go, cmd/api/apikey.go, tests, frontend api/auth.ts + ApiKeysSection.ts, docs/features/auth.md.
 - **Learnings:**
-  - For an epic bead, first check child status with `br show <epic>`. Then close the epic.
+  - Three callers reach `ValidateAPIKey` (AuthMiddleware, OptionalAuth, MCP). Each needs its own scope check.
+  - `c.Path()` gives the route pattern, so scope checks match registered routes, not raw URLs.
+  - A duplicate-column error in a migration counts as a no-op, so a new column can go in both schema.sql and the migration list.
 ---
