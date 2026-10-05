@@ -6,6 +6,6 @@
   // A test imports demo/ and scripts/ JavaScript; those files are not checked
   // here until they move to TypeScript (epic p-ts-tests-mf3t).
   "compilerOptions": { "checkJs": false, "module": "ES2022", "types": ["node"] },
-  "include": ["frontend/test/**/*.ts", "frontend/types/**/*.d.ts"],
+  "include": ["frontend/test/**/*.ts", "frontend/e2e/**/*.ts", "frontend/types/**/*.d.ts"],
   "exclude": ["node_modules"]
 }

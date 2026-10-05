@@ -20,19 +20,33 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import crypto from 'node:crypto';
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:8001';
 const PW = crypto.createHash('sha256').update('devpassword').digest('hex');
 const POLICY = "require-trusted-types-for 'script'; trusted-types point point-leaflet point-codejar";
 
+/** One Trusted Types violation, as COLLECT records it. */
+interface Violation {
+  disposition: string;
+  source: string;
+  sample: string;
+}
+
+declare global {
+  interface Window {
+    __ttViolations?: Violation[];
+  }
+}
+
 /** Every violation the page saw, plus every error a refused write threw. */
 const COLLECT = () => {
-  window.__ttViolations = [];
+  const seen: Violation[] = [];
+  window.__ttViolations = seen;
   document.addEventListener('securitypolicyviolation', (e) => {
     if (!/trusted-types/.test(e.effectiveDirective || e.violatedDirective || '')) return;
-    window.__ttViolations.push({
+    seen.push({
       disposition: e.disposition,
       source: (e.sourceFile || '') + ':' + e.lineNumber,
       sample: (e.sample || '').slice(0, 80),
@@ -41,13 +55,13 @@ const COLLECT = () => {
 };
 
 describe('Trusted Types', () => {
-  let browser;
-  let context;
-  let page;
+  let browser: Browser | undefined;
+  let context: BrowserContext;
+  let page: Page;
   let cookie = '';
-  const pageErrors = [];
+  const pageErrors: string[] = [];
 
-  const api = (path, body, method = 'POST') =>
+  const api = (path: string, body: unknown, method = 'POST') =>
     fetch(BASE + path, {
       method,
       headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: 'session=' + cookie } : {}) },
@@ -97,14 +111,14 @@ describe('Trusted Types', () => {
   });
 
   /** Load `path`, let it settle, and return what the browser reported. */
-  const violationsAt = async (path, settle = 600) => {
+  const violationsAt = async (path: string, settle = 600): Promise<Violation[]> => {
     pageErrors.length = 0;
     await page.goto(BASE + path, { waitUntil: 'networkidle' });
     await page.waitForTimeout(settle);
     return page.evaluate(() => window.__ttViolations || []);
   };
 
-  const assertClean = (viol, path) => {
+  const assertClean = (viol: Violation[], path: string) => {
     assert.deepEqual(viol, [], `a write skipped the policy on ${path}: ${JSON.stringify(viol)}`);
     const refused = pageErrors.filter((e) => /TrustedHTML|TrustedScript/.test(e));
     assert.deepEqual(refused, [], `a sink threw on ${path}: ${JSON.stringify(refused)}`);
@@ -146,12 +160,12 @@ describe('Trusted Types', () => {
     // trying — which is the better test anyway.
     await violationsAt('/posts/trusted-types-probe');
     const result = await page.evaluate(() => {
-      const attempt = (name) => {
+      const attempt = (name: string) => {
         try {
-          window.trustedTypes.createPolicy(name, { createHTML: (s) => s });
+          window.trustedTypes!.createPolicy(name, { createHTML: (s) => s });
           return 'created';
         } catch (e) {
-          return e.name;
+          return e instanceof Error ? e.name : String(e);
         }
       };
       return { rogue: attempt('point-rogue'), duplicate: attempt('point') };
@@ -168,8 +182,8 @@ describe('Trusted Types', () => {
     const blocks = await page.evaluate(() =>
       [...document.querySelectorAll('pre code')].map((c) => ({
         tokens: c.querySelectorAll('.token').length,
-        pre: c.parentElement.className,
-        text: c.textContent.trim(),
+        pre: c.parentElement?.className ?? '',
+        text: (c.textContent ?? '').trim(),
       })));
     // Prism was dealt with by calling the string-returning highlight() and
     // writing the result with setHTML(), so there is no "prism-only" violation
@@ -254,13 +268,13 @@ describe('Trusted Types', () => {
     await page.click(sel);
     await page.keyboard.type('.probe { color: red;');
     await page.waitForTimeout(400);
-    const typed = await page.evaluate((s) => document.querySelector(s).textContent, sel);
+    const typed = await page.evaluate((s) => document.querySelector(s)?.textContent ?? '', sel);
     assert.match(typed, /\.probe \{ color: red;/, `typing did not land: ${JSON.stringify(typed)}`);
     // The bead's reproduction: the `{` went missing on undo, because the
     // snapshot restore was refused and the DOM kept a half-applied edit.
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(400);
-    const undone = await page.evaluate((s) => document.querySelector(s).textContent, sel);
+    const undone = await page.evaluate((s) => document.querySelector(s)?.textContent ?? '', sel);
     // CodeJar auto-closes the `{`, so an undo step taken mid-typing can hold a
     // prefix of the typed text plus that `}`. Strip one trailing `}` before the
     // prefix check; a missing `{` still fails it.
@@ -271,10 +285,10 @@ describe('Trusted Types', () => {
     );
     await page.keyboard.press('Control+Shift+z');
     await page.waitForTimeout(400);
-    const redone = await page.evaluate((s) => document.querySelector(s).textContent, sel);
+    const redone = await page.evaluate((s) => document.querySelector(s)?.textContent ?? '', sel);
     assert.ok(redone.length >= undone.length, `redo lost content: ${JSON.stringify(redone)}`);
     assert.ok(
-      await page.evaluate((s) => document.querySelector(s).querySelectorAll('.token').length > 0, sel),
+      await page.evaluate((s) => (document.querySelector(s)?.querySelectorAll('.token').length ?? 0) > 0, sel),
       'the editor is not syntax-highlighted, so setHTML() never landed',
     );
     void viol;

@@ -1,15 +1,15 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import crypto from 'node:crypto';
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:8001';
 const PW = crypto.createHash('sha256').update('devpassword').digest('hex');
 
 describe('Public Reading Path Smoke Test', () => {
-  let browser;
-  let page;
-  let context;
+  let browser: Browser | undefined;
+  let page: Page;
+  let context: BrowserContext;
 
   before(async () => {
     browser = await chromium.launch();
@@ -66,14 +66,14 @@ describe('Public Reading Path Smoke Test', () => {
   it('home renders posts', async () => {
     await page.goto(`${BASE}/`);
     await page.waitForSelector('.post-card');
-    const text = await page.textContent('.post-card');
+    const text = (await page.textContent('.post-card')) ?? '';
     assert.match(text, /Hello E2E/);
   });
 
   it('a tag page filters', async () => {
     await page.goto(`${BASE}/tags/e2etag`);
     await page.waitForSelector('.post-card');
-    const text = await page.textContent('.post-card');
+    const text = (await page.textContent('.post-card')) ?? '';
     assert.match(text, /Hello E2E/);
     const title = await page.title();
     assert.match(title, /e2etag/i);
@@ -84,7 +84,7 @@ describe('Public Reading Path Smoke Test', () => {
     await page.waitForSelector('.post-card');
     await page.click('.post-card');
     await page.waitForSelector('.post-content');
-    const content = await page.textContent('.post-content');
+    const content = (await page.textContent('.post-content')) ?? '';
     assert.match(content, /This is body text/);
   });
 
@@ -111,7 +111,7 @@ describe('Public Reading Path Smoke Test', () => {
     await page.press('#password-input', 'Enter');
     
     await page.waitForSelector('.dashboard-grid');
-    const text = await page.textContent('body');
+    const text = (await page.textContent('body')) ?? '';
     assert.match(text, /Dashboard/i);
   });
 });
