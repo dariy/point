@@ -28,3 +28,24 @@ after each iteration and it's included in prompts for context.
   - Run `br show <id>` first. If the type is epic, check the children before any work.
   - Carousel work lives on `carousel-studio`. `frontend/src/plugins/carousel` does not exist on other branches.
 ---
+## 2026-10-05 - p-7181
+- Made TestSystemService_CreateBackup_InsufficientDisk deterministic: sparse file is Free+1TiB; Truncate/Create errors are checked (skip if the filesystem refuses).
+- Files changed: api/internal/api/system_test.go
+- **Learnings:**
+  - A margin of +1 byte over a sampled free-space value is racy on shared CI; use a margin far above any drift.
+---
+
+## 2026-10-05 - p-template-node-test-3fcc
+- Replaced the `<the narrow test command>` placeholder in the `/br-new` body template with `node --test frontend/test/<File>.test.ts` and `(cd api && go test ./internal/<pkg>/...)`, plus a "no vitest, no jest" note.
+- Files changed: ~/src/beads-private/point/bin/bead-new.sh (private repo).
+- **Learnings:**
+  - Frontend tests are now `.test.ts`; the bead's `.test.js` example no longer exists.
+  - AGENTS.md "Frontend tests" row still says `*.test.js`; `package.json` globs `*.test.[jt]s`. Candidate for a follow-up bead.
+---
+
+## 2026-10-05 - p-967m
+- `shouldUseImmersive` now derives media type from `path` with `mediaTypeFromPath`. The API sends no media `type`. Removed the cast and its comment.
+- Files changed: frontend/src/components/public/PostContent.ts; new frontend/test/shouldUseImmersive.test.ts (audio-only, image, mixed).
+- **Learnings:**
+  - `PostMediaRef` has no `type`. Derive the type from `path`.
+---

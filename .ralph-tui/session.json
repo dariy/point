@@ -3,10 +3,10 @@
   "sessionId": "55037591-b47d-4a0e-80fd-322da6d5e2c8",
   "status": "running",
   "startedAt": "2026-10-05T12:57:04.530Z",
-  "updatedAt": "2026-10-05T13:04:13.497Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-10-05T13:09:27.764Z",
+  "currentIteration": 4,
   "maxIterations": 0,
-  "tasksCompleted": 1,
+  "tasksCompleted": 4,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -1175,8 +1175,8 @@
       {
         "id": "p-carousel-touch-layout-vfs1",
         "title": "carousel studio: the touch layout (S10)",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-carousel-studio-khzq.13",
@@ -4373,8 +4373,8 @@
       {
         "id": "p-template-node-test-3fcc",
         "title": "fix(beads): body template shows node --test, not a bare test placeholder",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-slideshow-plugin-n9ng.7",
@@ -4439,8 +4439,8 @@
       {
         "id": "p-7181",
         "title": "test(backup): TestSystemService_CreateBackup_InsufficientDisk is flaky on CI",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-thumb-ladder-ph12.1",
@@ -5426,12 +5426,42 @@
       "durationMs": 261432,
       "startedAt": "2026-10-05T12:59:07.860Z",
       "endedAt": "2026-10-05T13:03:29.292Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "p-carousel-touch-layout-vfs1",
+      "taskTitle": "carousel studio: the touch layout (S10)",
+      "taskCompleted": true,
+      "durationMs": 20065,
+      "startedAt": "2026-10-05T13:04:13.043Z",
+      "endedAt": "2026-10-05T13:04:33.108Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "p-7181",
+      "taskTitle": "test(backup): TestSystemService_CreateBackup_InsufficientDisk is flaky on CI",
+      "taskCompleted": true,
+      "durationMs": 32783,
+      "startedAt": "2026-10-05T13:05:23.937Z",
+      "endedAt": "2026-10-05T13:05:56.720Z"
+    },
+    {
+      "iteration": 4,
+      "status": "completed",
+      "taskId": "p-template-node-test-3fcc",
+      "taskTitle": "fix(beads): body template shows node --test, not a bare test placeholder",
+      "taskCompleted": true,
+      "durationMs": 103949,
+      "startedAt": "2026-10-05T13:06:49.202Z",
+      "endedAt": "2026-10-05T13:08:33.151Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [
-    "p-carousel-touch-layout-vfs1"
+    "p-967m"
   ],
   "subagentPanelVisible": false
 }

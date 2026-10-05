@@ -1,0 +1,36 @@
+# Iteration 3 Log
+
+## Metadata
+
+- **Task ID**: p-7181
+- **Task Title**: test(backup): TestSystemService_CreateBackup_InsufficientDisk is flaky on CI
+- **Description**: Where: api/internal/api/system_test.go::TestSystemService_CreateBackup_InsufficientDisk. The test reads info.Free, then makes a sparse file of info.Free+1. On a shared CI runner the free space changes...
+- **Status**: completed
+- **Task Completed**: Yes
+- **Promise Detected**: Yes
+- **Started At**: 2026-10-05T13:05:23.937Z
+- **Ended At**: 2026-10-05T13:05:56.720Z
+- **Duration**: 32s
+- **Input Tokens**: 24
+- **Output Tokens**: 2180
+- **Total Tokens**: 2204
+- **Agent**: claude
+- **Model**: claude-sonnet-5-5
+- **Sandbox Mode**: auto
+- **Sandbox Network**: Enabled
+--- RAW OUTPUT ---
+[94m[Bash][0m $ grep -n "Free\|func.*CreateBackup" system*.go | grep -v _test | head -20
+[94m[bash][0m $ err != nil { 		_ = f.Close() 		t.Skipf("filesystem cannot hold a sparse file of %d bytes: %v", fakeS...
+
+[91m[Error: <tool_use_error>Error: No such tool available: bash. Tool names are case-sensitive: call Bash instead.</tool_use_error>][0m
+[94m[Bash][0m $ err != nil { 		_ = f.Close() 		t.Skipf("filesystem cannot hold a sparse file of %d bytes: %v", fakeS...
+[94m[Bash][0m $ use a margin far above any drift. --- E
+I fixed the flaky test in `api/internal/api/system_test.go`. The sparse file is now `info.Free + 1<<40` (1 TiB over free space) instead of `info.Free + 1`. Free-space drift on a CI runner can no longer let `CreateBackup` succeed.
+
+The test also checks the `os.Create` and `Truncate` errors now. If the filesystem refuses a file that large, the test skips instead of failing.
+
+`go test -run InsufficientDisk` passes locally. I did not run it repeatedly or on CI, so the flake itself is not shown to be gone.
+
+I closed bead p-7181 and appended the entry to `.ralph-tui/progress.md`. `br sync --flush-only` reported nothing to export.
+
+<promise>COMPLETE</promise>
