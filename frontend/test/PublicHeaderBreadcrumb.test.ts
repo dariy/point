@@ -1,45 +1,47 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock, memoryStorage, nodeList } from './helpers/mock.ts';
+import type { BreadcrumbsProps } from '../src/plugins/breadcrumbs/Breadcrumbs.ts';
+
+type Route = Parameters<typeof import('../src/store.ts').setRoute>[0];
 
 describe('Breadcrumbs plugin', () => {
-  let BreadcrumbsComponent;
-  let setRoute;
-  let container;
+  let BreadcrumbsComponent: typeof import('../src/plugins/breadcrumbs/Breadcrumbs.ts').Breadcrumbs;
+  let setRoute: typeof import('../src/store.ts').setRoute;
+  let container: HTMLElement;
 
   before(async () => {
     // Minimal DOM shim required by Component, store, and ViewContext
-    global.document = {
-      createElement: () => ({
-        appendChild: () => {},
+    globalThis.document = mock<Document>({
+      createElement: () => mock<HTMLElement>({
+        appendChild: <T extends Node>(n: T) => n,
         remove: () => {},
-        classList: { add: () => {}, remove: () => {} },
+        classList: mock<DOMTokenList>({ add: () => {}, remove: () => {} }),
         addEventListener: () => {},
         querySelector: () => null,
-        querySelectorAll: () => [],
+        querySelectorAll: () => nodeList<Element>([]),
         innerHTML: '',
         textContent: '',
-        style: {},
+        style: mock<CSSStyleDeclaration>({}),
       }),
-      head: { appendChild: () => {} },
-      body: { classList: { remove: () => {}, add: () => {} } },
+      head: mock<HTMLHeadElement>({ appendChild: <T extends Node>(n: T) => n }),
+      body: mock<HTMLElement>({ classList: mock<DOMTokenList>({ remove: () => {}, add: () => {} }) }),
       getElementById: () => null,
       addEventListener: () => {},
       removeEventListener: () => {},
-      querySelectorAll: () => [],
-    };
-    global.window = {
-      location: { pathname: '/', search: '' },
+      querySelectorAll: () => nodeList<Element>([]),
+    });
+    globalThis.window = mock<typeof window>({
+      location: mock<Location>({ pathname: '/', search: '' }),
       addEventListener: () => {},
       removeEventListener: () => {},
       innerWidth: 1024,
       innerHeight: 768,
-    };
-    global.localStorage = {
-      getItem: () => null,
-      setItem: () => {},
-    };
-    global.ResizeObserver = class {
+    });
+    globalThis.localStorage = memoryStorage();
+    globalThis.ResizeObserver = class {
       observe() {}
+      unobserve() {}
       disconnect() {}
     };
 
@@ -48,17 +50,18 @@ describe('Breadcrumbs plugin', () => {
     const mod = await import('../src/plugins/breadcrumbs/Breadcrumbs.ts');
     BreadcrumbsComponent = mod.Breadcrumbs;
 
-    container = {
+    let innerHTML = '';
+    container = mock<HTMLElement>({
       querySelector: () => null,
-      querySelectorAll: () => [],
-      set innerHTML(val) { this._innerHTML = val; },
-      get innerHTML() { return this._innerHTML || ''; },
+      querySelectorAll: () => nodeList<Element>([]),
+      set innerHTML(val: string) { innerHTML = val; },
+      get innerHTML() { return innerHTML; },
       textContent: '',
-    };
+    });
   });
 
   // Helper: render the trail with given props and a given route
-  function renderWith(routeOverride, propsOverride = {}) {
+  function renderWith(routeOverride: Route, propsOverride: BreadcrumbsProps = {}) {
     setRoute(routeOverride);
     const header = new BreadcrumbsComponent(container, {
       settings: { blog_title: 'Test Blog' },
@@ -68,7 +71,7 @@ describe('Breadcrumbs plugin', () => {
       timelineVisible: false,
       ...propsOverride,
     });
-    return header.render();
+    return String(header.render());
   }
 
   // ── Year crumb ────────────────────────────────────────────────────────────

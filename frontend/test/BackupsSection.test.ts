@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";
-import { setupDOM } from "./helpers/dom.ts";
+import { setupDOM, must } from "./helpers/dom.ts";
 import { BackupsSection } from "../src/components/light/sections/BackupsSection.ts";
 import * as gestures from "../src/core/gestures.ts";
 
 test("BackupsSection", async (t) => {
-  let dom;
+  let dom: ReturnType<typeof setupDOM> | undefined;
   beforeEach(() => { dom = setupDOM(); });
   afterEach(() => { dom?.cleanup(); });
 
@@ -22,7 +22,7 @@ test("BackupsSection", async (t) => {
       uploadPct: 0
     };
 
-    const html = section.render();
+    const html = String(section.render());
     assert.ok(html.includes("backup.zip"));
     
     section._load = async () => {};
@@ -34,10 +34,10 @@ test("BackupsSection", async (t) => {
     assert.ok(dlBtn);
     
     // click upload btn
-    const uploadInput = root.querySelector("#upload-backup-input");
+    const uploadInput = must(root.querySelector<HTMLInputElement>("#upload-backup-input"));
     let clickFired = false;
     uploadInput.addEventListener('click', () => { clickFired = true; });
-    const uploadBtn = root.querySelector("#upload-backup-btn");
+    const uploadBtn = must(root.querySelector<HTMLElement>("#upload-backup-btn"));
     uploadBtn.click();
     assert.ok(clickFired);
     
@@ -63,22 +63,22 @@ test("BackupsSection actions", async (t) => {
     uploadPct: 0
   };
 
-  root.innerHTML = section.render();
+  root.innerHTML = String(section.render());
   section._load = async () => {};
   section._syncPoll = () => {};
   
   // mock methods
-  section._handleRestore = (f, p) => {};
-  section._handleDelete = (f) => {};
-  section._handleDownload = (f) => {};
+  section._handleRestore = async () => {};
+  section._handleDelete = async () => {};
+  section._handleDownload = () => {};
   section.afterRender();
 
   // Test click handlers
-  root.querySelector(".restore-backup-btn").click();
-  root.querySelector(".delete-backup-btn").click();
-  root.querySelector(".download-backup-btn").click();
-  root.querySelector("#create-backup-btn").click();
-  root.querySelector("#restart-server-btn").click();
+  must(root.querySelector<HTMLElement>(".restore-backup-btn")).click();
+  must(root.querySelector<HTMLElement>(".delete-backup-btn")).click();
+  must(root.querySelector<HTMLElement>(".download-backup-btn")).click();
+  must(root.querySelector<HTMLElement>("#create-backup-btn")).click();
+  must(root.querySelector<HTMLElement>("#restart-server-btn")).click();
 
   // A change to any cadence control saves the settings. Stub the save and
   // assert it ran: the control has to be one that render() emits, or the

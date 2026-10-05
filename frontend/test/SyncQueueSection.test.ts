@@ -1,9 +1,10 @@
 import { test, describe, before, after, afterEach } from 'node:test';
 import assert from 'node:assert';
+import type { QueuedOp } from '../src/utils/mutationQueue.ts';
 
 describe('SyncQueueSection', () => {
-  let dom;
-  let SyncQueueSection;
+  let dom: ReturnType<typeof import('./helpers/dom.ts').setupDOM>;
+  let SyncQueueSection: typeof import('../src/components/light/sections/SyncQueueSection.ts').SyncQueueSection;
 
   before(async () => {
     const domHelper = await import('./helpers/dom.ts');
@@ -19,7 +20,7 @@ describe('SyncQueueSection', () => {
     document.body.innerHTML = '';
   });
 
-  const op = (id, status) => ({
+  const op = (id: string, status: QueuedOp['status']): QueuedOp => ({
     id, timestamp: Date.UTC(2026, 0, 2), method: 'PUT', url: `/api/posts/${id}`,
     body: null, blob_key: null, status, error: status === 'failed' ? 'Server error' : null, temp_id_map: {},
   });
@@ -37,7 +38,7 @@ describe('SyncQueueSection', () => {
     assert.ok(items[1].classList.contains('status-pending'));
     assert.ok(container.querySelector('#reset-sync-btn'), 'Retry Failed button is shown');
     assert.ok(container.querySelector('#sync-now-btn'), 'Sync Now button is shown');
-    assert.notStrictEqual(container.querySelector('.sync-meta').textContent.trim(), '');
+    assert.notStrictEqual(container.querySelector('.sync-meta')?.textContent.trim(), '');
   });
 
   test('only pending ops show no Retry Failed button', () => {

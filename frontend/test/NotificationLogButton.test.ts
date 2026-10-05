@@ -1,6 +1,8 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type { Modal } from '../src/components/shared/Modal.ts';
 import { setToastLog } from '../src/store.ts';
 import { NotificationLogButton } from '../src/components/shared/NotificationLogButton.ts';
 
@@ -8,9 +10,9 @@ import { NotificationLogButton } from '../src/components/shared/NotificationLogB
 // not author. The modal body used to be built with a bare template literal
 // wrapped in raw(), so `e.message` reached innerHTML unescaped.
 describe('NotificationLogButton modal escaping', () => {
-  let dom;
-  let btn;
-  let body;
+  let dom: ReturnType<typeof setupDOM>;
+  let btn: NotificationLogButton;
+  let body: HTMLElement;
 
   beforeEach(() => {
     dom = setupDOM();
@@ -18,7 +20,7 @@ describe('NotificationLogButton modal escaping', () => {
     body = dom.document.createElement('div');
     // Drive _refreshModalContent directly: the escaping is what is under test,
     // not the Modal plumbing that supplies the mount point.
-    btn._activeModal = { getBodyMount: () => body };
+    btn._activeModal = mock<Modal>({ getBodyMount: () => body });
   });
 
   afterEach(() => {
@@ -34,7 +36,7 @@ describe('NotificationLogButton modal escaping', () => {
 
     assert.strictEqual(body.querySelector('img'), null);
     assert.strictEqual(
-      body.querySelector('.notification-log-message').textContent,
+      must(body.querySelector('.notification-log-message')).textContent,
       '<img src=x onerror=alert(1)>'
     );
   });
@@ -45,7 +47,7 @@ describe('NotificationLogButton modal escaping', () => {
     ]);
     btn._refreshModalContent();
 
-    const item = body.querySelector('.notification-log-item');
+    const item = must(body.querySelector('.notification-log-item'));
     assert.ok(item.classList.contains('notification-log-item-info'));
     assert.strictEqual(item.getAttribute('onmouseover'), null);
   });
@@ -56,8 +58,8 @@ describe('NotificationLogButton modal escaping', () => {
     ]);
     btn._refreshModalContent();
 
-    assert.strictEqual(body.querySelector('.notification-log-icon').textContent, '✓');
-    assert.strictEqual(body.querySelector('.notification-log-message').textContent, 'Saved');
+    assert.strictEqual(must(body.querySelector('.notification-log-icon')).textContent, '✓');
+    assert.strictEqual(must(body.querySelector('.notification-log-message')).textContent, 'Saved');
   });
 
   test('an empty log renders the empty state', () => {

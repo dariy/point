@@ -1,5 +1,10 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
+import { mock, memoryStorage, nodeList } from './helpers/mock.ts';
+import type { PluginView } from '../src/api/plugins.ts';
+
+type Page = InstanceType<typeof import('../src/pages/light/PluginsPage.ts').default>;
 
 // The Plugins page derives its radio/lock behavior from each row's `slot_rule`
 // (the cardinality of the slot the plugin claims), so the tag maps and the
@@ -9,47 +14,47 @@ import assert from 'node:assert';
 // (`tags-route`, the graph) has nothing to compete with and is not an
 // alternative.
 describe('PluginsPage slot rules', () => {
-  let PluginsPage;
+  let PluginsPage: typeof import('../src/pages/light/PluginsPage.ts').default;
 
   before(async () => {
-    const el = () => ({
-      style: {},
-      classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    const el = () => mock<HTMLElement>({
+      style: mock<CSSStyleDeclaration>({}),
+      classList: mock<DOMTokenList>({ add: () => {}, remove: () => {}, toggle: () => false }),
       addEventListener: () => {},
       removeEventListener: () => {},
       querySelector: () => null,
-      querySelectorAll: () => [],
-      appendChild: () => {},
+      querySelectorAll: () => nodeList<Element>([]),
+      appendChild: <T extends Node>(n: T) => n,
       dataset: {},
     });
-    global.document = {
+    globalThis.document = mock<Document>({
       createElement: el,
       body: el(),
       documentElement: el(),
-      head: el(),
+      head: mock<HTMLHeadElement>(el()),
       addEventListener: () => {},
       removeEventListener: () => {},
       querySelector: () => null,
-      querySelectorAll: () => [],
-    };
-    global.window = {
-      location: { pathname: '/light/plugins', search: '', hash: '' },
+      querySelectorAll: () => nodeList<Element>([]),
+    });
+    globalThis.window = mock<typeof window>({
+      location: mock<Location>({ pathname: '/light/plugins', search: '', hash: '' }),
       addEventListener: () => {},
       removeEventListener: () => {},
-      dispatchEvent: () => {},
-      matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-      localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-    };
-    global.localStorage = global.window.localStorage;
+      dispatchEvent: () => true,
+      matchMedia: () => mock<MediaQueryList>({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+      localStorage: memoryStorage(),
+    });
+    globalThis.localStorage = globalThis.window.localStorage;
 
     const mod = await import('../src/pages/light/PluginsPage.ts');
-    PluginsPage = mod.PluginsPage || mod.default;
+    PluginsPage = mod.default;
   });
 
   // Rows as the backend serves them: two candidates for the 0-1 map slot, one for
   // the 0-1 tags slot and two for the 1 post-viewer slot.
   function page(overrides = {}) {
-    const p = new PluginsPage({ querySelector: () => null, querySelectorAll: () => [] });
+    const p = new PluginsPage(mock<HTMLElement>({ querySelector: () => null, querySelectorAll: () => nodeList<Element>([]) }));
     p.state = {
       ...p.state,
       loading: false,
@@ -66,7 +71,8 @@ describe('PluginsPage slot rules', () => {
     return p;
   }
 
-  const rowOf = (p, id) => p._renderPlugin(p.state.plugins.find((x) => x.id === id));
+  const pluginsOf = (p: Page): PluginView[] => p.state.plugins;
+  const rowOf = (p: Page, id: string) => String(p._renderPlugin(must(pluginsOf(p).find((x) => x.id === id))));
 
   test('alternatives for a slot are rendered as radio buttons, replacing the lock behavior', () => {
     const p = page();
@@ -98,7 +104,7 @@ describe('PluginsPage slot rules', () => {
   // reload to make the incoming claimant read-only.
   test('locks follow the claimant when a required slot switches over', () => {
     const p = page();
-    const switched = p.state.plugins.map((x) =>
+    const switched = pluginsOf(p).map((x) =>
       x.slot === 'post-viewer' ? { ...x, enabled: x.id === 'immersive', locked: false } : x,
     );
 
@@ -108,7 +114,7 @@ describe('PluginsPage slot rules', () => {
 
   test('a required slot with several claimants enabled locks neither', () => {
     const p = page();
-    const both = p.state.plugins.map((x) =>
+    const both = pluginsOf(p).map((x) =>
       x.slot === 'post-viewer' ? { ...x, enabled: true, locked: false } : x,
     );
 

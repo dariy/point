@@ -5,7 +5,7 @@ import { pluginHost } from "../src/core/pluginHost.ts";
 // Minimal enabled-only manifest mirroring window.__PLUGINS__. Entries without
 // `entry` are enabled but not yet extracted into a chunk; entries with `entry`
 // are built chunks that "claim" their slot.
-const MANIFEST = [
+const MANIFEST: PluginManifestEntry[] = [
   { id: "timeline", type: "slot", slot: "timeline" }, // no chunk yet
   { id: "tag-cloud", type: "slot", slot: "home-explore", entry: "/assets/js/p/tag-cloud-abc.js" },
   { id: "tags-graph", type: "route", slot: "tags-route", routes: ["/tags"] }, // no chunk
@@ -62,7 +62,7 @@ describe("PluginHost", () => {
     const mod = await pluginHost.claimRoute("map-route", (entries) =>
       entries.find((e) => e.id === "tags-map"),
     );
-    assert.strictEqual(mod.default, "MAP_PAGE");
+    assert.strictEqual(mod?.default, "MAP_PAGE");
   });
 
   test("the two viz slots are claimed independently", async () => {
@@ -72,14 +72,14 @@ describe("PluginHost", () => {
       { id: "tags-graph", type: "route", slot: "tags-route", routes: ["/tags"], entry: graph },
       { id: "tags-map", type: "route", slot: "map-route", routes: ["/map"], entry: map },
     ]);
-    assert.strictEqual((await pluginHost.claimRoute("tags-route")).default, "GRAPH_PAGE");
-    assert.strictEqual((await pluginHost.claimRoute("map-route")).default, "MAP_PAGE");
+    assert.strictEqual((await pluginHost.claimRoute("tags-route"))?.default, "GRAPH_PAGE");
+    assert.strictEqual((await pluginHost.claimRoute("map-route"))?.default, "MAP_PAGE");
   });
 
   test("fill imports and invokes each claiming plugin's mount", async () => {
     const entry = "data:text/javascript,export function mount(el, ctx) { return ctx.tags.length; }";
     pluginHost.init([{ id: "tag-cloud", type: "slot", slot: "home-explore", entry }]);
-    const results = await pluginHost.fill("home-explore", {}, { tags: [1, 2, 3] });
+    const results = await pluginHost.fill("home-explore", null, { tags: [1, 2, 3] });
     assert.deepStrictEqual(results, [3]);
   });
 

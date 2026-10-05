@@ -1,13 +1,18 @@
 import { test, describe, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
+import { jsonResponse } from './helpers/fetch.ts';
+
+type Toast = NonNullable<Parameters<Parameters<typeof import('../src/store.ts').onToast>[0]>[0]>;
 
 describe('RebuildThumbnailsSection', () => {
-  let dom;
-  let RebuildThumbnailsSection;
-  let onToast, setToast;
-  let originalFetch;
-  let fetchCalls = [];
-  let click;
+  let dom: ReturnType<typeof import('./helpers/dom.ts').setupDOM>;
+  let RebuildThumbnailsSection: typeof import('../src/components/light/sections/RebuildThumbnailsSection.ts').RebuildThumbnailsSection;
+  let onToast: typeof import('../src/store.ts').onToast;
+  let setToast: typeof import('../src/store.ts').setToast;
+  let originalFetch: typeof fetch;
+  let fetchCalls: { url: string; options: RequestInit | undefined }[] = [];
+  let click: typeof import('./helpers/dom.ts').click;
 
   before(async () => {
     const domHelper = await import('./helpers/dom.ts');
@@ -27,17 +32,10 @@ describe('RebuildThumbnailsSection', () => {
   beforeEach(() => {
     fetchCalls = [];
     originalFetch = globalThis.fetch;
-    const createMockResponse = (body, isJson = true, ok = true, status = 200) => ({
-      ok,
-      status,
-      headers: {
-        get: (name) => name.toLowerCase() === 'content-type' ? 'application/json' : null
-      },
-      json: async () => body,
-      text: async () => JSON.stringify(body)
-    });
+    const createMockResponse = (body: unknown, ok = true, status = 200) => jsonResponse({ ok, status, body });
 
-    globalThis.fetch = async (url, options) => {
+    globalThis.fetch = async (input, options) => {
+      const url = String(input);
       fetchCalls.push({ url, options });
       if (url.includes('/api/settings')) {
         return createMockResponse({});
@@ -63,7 +61,7 @@ describe('RebuildThumbnailsSection', () => {
     const section = new RebuildThumbnailsSection(container);
     section.mount();
     
-    const btn = container.querySelector('#rebuild-thumbnails-btn');
+    const btn = must(container.querySelector<HTMLButtonElement>('#rebuild-thumbnails-btn'));
     assert.ok(btn, 'Rebuild button is rendered');
     assert.equal(btn.textContent, 'Rebuild Thumbnails');
   });
@@ -74,10 +72,10 @@ describe('RebuildThumbnailsSection', () => {
     const section = new RebuildThumbnailsSection(container);
     section.mount();
 
-    const btn = container.querySelector('#rebuild-thumbnails-btn');
+    const btn = must(container.querySelector<HTMLButtonElement>('#rebuild-thumbnails-btn'));
     
-    let resolveToast;
-    const toastPromise = new Promise(resolve => resolveToast = resolve);
+    let resolveToast: (t: Toast) => void = () => {};
+    const toastPromise = new Promise<Toast>(resolve => { resolveToast = resolve; });
     const unsub = onToast((t) => {
       if (t) {
         resolveToast(t);
@@ -99,24 +97,17 @@ describe('RebuildThumbnailsSection', () => {
     assert.equal(btn.disabled, false, 'Button is re-enabled');
 
     assert.equal(fetchCalls.length, 1, 'The rebuild is the only call: there are no thumbnail dimensions left to save first');
-    assert.ok(fetchCalls[0].url.includes('/api/media/thumbnails/rebuild'), 'The one call triggers the rebuild');
-    assert.ok(!fetchCalls[0].url.includes('only_missing'), 'A rebuild discards every file; there is nothing to skip');
-    assert.equal(fetchCalls[0].options.method, 'POST');
+    assert.ok(fetchCalls[0]?.url.includes('/api/media/thumbnails/rebuild'), 'The one call triggers the rebuild');
+    assert.ok(!fetchCalls[0]?.url.includes('only_missing'), 'A rebuild discards every file; there is nothing to skip');
+    assert.equal(fetchCalls[0]?.options?.method, 'POST');
     // api.post skips body param if it's undefined
-    assert.equal(fetchCalls[0].options.body, undefined);
+    assert.equal(fetchCalls[0]?.options?.body, undefined);
   });
 
   test('shows an error toast if rebuild fails', async () => {
-    globalThis.fetch = async (url, options) => {
-      const createMockResponse = (body, ok = true, status = 200) => ({
-        ok,
-        status,
-        headers: {
-          get: (name) => name.toLowerCase() === 'content-type' ? 'application/json' : null
-        },
-        json: async () => body,
-        text: async () => JSON.stringify(body)
-      });
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      const createMockResponse = (body: unknown, ok = true, status = 200) => jsonResponse({ ok, status, body });
 
       if (url.includes('/api/media/thumbnails/rebuild')) {
         return createMockResponse({ message: 'Server error' }, false, 500);
@@ -129,8 +120,8 @@ describe('RebuildThumbnailsSection', () => {
     const section = new RebuildThumbnailsSection(container);
     section.mount();
 
-    let resolveToast;
-    const toastPromise = new Promise(resolve => resolveToast = resolve);
+    let resolveToast: (t: Toast) => void = () => {};
+    const toastPromise = new Promise<Toast>(resolve => { resolveToast = resolve; });
     const unsub = onToast((t) => {
       if (t) {
         resolveToast(t);
@@ -138,7 +129,7 @@ describe('RebuildThumbnailsSection', () => {
       }
     });
 
-    const btn = container.querySelector('#rebuild-thumbnails-btn');
+    const btn = must(container.querySelector<HTMLButtonElement>('#rebuild-thumbnails-btn'));
     click(btn);
 
     const toast = await toastPromise;

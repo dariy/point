@@ -1,6 +1,8 @@
 import { test, describe, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
+type OnProgress = NonNullable<Parameters<typeof import('../src/utils/imageCache.ts').preCacheImages>[2]>;
+
 /**
  * The offline settings card's half of the thumbnail ladder: which URLs it hands
  * to preCacheImages, and the progress it reports while they download.
@@ -13,8 +15,8 @@ import assert from 'node:assert';
  */
 
 describe('OfflineDataSection', () => {
-  let dom;
-  let OfflineDataSection;
+  let dom: ReturnType<typeof import('./helpers/dom.ts').setupDOM>;
+  let OfflineDataSection: typeof import('../src/components/light/sections/OfflineDataSection.ts').OfflineDataSection;
 
   before(async () => {
     const domHelper = await import('./helpers/dom.ts');
@@ -29,8 +31,8 @@ describe('OfflineDataSection', () => {
     if (dom) dom.cleanup();
   });
 
-  let section;
-  let container;
+  let section: InstanceType<typeof OfflineDataSection>;
+  let container: HTMLElement;
 
   beforeEach(() => {
     container = document.createElement('div');
@@ -117,7 +119,8 @@ describe('OfflineDataSection', () => {
 
     test('never renders NaN — the callback takes a progress object', () => {
       showDownloading();
-      const onImage = section._imageProgress(3);
+      // preCacheImages calls it with a progress object.
+      const onImage: OnProgress = section._imageProgress(3);
       onImage({ completed: 1, total: 3, current: '/2026/03/a.jpg' });
       assert.strictEqual(Number.isFinite(section.state.progress), true);
       assert.ok(!container.textContent.includes('NaN'), container.textContent);

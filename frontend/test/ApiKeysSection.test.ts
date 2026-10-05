@@ -1,32 +1,35 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
+
+type OAuthClient = Parameters<InstanceType<typeof import('../src/components/light/sections/ApiKeysSection.ts').ApiKeysSection>['_renderOAuthClients']>[0][number];
 
 describe('ApiKeysSection connected apps', () => {
-  let ApiKeysSection;
+  let ApiKeysSection: typeof import('../src/components/light/sections/ApiKeysSection.ts').ApiKeysSection;
 
   before(async () => {
-    global.document = {
-      createElement: () => ({
-        style: {},
-        classList: { add: () => {}, remove: () => {} },
+    globalThis.document = mock<Document>({
+      createElement: () => mock<HTMLElement>({
+        style: mock<CSSStyleDeclaration>({}),
+        classList: mock<DOMTokenList>({ add: () => {}, remove: () => {} }),
         addEventListener: () => {},
         removeEventListener: () => {}
       }),
-      body: { appendChild: () => {} },
+      body: mock<HTMLElement>({ appendChild: <T extends Node>(n: T) => n }),
       addEventListener: () => {},
       removeEventListener: () => {}
-    };
-    global.window = {
+    });
+    globalThis.window = mock<typeof window>({
       addEventListener: () => {},
       removeEventListener: () => {},
-      dispatchEvent: () => {}
-    };
+      dispatchEvent: () => true
+    });
     const mod = await import('../src/components/light/sections/ApiKeysSection.ts');
     ApiKeysSection = mod.ApiKeysSection;
   });
 
-  function render(oauthClients) {
-    const section = new ApiKeysSection({ querySelector: () => null });
+  function render(oauthClients: OAuthClient[]) {
+    const section = new ApiKeysSection(mock<HTMLElement>({ querySelector: () => null }));
     section.state = { loading: false, apiKeys: [], oauthClients };
     return String(section.render());
   }
@@ -40,7 +43,7 @@ describe('ApiKeysSection connected apps', () => {
     assert.ok(out.includes('claude.ai'));
     assert.ok(out.includes('127.0.0.1:9000'));
     assert.ok(out.includes('<td>2</td>'), 'live token count shown');
-    assert.strictEqual(out.match(/revoke-oauth-client-btn/g).length, 2, 'one Revoke button per client');
+    assert.strictEqual(out.match(/revoke-oauth-client-btn/g)?.length, 2, 'one Revoke button per client');
     assert.ok(out.includes('data-id="c-1"') && out.includes('data-id="c-2"'));
   });
 

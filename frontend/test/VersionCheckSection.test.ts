@@ -1,33 +1,35 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
+
+type VersionInfo = Awaited<ReturnType<typeof import('../src/api/system.ts').getVersion>>;
 
 describe('VersionCheckSection', () => {
-  let VersionCheckSection;
+  let VersionCheckSection: typeof import('../src/components/light/sections/VersionCheckSection.ts').VersionCheckSection;
 
   before(async () => {
-    global.document = {
-      createElement: () => ({
-        style: {},
-        classList: { add: () => {}, remove: () => {} },
+    globalThis.document = mock<Document>({
+      createElement: () => mock<HTMLElement>({
+        style: mock<CSSStyleDeclaration>({}),
+        classList: mock<DOMTokenList>({ add: () => {}, remove: () => {} }),
         addEventListener: () => {},
         removeEventListener: () => {}
       }),
-      body: { appendChild: () => {} },
+      body: mock<HTMLElement>({ appendChild: <T extends Node>(n: T) => n }),
       addEventListener: () => {},
       removeEventListener: () => {}
-    };
-    global.window = {
+    });
+    globalThis.window = mock<typeof window>({
       addEventListener: () => {},
       removeEventListener: () => {},
-      dispatchEvent: () => {}
-    };
-
+      dispatchEvent: () => true
+    });
     const mod = await import('../src/components/light/sections/VersionCheckSection.ts');
     VersionCheckSection = mod.VersionCheckSection;
   });
 
-  function sectionWith(info, extra = {}) {
-    const container = { querySelector: () => null };
+  function sectionWith(info: VersionInfo, extra = {}) {
+    const container = mock<HTMLElement>({ querySelector: () => null });
     const section = new VersionCheckSection(container);
     section.state = { ...section.state, loading: false, info, ...extra };
     return section.render();

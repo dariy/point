@@ -31,8 +31,29 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM, click, check, fire, type } from './helpers/dom.ts';
+import { setupDOM, click, check, fire, type, must } from './helpers/dom.ts';
+import { jsonResponse } from './helpers/fetch.ts';
+import { mock } from './helpers/mock.ts';
 import { getSettings, getToast, setSettings, setToast, setUser } from '../src/store.ts';
+import type { NavMenuUpdate } from '../src/plugins/nav-menu/api.ts';
+
+type User = NonNullable<Parameters<typeof setUser>[0]>;
+
+/** What the fake GET /api/nav-menu answers with. */
+interface FakeMenu {
+  mode: string;
+  custom_markdown: string;
+  tag_items: { name: string }[];
+  inline_max: number;
+  more_title: string;
+}
+
+/** One request the page sent. `body` is the parsed JSON body, if any. */
+interface MenuRequest {
+  url: string;
+  method: string;
+  body: NavMenuUpdate | undefined;
+}
 
 /** Home, About > Team, Blog — one nested branch, roots either side of it. */
 const MARKDOWN = [
@@ -43,24 +64,25 @@ const MARKDOWN = [
 ].join('\n');
 
 describe('MenuPage', () => {
-  let dom, MenuPage, page, requests, config;
+  let dom: ReturnType<typeof setupDOM>;
+  let MenuPage: typeof import('../src/plugins/nav-menu/MenuPage.ts').default;
+  let page: InstanceType<typeof MenuPage>;
+  let mounted = false;
+  let requests: MenuRequest[];
+  let config: FakeMenu;
+  const realFetch = globalThis.fetch;
 
-  const settle = () => new Promise(r => setImmediate(r));
+  const settle = () => new Promise<void>(r => setImmediate(r));
 
   function fakeFetch() {
     requests = [];
     globalThis.fetch = async (url, opts = {}) => {
       requests.push({
-        url,
+        url: String(url),
         method: opts.method || 'GET',
-        body: opts.body ? JSON.parse(opts.body) : undefined,
+        body: opts.body ? JSON.parse(String(opts.body)) : undefined,
       });
-      return {
-        ok: true,
-        status: 200,
-        headers: { get: () => 'application/json' },
-        json: async () => config,
-      };
+      return jsonResponse({ ok: true, status: 200, body: config });
     };
   }
 
@@ -71,30 +93,40 @@ describe('MenuPage', () => {
     dom.document.body.appendChild(el);
     page = new MenuPage(el, {});
     page.mount();
+    mounted = true;
     await settle();
     return page;
   }
 
-  const rows = () => [...page.container.querySelectorAll('.menu-row')];
-  const q = sel => page.container.querySelector(sel);
+  const rows = () => [...page.container.querySelectorAll<HTMLElement>('.menu-row')];
+  const q = (sel: string) => page.container.querySelector<HTMLInputElement>(sel);
+  /** Like q(), for an element the test needs to be there. */
+  const $ = (sel: string) => must(q(sel), sel);
+  /** A field inside a row. */
+  const field = (row: Element, sel: string) => must(row.querySelector<HTMLInputElement>(sel), sel);
+  /** A field inside the row at `index`. */
+  const cell = (index: number, sel: string) => field(must(rows()[index]), sel);
 
   /** [label, url, depth] per visual row, in document order. */
   const visual = () => rows().map(r => [
-    r.querySelector('.item-label').value,
-    r.querySelector('.item-url').value,
+    field(r, '.item-label').value,
+    field(r, '.item-url').value,
     Number(r.dataset.depth),
   ]);
 
-  const markdown = () => q('#menu-markdown-input').value;
-  const savedBody = () => requests.filter(r => r.method === 'PUT').at(-1)?.body;
+  const markdown = () => $('#menu-markdown-input').value;
+  const savedBody = () => must(requests.filter(r => r.method === 'PUT').slice(-1)[0]?.body, 'a saved body');
 
   /** A dataTransfer stand-in — linkedom builds no drag events of its own. */
-  const transfer = () => ({ data: {}, setData(k, v) { this.data[k] = v; }, getData(k) { return this.data[k]; } });
+  const transfer = () => {
+    const data: Record<string, string> = {};
+    return { data, setData(k: string, v: string) { data[k] = v; }, getData(k: string) { return data[k]; } };
+  };
 
   /** Drag `from` onto `to` the way a user gripping the handle would. */
-  function dragRow(from, to) {
-    const src = rows()[from], dst = rows()[to];
-    fire(src.querySelector('.drag-handle'), 'mousedown');
+  function dragRow(from: number, to: number) {
+    const src = must(rows()[from]), dst = must(rows()[to]);
+    fire(field(src, '.drag-handle'), 'mousedown');
     fire(src, 'dragstart', { dataTransfer: transfer() });
     fire(dst, 'dragenter', { dataTransfer: transfer() });
     fire(dst, 'drop', { dataTransfer: transfer() });
@@ -111,17 +143,17 @@ describe('MenuPage', () => {
       more_title: 'More',
     };
     fakeFetch();
-    setUser({ username: 'owner', is_admin: true });
+    setUser(mock<User>({ username: 'owner' }));
     setSettings({ blog_title: 'Test blog' });
     setToast(null);
     ({ default: MenuPage } = await import('../src/plugins/nav-menu/MenuPage.ts'));
   });
 
   afterEach(() => {
-    page?.unmount();
-    page = null;
+    if (mounted) page.unmount();
+    mounted = false;
     dom.cleanup();
-    delete globalThis.fetch;
+    globalThis.fetch = realFetch;
   });
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -156,7 +188,7 @@ describe('MenuPage', () => {
     test('a load failure shows an error instead of an editor', async () => {
       globalThis.fetch = async () => { throw new Error('offline'); };
       await mountPage();
-      assert.match(q('.error-state').textContent, /Could not load/);
+      assert.match($('.error-state').textContent, /Could not load/);
       assert.equal(q('#menu-items-list'), null);
     });
   });
@@ -166,24 +198,24 @@ describe('MenuPage', () => {
   describe('visual editor — editing an existing item', () => {
     test('typing does not re-render the row out from under the caret', async () => {
       await mountPage();
-      const input = rows()[0].querySelector('.item-label');
+      const input = cell(0, '.item-label');
       type(input, 'Homepage');
-      assert.equal(rows()[0].querySelector('.item-label'), input, 'row was re-rendered while typing');
+      assert.equal(cell(0, '.item-label'), input, 'row was re-rendered while typing');
       assert.equal(input.value, 'Homepage');
     });
 
     test('an edit survives every structural action that re-renders', async () => {
       await mountPage();
-      type(rows()[1].querySelector('.item-label'), 'About Us');
-      type(rows()[1].querySelector('.item-url'), '/about-us');
+      type(cell(1, '.item-label'), 'About Us');
+      type(cell(1, '.item-url'), '/about-us');
 
-      click(q('#add-item-btn'));
+      click($('#add-item-btn'));
       assert.deepEqual(visual()[1], ['About Us', '/about-us', 0], 'lost on add');
 
-      click(rows()[0].querySelector('.indent-btn'));
+      click(cell(0, '.indent-btn'));
       assert.deepEqual(visual()[1], ['About Us', '/about-us', 0], 'lost on indent');
 
-      click(rows()[3].querySelector('.delete-item-btn'));
+      click(cell(3, '.delete-item-btn'));
       assert.deepEqual(visual()[1], ['About Us', '/about-us', 0], 'lost on delete');
     });
 
@@ -191,8 +223,8 @@ describe('MenuPage', () => {
       await mountPage();
       // Step one of retyping a label is an empty field. The row must not be
       // treated as absent, or the next click lands on the wrong item.
-      type(rows()[3].querySelector('.item-label'), '');
-      click(q('#add-item-btn'));
+      type(cell(3, '.item-label'), '');
+      click($('#add-item-btn'));
 
       assert.deepEqual(visual(), [
         ['Home', '/', 0],
@@ -205,11 +237,11 @@ describe('MenuPage', () => {
 
     test('an empty row does not shift what the rows after it act on', async () => {
       await mountPage();
-      type(rows()[1].querySelector('.item-label'), '');
+      type(cell(1, '.item-label'), '');
 
       // Blog is the last row either way; with the empty row dropped from the
       // collected list this would indent Team, or run off the end.
-      click(rows()[3].querySelector('.indent-btn'));
+      click(cell(3, '.indent-btn'));
       assert.deepEqual(visual(), [
         ['Home', '/', 0],
         ['', '/about', 0],
@@ -217,14 +249,14 @@ describe('MenuPage', () => {
         ['Blog', '/blog', 1],
       ]);
 
-      click(rows()[0].querySelector('.delete-item-btn'));
+      click(cell(0, '.delete-item-btn'));
       assert.deepEqual(visual().map(r => r[0]), ['', 'Team', 'Blog']);
     });
 
     test('trailing whitespace is trimmed when the row is read back', async () => {
       await mountPage();
-      type(rows()[0].querySelector('.item-label'), '  Home  ');
-      click(q('#add-item-btn'));
+      type(cell(0, '.item-label'), '  Home  ');
+      click($('#add-item-btn'));
       assert.equal(visual()[0][0], 'Home');
     });
   });
@@ -234,14 +266,14 @@ describe('MenuPage', () => {
   describe('visual editor — structure', () => {
     test('add appends one empty row at the root', async () => {
       await mountPage();
-      click(q('#add-item-btn'));
+      click($('#add-item-btn'));
       assert.equal(rows().length, 5);
       assert.deepEqual(visual()[4], ['', '', 0]);
     });
 
     test('delete removes the row that was clicked, not its neighbour', async () => {
       await mountPage();
-      click(rows()[1].querySelector('.delete-item-btn'));
+      click(cell(1, '.delete-item-btn'));
       assert.deepEqual(visual().map(r => r[0]), ['Home', 'Team', 'Blog']);
     });
 
@@ -249,10 +281,10 @@ describe('MenuPage', () => {
       await mountPage();
       const depth = () => visual()[0][2];
 
-      for (let i = 0; i < 5; i++) click(rows()[0].querySelector('.indent-btn'));
+      for (let i = 0; i < 5; i++) click(cell(0, '.indent-btn'));
       assert.equal(depth(), 3, 'indent must cap at 3');
 
-      for (let i = 0; i < 5; i++) click(rows()[0].querySelector('.outdent-btn'));
+      for (let i = 0; i < 5; i++) click(cell(0, '.outdent-btn'));
       assert.equal(depth(), 0, 'outdent must stop at the root');
     });
 
@@ -264,7 +296,7 @@ describe('MenuPage', () => {
 
     test('a drag reorder carries edits and depth with the moved row', async () => {
       await mountPage();
-      type(rows()[2].querySelector('.item-label'), 'The Team');
+      type(cell(2, '.item-label'), 'The Team');
       dragRow(2, 0);
       assert.deepEqual(visual(), [
         ['The Team', '/about/team', 1],
@@ -290,14 +322,14 @@ describe('MenuPage', () => {
       // the label cannot be selected or replaced with the mouse at all.
       assert.ok(rows().every(r => !r.hasAttribute('draggable')), 'a row is draggable at rest');
 
-      fire(rows()[0].querySelector('.drag-handle'), 'mousedown');
+      fire(cell(0, '.drag-handle'), 'mousedown');
       assert.equal(rows()[0].getAttribute('draggable'), 'true');
     });
 
     test('pressing an input does not arm the row', async () => {
       await mountPage();
-      fire(rows()[0].querySelector('.item-label'), 'mousedown');
-      fire(rows()[0].querySelector('.item-url'), 'mousedown');
+      fire(cell(0, '.item-label'), 'mousedown');
+      fire(cell(0, '.item-url'), 'mousedown');
       assert.ok(!rows()[0].hasAttribute('draggable'), 'editing a field armed a drag');
     });
 
@@ -314,7 +346,7 @@ describe('MenuPage', () => {
 
     test('drop cancels the default action rather than returning false', async () => {
       await mountPage();
-      fire(rows()[0].querySelector('.drag-handle'), 'mousedown');
+      fire(cell(0, '.drag-handle'), 'mousedown');
       fire(rows()[0], 'dragstart', { dataTransfer: transfer() });
       // Uncancelled, the browser pastes the dragged payload into the drop target.
       const evt = fire(rows()[2], 'drop', { dataTransfer: transfer() });
@@ -323,7 +355,7 @@ describe('MenuPage', () => {
 
     test('a press on the handle that never becomes a drag disarms again', async () => {
       await mountPage();
-      fire(rows()[0].querySelector('.drag-handle'), 'mousedown');
+      fire(cell(0, '.drag-handle'), 'mousedown');
       // No dragstart, no dragend — just a click. The row must not stay armed,
       // or its inputs are permanently unusable.
       fire(dom.document, 'mouseup');
@@ -332,7 +364,7 @@ describe('MenuPage', () => {
 
     test('dragend disarms every row', async () => {
       await mountPage();
-      fire(rows()[0].querySelector('.drag-handle'), 'mousedown');
+      fire(cell(0, '.drag-handle'), 'mousedown');
       fire(rows()[0], 'dragstart', { dataTransfer: transfer() });
       fire(rows()[0], 'dragend', { dataTransfer: transfer() });
 
@@ -345,7 +377,7 @@ describe('MenuPage', () => {
       fire(rows()[2], 'dragenter', { dataTransfer: transfer() });
       assert.ok(!rows()[2].classList.contains('drag-over'), 'highlighted without a drag');
 
-      fire(rows()[0].querySelector('.drag-handle'), 'mousedown');
+      fire(cell(0, '.drag-handle'), 'mousedown');
       fire(rows()[0], 'dragstart', { dataTransfer: transfer() });
       fire(rows()[2], 'dragenter', { dataTransfer: transfer() });
       assert.ok(rows()[2].classList.contains('drag-over'));
@@ -358,8 +390,8 @@ describe('MenuPage', () => {
   // ── Markdown editor ───────────────────────────────────────────────────────
 
   describe('markdown editor', () => {
-    const toMarkdown = () => click(q('#mode-markdown-btn'));
-    const toVisual = () => click(q('#mode-visual-btn'));
+    const toMarkdown = () => click($('#mode-markdown-btn'));
+    const toVisual = () => click($('#mode-visual-btn'));
 
     test('switching to markdown serialises exactly what the rows hold', async () => {
       await mountPage();
@@ -369,15 +401,15 @@ describe('MenuPage', () => {
 
     test('the switch carries unsaved visual edits into the text', async () => {
       await mountPage();
-      type(rows()[0].querySelector('.item-label'), 'Homepage');
-      type(rows()[0].querySelector('.item-url'), '/home');
+      type(cell(0, '.item-label'), 'Homepage');
+      type(cell(0, '.item-url'), '/home');
       toMarkdown();
       assert.match(markdown(), /^- \[Homepage\]\(\/home\)$/m);
     });
 
     test('an unnamed row has no markdown spelling and is left out', async () => {
       await mountPage();
-      click(q('#add-item-btn'));
+      click($('#add-item-btn'));
       toMarkdown();
       // A bare `- ` or `- [](url)` does not parse back to the same item.
       assert.equal(markdown(), MARKDOWN);
@@ -387,7 +419,7 @@ describe('MenuPage', () => {
     test('switching back parses the text into rows', async () => {
       await mountPage();
       toMarkdown();
-      q('#menu-markdown-input').value = [
+      $('#menu-markdown-input').value = [
         '- [Docs](/docs)',
         '  - [API](/docs/api)',
         '    - [Auth](/docs/api/auth)',
@@ -406,7 +438,7 @@ describe('MenuPage', () => {
     test('a label with no link is a group header', async () => {
       await mountPage();
       toMarkdown();
-      q('#menu-markdown-input').value = '- Reference\n  - [Guide](/guide)';
+      $('#menu-markdown-input').value = '- Reference\n  - [Guide](/guide)';
       toVisual();
       assert.deepEqual(visual()[0], ['Reference', '', 0]);
     });
@@ -414,7 +446,7 @@ describe('MenuPage', () => {
     test('blank lines and non-list text are skipped', async () => {
       await mountPage();
       toMarkdown();
-      q('#menu-markdown-input').value = '\n- [A](/a)\n\nnot a list item\n   \n- [B](/b)\n';
+      $('#menu-markdown-input').value = '\n- [A](/a)\n\nnot a list item\n   \n- [B](/b)\n';
       toVisual();
       assert.deepEqual(visual().map(r => r[0]), ['A', 'B']);
     });
@@ -422,7 +454,7 @@ describe('MenuPage', () => {
     test('a link with an empty target keeps its label', async () => {
       await mountPage();
       toMarkdown();
-      q('#menu-markdown-input').value = '- [Placeholder]()';
+      $('#menu-markdown-input').value = '- [Placeholder]()';
       toVisual();
       assert.deepEqual(visual(), [['Placeholder', '', 0]]);
     });
@@ -438,8 +470,8 @@ describe('MenuPage', () => {
     test('a full round trip through both editors preserves the menu', async () => {
       await mountPage();
       const before = visual();
-      click(q('#mode-markdown-btn'));
-      click(q('#mode-visual-btn'));
+      click($('#mode-markdown-btn'));
+      click($('#mode-visual-btn'));
       assert.deepEqual(visual(), before);
     });
   });
@@ -449,7 +481,7 @@ describe('MenuPage', () => {
   describe('saving', () => {
     test('the visual editor saves a tree plus the markdown that made it', async () => {
       await mountPage();
-      click(q('#save-menu-btn'));
+      click($('#save-menu-btn'));
       await settle();
 
       assert.deepEqual(savedBody(), {
@@ -470,35 +502,35 @@ describe('MenuPage', () => {
 
     test('unsaved field edits are what gets sent', async () => {
       await mountPage();
-      type(rows()[0].querySelector('.item-label'), 'Homepage');
-      click(q('#save-menu-btn'));
+      type(cell(0, '.item-label'), 'Homepage');
+      click($('#save-menu-btn'));
       await settle();
       assert.equal(savedBody().items[0].name, 'Homepage');
-      assert.match(savedBody().custom_markdown, /^- \[Homepage\]\(\/\)$/m);
+      assert.match(savedBody().custom_markdown ?? '', /^- \[Homepage\]\(\/\)$/m);
     });
 
     test('rows left unnamed are dropped from the payload', async () => {
       await mountPage();
-      click(q('#add-item-btn'));
-      type(rows()[4].querySelector('.item-url'), '/orphan');
-      click(q('#save-menu-btn'));
+      click($('#add-item-btn'));
+      type(cell(4, '.item-url'), '/orphan');
+      click($('#save-menu-btn'));
       await settle();
 
       assert.equal(savedBody().items.length, 3);
-      assert.ok(!savedBody().custom_markdown.includes('/orphan'));
+      assert.ok(!(savedBody().custom_markdown ?? '').includes('/orphan'));
     });
 
     test('a closed branch does not adopt a later deeper item', async () => {
       await mountPage();
-      click(q('#mode-markdown-btn'));
+      click($('#mode-markdown-btn'));
       // Support > FAQ closes when Legal starts; Terms belongs to Legal.
-      q('#menu-markdown-input').value = [
+      $('#menu-markdown-input').value = [
         '- [Support](/support)',
         '  - [FAQ](/faq)',
         '- [Legal](/legal)',
         '    - [Terms](/terms)',
       ].join('\n');
-      click(q('#save-menu-btn'));
+      click($('#save-menu-btn'));
       await settle();
 
       const [support, legal] = savedBody().items;
@@ -508,18 +540,18 @@ describe('MenuPage', () => {
 
     test('an item indented with no parent above it becomes a root', async () => {
       await mountPage();
-      click(q('#mode-markdown-btn'));
-      q('#menu-markdown-input').value = '  - [Orphan](/orphan)\n- [Root](/root)';
-      click(q('#save-menu-btn'));
+      click($('#mode-markdown-btn'));
+      $('#menu-markdown-input').value = '  - [Orphan](/orphan)\n- [Root](/root)';
+      click($('#save-menu-btn'));
       await settle();
       assert.deepEqual(savedBody().items.map(i => i.name), ['Orphan', 'Root']);
     });
 
     test('the markdown editor saves what its text says', async () => {
       await mountPage();
-      click(q('#mode-markdown-btn'));
-      q('#menu-markdown-input').value = '- [Only](/only)';
-      click(q('#save-menu-btn'));
+      click($('#mode-markdown-btn'));
+      $('#menu-markdown-input').value = '- [Only](/only)';
+      click($('#save-menu-btn'));
       await settle();
 
       assert.equal(savedBody().custom_markdown, '- [Only](/only)');
@@ -530,7 +562,7 @@ describe('MenuPage', () => {
       await mountPage();
       for (const mode of ['tags', 'none']) {
         page.setState({ mode });
-        click(q('#save-menu-btn'));
+        click($('#save-menu-btn'));
         await settle();
         assert.equal(savedBody().mode, mode);
         assert.equal(savedBody().custom_markdown, '');
@@ -540,7 +572,7 @@ describe('MenuPage', () => {
 
     test('the slot cap and More title are clamped and saved', async () => {
       await mountPage();
-      const cap = q('#inline-max-input');
+      const cap = $('#inline-max-input');
 
       cap.value = '11';
       fire(cap, 'change');
@@ -548,9 +580,9 @@ describe('MenuPage', () => {
 
       cap.value = '6';
       fire(cap, 'change');
-      type(q('#more-title-input'), 'Others');
+      type($('#more-title-input'), 'Others');
 
-      click(q('#save-menu-btn'));
+      click($('#save-menu-btn'));
       await settle();
       assert.equal(savedBody().inline_max, 6);
       assert.equal(savedBody().more_title, 'Others');
@@ -561,7 +593,7 @@ describe('MenuPage', () => {
       let navChanged = 0;
       dom.document.addEventListener('nav-changed', () => { navChanged++; });
 
-      click(q('#save-menu-btn'));
+      click($('#save-menu-btn'));
       await settle();
 
       assert.equal(navChanged, 1);
@@ -576,32 +608,32 @@ describe('MenuPage', () => {
     // wiping on screen the very text the request just carried correctly.
     test('a row typed into after being added keeps its text once saved', async () => {
       await mountPage();
-      click(q('#add-item-btn'));
-      type(rows()[4].querySelector('.item-label'), 'Contact');
-      type(rows()[4].querySelector('.item-url'), '/contact');
+      click($('#add-item-btn'));
+      type(cell(4, '.item-label'), 'Contact');
+      type(cell(4, '.item-url'), '/contact');
 
-      click(q('#save-menu-btn'));
+      click($('#save-menu-btn'));
       await settle();
 
-      assert.deepEqual(savedBody().items.at(-1), { name: 'Contact', url: '/contact', children: [] });
-      assert.deepEqual(visual().at(-1), ['Contact', '/contact', 0], 'the editor blanked the saved row');
+      assert.deepEqual(savedBody().items.slice(-1)[0], { name: 'Contact', url: '/contact', children: [] });
+      assert.deepEqual(visual().slice(-1)[0], ['Contact', '/contact', 0], 'the editor blanked the saved row');
     });
 
     test('saving does not revert an edit to an existing row', async () => {
       await mountPage();
-      type(rows()[1].querySelector('.item-label'), 'About Us');
-      click(q('#save-menu-btn'));
+      type(cell(1, '.item-label'), 'About Us');
+      click($('#save-menu-btn'));
       await settle();
       assert.deepEqual(visual().map(r => r[0]), ['Home', 'About Us', 'Team', 'Blog']);
     });
 
     test('saving leaves the markdown the owner authored exactly as typed', async () => {
       await mountPage();
-      click(q('#mode-markdown-btn'));
+      click($('#mode-markdown-btn'));
       const authored = '- [A](/a)\n\n    - [B](/b)\n- [C](/c)';
-      q('#menu-markdown-input').value = authored;
+      $('#menu-markdown-input').value = authored;
 
-      click(q('#save-menu-btn'));
+      click($('#save-menu-btn'));
       await settle();
 
       assert.equal(markdown(), authored, 'the textarea was rewritten by saving');
@@ -610,20 +642,20 @@ describe('MenuPage', () => {
 
     test('the editor survives a save that fails', async () => {
       await mountPage();
-      type(rows()[0].querySelector('.item-label'), 'Homepage');
+      type(cell(0, '.item-label'), 'Homepage');
       globalThis.fetch = async () => { throw new Error('nope'); };
-      click(q('#save-menu-btn'));
+      click($('#save-menu-btn'));
       await settle();
       assert.equal(visual()[0][0], 'Homepage');
     });
 
     test('the button reports progress in place, without a re-render', async () => {
       await mountPage();
-      const btn = q('#save-menu-btn');
+      const btn = $('#save-menu-btn');
       let inFlight;
       globalThis.fetch = async () => {
         inFlight = { disabled: btn.disabled, text: btn.textContent.trim() };
-        return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({}) };
+        return jsonResponse({ ok: true, status: 200, body: {} });
       };
 
       click(btn);
@@ -638,11 +670,11 @@ describe('MenuPage', () => {
     test('a failed save reports it and leaves the button usable', async () => {
       await mountPage();
       globalThis.fetch = async () => { throw new Error('nope'); };
-      click(q('#save-menu-btn'));
+      click($('#save-menu-btn'));
       await settle();
 
       assert.equal(getToast().type, 'error');
-      assert.ok(!q('#save-menu-btn').disabled, 'save stayed disabled after a failure');
+      assert.ok(!$('#save-menu-btn').disabled, 'save stayed disabled after a failure');
     });
   });
 
@@ -653,23 +685,23 @@ describe('MenuPage', () => {
       await mountPage();
       assert.deepEqual(page._previewItems().map(i => i.name), ['Home', 'About', 'Blog']);
 
-      click(q('#mode-markdown-btn'));
-      q('#menu-markdown-input').value = '- [One](/1)\n  - [Deep](/2)\n- [Two](/3)';
+      click($('#mode-markdown-btn'));
+      $('#menu-markdown-input').value = '- [One](/1)\n  - [Deep](/2)\n- [Two](/3)';
       assert.deepEqual(page._previewItems().map(i => i.name), ['One', 'Two']);
     });
 
     test('unnamed rows are not previewed', async () => {
       await mountPage();
-      click(q('#add-item-btn'));
+      click($('#add-item-btn'));
       assert.deepEqual(page._previewItems().map(i => i.name), ['Home', 'About', 'Blog']);
     });
 
     test('flipping the mode away and back keeps unsaved edits', async () => {
       await mountPage();
-      type(rows()[0].querySelector('.item-label'), 'Homepage');
+      type(cell(0, '.item-label'), 'Homepage');
 
-      const pick = value => check([...page.container.querySelectorAll('input[name="menu-mode"]')]
-        .find(r => r.value === value));
+      const pick = (value: string) => check(must([...page.container.querySelectorAll<HTMLInputElement>('input[name="menu-mode"]')]
+        .find(r => r.value === value)));
       pick('none');
       pick('custom');
 
@@ -694,8 +726,8 @@ describe('MenuPage', () => {
       assert.ok(first.every(f => f._providers.length === 0), 'a fold survived a re-render');
 
       page.unmount();
+      mounted = false;
       assert.equal(page._previewFolds.length, 0);
-      page = null;
     });
   });
 });

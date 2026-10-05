@@ -1,109 +1,121 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
+import { mock, memoryStorage, nodeList } from './helpers/mock.ts';
+import { StubElement, StubClassList, asElement, asStub, type Listener } from './helpers/stubElement.ts';
+
+type TimelineCtor = typeof import('../src/plugins/timeline/index.ts').Timeline;
+type TimelineProps = NonNullable<ConstructorParameters<TimelineCtor>[1]>;
+type TimelineInstance = InstanceType<TimelineCtor>;
+type CenteredItem = NonNullable<ReturnType<TimelineInstance['_findCenteredItem']>>;
+type PillInfo = Parameters<TimelineInstance['_makePillBtn']>[0];
+type TimelinePill = Parameters<TimelineInstance['_openPopover']>[1];
+type PillCluster = NonNullable<TimelineInstance['_lastCollision']>['clusters'][number];
+
+/** A cluster as _findCenteredItem reports it. */
+const cluster = (c: PillCluster & { type: 'cluster' }) => c;
+
+/** What navigator.vibrate was called with. */
+let vibrateCalls: number[] = [];
+/** What matchMedia reports for prefers-reduced-motion. */
+let prefersReducedMotion = false;
+
+/** Set document.activeElement, which the DOM types keep read-only. */
+function setActive(el: Element | null) {
+  Object.assign(document, { activeElement: el });
+}
+
+/** A classList that records nothing and reports no class, as the old stub did. */
+const inertClassList = () => Object.assign(new StubClassList(), { toggle: () => false, contains: () => false });
+
+/** A track element: the box Timeline measures and listens on. */
+const trackStub = (left = 0) => new StubElement({
+  clientWidth: 1000,
+  getBoundingClientRect: () => ({ left, top: 0, width: 1000, height: 100 }),
+  classList: inertClassList(),
+  querySelectorAll: () => [],
+});
+
+/**
+ * An element from document.createElement. It has no innerHTML, so a test can
+ * see that nothing was written as markup. Attributes are plain properties.
+ */
+function createElement(tag: string): HTMLElement {
+  const el: HTMLElement = mock<HTMLElement>({
+    appendChild: <T extends Node>(n: T) => n,
+    remove: () => {},
+    classList: mock<DOMTokenList>({ add: () => {}, remove: () => {}, toggle: () => false, contains: () => false }),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    querySelector: () => null,
+    querySelectorAll: () => nodeList<Element>([]),
+    dataset: {},
+    style: mock<CSSStyleDeclaration>({}),
+    setAttribute: (name: string, val: string) => { Reflect.set(el, name, val); },
+    getAttribute: (name: string) => Reflect.get(el, name),
+    getBoundingClientRect: () => mock<DOMRect>({ left: 0, top: 0, width: 1000, height: 100 }),
+    children: mock<HTMLCollection>({ length: 0 }),
+    focus: () => { setActive(el); },
+  });
+  if (tag === 'canvas') {
+    Object.assign(el, { getContext: () => ({ measureText: () => ({ width: 50 }) }), font: '' });
+  }
+  return el;
+}
 
 describe('Timeline Component', () => {
-  let Timeline;
-  let container;
-  let props;
+  let Timeline: TimelineCtor;
+  let container: StubElement;
+  let props: TimelineProps;
 
   before(async () => {
-    // Mock global dependencies
-    global.document = {
-      createElement: (tag) => {
-          const el = {
-            appendChild: () => {},
-            remove: () => {},
-            classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
-            addEventListener: () => {},
-            removeEventListener: () => {},
-            querySelector: (sel) => el._querySelector?.(sel) || null,
-            querySelectorAll: (sel) => el._querySelectorAll?.(sel) || [],
-            dataset: {},
-            style: {},
-            setAttribute: (name, val) => { el[name] = val; },
-            getAttribute: (name) => el[name],
-            getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000, height: 100 }),
-            children: [],
-            focus: () => { global.document.activeElement = el; }
-          };
-          if (tag === 'canvas') {
-              el.getContext = () => ({ measureText: () => ({ width: 50 }) });
-              el.font = '';
-          }
-          return el;
-      },
-      head: { appendChild: () => {} },
-      body: { appendChild: () => {}, classList: { remove: () => {} } },
-      documentElement: { dataset: { theme: 'light' } },
+    globalThis.document = mock<Document>({
+      createElement,
+      head: mock<HTMLHeadElement>({ appendChild: <T extends Node>(n: T) => n }),
+      body: mock<HTMLElement>({ appendChild: <T extends Node>(n: T) => n, classList: mock<DOMTokenList>({ remove: () => {} }) }),
+      documentElement: mock<HTMLElement>({ dataset: { theme: 'light' } }),
       addEventListener: () => {},
       removeEventListener: () => {},
       activeElement: null
-    };
-    global.window = {
+    });
+    globalThis.window = mock<typeof window>({
       addEventListener: () => {},
       removeEventListener: () => {},
-      matchMedia: (query) => ({ 
-        matches: global.prefersReducedMotion || false,
-        media: query 
+      matchMedia: (query: string) => mock<MediaQueryList>({
+        matches: prefersReducedMotion,
+        media: query
       }),
       scrollY: 0,
       innerWidth: 1024,
-      performance: { now: () => Date.now() },
-      requestAnimationFrame: (cb) => setTimeout(cb, 16),
-      cancelAnimationFrame: (id) => clearTimeout(id)
-    };
-    global.vibrateCalls = [];
-    Object.defineProperty(global, 'navigator', {
+      performance: mock<Performance>({ now: () => Date.now() }),
+      requestAnimationFrame: (cb: FrameRequestCallback) => Number(setTimeout(cb, 16)),
+      cancelAnimationFrame: (id: number) => clearTimeout(id)
+    });
+    Object.defineProperty(globalThis, 'navigator', {
       value: {
-        vibrate: (ms) => { global.vibrateCalls.push(ms); }
+        vibrate: (ms: number) => { vibrateCalls.push(ms); }
       },
       configurable: true,
       writable: true
     });
-    global.ResizeObserver = class {
+    globalThis.ResizeObserver = class {
       observe() {}
+      unobserve() {}
       disconnect() {}
     };
-    global.localStorage = {
-      getItem: () => null,
-      setItem: () => {}
-    };
-    global.requestAnimationFrame = (cb) => setTimeout(cb, 16);
-    global.cancelAnimationFrame = (id) => clearTimeout(id);
+    globalThis.localStorage = memoryStorage();
+    globalThis.requestAnimationFrame = (cb) => Number(setTimeout(cb, 16));
+    globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 
     const mod = await import('../src/plugins/timeline/index.ts');
     Timeline = mod.Timeline;
   });
 
   beforeEach(() => {
-    container = {
-      querySelector: (selector) => {
-          const base = {
-              clientWidth: 1000,
-              addEventListener: () => {},
-              removeEventListener: () => {},
-              getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000, height: 100 }),
-              classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
-              querySelector: () => null,
-              querySelectorAll: () => [],
-              appendChild: () => {},
-              children: [],
-              setAttribute: () => {},
-              dataset: {},
-              style: {}
-          };
-          if (selector === '.timeline-track') return base;
-          if (selector === '.timeline-track-wrapper') return base;
-          if (selector === '.timeline-pills-mount') return base;
-          if (selector === '#histogram-mount') return base;
-          if (selector === '.timeline-axis-ticks') return base;
-          return base;
-      },
+    container = new StubElement({
+      querySelector: () => trackStub(),
       querySelectorAll: () => [],
-      appendChild: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {}
-    };
+    });
     props = {
         mode: 'filter',
         onRangeChange: () => {}
@@ -114,7 +126,7 @@ describe('Timeline Component', () => {
     // Emitting mid-drag navigates + re-renders the host page, remounting the
     // timeline and killing the in-flight gesture. The range must commit only
     // once the drag settles — never while _isDragging is true.
-    const timeline = new Timeline(container, props);
+    const timeline = new Timeline(asElement(container), props);
     timeline.state.isLoading = false;
     timeline.state.pills = [
         { year: 2020, name: '2020', slug: '2020', post_count: 1 },
@@ -147,7 +159,7 @@ describe('Timeline Component', () => {
   });
 
   test('commits the range once after the drag settles', (t, done) => {
-    const timeline = new Timeline(container, props);
+    const timeline = new Timeline(asElement(container), props);
     timeline.state.isLoading = false;
     timeline.state.pills = [
         { year: 2021, name: '2021', slug: '2021', post_count: 1 }
@@ -176,14 +188,14 @@ describe('Timeline Component', () => {
   });
 
   test('should update aria-live announcer on settle', (t) => {
-    const announcer = { textContent: '' };
+    const announcer = new StubElement({ textContent: '' });
     const originalQS = container.querySelector;
     container.querySelector = (selector) => {
         if (selector === '#timeline-live-announcer') return announcer;
         return originalQS(selector);
     };
 
-    const timeline = new Timeline(container, props);
+    const timeline = new Timeline(asElement(container), props);
     timeline.state.isLoading = false;
     timeline.state.pills = [
         { year: 2021, name: '2021', slug: '2021', post_count: 5 }
@@ -199,14 +211,14 @@ describe('Timeline Component', () => {
   });
 
   test('should update aria-live announcer for clusters', (t) => {
-    const announcer = { textContent: '' };
+    const announcer = new StubElement({ textContent: '' });
     const originalQS = container.querySelector;
     container.querySelector = (selector) => {
         if (selector === '#timeline-live-announcer') return announcer;
         return originalQS(selector);
     };
 
-    const timeline = new Timeline(container, props);
+    const timeline = new Timeline(asElement(container), props);
     timeline.state.isLoading = false;
     timeline.state.pills = [
         { year: 2021, name: '2021', slug: '2021', post_count: 5 },
@@ -216,12 +228,12 @@ describe('Timeline Component', () => {
     timeline._getX = (y) => 500;
     timeline._lastCollision = { 
         visible: [], 
-        clusters: [{
+        clusters: [cluster({
             type: 'cluster',
             minYear: 2021,
             maxYear: 2022,
             pills: timeline.state.pills
-        }] 
+        })] 
     };
 
     timeline._settled = true;
@@ -231,14 +243,14 @@ describe('Timeline Component', () => {
   });
 
   test('should update aria-live announcer for all years', (t) => {
-    const announcer = { textContent: '' };
+    const announcer = new StubElement({ textContent: '' });
     const originalQS = container.querySelector;
     container.querySelector = (selector) => {
         if (selector === '#timeline-live-announcer') return announcer;
         return originalQS(selector);
     };
 
-    const timeline = new Timeline(container, props);
+    const timeline = new Timeline(asElement(container), props);
     timeline.state.isLoading = false;
     timeline.state.pills = [
         { year: 2021, name: '2021', slug: '2021', post_count: 5 },
@@ -248,13 +260,13 @@ describe('Timeline Component', () => {
     timeline._getX = () => 500;
     timeline._lastCollision = { 
         visible: [], 
-        clusters: [{
+        clusters: [cluster({
             type: 'cluster',
             minYear: 2021,
             maxYear: 2022,
             pills: timeline.state.pills,
             isAllYears: true
-        }] 
+        })] 
     };
 
     timeline._settled = true;
@@ -265,110 +277,111 @@ describe('Timeline Component', () => {
 
   describe('Accessibility & Keyboard', () => {
     test('Escape key resets zoom when no popover is open', (t) => {
-      const timeline = new Timeline(container, props);
+      const timeline = new Timeline(asElement(container), props);
       timeline.state.isLoading = false;
       timeline.state.pills = [{ year: 2021, slug: '2021', post_count: 5 }];
       timeline.state.extent = { min: 2021, max: 2021 };
       timeline.state.zoom = 5;
       
-      let keydownHandler;
+      const handlers: Record<string, Listener> = {};
       const originalQS = container.querySelector;
       container.querySelector = (sel) => {
-          const el = originalQS(sel);
+          const el = must(originalQS(sel));
           if (sel === '.timeline-track-wrapper') {
-              el.addEventListener = (name, cb) => { if (name === 'keydown') keydownHandler = cb; };
+              el.addEventListener = (name, cb) => { handlers[name] = cb; };
           }
           return el;
       };
 
       timeline.afterRender();
       
-      assert.ok(keydownHandler, 'keydownHandler should be assigned');
-      keydownHandler({ key: 'Escape', preventDefault: () => {} });
+      assert.ok(handlers.keydown, 'keydownHandler should be assigned');
+      must(handlers.keydown)({ key: 'Escape', preventDefault: () => {} });
       
       assert.strictEqual(timeline.state.zoom, 0.0001, 'Zoom should be reset to collapsed state');
     });
 
     test('Home and End keys jump to extents', (t) => {
-      const timeline = new Timeline(container, props);
+      const timeline = new Timeline(asElement(container), props);
       timeline.state.isLoading = false;
       timeline.state.pills = [{ year: 2021, slug: '2021', post_count: 5 }];
       timeline.state.extent = { min: 2000, max: 2020 };
       timeline.state.zoom = 1;
       timeline.state.panX = 0;
       
-      let keydownHandler;
+      const handlers: Record<string, Listener> = {};
       const originalQS = container.querySelector;
       container.querySelector = (sel) => {
-          const el = originalQS(sel);
+          const el = must(originalQS(sel));
           if (sel === '.timeline-track-wrapper') {
-              el.addEventListener = (name, cb) => { if (name === 'keydown') keydownHandler = cb; };
+              el.addEventListener = (name, cb) => { handlers[name] = cb; };
           }
           return el;
       };
 
       timeline.afterRender();
       
-      assert.ok(keydownHandler, 'keydownHandler should be assigned');
-      keydownHandler({ key: 'Home', preventDefault: () => {} });
-      keydownHandler({ key: 'End', preventDefault: () => {} });
+      assert.ok(handlers.keydown, 'keydownHandler should be assigned');
+      must(handlers.keydown)({ key: 'Home', preventDefault: () => {} });
+      must(handlers.keydown)({ key: 'End', preventDefault: () => {} });
     });
 
     test('Arrow keys announce focus', (t) => {
-      const announcer = { textContent: '' };
-      const timeline = new Timeline(container, props);
+      const announcer = new StubElement({ textContent: '' });
+      const timeline = new Timeline(asElement(container), props);
       timeline.state.isLoading = false;
       timeline.state.pills = [{ year: 2021, slug: '2021', post_count: 5 }];
       
-      let keydownHandler;
+      const handlers: Record<string, Listener> = {};
       const originalQS = container.querySelector;
       container.querySelector = (sel) => {
           if (sel === '#timeline-live-announcer') return announcer;
-          const el = originalQS(sel);
+          const el = must(originalQS(sel));
           if (sel === '.timeline-track-wrapper') {
-              el.addEventListener = (name, cb) => { if (name === 'keydown') keydownHandler = cb; };
+              el.addEventListener = (name, cb) => { handlers[name] = cb; };
           }
           return el;
       };
 
-      const btn1 = { 
-          focus: () => { global.document.activeElement = btn1; },
-          getBoundingClientRect: () => ({ left: 100, top: 0, width: 50, height: 20 }),
+      const btn1: HTMLElement = mock<HTMLElement>({
+          focus: () => { setActive(btn1); },
+          getBoundingClientRect: () => mock<DOMRect>({ left: 100, top: 0, width: 50, height: 20 }),
           addEventListener: () => {},
           removeEventListener: () => {}
-      };
-      const btn2 = { 
-          focus: () => { global.document.activeElement = btn2; },
-          getAttribute: (name) => name === 'aria-label' ? '2021, 5 posts' : null,
-          getBoundingClientRect: () => ({ left: 500, top: 0, width: 50, height: 20 }),
+      });
+      const btn2: HTMLElement = mock<HTMLElement>({
+          focus: () => { setActive(btn2); },
+          getAttribute: (name: string) => name === 'aria-label' ? '2021, 5 posts' : null,
+          getBoundingClientRect: () => mock<DOMRect>({ left: 500, top: 0, width: 50, height: 20 }),
           addEventListener: () => {},
           removeEventListener: () => {}
-      };
-      timeline.$$ = () => [btn1, btn2];
-      global.document.activeElement = btn1;
+      });
+      timeline.$$ = () => nodeList([btn1, btn2]);
+      setActive(btn1);
 
       timeline.afterRender();
       
-      assert.ok(keydownHandler, 'keydownHandler should be assigned');
-      keydownHandler({ key: 'ArrowRight', preventDefault: () => {} });
+      assert.ok(handlers.keydown, 'keydownHandler should be assigned');
+      must(handlers.keydown)({ key: 'ArrowRight', preventDefault: () => {} });
       
-      assert.strictEqual(global.document.activeElement, btn2);
+      assert.strictEqual(document.activeElement, btn2);
       assert.strictEqual(announcer.textContent, '2021, 5 posts');
     });
 
     test('Popover has role dialog and focus management', async (t) => {
-      const timeline = new Timeline(container, props);
+      const timeline = new Timeline(asElement(container), props);
       timeline.state.isLoading = false;
       timeline.state.pills = [{ year: 2021, slug: '2021', post_count: 5 }];
 
-      const pillEl = { 
+      let focused = false;
+      const pillEl = asElement(new StubElement({
           getBoundingClientRect: () => ({ top: 100, left: 100, width: 50, height: 20 }),
-          querySelector: () => ({ focus: () => { pillEl.focused = true; } })
-      };
-      
-      const originalCreateElement = global.document.createElement;
-      let popover;
-      global.document.createElement = (tag) => {
+          querySelector: () => new StubElement({ focus: () => { focused = true; } })
+      }));
+
+      const originalCreateElement = document.createElement;
+      let popover: HTMLElement | undefined;
+      document.createElement = (tag: string) => {
           const el = originalCreateElement(tag);
           if (tag === 'div') {
               const originalSetAttribute = el.setAttribute;
@@ -383,59 +396,59 @@ describe('Timeline Component', () => {
       await timeline._openPopover(pillEl, timeline.state.pills[0]);
       
       assert.ok(popover, 'Popover should be created with role dialog');
-      assert.strictEqual(popover.getAttribute('role'), 'dialog');
+      assert.strictEqual(must(popover).getAttribute('role'), 'dialog');
       
       timeline._closePopover();
       assert.strictEqual(timeline.state.popover, null);
-      assert.ok(pillEl.focused, 'Focus should return to trigger element');
+      assert.ok(focused, 'Focus should return to trigger element');
       
-      global.document.createElement = originalCreateElement;
+      document.createElement = originalCreateElement;
     });
   });
 
   describe('Haptic Feedback', () => {
     beforeEach(() => {
-      global.vibrateCalls = [];
-      global.prefersReducedMotion = false;
+      vibrateCalls = [];
+      prefersReducedMotion = false;
     });
 
     test('vibrates on snap when centered item changes', () => {
-      const timeline = new Timeline(container, props);
+      const timeline = new Timeline(asElement(container), props);
       timeline.state.isLoading = false;
       timeline.state.pills = [{ year: 2020, post_count: 5 }];
       timeline.state.extent = { min: 2000, max: 2040 };
       
       // Mock _findCenteredItem to return a pill
-      timeline._findCenteredItem = () => ({ type: 'pill', year: 2020 });
+      timeline._findCenteredItem = () => mock<CenteredItem>({ type: 'pill', year: 2020 });
       timeline._centerOnYear = () => {};
 
       // First snap (from null to 2020) - should NOT vibrate
       timeline._snapToCenterPill();
-      assert.strictEqual(global.vibrateCalls.length, 0, 'Should not vibrate on first snap');
+      assert.strictEqual(vibrateCalls.length, 0, 'Should not vibrate on first snap');
       assert.strictEqual(timeline._lastCenteredYear, 2020);
 
       // Second snap to different year
-      timeline._findCenteredItem = () => ({ type: 'pill', year: 2021 });
+      timeline._findCenteredItem = () => mock<CenteredItem>({ type: 'pill', year: 2021 });
       timeline._snapToCenterPill();
-      assert.strictEqual(global.vibrateCalls.length, 1, 'Should vibrate on year change');
-      assert.strictEqual(global.vibrateCalls[0], 10);
+      assert.strictEqual(vibrateCalls.length, 1, 'Should vibrate on year change');
+      assert.strictEqual(vibrateCalls[0], 10);
       assert.strictEqual(timeline._lastCenteredYear, 2021);
 
       // Third snap to SAME year
       timeline._snapToCenterPill();
-      assert.strictEqual(global.vibrateCalls.length, 1, 'Should not vibrate if year is same');
+      assert.strictEqual(vibrateCalls.length, 1, 'Should not vibrate if year is same');
     });
 
     test('respects prefers-reduced-motion', () => {
-      global.prefersReducedMotion = true;
-      const timeline = new Timeline(container, props);
+      prefersReducedMotion = true;
+      const timeline = new Timeline(asElement(container), props);
       timeline.state.isLoading = false;
       timeline._lastCenteredYear = 2020;
       timeline._centerOnYear = () => {};
-      timeline._findCenteredItem = () => ({ type: 'pill', year: 2021 });
+      timeline._findCenteredItem = () => mock<CenteredItem>({ type: 'pill', year: 2021 });
 
       timeline._snapToCenterPill();
-      assert.strictEqual(global.vibrateCalls.length, 0, 'Should not vibrate when reduced motion is on');
+      assert.strictEqual(vibrateCalls.length, 0, 'Should not vibrate when reduced motion is on');
     });
   });
 
@@ -443,28 +456,11 @@ describe('Timeline Component', () => {
     // Builds a wired-up timeline whose track elements report `rectLeft` as their
     // viewport offset, then exposes the live GestureController callbacks.
     function makeTimeline(rectLeft = 0) {
-      const el = () => ({
-        clientWidth: 1000,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        getBoundingClientRect: () => ({ left: rectLeft, top: 0, width: 1000, height: 100 }),
-        classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
-        querySelector: () => null,
+      const customContainer = new StubElement({
+        querySelector: () => trackStub(rectLeft),
         querySelectorAll: () => [],
-        appendChild: () => {},
-        children: [],
-        setAttribute: () => {},
-        dataset: {},
-        style: {},
       });
-      const customContainer = {
-        querySelector: () => el(),
-        querySelectorAll: () => [],
-        appendChild: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-      };
-      const timeline = new Timeline(customContainer, { mode: 'filter', onRangeChange: () => {} });
+      const timeline = new Timeline(asElement(customContainer), { mode: 'filter', onRangeChange: () => {} });
       timeline.state.isLoading = false;
       timeline.state.pills = [
         { year: 2020, name: '2020', slug: '2020', post_count: 1 },
@@ -485,11 +481,11 @@ describe('Timeline Component', () => {
       timeline._applyMomentum = () => { momentum = true; };
       timeline.props.onRangeChange = () => { emitted = true; };
 
-      const opts = timeline._gestureController._opts;
-      opts.onSwipeMove(2, 80); // predominantly vertical
+      const opts = must(timeline._gestureController)._opts;
+      must(opts.onSwipeMove)(2, 80); // predominantly vertical
       assert.strictEqual(panned, false, 'vertical swipe must not pan the timeline');
 
-      opts.onSwipeCommit('down');
+      must(opts.onSwipeCommit)('down');
       assert.strictEqual(momentum, false, 'vertical commit must not start momentum');
       assert.strictEqual(emitted, false, 'vertical swipe must not emit a range change');
     });
@@ -499,7 +495,7 @@ describe('Timeline Component', () => {
       let panArg = null;
       timeline._onPan = (dx) => { panArg = dx; };
 
-      timeline._gestureController._opts.onSwipeMove(80, 5);
+      must(must(timeline._gestureController)._opts.onSwipeMove)(80, 5);
       assert.strictEqual(panArg, 80, 'horizontal swipe should pan by dx');
     });
 
@@ -508,7 +504,7 @@ describe('Timeline Component', () => {
       let momentum = false;
       timeline._applyMomentum = () => { momentum = true; };
 
-      timeline._gestureController._opts.onSwipeCommit('left');
+      must(must(timeline._gestureController)._opts.onSwipeCommit)('left');
       assert.strictEqual(momentum, true, 'horizontal commit should start momentum');
     });
 
@@ -517,7 +513,7 @@ describe('Timeline Component', () => {
       let anchor = null;
       timeline._onZoom = (_scale, anchorX) => { anchor = anchorX; };
 
-      timeline._gestureController._opts.onPinchMove(1.2, 300); // pinch center at clientX 300
+      must(must(timeline._gestureController)._opts.onPinchMove)(1.2, 300, 0); // pinch center at clientX 300
       assert.strictEqual(anchor, 100, 'anchor should be clientX minus the track left offset');
     });
   });
@@ -525,31 +521,32 @@ describe('Timeline Component', () => {
   describe('Density histogram', () => {
     // Capture the html written into the histogram mount and pull out each bar's
     // `left:` pixel position so we can assert the bars actually spread out.
-    function renderHistogram(timeline) {
-      const mount = { innerHTML: '' };
-      const originalQS = timeline.container.querySelector;
-      timeline.container.querySelector = (sel) =>
-        sel === '#histogram-mount' ? mount : originalQS.call(timeline.container, sel);
+    function renderHistogram(timeline: TimelineInstance) {
+      const mount = new StubElement();
+      const host = asStub(timeline.container);
+      const originalQS = host.querySelector;
+      host.querySelector = (sel) =>
+        sel === '#histogram-mount' ? mount : originalQS.call(host, sel);
 
       const trackWidth = 1000;
       const { extent, zoom, panX } = timeline.state;
       const EDGE_PAD = 48;
-      const getX = (year) => {
+      const getX = (year: number) => {
         if (extent.max === extent.min) return trackWidth / 2;
         const progress = (year - extent.min) / (extent.max - extent.min);
         return EDGE_PAD + progress * (trackWidth - 2 * EDGE_PAD) * zoom + panX;
       };
       timeline._layout();
       timeline._updateHistogram(trackWidth, getX);
-      timeline.container.querySelector = originalQS;
+      host.querySelector = originalQS;
 
       return [...mount.innerHTML.matchAll(/left:\s*([\d.]+)px/g)].map((m) =>
-        parseFloat(m[1]),
+        parseFloat(m[1] ?? ''),
       );
     }
 
     function fourYearTimeline() {
-      const timeline = new Timeline(container, props);
+      const timeline = new Timeline(asElement(container), props);
       timeline.state.isLoading = false;
       timeline.state.pills = [
         { year: 2018, name: '2018', slug: '2018', post_count: 3 },
@@ -593,34 +590,34 @@ describe('Timeline Component', () => {
     const XSS = '<img src=x onerror="alert(1)">';
 
     test('pill labels go through textContent, not innerHTML', () => {
-      const timeline = new Timeline(container, props);
-      const btn = timeline._makePillBtn({
+      const timeline = new Timeline(asElement(container), props);
+      const btn = timeline._makePillBtn(mock<PillInfo>({
         type: 'pill',
-        data: { year: 2020, name: XSS, slug: 'evil', post_count: 1 },
-      });
+        data: mock<TimelinePill>({ year: 2020, name: XSS, slug: 'evil', post_count: 1 }),
+      }));
 
       assert.strictEqual(btn.textContent, XSS, 'the name should land as literal text');
       assert.strictEqual(btn.innerHTML, undefined, 'nothing may be written as markup');
     });
 
     test('cluster labels go through textContent, not innerHTML', () => {
-      const timeline = new Timeline(container, props);
-      const btn = timeline._makePillBtn({
+      const timeline = new Timeline(asElement(container), props);
+      const btn = timeline._makePillBtn(mock<PillInfo>({
         type: 'cluster',
         data: { label: XSS, minYear: 2018, maxYear: 2020, pills: [] },
-      });
+      }));
 
       assert.strictEqual(btn.textContent, XSS);
       assert.strictEqual(btn.innerHTML, undefined);
     });
 
     test('the cluster popover escapes pill names and slugs', () => {
-      const timeline = new Timeline(container, props);
+      const timeline = new Timeline(asElement(container), props);
       timeline.state.pills = [];
-      const trigger = global.document.createElement('button');
+      const trigger = document.createElement('button');
 
       timeline._openClusterPopover(trigger, [
-        { name: XSS, slug: '" onclick="alert(1)', year: 2020, post_count: 1 },
+        mock<TimelinePill>({ name: XSS, slug: '" onclick="alert(1)', year: 2020, post_count: 1 }),
       ]);
 
       const html = timeline.state.popover.innerHTML;
@@ -630,7 +627,7 @@ describe('Timeline Component', () => {
       const slugAttr = html.match(/data-slug="([^"]*)"/);
       assert.ok(slugAttr, 'the slug should stay inside one quoted attribute');
       assert.ok(
-        !slugAttr[1].includes('"') && slugAttr[1].includes('&quot;'),
+        !slugAttr[1]?.includes('"') && slugAttr[1]?.includes('&quot;'),
         'a quote in the slug must not break out of the attribute',
       );
     });

@@ -10,17 +10,20 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.ts';
+import type { Component } from '../src/components/Component.ts';
 
-function markupOf(PageClass, state) {
+type PageCtor = new (container: HTMLElement, props: object) => Component;
+
+function markupOf(PageClass: PageCtor, state: object) {
   const page = new PageClass(document.createElement('div'), {});
   Object.assign(page.state, state);
   return String(page.render());
 }
 
 describe('API fields in page markup', () => {
-  let dom;
-  let SecurityPage;
-  let SystemPage;
+  let dom: ReturnType<typeof setupDOM>;
+  let SecurityPage: typeof import('../src/pages/light/SecurityPage.ts').default;
+  let SystemPage: typeof import('../src/pages/light/SystemPage.ts').default;
 
   before(async () => {
     dom = setupDOM();

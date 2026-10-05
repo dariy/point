@@ -1,12 +1,29 @@
 import { test, describe, before, afterEach } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
+import { jsonResponse } from './helpers/fetch.ts';
+import { mock, memoryStorage, nodeList } from './helpers/mock.ts';
+import type { AtlasTag, ConcealMarks, PanelView } from '../src/plugins/tags-atlas/index.ts';
+
+type AtlasModule = typeof import('../src/plugins/tags-atlas/index.ts');
+type Page = InstanceType<AtlasModule['default']>;
+type User = NonNullable<Parameters<typeof import('../src/store.ts').setUser>[0]>;
+
+const tag = (fields: Partial<AtlasTag>) => mock<AtlasTag>(fields);
+const post = (fields: Partial<PanelView['posts'][number]>) => mock<PanelView['posts'][number]>(fields);
+
+/** A node as isConcealed and _filteredOut see it, with the fields that name it. */
+const node = (fields: ConcealMarks & { id?: number; name?: string; slug?: string }): ConcealMarks => fields;
+
+/** A page container that holds no elements. */
+const emptyContainer = () => mock<HTMLElement>({ querySelector: () => null, querySelectorAll: () => nodeList<Element>([]) });
 
 // The graph payload now ships only markers + hierarchy — posts and co-tags are
 // fetched per place on tap (see getTagCloud / _loadAndSpawnCloud).
 const GRAPH = {
   tags: [
-    { id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4 },
-    { id: 2, name: 'Paris', slug: 'paris', kind: 'place', latitude: 48.8, longitude: 2.3 },
+    tag({ id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4 }),
+    tag({ id: 2, name: 'Paris', slug: 'paris', kind: 'place', latitude: 48.8, longitude: 2.3 }),
   ],
   hierarchyEdges: [],
 };
@@ -26,42 +43,37 @@ const CLOUD = {
 };
 
 /** Stub global.fetch to return `payload` for every request; returns the URL log. */
-function fakeFetch(payload) {
-  const calls = [];
-  global.fetch = async (url) => {
-    calls.push(url);
-    return {
-      ok: true,
-      status: 200,
-      headers: { get: () => 'application/json' },
-      json: async () => payload,
-    };
+function fakeFetch(payload: unknown) {
+  const calls: string[] = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return jsonResponse({ ok: true, status: 200, body: payload });
   };
   return calls;
 }
 
 describe('AtlasPage lazy cloud loading', () => {
-  let AtlasPage;
-  let setRoute;
+  let AtlasPage: AtlasModule['default'];
+  let setRoute: typeof import('../src/store.ts').setRoute;
 
   before(async () => {
-    global.document = {
-      createElement: () => ({ classList: { add() {}, remove() {} }, appendChild() {} }),
-      head: { appendChild() {} },
-      body: { classList: { remove() {} } },
-      documentElement: { dataset: { theme: 'light' } },
+    globalThis.document = mock<Document>({
+      createElement: () => mock<HTMLElement>({ classList: mock<DOMTokenList>({ add() {}, remove() {} }), appendChild: <T extends Node>(n: T) => n }),
+      head: mock<HTMLHeadElement>({ appendChild: <T extends Node>(n: T) => n }),
+      body: mock<HTMLElement>({ classList: mock<DOMTokenList>({ remove() {} }) }),
+      documentElement: mock<HTMLElement>({ dataset: { theme: 'light' } }),
       addEventListener() {},
       removeEventListener() {},
       querySelector: () => null,
-      querySelectorAll: () => [],
-    };
-    global.window = {
-      location: { pathname: '/atlas', search: '' },
-      history: { replaceState() {}, pushState() {} },
+      querySelectorAll: () => nodeList<Element>([]),
+    });
+    globalThis.window = mock<typeof window>({
+      location: mock<Location>({ pathname: '/atlas', search: '' }),
+      history: mock<History>({ replaceState() {}, pushState() {} }),
       addEventListener() {},
       removeEventListener() {},
-      matchMedia: () => ({ matches: false }),
-    };
+      matchMedia: () => mock<MediaQueryList>({ matches: false }),
+    });
     const mod = await import('../src/plugins/tags-atlas/index.ts');
     AtlasPage = mod.default;
     ({ setRoute } = await import('../src/store.ts'));
@@ -69,18 +81,18 @@ describe('AtlasPage lazy cloud loading', () => {
 
   afterEach(() => {
     setRoute({ pathname: '/atlas', query: {} });
-    delete global.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
   });
 
   function loaded() {
-    const page = new AtlasPage({});
+    const page = new AtlasPage(mock<HTMLElement>({}));
     page._buildIndexes(GRAPH);
     return page;
   }
 
   /** Put a place into the "actively selected" state so spawnFrom's guard passes. */
-  function activate(page, tagId) {
-    const tag = page._tagsById.get(tagId);
+  function activate(page: Page, tagId: number) {
+    const tag = must(page._tagsById.get(tagId));
     page._activeTag = tag;
     page._activeKey = 'm' + tagId;
     return tag;
@@ -88,23 +100,24 @@ describe('AtlasPage lazy cloud loading', () => {
 
   test('_repositionCloud moves satellites and edges to the anchor offsets', () => {
     const page = loaded();
-    const at = (x, y) => ({ x, y, add: ([dx, dy]) => at(x + dx, y + dy) });
+    type Point = { x: number; y: number; add(d: [number, number]): Point };
+    const at = (x: number, y: number): Point => ({ x, y, add: ([dx, dy]) => at(x + dx, y + dy) });
     page._map = {
       latLngToContainerPoint: () => at(100, 100),
-      containerPointToLatLng: p => [p.x, p.y],
+      containerPointToLatLng: (p: Point) => [p.x, p.y],
     };
-    const moved = {};
-    const marker = key => ({ setLatLng: ll => { moved[key] = ll; } });
-    let edgeEnds = null;
-    page._cloud = {
+    const moved: Record<string, unknown> = {};
+    const marker = (key: string) => ({ setLatLng: (ll: unknown) => { moved[key] = ll; } });
+    let edgeEnds: unknown = null;
+    page._cloud = mock<NonNullable<Page['_cloud']>>({
       anchorLatLng: [0, 0],
       nodePos: new Map([['t5', { dx: 10, dy: -5 }], ['p10', { dx: -20, dy: 0 }]]),
       sats: [{ key: 't5', marker: marker('t5') }, { key: 'gone', marker: marker('gone') }],
       edges: [
-        { a: 'p10', b: 't5', line: { setLatLngs: ends => { edgeEnds = ends; } } },
-        { a: 'p10', b: 'gone', line: { setLatLngs: () => assert.fail('an edge to a missing node must not move') } },
+        { a: 'p10', b: 't5', baseOpacity: 1, line: { setLatLngs: (ends: unknown) => { edgeEnds = ends; } } },
+        { a: 'p10', b: 'gone', baseOpacity: 1, line: { setLatLngs: () => assert.fail('an edge to a missing node must not move') } },
       ],
-    };
+    });
     page._repositionCloud();
     assert.deepEqual(moved, { t5: [110, 95] });
     assert.deepEqual(edgeEnds, [[80, 100], [110, 95]]);
@@ -113,16 +126,16 @@ describe('AtlasPage lazy cloud loading', () => {
   test('_buildIndexes indexes only tag (marker) nodes', () => {
     const page = loaded();
     assert.equal(page._tagsById.size, 2);
-    assert.equal(page._tagsById.get(1).slug, 'berlin');
+    assert.equal(page._tagsById.get(1)?.slug, 'berlin');
     // The old global post indexes are gone.
-    assert.equal(page._postsById, undefined);
-    assert.equal(page._tagsByPost, undefined);
+    assert.equal(Reflect.get(page, '_postsById'), undefined);
+    assert.equal(Reflect.get(page, '_tagsByPost'), undefined);
   });
 
   test('_loadAndSpawnCloud fetches the place cloud, spawns from it, and caches', async () => {
     const page = loaded();
     const berlin = activate(page, 1);
-    let captured = null;
+    let captured: unknown = null;
     page._spawnCloud = (_t, _a, data) => { captured = data; };
     const calls = fakeFetch(CLOUD);
 
@@ -159,10 +172,10 @@ describe('AtlasPage lazy cloud loading', () => {
     let spawned = false;
     page._spawnCloud = () => { spawned = true; };
 
-    let release;
-    global.fetch = async () => {
-      await new Promise((r) => { release = r; });
-      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => CLOUD };
+    let release: () => void = () => {};
+    globalThis.fetch = async () => {
+      await new Promise<void>((r) => { release = r; });
+      return jsonResponse({ ok: true, status: 200, body: CLOUD });
     };
 
     const pending = page._loadAndSpawnCloud(berlin, { lat: 52.5, lng: 13.4 });
@@ -177,13 +190,13 @@ describe('AtlasPage lazy cloud loading', () => {
 // The timeline scopes the map itself, not only the open place's cloud: the
 // graph is refetched for the range and the places redrawn from it.
 describe('AtlasPage timeline filtering', () => {
-  let AtlasPage;
-  let setRoute;
+  let AtlasPage: AtlasModule['default'];
+  let setRoute: typeof import('../src/store.ts').setRoute;
 
   // Only Berlin survives a narrow range, and with a smaller (in-range) count.
   const SCOPED_GRAPH = {
     tags: [
-      { id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4, post_count: 2 },
+      tag({ id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4, post_count: 2 }),
     ],
     hierarchyEdges: [],
   };
@@ -196,12 +209,12 @@ describe('AtlasPage timeline filtering', () => {
 
   afterEach(() => {
     setRoute({ pathname: '/atlas', query: {} });
-    delete global.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
   });
 
   /** A page past its initial load, with a map and a container the DOM helpers can query. */
   function mounted() {
-    const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    const page = new AtlasPage(emptyContainer());
     page._buildIndexes(GRAPH);
     page.state = { loading: false, data: GRAPH, error: null };
     page._map = {};
@@ -212,7 +225,7 @@ describe('AtlasPage timeline filtering', () => {
     setRoute({ pathname: '/atlas', query: { timeline: '2018-2019' } });
     const page = mounted();
     let redrew = false;
-    page._redrawPlaces = () => { redrew = true; };
+    page._redrawPlaces = async () => { redrew = true; };
     const calls = fakeFetch(SCOPED_GRAPH);
 
     await page._applyYearScope();
@@ -226,7 +239,7 @@ describe('AtlasPage timeline filtering', () => {
 
   test('the initial load carries a year range from the URL', async () => {
     setRoute({ pathname: '/atlas', query: { timeline: '2020-2021' } });
-    const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    const page = new AtlasPage(emptyContainer());
     page.setState = (s) => Object.assign(page.state, s);
     const calls = fakeFetch(SCOPED_GRAPH);
 
@@ -239,8 +252,8 @@ describe('AtlasPage timeline filtering', () => {
   test('a failed refetch leaves the drawn places alone', async () => {
     const page = mounted();
     let redrew = false;
-    page._redrawPlaces = () => { redrew = true; };
-    global.fetch = async () => { throw new Error('offline'); };
+    page._redrawPlaces = async () => { redrew = true; };
+    globalThis.fetch = async () => { throw new Error('offline'); };
 
     await page._applyYearScope();
 
@@ -251,12 +264,12 @@ describe('AtlasPage timeline filtering', () => {
   test('drops a stale graph response when a newer range overtakes it', async () => {
     const page = mounted();
     let redrew = false;
-    page._redrawPlaces = () => { redrew = true; };
+    page._redrawPlaces = async () => { redrew = true; };
 
-    let release;
-    global.fetch = async () => {
-      await new Promise((r) => { release = r; });
-      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => SCOPED_GRAPH };
+    let release: () => void = () => {};
+    globalThis.fetch = async () => {
+      await new Promise<void>((r) => { release = r; });
+      return jsonResponse({ ok: true, status: 200, body: SCOPED_GRAPH });
     };
 
     const pending = page._applyYearScope();
@@ -270,13 +283,13 @@ describe('AtlasPage timeline filtering', () => {
 
   test('a redraw reopens the selected place when the range still has it', async () => {
     const page = mounted();
-    page._activeTag = page._tagsById.get(1);
+    page._activeTag = must(page._tagsById.get(1));
     page._activeKey = 'm1';
     page._drawLayers = async () => {
       page._placeActivators.set(1, { latLng: {}, setActive() {}, key: 'm1' });
     };
-    const selected = [];
-    page._selectPlaceById = (id, opts) => selected.push([id, opts]);
+    const selected: unknown[] = [];
+    page._selectPlaceById = (id, opts) => { selected.push([id, opts]); return true; };
 
     await page._redrawPlaces();
 
@@ -285,11 +298,11 @@ describe('AtlasPage timeline filtering', () => {
 
   test('a redraw drops a selection the range filtered out', async () => {
     const page = mounted();
-    page._activeTag = page._tagsById.get(1);
+    page._activeTag = must(page._tagsById.get(1));
     page._activeKey = 'm1';
     page._drawLayers = async () => {}; // the place is gone from the new payload
-    const selected = [];
-    page._selectPlaceById = (id, opts) => selected.push([id, opts]);
+    const selected: unknown[] = [];
+    page._selectPlaceById = (id, opts) => { selected.push([id, opts]); return true; };
 
     await page._redrawPlaces();
 
@@ -314,19 +327,17 @@ describe('AtlasPage timeline filtering', () => {
 // from the payload), but dropping 1 marker in 500 looks like nothing happened.
 // The revealed view therefore marks what a guest would not get.
 describe('AtlasPage owner-only marking', () => {
-  let isConcealed, concealedTitle, AtlasPage, setRevelio;
+  let isConcealed: AtlasModule['isConcealed'];
+  let concealedTitle: AtlasModule['concealedTitle'];
+  let AtlasPage: AtlasModule['default'];
+  let setRevelio: typeof import('../src/utils/revelio.ts').setRevelio;
 
   before(async () => {
     // revelio keeps its state in localStorage, which node has no notion of —
     // without this the switch silently stays on (its reads fall back to the
     // default) and the concealed-404 case below could never be reached.
-    const mem = new Map();
-    global.localStorage = {
-      getItem: (k) => (mem.has(k) ? mem.get(k) : null),
-      setItem: (k, v) => mem.set(k, String(v)),
-      removeItem: (k) => mem.delete(k),
-    };
-    global.window.localStorage = global.localStorage;
+    globalThis.localStorage = memoryStorage();
+    globalThis.window.localStorage = globalThis.localStorage;
     const mod = await import('../src/plugins/tags-atlas/index.ts');
     ({ isConcealed, concealedTitle } = mod);
     AtlasPage = mod.default;
@@ -335,16 +346,16 @@ describe('AtlasPage owner-only marking', () => {
 
   afterEach(() => {
     setRevelio(true);
-    delete global.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
   });
 
   test('marks hidden tags and non-public posts, nothing else', () => {
-    assert.equal(isConcealed({ id: 1, name: 'fog', is_hidden: true }), true);
-    assert.equal(isConcealed({ id: 2, slug: 'p', status: 'draft' }), true);
-    assert.equal(isConcealed({ id: 3, slug: 'p', status: 'scheduled' }), true);
+    assert.equal(isConcealed(node({ id: 1, name: 'fog', is_hidden: true })), true);
+    assert.equal(isConcealed(node({ id: 2, slug: 'p', status: 'draft' })), true);
+    assert.equal(isConcealed(node({ id: 3, slug: 'p', status: 'scheduled' })), true);
     // A guest's payload carries neither field, so nothing is ever marked there.
-    assert.equal(isConcealed({ id: 4, name: 'Berlin' }), false);
-    assert.equal(isConcealed({ id: 5, slug: 'p', status: 'published' }), false);
+    assert.equal(isConcealed(node({ id: 4, name: 'Berlin' })), false);
+    assert.equal(isConcealed(node({ id: 5, slug: 'p', status: 'published' })), false);
   });
 
   test('the tooltip names why a node is owner-only', () => {
@@ -354,15 +365,10 @@ describe('AtlasPage owner-only marking', () => {
   });
 
   test('a 404 while concealing explains itself instead of reading as a broken page', async () => {
-    const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    const page = new AtlasPage(emptyContainer());
     page.setState = (s) => Object.assign(page.state, s);
     setRevelio(false); // owner viewing as a guest
-    global.fetch = async () => ({
-      ok: false,
-      status: 404,
-      headers: { get: () => 'application/json' },
-      json: async () => ({ detail: 'tags not found' }),
-    });
+    globalThis.fetch = async () => jsonResponse({ ok: false, status: 404, body: { detail: 'tags not found' } });
 
     await page._load();
 
@@ -371,9 +377,9 @@ describe('AtlasPage owner-only marking', () => {
   });
 
   test('an ordinary failure still surfaces the real error', async () => {
-    const page = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    const page = new AtlasPage(emptyContainer());
     page.setState = (s) => Object.assign(page.state, s);
-    global.fetch = async () => { throw new Error('offline'); };
+    globalThis.fetch = async () => { throw new Error('offline'); };
 
     await page._load();
 
@@ -386,12 +392,15 @@ describe('AtlasPage owner-only marking', () => {
 // it redraws the place layer — a hidden country must lose its fill, not just
 // its marker.
 describe('AtlasPage hidden-node filter', () => {
-  let AtlasPage, isConcealed, setUser, setRevelio;
+  let AtlasPage: AtlasModule['default'];
+  let isConcealed: AtlasModule['isConcealed'];
+  let setUser: typeof import('../src/store.ts').setUser;
+  let setRevelio: typeof import('../src/utils/revelio.ts').setRevelio;
 
   const MIXED = {
     tags: [
-      { id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4 },
-      { id: 2, name: 'Italy', slug: 'italy', kind: 'place', latitude: 42.8, longitude: 12.5, is_hidden: true },
+      tag({ id: 1, name: 'Berlin', slug: 'berlin', kind: 'place', latitude: 52.5, longitude: 13.4 }),
+      tag({ id: 2, name: 'Italy', slug: 'italy', kind: 'place', latitude: 42.8, longitude: 12.5, is_hidden: true }),
     ],
     hierarchyEdges: [],
   };
@@ -410,7 +419,7 @@ describe('AtlasPage hidden-node filter', () => {
   });
 
   function page() {
-    const p = new AtlasPage({ querySelector: () => null, querySelectorAll: () => [] });
+    const p = new AtlasPage(emptyContainer());
     p.state = { loading: false, data: MIXED, error: null };
     p._buildIndexes(MIXED);
     return p;
@@ -420,7 +429,7 @@ describe('AtlasPage hidden-node filter', () => {
     const p = page();
     setUser(null);
     assert.equal(p._canFilterHidden(), false, 'a guest gets a payload with nothing hidden in it');
-    setUser({ id: 1 });
+    setUser(mock<User>({ id: 1 }));
     assert.equal(p._canFilterHidden(), true);
     setRevelio(false);
     assert.equal(p._canFilterHidden(), false, 'concealing already removed the hidden nodes');
@@ -428,14 +437,14 @@ describe('AtlasPage hidden-node filter', () => {
 
   test('filtering drops hidden places and keeps the rest', () => {
     const p = page();
-    const geo = () => (p.state.data.tags || []).filter((t) => !p._filteredOut(t)).map((t) => t.slug);
+    const geo = () => (p.state.data.tags || []).filter((t: AtlasTag) => !p._filteredOut(t)).map((t: AtlasTag) => t.slug);
 
     assert.deepEqual(geo(), ['berlin', 'italy'], 'unfiltered, the owner sees both');
     p._hiddenTypes.add('concealed');
     assert.deepEqual(geo(), ['berlin'], 'the hidden country leaves the drawn set entirely');
     // Leaving the set is what reverts its boundary shape to an untagged outline:
     // the GeoJSON features match against exactly these tags.
-    assert.equal(isConcealed(MIXED.tags[1]), true);
+    assert.equal(isConcealed(must(MIXED.tags[1])), true);
   });
 
   // Regression: the toggle was built with a plain `` template literal
@@ -443,7 +452,7 @@ describe('AtlasPage hidden-node filter', () => {
   // markup as visible text instead of a button.
   test('the toggle renders as an element, not as escaped text', () => {
     const p = page();
-    setUser({ id: 1 });
+    setUser(mock<User>({ id: 1 }));
     const markup = String(p.render());
     assert.ok(
       markup.includes('<button type="button" class="atlas-toggle atlas-toggle--hidden"'),
@@ -455,20 +464,20 @@ describe('AtlasPage hidden-node filter', () => {
   test('a draft post chip is filtered by the same switch', () => {
     const p = page();
     p._hiddenTypes.add('concealed');
-    assert.equal(p._filteredOut({ id: 9, slug: 'p', status: 'draft' }), true);
-    assert.equal(p._filteredOut({ id: 10, slug: 'q', status: 'published' }), false);
+    assert.equal(p._filteredOut(node({ id: 9, slug: 'p', status: 'draft' })), true);
+    assert.equal(p._filteredOut(node({ id: 10, slug: 'q', status: 'published' })), false);
   });
 });
 
 describe('AtlasPage desktop side panel', () => {
-  let AtlasPage;
-  let panelHtml;
-  let setRoute;
+  let AtlasPage: AtlasModule['default'];
+  let panelHtml: AtlasModule['panelHtml'];
+  let setRoute: typeof import('../src/store.ts').setRoute;
 
   const TAG_PAGE = {
     posts: [
-      { id: 10, slug: 'p10', title: 'Berlin 2020', status: 'published', published_at: '2020-05-01T00:00:00Z' },
-      { id: 12, slug: 'p12', title: 'Draft', status: 'draft' },
+      post({ id: 10, slug: 'p10', title: 'Berlin 2020', status: 'published', published_at: '2020-05-01T00:00:00Z' }),
+      post({ id: 12, slug: 'p12', title: 'Draft', status: 'draft' }),
     ],
     pagination: { page: 1, per_page: 2, total: 3, pages: 2 },
   };
@@ -482,20 +491,20 @@ describe('AtlasPage desktop side panel', () => {
 
   afterEach(() => {
     setRoute({ pathname: '/atlas', query: {} });
-    global.window.matchMedia = () => ({ matches: false });
-    delete global.fetch;
+    globalThis.window.matchMedia = () => mock<MediaQueryList>({ matches: false });
+    Reflect.deleteProperty(globalThis, 'fetch');
   });
 
   /** A page with a fake #atlas-panel element that records what is written to it. */
-  function withPanel(desktop) {
-    global.window.matchMedia = () => ({ matches: desktop });
-    const el = { hidden: true, innerHTML: '', addEventListener() {} };
-    const page = new AtlasPage({
-      querySelector: (sel) => (sel === '#atlas-panel' ? el : null),
-      querySelectorAll: () => [],
-    });
+  function withPanel(desktop: boolean) {
+    globalThis.window.matchMedia = () => mock<MediaQueryList>({ matches: desktop });
+    const el = mock<HTMLElement>({ hidden: true, innerHTML: '', addEventListener() {} });
+    const page = new AtlasPage(mock<HTMLElement>({
+      querySelector: (sel: string) => (sel === '#atlas-panel' ? el : null),
+      querySelectorAll: () => nodeList<Element>([]),
+    }));
     page._buildIndexes(GRAPH);
-    return { page, el, berlin: page._tagsById.get(1) };
+    return { page, el, berlin: must(page._tagsById.get(1)) };
   }
 
   test('a place at desktop width loads its posts with the year scope and renders rows', async () => {
@@ -518,7 +527,7 @@ describe('AtlasPage desktop side panel', () => {
     // "More" asks for the next page and appends.
     fakeFetch({ posts: [{ id: 13, slug: 'p13', title: 'Last' }], pagination: { page: 2, total: 3, pages: 2 } });
     await page._loadPanelPage();
-    assert.equal(page._panel.posts.length, 3);
+    assert.equal(page._panel?.posts.length, 3);
     assert.ok(!String(el.innerHTML).includes('data-action="more"'), 'no more pages');
   });
 
@@ -534,7 +543,7 @@ describe('AtlasPage desktop side panel', () => {
     calls = fakeFetch(TAG_PAGE);
     await page._openPanel(berlin);
     assert.ok(calls[0].includes('year_from=2015') && calls[0].includes('year_to=2016'));
-    assert.equal(page._panel.posts.length, 2, 'the list is replaced, not appended');
+    assert.equal(page._panel?.posts.length, 2, 'the list is replaced, not appended');
   });
 
   test('_clearSelection removes the panel and drops a late page', async () => {
@@ -558,10 +567,10 @@ describe('AtlasPage desktop side panel', () => {
   });
 
   test('with "Hidden" off the list skips concealed posts', () => {
-    const page = new AtlasPage({});
+    const page = new AtlasPage(mock<HTMLElement>({}));
     page._hiddenTypes.add('concealed');
     const out = String(panelHtml(
-      { tag: { name: 'Berlin' }, ...TAG_PAGE, page: 1, pages: 1, total: 2, loading: false, error: null },
+      mock<PanelView>({ tag: { name: 'Berlin' }, ...TAG_PAGE, page: 1, pages: 1, total: 2, loading: false, error: null }),
       (p) => page._filteredOut(p),
     ));
     assert.ok(out.includes('data-slug="p10"'));
@@ -569,20 +578,23 @@ describe('AtlasPage desktop side panel', () => {
   });
 
   test('a post row opens the post and leaves atlasOpenContext', () => {
-    const store = {};
-    global.sessionStorage = { setItem: (k, v) => { store[k] = v; } };
-    const navs = [];
-    const prevDispatch = global.window.dispatchEvent;
-    global.window.dispatchEvent = (ev) => navs.push(ev.detail.path);
+    const store = new Map<string, string>();
+    globalThis.sessionStorage = memoryStorage(store);
+    const navs: string[] = [];
+    const prevDispatch = globalThis.window.dispatchEvent;
+    globalThis.window.dispatchEvent = (ev) => {
+      if (ev instanceof CustomEvent) navs.push(ev.detail.path);
+      return true;
+    };
     try {
       const { page, berlin } = withPanel(true);
       page._activeTag = berlin;
       page._openPanelPost('p10');
-      assert.deepEqual(JSON.parse(store.atlasOpenContext), { placeTagId: 1 });
+      assert.deepEqual(JSON.parse(store.get('atlasOpenContext') ?? 'null'), { placeTagId: 1 });
       assert.deepEqual(navs, ['/posts/p10']);
     } finally {
-      global.window.dispatchEvent = prevDispatch;
-      delete global.sessionStorage;
+      globalThis.window.dispatchEvent = prevDispatch;
+      Reflect.deleteProperty(globalThis, 'sessionStorage');
     }
   });
 });

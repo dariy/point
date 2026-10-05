@@ -1,17 +1,21 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
 import { NavMenu } from '../src/plugins/nav-menu/NavMenu.ts';
 import { setUser, store } from '../src/store.ts';
 import { pluginHost } from '../src/core/pluginHost.ts';
+
+type NavItem = NavMenu['_configOverflow'][number];
+type User = NonNullable<Parameters<typeof setUser>[0]>;
 
 // The More ▾ panel renders admin-authored menu items into the PUBLIC header.
 // It used to be built with a bare template literal wrapped in raw(), which put
 // both the name and the href outside the escaping helper entirely.
 describe('NavMenu More panel escaping', () => {
-  let dom;
-  let navItemsEl;
-  let menu;
+  let dom: ReturnType<typeof setupDOM>;
+  let navItemsEl: HTMLElement;
+  let menu: NavMenu;
 
   beforeEach(() => {
     dom = setupDOM();
@@ -32,10 +36,10 @@ describe('NavMenu More panel escaping', () => {
   });
 
   /** Populate the panel from config-overflow items only (nothing folded). */
-  const syncWith = (items) => {
-    menu._configOverflow = items;
+  const syncWith = (items: Partial<NavItem>[]) => {
+    menu._configOverflow = items.map((i) => mock<NavItem>(i));
     menu._syncMore();
-    return navItemsEl.querySelector('.nav-more-item');
+    return must(navItemsEl.querySelector('.nav-more-item'));
   };
 
   test('a script tag in an item name renders as text, not as an element', () => {
@@ -78,7 +82,7 @@ describe('NavMenu More panel escaping', () => {
 
   test('a parent item keeps its caret and has-children class', () => {
     const link = syncWith([
-      { name: 'Travel', href: '/travel', children: [{ name: 'Peru', href: '/travel/peru' }] },
+      { name: 'Travel', href: '/travel', children: [mock<NavItem>({ name: 'Peru', href: '/travel/peru' })] },
     ]);
 
     assert.ok(link.classList.contains('has-children'));
@@ -91,9 +95,9 @@ describe('NavMenu More panel escaping', () => {
 // save — a blog title, a posts-per-page — rebuilt the menu and closed whatever
 // dropdown was open in it.
 describe('NavMenu settings subscription', () => {
-  let dom;
-  let menu;
-  let renders;
+  let dom: ReturnType<typeof setupDOM>;
+  let menu: NavMenu;
+  let renders: number;
 
   beforeEach(() => {
     dom = setupDOM();
@@ -142,18 +146,16 @@ describe('NavMenu settings subscription', () => {
 // header shows up to two independent icon buttons — one single "active viz"
 // icon could only ever point at one of them.
 describe('NavMenu viz buttons', () => {
-  let dom;
-  let navItemsEl;
-  let burgerSitemapEl;
-  let menu;
+  let dom: ReturnType<typeof setupDOM>;
+  let navItemsEl: HTMLElement;
+  let burgerSitemapEl: HTMLElement;
+  let menu: NavMenu;
 
   /**
    * Render the nav with `enabled` plugin ids in the manifest.
-   * @param {string[]} enabled
-   * @param {object} [opts] {visibility, user, currentPath}
    */
-  const renderWith = (enabled, opts = {}) => {
-    pluginHost.init(enabled.map((id) => ({ id, entry: `/assets/js/p/${id}.js` })));
+  const renderWith = (enabled: string[], opts: { visibility?: string; user?: User; currentPath?: string } = {}) => {
+    pluginHost.init(enabled.map((id) => mock<PluginManifestEntry>({ id, entry: `/assets/js/p/${id}.js` })));
     store.set('settings', { tags_visibility: opts.visibility || 'all', nav_menu_mode: 'none' });
     setUser(opts.user || null);
     menu = new NavMenu({
@@ -212,7 +214,7 @@ describe('NavMenu viz buttons', () => {
   });
 
   test('an admin sees them even under tags_visibility=hidden', () => {
-    const btns = renderWith(['tags-graph', 'tags-atlas'], { visibility: 'hidden', user: { id: 1 } });
+    const btns = renderWith(['tags-graph', 'tags-atlas'], { visibility: 'hidden', user: mock<User>({ id: 1 }) });
 
     assert.deepStrictEqual(btns.map((b) => b.getAttribute('href')), ['/tags', '/map']);
   });

@@ -1,61 +1,66 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock, memoryStorage, nodeList } from './helpers/mock.ts';
+import type { SiteCrumbProps } from '../src/components/public/SiteCrumb.ts';
 
 // The blog title lives in the header, not the breadcrumbs plugin, so it (and
 // its root-tag dropdown) survive that plugin being switched off.
+type RootTag = ReturnType<typeof import('../src/store.ts').getRootTags>[number];
+
 describe('SiteCrumb', () => {
-  let SiteCrumb;
-  let setRootTags;
-  let container;
+  let SiteCrumb: typeof import('../src/components/public/SiteCrumb.ts').SiteCrumb;
+  let setRootTags: typeof import('../src/store.ts').setRootTags;
+  let container: HTMLElement;
 
   before(async () => {
-    global.document = {
-      createElement: () => ({
-        appendChild: () => {},
+    globalThis.document = mock<Document>({
+      createElement: () => mock<HTMLElement>({
+        appendChild: <T extends Node>(n: T) => n,
         remove: () => {},
-        classList: { add: () => {}, remove: () => {} },
+        classList: mock<DOMTokenList>({ add: () => {}, remove: () => {} }),
         addEventListener: () => {},
         querySelector: () => null,
-        querySelectorAll: () => [],
+        querySelectorAll: () => nodeList<Element>([]),
         innerHTML: '',
         textContent: '',
-        style: {},
+        style: mock<CSSStyleDeclaration>({}),
       }),
-      head: { appendChild: () => {} },
-      body: { classList: { remove: () => {}, add: () => {} } },
+      head: mock<HTMLHeadElement>({ appendChild: <T extends Node>(n: T) => n }),
+      body: mock<HTMLElement>({ classList: mock<DOMTokenList>({ remove: () => {}, add: () => {} }) }),
       getElementById: () => null,
       addEventListener: () => {},
       removeEventListener: () => {},
-      querySelectorAll: () => [],
-    };
-    global.window = {
-      location: { pathname: '/', search: '', origin: 'http://localhost' },
+      querySelectorAll: () => nodeList<Element>([]),
+    });
+    globalThis.window = mock<typeof window>({
+      location: mock<Location>({ pathname: '/', search: '', origin: 'http://localhost' }),
       addEventListener: () => {},
       removeEventListener: () => {},
       innerWidth: 1024,
       innerHeight: 768,
-    };
-    global.localStorage = { getItem: () => null, setItem: () => {} };
+    });
+    globalThis.localStorage = memoryStorage();
 
     ({ setRootTags } = await import('../src/store.ts'));
     ({ SiteCrumb } = await import('../src/components/public/SiteCrumb.ts'));
 
-    container = {
+    let innerHTML = '';
+    container = mock<HTMLElement>({
       querySelector: () => null,
-      querySelectorAll: () => [],
-      set innerHTML(val) { this._innerHTML = val; },
-      get innerHTML() { return this._innerHTML || ''; },
+      querySelectorAll: () => nodeList<Element>([]),
+      set innerHTML(val: string) { innerHTML = val; },
+      get innerHTML() { return innerHTML; },
       textContent: '',
-    };
+    });
   });
 
-  function renderWith(props = {}, rootTags = []) {
+  function renderWith(props: SiteCrumbProps = {}, rootTags: RootTag[] = []) {
     setRootTags(rootTags);
     return new SiteCrumb(container, {
       settings: { blog_title: 'Test Blog' },
       hasTrail: false,
       ...props,
-    }).render();
+    }).render().toString();
   }
 
   test('renders the blog title as the home link', () => {
@@ -82,13 +87,13 @@ describe('SiteCrumb', () => {
   });
 
   test('root tags in the store give it a dropdown', () => {
-    const markup = renderWith({}, [{ name: 'Travel', slug: 'travel', post_count: 10 }]);
+    const markup = renderWith({}, [mock<RootTag>({ name: 'Travel', slug: 'travel', post_count: 10 })]);
     assert.ok(markup.includes('has-dropdown'), 'Should advertise a dropdown');
     assert.ok(markup.includes('aria-haspopup="true"'), 'Should announce a popup');
   });
 
   test('show_title_dropdown=false drops it even when root tags exist', () => {
-    const tags = [{ name: 'Travel', slug: 'travel', post_count: 10 }];
+    const tags = [mock<RootTag>({ name: 'Travel', slug: 'travel', post_count: 10 })];
     for (const value of [false, 'false']) {
       const markup = renderWith(
         { settings: { blog_title: 'Test Blog', show_title_dropdown: value } },

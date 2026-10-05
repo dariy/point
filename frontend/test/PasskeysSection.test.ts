@@ -1,34 +1,37 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
+
+type PasskeyStatus = Awaited<ReturnType<typeof import('../src/api/auth.ts').getPasskeyStatus>>;
 
 describe('PasskeysSection', () => {
-  let PasskeysSection;
+  let PasskeysSection: typeof import('../src/components/light/sections/PasskeysSection.ts').PasskeysSection;
 
   before(async () => {
-    global.document = {
-      createElement: () => ({
-        style: {},
-        classList: { add: () => {}, remove: () => {} },
+    globalThis.document = mock<Document>({
+      createElement: () => mock<HTMLElement>({
+        style: mock<CSSStyleDeclaration>({}),
+        classList: mock<DOMTokenList>({ add: () => {}, remove: () => {} }),
         addEventListener: () => {},
         removeEventListener: () => {}
       }),
-      body: { appendChild: () => {} },
+      body: mock<HTMLElement>({ appendChild: <T extends Node>(n: T) => n }),
       addEventListener: () => {},
       removeEventListener: () => {}
-    };
-    global.window = {
-      PublicKeyCredential: function () {},
+    });
+    globalThis.window = mock<typeof window>({
+      PublicKeyCredential: mock<typeof PublicKeyCredential>({}),
       addEventListener: () => {},
       removeEventListener: () => {},
-      dispatchEvent: () => {}
-    };
+      dispatchEvent: () => true
+    });
 
     const mod = await import('../src/components/light/sections/PasskeysSection.ts');
     PasskeysSection = mod.PasskeysSection;
   });
 
-  function sectionWithStatus(status) {
-    const container = { querySelector: () => null };
+  function sectionWithStatus(status: PasskeyStatus) {
+    const container = mock<HTMLElement>({ querySelector: () => null });
     const section = new PasskeysSection(container);
     section.state = { ...section.state, loading: false, status };
     return section.render();

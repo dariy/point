@@ -10,20 +10,27 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { setupDOM } from './helpers/dom.ts';
+import { setupDOM, must } from './helpers/dom.ts';
+import { mock } from './helpers/mock.ts';
+import type { NavTagNode } from '../src/api/nav.ts';
+import type { HeaderCrumb } from '../src/plugins/public-header/PublicHeader.ts';
+
+const navTag = (t: Partial<NavTagNode>) => mock<NavTagNode>(t);
 
 const NAV_TAGS = [
-  {
+  navTag({
     slug: 'travel', name: 'Travel', post_count: 4,
     children: [
-      { slug: 'japan', name: 'Japan', post_count: 2, children: [] },
-      { slug: 'norway', name: 'Norway', post_count: 2, children: [] },
+      navTag({ slug: 'japan', name: 'Japan', post_count: 2, children: [] }),
+      navTag({ slug: 'norway', name: 'Norway', post_count: 2, children: [] }),
     ],
-  },
+  }),
 ];
 
 describe('Breadcrumbs (mounted)', () => {
-  let dom, Breadcrumbs, trail;
+  let dom: ReturnType<typeof setupDOM>;
+  let Breadcrumbs: typeof import('../src/plugins/breadcrumbs/Breadcrumbs.ts').Breadcrumbs;
+  let trail: InstanceType<typeof Breadcrumbs> | undefined;
 
   beforeEach(async () => {
     dom = setupDOM();
@@ -35,33 +42,34 @@ describe('Breadcrumbs (mounted)', () => {
     dom.cleanup();
   });
 
-  function mountTrail(breadcrumb) {
+  function mountTrail(breadcrumb: HeaderCrumb[]) {
     const group = dom.document.createElement('div');
     const el = dom.document.createElement('div');
     group.appendChild(el);
     dom.document.body.appendChild(group);
-    trail = new Breadcrumbs(el, { settings: { blog_title: 'Test blog' }, navTags: NAV_TAGS, breadcrumb, group });
-    trail.mount();
-    return trail;
+    const mounted = new Breadcrumbs(el, { settings: { blog_title: 'Test blog' }, navTags: NAV_TAGS, breadcrumb, group });
+    mounted.mount();
+    trail = mounted;
+    return mounted;
   }
 
   test('a crumb with children gets the dropdown affordance', () => {
-    mountTrail([{ slug: 'travel', name: 'Travel' }]);
-    const crumb = trail.container.querySelector('.breadcrumb-current[data-crumb-slug="travel"]');
+    const trail = mountTrail([{ slug: 'travel', name: 'Travel' }]);
+    const crumb = must(trail.container.querySelector('.breadcrumb-current[data-crumb-slug="travel"]'));
     assert.ok(crumb.classList.contains('has-dropdown'));
     assert.deepStrictEqual(trail._getTagChildren('travel', NAV_TAGS).map(c => c.slug), ['japan', 'norway']);
     assert.ok(!crumb.classList.contains('crumb-trail-toggle'));
   });
 
   test('a childless leaf gets the path-only trail toggle', () => {
-    mountTrail([{ slug: 'travel', name: 'Travel' }, { slug: 'japan', name: 'Japan' }]);
-    const leaf = trail.container.querySelector('.breadcrumb-current[data-crumb-slug="japan"]');
+    const trail = mountTrail([{ slug: 'travel', name: 'Travel' }, { slug: 'japan', name: 'Japan' }]);
+    const leaf = must(trail.container.querySelector('.breadcrumb-current[data-crumb-slug="japan"]'));
     assert.ok(!leaf.classList.contains('has-dropdown'));
     assert.ok(leaf.classList.contains('crumb-trail-toggle'));
   });
 
   test('an unknown slug has no children', () => {
-    mountTrail([{ slug: 'travel', name: 'Travel' }]);
+    const trail = mountTrail([{ slug: 'travel', name: 'Travel' }]);
     assert.deepStrictEqual(trail._getTagChildren('nowhere', NAV_TAGS), []);
   });
 });

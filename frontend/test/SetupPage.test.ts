@@ -1,28 +1,29 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock } from './helpers/mock.ts';
 
 describe('SetupPage', () => {
-  let SetupPage;
-  let setupTokenFrom;
+  let SetupPage: typeof import('../src/pages/light/SetupPage.ts').default;
+  let setupTokenFrom: typeof import('../src/pages/light/SetupPage.ts').setupTokenFrom;
 
   before(async () => {
     // Mock enough globals for the Component and SetupPage to import
-    global.document = {
-      createElement: () => ({
-        style: {},
-        classList: { add: () => {}, remove: () => {} },
+    globalThis.document = mock<Document>({
+      createElement: () => mock<HTMLElement>({
+        style: mock<CSSStyleDeclaration>({}),
+        classList: mock<DOMTokenList>({ add: () => {}, remove: () => {} }),
         addEventListener: () => {},
         removeEventListener: () => {}
       }),
-      body: { appendChild: () => {} },
+      body: mock<HTMLElement>({ appendChild: <T extends Node>(n: T) => n }),
       addEventListener: () => {},
       removeEventListener: () => {}
-    };
-    global.window = {
+    });
+    globalThis.window = mock<typeof window>({
       addEventListener: () => {},
       removeEventListener: () => {},
-      dispatchEvent: () => {}
-    };
+      dispatchEvent: () => true
+    });
 
     const mod = await import('../src/pages/light/SetupPage.ts');
     SetupPage = mod.default;
@@ -30,9 +31,9 @@ describe('SetupPage', () => {
   });
 
   test('renders email field as type="text" with autocomplete="off"', () => {
-    const container = { querySelector: () => null };
+    const container = mock<HTMLElement>({ querySelector: () => null });
     const page = new SetupPage(container);
-    const html = page.render();
+    const html = String(page.render());
     
     assert.ok(html.includes('id="email"'), 'Email field should exist');
     assert.ok(html.includes('type="text"'), 'Email field should be type="text" to avoid autofill crash');
@@ -40,29 +41,29 @@ describe('SetupPage', () => {
   });
 
   test('helper text is outside the label', () => {
-    const container = { querySelector: () => null };
+    const container = mock<HTMLElement>({ querySelector: () => null });
     const page = new SetupPage(container);
-    const html = page.render();
+    const html = String(page.render());
     
     // Check that the label for email does NOT contain the help text
     const labelMatch = html.match(/<label[^>]*for="email"[^>]*>([\s\S]*?)<\/label>/);
     assert.ok(labelMatch, 'Label for email should exist');
-    assert.ok(!labelMatch[1].includes('form-help'), 'Label should not contain helper text span');
+    assert.ok(!labelMatch[1]?.includes('form-help'), 'Label should not contain helper text span');
     
     // Check that form-help exists in the HTML
     assert.ok(html.includes('class="form-help"'), 'Helper text should exist');
   });
 
   test('password fields have form-input class', () => {
-    const container = { querySelector: () => null };
+    const container = mock<HTMLElement>({ querySelector: () => null });
     const page = new SetupPage(container);
-    const html = page.render();
+    const html = String(page.render());
     
     const passwordMatch = html.match(/id="password"[^>]*class="([^"]*)"/);
     const confirmMatch = html.match(/id="confirm_password"[^>]*class="([^"]*)"/);
     
-    assert.ok(passwordMatch && passwordMatch[1].includes('form-input'), 'Password field should have form-input class');
-    assert.ok(confirmMatch && confirmMatch[1].includes('form-input'), 'Confirm password field should have form-input class');
+    assert.ok(passwordMatch && passwordMatch[1]?.includes('form-input'), 'Password field should have form-input class');
+    assert.ok(confirmMatch && confirmMatch[1]?.includes('form-input'), 'Confirm password field should have form-input class');
   });
 
   test('setupTokenFrom reads the token from the setup link', () => {

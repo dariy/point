@@ -1,5 +1,9 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
+import { mock, memoryStorage } from './helpers/mock.ts';
+
+import type { StoreSettings } from '../src/utils/helpers.ts';
+type User = NonNullable<Parameters<typeof import('../src/store.ts').setUser>[0]>;
 
 /**
  * The copyright line is an admin-editable template: `{{author_name}}` and
@@ -9,39 +13,40 @@ import assert from 'node:assert';
  * markup, so each of those has a case here.
  */
 describe('PublicFooter copyright template', () => {
-  let PublicFooter;
+  let PublicFooter: typeof import('../src/plugins/public-footer/PublicFooter.ts').PublicFooter;
 
   before(async () => {
     // maxZoomCols() measures a probe element, so render() needs enough of a
     // document to append one to. Nothing here is under test — the assertions
     // only read the copyright line back out of the returned HTML.
-    const probe = () => ({ style: {}, offsetWidth: 0, remove() {} });
-    global.window = {
+    const probe = () => mock<HTMLElement>({ style: mock<CSSStyleDeclaration>({}), offsetWidth: 0, remove() {} });
+    const classList = () => mock<DOMTokenList>({ add() {}, remove() {}, contains: () => false });
+    globalThis.window = mock<typeof window>({
       innerWidth: 1200,
-      location: { pathname: '/', search: '', hash: '' },
+      location: mock<Location>({ pathname: '/', search: '', hash: '' }),
       addEventListener() {},
       removeEventListener() {},
-      matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
-      localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    };
-    global.localStorage = global.window.localStorage;
-    global.document = {
+      matchMedia: () => mock<MediaQueryList>({ matches: false, addEventListener() {}, removeEventListener() {} }),
+      localStorage: mock<Storage>({ getItem: () => null, setItem() {}, removeItem() {} }),
+    });
+    globalThis.localStorage = globalThis.window.localStorage;
+    globalThis.document = mock<Document>({
       addEventListener() {},
       removeEventListener() {},
       createElement: probe,
-      body: { appendChild() {}, classList: { add() {}, remove() {}, contains: () => false } },
-      documentElement: { style: { setProperty() {} }, classList: { add() {}, remove() {}, contains: () => false } },
+      body: mock<HTMLElement>({ appendChild: <T extends Node>(n: T) => n, classList: classList() }),
+      documentElement: mock<HTMLElement>({ style: mock<CSSStyleDeclaration>({ setProperty() {} }), classList: classList() }),
       querySelector: () => null,
-    };
+    });
     ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.ts'));
   });
 
   /** Render with the given settings and return just the copyright line's HTML. */
-  function copyright(settings) {
-    const html = new PublicFooter(null, { settings }).render();
+  function copyright(settings: StoreSettings) {
+    const html = String(new PublicFooter(mock<HTMLElement>({}), { settings }).render());
     const m = html.match(/<p class="footer-copyright"[^>]*>([\s\S]*?)<\/p>/);
     assert.ok(m, 'footer renders a .footer-copyright element');
-    return m[1].trim();
+    return (m[1] ?? '').trim();
   }
 
   test('no template: author and engine are linked by default', () => {
@@ -97,26 +102,23 @@ describe('PublicFooter copyright template', () => {
  * that there is something to see.
  */
 describe('PublicFooter revelio toggle', () => {
-  let PublicFooter, setUser, setRevelio;
+  let PublicFooter: typeof import('../src/plugins/public-footer/PublicFooter.ts').PublicFooter;
+  let setUser: typeof import('../src/store.ts').setUser;
+  let setRevelio: typeof import('../src/utils/revelio.ts').setRevelio;
 
   before(async () => {
     // The suite above stubs localStorage as a black hole (it only renders the
     // copyright line); revelio actually stores its state there, so swap in one
     // that remembers.
-    const mem = new Map();
-    global.localStorage = {
-      getItem: (k) => (mem.has(k) ? mem.get(k) : null),
-      setItem: (k, v) => mem.set(k, String(v)),
-      removeItem: (k) => mem.delete(k),
-    };
-    global.window.localStorage = global.localStorage;
+    globalThis.localStorage = memoryStorage();
+    globalThis.window.localStorage = globalThis.localStorage;
     ({ PublicFooter } = await import('../src/plugins/public-footer/PublicFooter.ts'));
     ({ setUser } = await import('../src/store.ts'));
     ({ setRevelio } = await import('../src/utils/revelio.ts'));
   });
 
   // render() returns the RawHtml html`` produces; assert.match wants a primitive.
-  const render = () => String(new PublicFooter(null, { settings: {} }).render());
+  const render = () => String(new PublicFooter(mock<HTMLElement>({}), { settings: {} }).render());
 
   test('a guest never sees the switch', () => {
     setUser(null);
@@ -125,7 +127,7 @@ describe('PublicFooter revelio toggle', () => {
   });
 
   test('the owner gets it, reading as "revealing" by default', () => {
-    setUser({ id: 1 });
+    setUser(mock<User>({ id: 1 }));
     setRevelio(true);
     const html = render();
     assert.match(html, /id="revelio-toggle"/);
@@ -134,7 +136,7 @@ describe('PublicFooter revelio toggle', () => {
   });
 
   test('switched off, it offers to reveal again', () => {
-    setUser({ id: 1 });
+    setUser(mock<User>({ id: 1 }));
     setRevelio(false);
     const html = render();
     assert.match(html, /aria-pressed="false"/);

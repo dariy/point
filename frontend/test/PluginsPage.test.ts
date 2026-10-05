@@ -1,71 +1,76 @@
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { must } from './helpers/dom.ts';
+import { mock, memoryStorage, nodeList } from './helpers/mock.ts';
+import type { PluginView } from '../src/api/plugins.ts';
+import type { ComponentState } from '../src/components/Component.ts';
 
 describe('PluginsPage', () => {
-  let PluginsPage;
+  let PluginsPage: typeof import('../src/pages/light/PluginsPage.ts').default;
 
   before(async () => {
     // Basic DOM mocking for these tests
     const el = (tag = 'div') => {
-      const e = {
+      const attrs: Record<string, string> = {};
+      const e: HTMLElement = mock<HTMLElement>({
         tagName: tag.toUpperCase(),
         className: '',
         dataset: {},
-        classList: {
-          add: (c) => e.className += ` ${c}`,
-          remove: (c) => e.className = e.className.replace(new RegExp(`\\b${c}\\b`, 'g'), '').trim(),
-          contains: (c) => e.className.includes(c),
-          toggle: (c, state) => {
+        style: mock<CSSStyleDeclaration>({}),
+        appendChild: <T extends Node>(n: T) => n,
+        removeChild: <T extends Node>(n: T) => n,
+        firstChild: null,
+        innerHTML: '',
+        getAttribute: (k: string) => attrs[k] ?? null,
+        setAttribute: (k: string, v: string) => { attrs[k] = v; },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        closest: () => null,
+        querySelector: () => null,
+        querySelectorAll: () => nodeList<Element>([]),
+        classList: mock<DOMTokenList>({
+          add: (c: string) => { e.className += ` ${c}`; },
+          remove: (c: string) => { e.className = e.className.replace(new RegExp(`\\b${c}\\b`, 'g'), '').trim(); },
+          contains: (c: string) => e.className.includes(c),
+          toggle: (c: string, state?: boolean) => {
             const has = e.classList.contains(c);
             if (state === undefined) state = !has;
             if (state && !has) e.classList.add(c);
             if (!state && has) e.classList.remove(c);
             return state;
           }
-        },
-        style: {},
-        appendChild: () => {},
-        removeChild: () => {},
-        firstChild: null,
-        innerHTML: '',
-        getAttribute: (k) => e[k],
-        setAttribute: (k, v) => e[k] = v,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        closest: () => null,
-        querySelector: () => null,
-        querySelectorAll: () => [],
-      };
+          }),
+      });
       return e;
     };
-    global.document = {
+    globalThis.document = mock<Document>({
       createElement: el,
       body: el(),
       documentElement: el(),
-      head: el(),
+      head: mock<HTMLHeadElement>(el()),
       addEventListener: () => {},
       removeEventListener: () => {},
       querySelector: () => null,
-      querySelectorAll: () => [],
-    };
-    global.window = {
-      location: { pathname: '/light/plugins', search: '', hash: '' },
+      querySelectorAll: () => nodeList<Element>([]),
+    });
+    globalThis.window = mock<typeof window>({
+      location: mock<Location>({ pathname: '/light/plugins', search: '', hash: '' }),
       addEventListener: () => {},
       removeEventListener: () => {},
-      dispatchEvent: () => {},
-      matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-      localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-      CSS: { escape: (s) => s },
-    };
-    global.localStorage = global.window.localStorage;
-    global.CSS = global.window.CSS;
+      dispatchEvent: () => true,
+      matchMedia: () => mock<MediaQueryList>({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+      localStorage: memoryStorage(),
+      CSS: mock<typeof CSS>({ escape: (s: string) => s }),
+    });
+    globalThis.localStorage = globalThis.window.localStorage;
+    globalThis.CSS = globalThis.window.CSS;
 
     const mod = await import('../src/pages/light/PluginsPage.ts');
-    PluginsPage = mod.PluginsPage || mod.default;
+    PluginsPage = mod.default;
   });
 
   function page(overrides = {}) {
-    const p = new PluginsPage({ querySelector: () => null, querySelectorAll: () => [] });
+    const p = new PluginsPage(mock<HTMLElement>({ querySelector: () => null, querySelectorAll: () => nodeList<Element>([]) }));
     p.state = {
       ...p.state,
       loading: false,
@@ -92,20 +97,20 @@ describe('PluginsPage', () => {
 
   test('render content when loading', () => {
     const p = page({ loading: true });
-    const html = p._renderContent();
+    const html = String(p._renderContent());
     assert.ok(html.includes('loading-spinner'));
   });
 
   test('render content with error', () => {
     const p = page({ error: 'Failed' });
-    const html = p._renderContent();
+    const html = String(p._renderContent());
     assert.ok(html.includes('error-state'));
     assert.ok(html.includes('Failed'));
   });
 
   test('render map', () => {
     const p = page();
-    const html = p._renderMap();
+    const html = String(p._renderMap());
     assert.ok(html.includes('pmap-card'));
     assert.ok(html.includes('Site map'));
 
@@ -129,20 +134,20 @@ describe('PluginsPage', () => {
 
   test('_renderPresets normal view', () => {
     const p = page({ activePreset: 'minimalistic' });
-    const html = p._renderPresets();
+    const html = String(p._renderPresets());
     assert.ok(html.includes('Minimalistic'));
     assert.ok(!html.includes('Editing only changes'));
   });
 
   test('_renderPresets edit view', () => {
     const p = page({ editingPreset: 'standalone' });
-    const html = p._renderPresets();
+    const html = String(p._renderPresets());
     assert.ok(html.includes('Editing only changes'));
   });
 
   test('_renderGroup renders group', () => {
     const p = page();
-    const html = p._renderGroup({ type: 'route', title: 'Routes', hint: 'hint' });
+    const html = String(p._renderGroup({ type: 'route', title: 'Routes', hint: 'hint' }));
     assert.ok(html.includes('Routes'));
     assert.ok(html.includes('tags-atlas'));
     assert.ok(html.includes('Alternatives for <code>map-route</code>'));
@@ -152,27 +157,27 @@ describe('PluginsPage', () => {
 
   test('_renderGroup empty group', () => {
     const p = page({ plugins: [] });
-    const html = p._renderGroup({ type: 'route', title: 'Routes', hint: 'hint' });
+    const html = String(p._renderGroup({ type: 'route', title: 'Routes', hint: 'hint' }));
     assert.strictEqual(html, '');
   });
 
   test('_renderRowControls with settings', () => {
     const p = page();
-    const html = p._renderRowControls(p.state.plugins.find(x => x.id === 'custom-css'), false);
+    const html = String(p._renderRowControls(must(p.state.plugins.find((x: PluginView) => x.id === 'custom-css')), false));
     assert.ok(html.includes('plugin-settings-link'));
     assert.ok(html.includes('/light/themes'));
   });
   
   test('_renderInclude forced', () => {
     const p = page();
-    const html = p._renderInclude({ id: 'only-viewer', slot: 'post-viewer', slot_rule: '1', enabled: true });
+    const html = String(p._renderInclude(mock<PluginView>({ id: 'only-viewer', slot: 'post-viewer', slot_rule: '1', enabled: true })));
     assert.ok(html.includes('Always on'));
     assert.ok(html.includes('disabled'));
   });
   
   test('_setAllCollapsed toggles state', () => {
     const p = page();
-    p.setState = (st) => { p.state = { ...p.state, ...st }; };
+    p.setState = (st: ComponentState) => { p.state = { ...p.state, ...st }; };
     p._setAllCollapsed(true);
     assert.strictEqual(p.state.collapsed.map, true);
     assert.strictEqual(p.state.collapsed.route, true);
@@ -180,14 +185,14 @@ describe('PluginsPage', () => {
   
   test('_toggleEdit starts editing', () => {
     const p = page({ activePreset: 'custom', editingPreset: null });
-    p.setState = (st) => { p.state = { ...p.state, ...st }; };
+    p.setState = (st: ComponentState) => { p.state = { ...p.state, ...st }; };
     p._toggleEdit();
     assert.strictEqual(p.state.editingPreset, 'minimalistic');
   });
 
   test('_toggleEdit stops editing', () => {
     const p = page({ editingPreset: 'minimalistic' });
-    p.setState = (st) => { p.state = { ...p.state, ...st }; };
+    p.setState = (st: ComponentState) => { p.state = { ...p.state, ...st }; };
     p._toggleEdit();
     assert.strictEqual(p.state.editingPreset, null);
   });
