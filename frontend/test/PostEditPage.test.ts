@@ -2,68 +2,76 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 import { pluginHost } from '../src/core/pluginHost.ts';
 import { mergeSettings } from '../src/store.ts';
+import type { PageProps } from '../src/router.ts';
+import { mock, nodeList } from './helpers/mock.ts';
+import type { MarkdownEditor } from '../src/components/light/MarkdownEditor.ts';
 import type { default as PostEditPageClass } from '../src/pages/light/PostEditPage.ts';
+
+/** One cast where a plain object stands in for a DOM type. */
+const asDom = <T>(fake: object) => fake as unknown as T;
+
+const emptyContainer = () => asDom<HTMLElement>({ querySelector: () => null, querySelectorAll: () => [] });
 
 describe('PostEditPage', () => {
   let PostEditPage: typeof PostEditPageClass;
 
   before(async () => {
     // Mock CustomElementRegistry
-    global.customElements = { define: () => {} };
+    global.customElements = mock<CustomElementRegistry>({ define: () => {} });
     // Mock HTMLElement
-    global.HTMLElement = class { 
-      constructor() { this.attachShadow = () => ({ innerHTML: '' }); } 
+    global.HTMLElement = asDom<typeof HTMLElement>(class {
+      attachShadow = () => ({ innerHTML: '' });
       get clientHeight() { return 800; }
       get offsetHeight() { return 50; }
-    };
-    global.document = {
-      createElement: () => ({ 
-        appendChild: () => {}, 
-        remove: () => {}, 
-        style: {}, 
-        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+    });
+    const classList = () => mock<DOMTokenList>({ add: () => {}, remove: () => {}, toggle: () => false });
+    global.document = mock<Document>({
+      createElement: () => asDom<HTMLElement>({
+        appendChild: () => {},
+        remove: () => {},
+        style: {},
+        classList: classList(),
         addEventListener: () => {},
         removeEventListener: () => {},
         setAttribute: () => {},
         querySelector: () => null,
         querySelectorAll: () => []
       }),
-      body: { appendChild: () => {}, remove: () => {}, classList: { add: () => {}, remove: () => {}, toggle: () => {} } },
-      activeElement: {},
+      body: asDom<HTMLElement>({ appendChild: () => {}, remove: () => {}, classList: classList() }),
+      activeElement: asDom<Element>({}),
       addEventListener: () => {},
       removeEventListener: () => {},
       querySelector: () => null,
-      querySelectorAll: () => []
-    };
-    global.window = {
-        Point: { emit: () => {}, on: () => {} },
-        location: { pathname: '' },
-        history: { replaceState: () => {} },
-        matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+      querySelectorAll: () => nodeList([])
+    });
+    global.window = Object.assign(mock<typeof window>({
+        location: mock<Location>({ pathname: '' }),
+        history: mock<History>({ replaceState: () => {} }),
+        matchMedia: () => mock<MediaQueryList>({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
         addEventListener: () => {},
         removeEventListener: () => {},
-        dispatchEvent: () => {},
+        dispatchEvent: () => true,
         __PLUGINS__: [
           {id: 'instagram', type: 'service'},
           {id: 'ai-analysis', type: 'service'},
           {id: 'custom-css', type: 'enhancer'}
         ]
-    };
+    }), { Point: { emit: () => {}, on: () => {} } });
 
     pluginHost.init(global.window.__PLUGINS__);
 
-    global.localStorage = {
+    global.localStorage = mock<Storage>({
       getItem: () => null,
       setItem: () => {},
       removeItem: () => {}
-    };
+    });
     const mod = await import('../src/pages/light/PostEditPage.ts');
     PostEditPage = mod.default;
   });
 
   test('should show delete button when editing an existing post', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const props = { params: { id: '123' } };
+    const container = emptyContainer();
+    const props = mock<PageProps>({ params: { id: '123' } });
     const page = new PostEditPage(container, props);
     page.state.loading = false;
     page.state.isNew = false;
@@ -74,8 +82,8 @@ describe('PostEditPage', () => {
   });
 
   test('should disable all header buttons when deleting', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const props = { params: { id: '123' } };
+    const container = emptyContainer();
+    const props = mock<PageProps>({ params: { id: '123' } });
     const page = new PostEditPage(container, props);
     page.state.loading = false;
     page.state.isNew = false;
@@ -89,7 +97,7 @@ describe('PostEditPage', () => {
   });
 test('should preserve other fields when switching from visual to text mode', () => {
   // We need a more functional container for this test
-  const createMount = (overrides = {}) => ({ 
+  const createMount = (overrides: object = {}) => ({ 
     appendChild: () => {}, 
     remove: () => {}, 
     innerHTML: '', 
@@ -121,15 +129,15 @@ test('should preserve other fields when switching from visual to text mode', () 
     '#visual-editor-mount': createMount(),
     '.light-header': createMount()
   };
-  const container = { 
-    querySelector: (selector) => elements[selector] || createMount(), 
+  const container = asDom<HTMLElement>({ 
+    querySelector: (selector: string) => elements[selector as keyof typeof elements] || createMount(), 
     querySelectorAll: () => [],
     innerHTML: '',
     addEventListener: () => {},
     removeEventListener: () => {}
-  };
+  });
 
-  const props = { params: {} }; // New post
+  const props = mock<PageProps>({ params: {} }); // New post
   const page = new PostEditPage(container, props);
   page.state.loading = false;
   page.state.isNew = true;
@@ -148,7 +156,7 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('should preserve other fields when switching from text to visual mode', () => {
-  const createMount = (overrides = {}) => ({ 
+  const createMount = (overrides: object = {}) => ({ 
     appendChild: () => {}, 
     remove: () => {}, 
     innerHTML: '', 
@@ -174,26 +182,26 @@ test('should preserve other fields when switching from visual to text mode', () 
     '.light-header': createMount()
   };
 
-  const container = { 
-    querySelector: (selector) => elements[selector] || createMount(), 
+  const container = asDom<HTMLElement>({ 
+    querySelector: (selector: string) => elements[selector as keyof typeof elements] || createMount(), 
     querySelectorAll: () => [],
     innerHTML: '',
     addEventListener: () => {},
     removeEventListener: () => {}
-  };
+  });
 
-  const props = { params: {} };
+  const props = mock<PageProps>({ params: {} });
   const page = new PostEditPage(container, props);
   page.state.loading = false;
   page.state.isNew = true;
   page.state.editorMode = 'text';
   page.state.post = null;
-  page._markdownEditorRef = { getValue: () => 'Content from textarea' };
+  page._markdownEditorRef = mock<MarkdownEditor>({ getValue: () => 'Content from textarea' });
 
   // Mock MarkdownEditor reference
-  page._markdownEditorRef = {
+  page._markdownEditorRef = mock<MarkdownEditor>({
     getValue: () => 'Content from textarea'
-  };
+  });
 
   page._switchMode('visual');
 
@@ -203,8 +211,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('should hide Instagram section when igStatus is null', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test' };
@@ -215,8 +223,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('should hide Instagram section when enable_instagram is false', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test' };
@@ -227,8 +235,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('should show Instagram section when enabled, with correct share state', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test', instagram_share: true, instagram_status: 'published' };
@@ -241,8 +249,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('should show failed status badge with error text', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test', instagram_share: false, instagram_status: 'failed', instagram_error: 'No image' };
@@ -254,8 +262,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('should render the Details toggle button and rail/sheet panel', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test', slug: 'test' };
@@ -268,8 +276,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('should render collapsible groups with summaries in spec order', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test', slug: 'my-trip' };
@@ -288,8 +296,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('aria-hidden on the panel reflects persisted detailsOpen state', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test' };
@@ -301,8 +309,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('pins title and tags to the canvas by default, everything else to Details', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test', slug: 'test' };
@@ -319,8 +327,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('no per-field pin buttons — arrange mode is the one way to move a field', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test' };
@@ -334,10 +342,10 @@ test('should preserve other fields when switching from visual to text mode', () 
 
   test('a persisted pin set decides placement', () => {
     const saved = global.localStorage;
-    global.localStorage = { getItem: () => JSON.stringify(['slug']), setItem: () => {}, removeItem: () => {} };
+    global.localStorage = mock<Storage>({ getItem: () => JSON.stringify(['slug']), setItem: () => {}, removeItem: () => {} });
     try {
-      const container = { querySelector: () => null, querySelectorAll: () => [] };
-      const page = new PostEditPage(container, { params: { id: '1' } });
+      const container = emptyContainer();
+      const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
       page.state.loading = false;
       page.state.isNew = false;
       page.state.post = { id: 1, title: 'Test', slug: 'test' };
@@ -352,8 +360,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('Schedule is hidden unless the post is scheduled', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
 
@@ -365,15 +373,26 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('dropping into the other list moves the live element and records the side', () => {
-    let stored = {};
+    const stored: Record<string, string> = {};
     const saved = global.localStorage;
-    global.localStorage = {
+    global.localStorage = mock<Storage>({
       getItem: (k) => stored[k] ?? null,
       setItem: (k, v) => { stored[k] = v; },
       removeItem: (k) => { delete stored[k]; },
-    };
+    });
     try {
-      const el = (classes = [], dataset = {}) => {
+      interface FakeGroup {
+        dataset: Record<string, string>;
+        open: boolean;
+        children: FakeGroup[];
+        _classes: Set<string>;
+        classList: { contains(c: string): boolean; add(c: string): void; remove(c: string): void; toggle(c: string, on: boolean): void };
+        setAttribute(): void;
+        focus(): void;
+        querySelector(): FakeGroup | null;
+        insertBefore(node: FakeGroup, ref: FakeGroup | null): void;
+      }
+      const el = (classes: string[] = [], dataset: Record<string, string> = {}): FakeGroup => {
         const set = new Set(classes);
         return {
           dataset, open: false, children: [], _classes: set,
@@ -401,28 +420,28 @@ test('should preserve other fields when switching from visual to text mode', () 
       panel.children = [slug];
       panel.querySelector = () => (panel.children.length ? panel.children[0] : null);
 
-      const container = {
-        querySelector: (sel) => ({ '#pinned-fields': canvas, '.details-panel-body': panel }[sel] ?? null),
+      const container = asDom<HTMLElement>({
+        querySelector: (sel: string) => new Map([['#pinned-fields', canvas], ['.details-panel-body', panel]]).get(sel) ?? null,
         querySelectorAll: () => [],
-      };
+      });
 
-      const page = new PostEditPage(container, { params: { id: '1' } });
-      page._dropGroup(slug, canvas, title);
+      const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
+      page._dropGroup(asDom<HTMLElement>(slug), asDom<HTMLElement>(canvas), asDom<Element>(title));
 
       assert.ok(page._pinned.has('slug'), 'slug now lives on the canvas');
-      assert.deepStrictEqual(JSON.parse(stored['point:editor:pinned']).includes('slug'), true, 'side persisted');
+      assert.deepStrictEqual(JSON.parse(stored['point:editor:pinned'] ?? '[]').includes('slug'), true, 'side persisted');
       assert.deepStrictEqual(canvas.children.map((c) => c.dataset.group), ['title', 'slug'], 'dropped after title');
       assert.ok(slug._classes.has('is-pinned'), 'element marked as a canvas block');
       assert.strictEqual(slug.open, true, 'a canvas block is always expanded');
-      assert.deepStrictEqual(JSON.parse(stored['point:editor:field-order']).slice(0, 2), ['title', 'slug'], 'order persisted');
+      assert.deepStrictEqual(JSON.parse(stored['point:editor:field-order'] ?? '[]').slice(0, 2), ['title', 'slug'], 'order persisted');
     } finally {
       global.localStorage = saved;
     }
   });
 
   test('content is a canvas block with a handle but no pin', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test' };
@@ -438,8 +457,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('every field carries a drag handle and the arrange bar starts hidden', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: { id: '1' } });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
     page.state.loading = false;
     page.state.isNew = false;
     page.state.post = { id: 1, title: 'Test' };
@@ -449,23 +468,23 @@ test('should preserve other fields when switching from visual to text mode', () 
     for (const key of ['title', 'tags', 'content', 'status', 'schedule', 'slug', 'excerpt', 'immersive', 'css', 'instagram']) {
       assert.ok(html.includes(`data-handle="${key}"`), `${key} has a drag handle`);
     }
-    assert.ok(html.includes('id="arrange-bar"') && /id="arrange-bar"[^>]*hidden/.test(html), 'arrange bar present but hidden');
+    assert.ok(html.includes('id="arrange-bar"') && /id="arrange-bar"[^>]*hidden/.test(String(html)), 'arrange bar present but hidden');
     assert.ok(html.includes('id="arrange-done"'), 'the mode has a way out');
     assert.ok(html.includes('data-action="arrange"'), 'the menu can enter the mode');
   });
 
   test('a stored order decides placement, unknown keys sort last', () => {
     const saved = global.localStorage;
-    global.localStorage = {
+    global.localStorage = mock<Storage>({
       getItem: (k) => (k === 'point:editor:field-order' ? JSON.stringify(['tags', 'title']) : null),
       setItem: () => {}, removeItem: () => {},
-    };
+    });
     // Earlier drop tests save the order and pins to the settings store, which
     // the layout reads before localStorage.
     mergeSettings({ editor_field_order: null, editor_pinned: null });
     try {
-      const container = { querySelector: () => null, querySelectorAll: () => [] };
-      const page = new PostEditPage(container, { params: { id: '1' } });
+      const container = emptyContainer();
+      const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
       page.state.loading = false;
       page.state.isNew = false;
       page.state.post = { id: 1, title: 'Test' };
@@ -481,18 +500,18 @@ test('should preserve other fields when switching from visual to text mode', () 
 
   test('_moveInOrder repositions one key and leaves the rest alone', () => {
     const saved = global.localStorage;
-    let stored = null;
-    global.localStorage = { getItem: () => null, setItem: (_k, v) => { stored = v; }, removeItem: () => {} };
+    let stored: string | null = null;
+    global.localStorage = mock<Storage>({ getItem: () => null, setItem: (_k, v) => { stored = v; }, removeItem: () => {} });
     try {
-      const container = { querySelector: () => null, querySelectorAll: () => [] };
-      const page = new PostEditPage(container, { params: { id: '1' } });
+      const container = emptyContainer();
+      const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
 
       page._moveInOrder('slug', 'title');
       assert.deepStrictEqual(page._order.slice(0, 4), ['title', 'slug', 'tags', 'content']);
 
       page._moveInOrder('excerpt', null);
       assert.strictEqual(page._order[0], 'excerpt', 'a null anchor means first');
-      assert.strictEqual(JSON.parse(stored)[0], 'excerpt', 'order persisted');
+      assert.strictEqual(JSON.parse(stored ?? '[]')[0], 'excerpt', 'order persisted');
     } finally {
       global.localStorage = saved;
     }
@@ -500,18 +519,18 @@ test('should preserve other fields when switching from visual to text mode', () 
 
   test('a drop into Details is refused for content', () => {
     const saved = global.localStorage;
-    global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+    global.localStorage = mock<Storage>({ getItem: () => null, setItem: () => {}, removeItem: () => {} });
     try {
       const panel = { insertBefore: () => { throw new Error('content must not move into Details'); }, querySelector: () => null, children: [] };
       const canvas = { insertBefore: () => {}, querySelector: () => null, children: [] };
-      const container = {
-        querySelector: (sel) => ({ '#pinned-fields': canvas, '.details-panel-body': panel }[sel] ?? null),
+      const container = asDom<HTMLElement>({
+        querySelector: (sel: string) => new Map<string, object>([['#pinned-fields', canvas], ['.details-panel-body', panel]]).get(sel) ?? null,
         querySelectorAll: () => [],
-      };
-      const page = new PostEditPage(container, { params: { id: '1' } });
+      });
+      const page = new PostEditPage(container, mock<PageProps>({ params: { id: '1' } }));
       const before = [...page._order];
 
-      page._dropGroup({ dataset: { group: 'content' } }, panel, null);
+      page._dropGroup(asDom<HTMLElement>({ dataset: { group: 'content' } }), asDom<HTMLElement>(panel), null);
 
       assert.ok(page._pinned.has('content'), 'content stays on the canvas');
       assert.deepStrictEqual(page._order, before, 'a refused drop changes nothing');
@@ -521,8 +540,8 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   test('should use default_share for new posts when igStatus loaded', () => {
-    const container = { querySelector: () => null, querySelectorAll: () => [] };
-    const page = new PostEditPage(container, { params: {} });
+    const container = emptyContainer();
+    const page = new PostEditPage(container, mock<PageProps>({ params: {} }));
     page.state.loading = false;
     page.state.isNew = true;
     page.state.post = null;
@@ -535,33 +554,37 @@ test('should preserve other fields when switching from visual to text mode', () 
   });
 
   describe('delete from the editor', () => {
-    const withStubs = async (fetchImpl, fn) => {
+    const withStubs = async (
+      fetchImpl: (url: string, opts: RequestInit) => Promise<object>,
+      fn: (navigations: string[]) => Promise<void>,
+    ) => {
       const savedFetch = global.fetch;
       const savedDispatch = global.window.dispatchEvent;
       // Node's own `navigator` is a getter-only global and has no `onLine`,
       // which the api client reads to decide between fetch and the offline queue.
       const savedNav = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-      const navigations = [];
-      global.fetch = fetchImpl;
+      const navigations: string[] = [];
+      global.fetch = asDom<typeof fetch>(fetchImpl);
       Object.defineProperty(globalThis, 'navigator', {
         value: { onLine: true }, configurable: true, writable: true,
       });
       global.window.dispatchEvent = (e) => {
-        if (e.type === 'app:navigate') navigations.push(e.detail.path);
+        if (e instanceof CustomEvent && e.type === 'app:navigate') navigations.push(e.detail.path);
+        return true;
       };
       try {
         await fn(navigations);
       } finally {
         global.fetch = savedFetch;
         if (savedNav) Object.defineProperty(globalThis, 'navigator', savedNav);
-        else delete globalThis.navigator;
+        else Reflect.deleteProperty(globalThis, 'navigator');
         global.window.dispatchEvent = savedDispatch;
       }
     };
 
     const makePage = () => {
-      const container = { querySelector: () => null, querySelectorAll: () => [] };
-      const page = new PostEditPage(container, { params: { id: '123' } });
+      const container = emptyContainer();
+      const page = new PostEditPage(container, mock<PageProps>({ params: { id: '123' } }));
       page.state.loading = false;
       page.state.isNew = false;
       page.state.post = { id: 123, title: 'Test' };
@@ -570,12 +593,12 @@ test('should preserve other fields when switching from visual to text mode', () 
     };
 
     test('confirming the menu Delete trashes the post and leaves the editor', async () => {
-      const calls = [];
+      const calls: [string, string | undefined][] = [];
       await withStubs(
         async (url, opts) => { calls.push([url, opts.method]); return { status: 204 }; },
         async (navigations) => {
           const page = makePage();
-          let confirmed = null;
+          let confirmed = null as { title: string; confirmText: string; variant: string } | null;
           page._showConfirm = (title, message, confirmText, variant, onConfirm) => {
             confirmed = { title, confirmText, variant };
             return onConfirm();
@@ -603,7 +626,7 @@ test('should preserve other fields when switching from visual to text mode', () 
         }),
         async (navigations) => {
           const page = makePage();
-          await page._deletePost('123');
+          await page._deletePost(123);
 
           assert.strictEqual(page.state.deleting, false, 'actions are usable again');
           assert.deepStrictEqual(navigations, [], 'the editor stays put');
@@ -617,9 +640,9 @@ test('should preserve other fields when switching from visual to text mode', () 
         async (navigations) => {
           const page = makePage();
           page.state.isNew = true;
-          page.state.postId = undefined;
+          page.state.postId = null;
 
-          await page._deletePost(undefined);
+          await page._deletePost(null);
 
           assert.deepStrictEqual(navigations, ['/light/posts']);
         }

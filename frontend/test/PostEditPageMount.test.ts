@@ -29,6 +29,34 @@ import {
 } from '../src/store.ts';
 import { pluginHost } from '../src/core/pluginHost.ts';
 import { clearPostReadCache } from '../src/api/posts.ts';
+import type { User } from '../src/api/auth.ts';
+import type { PageProps } from '../src/router.ts';
+import type { default as PostEditPageClass } from '../src/pages/light/PostEditPage.ts';
+import { mock } from './helpers/mock.ts';
+
+/** One request the fake fetch saw, with the JSON body parsed. */
+interface SentRequest {
+  url: string;
+  path: string;
+  method: string;
+  body: Record<string, unknown>;
+}
+
+/** A route handler: its return value is the JSON payload, `fail()`, or an Error to throw. */
+type Route = (req: { path: string; method: string; body: Record<string, unknown> }) => unknown;
+
+/** The last item of a list the test expects to be non-empty. */
+function last<T>(items: T[]): T {
+  const item = items[items.length - 1];
+  assert.ok(item !== undefined, 'expected at least one item');
+  return item;
+}
+
+/** A value the test expects to exist. */
+function must<T>(value: T | null | undefined, what = 'value'): T {
+  assert.ok(value != null, `expected a ${what}`);
+  return value;
+}
 
 const settle = () => new Promise(r => setImmediate(r));
 
@@ -52,7 +80,12 @@ const POST = () => ({
 });
 
 describe('PostEditPage (mounted)', () => {
-  let dom, PostEditPage, page, requests, routes, navigations;
+  let dom: ReturnType<typeof setupDOM>;
+  let PostEditPage: typeof PostEditPageClass;
+  let page: PostEditPageClass;
+  let requests: SentRequest[];
+  let routes: Record<string, Route>;
+  let navigations: string[];
 
   /**
    * Route by method + path prefix. Handlers are looked up longest-first so a
@@ -60,12 +93,12 @@ describe('PostEditPage (mounted)', () => {
    */
   function fakeFetch() {
     requests = [];
-    globalThis.fetch = async (url, opts = {}) => {
+    globalThis.fetch = async (url: RequestInfo | URL, opts: RequestInit = {}) => {
       const method = opts.method || 'GET';
       const path = String(url).split('?')[0];
-      let body;
-      if (typeof opts.body === 'string') { try { body = JSON.parse(opts.body); } catch { body = opts.body; } }
-      else body = opts.body;
+      let body: Record<string, unknown>;
+      if (typeof opts.body === 'string') { try { body = JSON.parse(opts.body); } catch { body = { raw: opts.body }; } }
+      else body = { raw: opts.body };
       requests.push({ url: String(url), path, method, body });
 
       const key = Object.keys(routes)
@@ -77,42 +110,44 @@ describe('PostEditPage (mounted)', () => {
       const handler = key ? routes[key] : null;
       const result = handler ? await handler({ path, method, body }) : {};
       if (result instanceof Error) throw result;
-      const { status = 200, payload = result } = result?.__response ? result : {};
-      return {
+      const { status = 200, payload = result } = isFailure(result) ? result : {};
+      return mock<Response>({
         ok: status < 400,
         status,
-        headers: { get: () => 'application/json' },
+        headers: mock<Headers>({ get: () => 'application/json' }),
         json: async () => payload,
         text: async () => JSON.stringify(payload),
-      };
+      });
     };
   }
 
   /** Mark a route's return value as a non-2xx response with `payload`. */
-  const fail = (status, message) => ({ __response: true, status, payload: { message } });
+  const fail = (status: number, message: string) => ({ __response: true as const, status, payload: { message } as unknown });
+  const isFailure = (r: unknown): r is ReturnType<typeof fail> =>
+    typeof r === 'object' && r !== null && '__response' in r;
 
-  async function mountPage(props = {}) {
+  async function mountPage(props: Partial<PageProps> = {}) {
     dom.location.pathname = props.params?.id ? `/light/posts/${props.params.id}/edit` : '/light/posts/new';
     const el = dom.document.createElement('div');
     dom.document.body.appendChild(el);
-    page = new PostEditPage(el, props);
+    page = new PostEditPage(el, mock<PageProps>(props));
     page.mount();
     await settle();
     await settle();
     return page;
   }
 
-  const q = sel => page.container.querySelector(sel);
-  const sent = (method, path) => requests.filter(r => r.method === method && r.path === path);
+  const q = (sel: string) => page.container.querySelector<HTMLInputElement>(sel);
+  /** Like `q`, for an element the test expects to be rendered. */
+  const get = (sel: string) => must(q(sel), sel);
+  const sent = (method: string, path: string) => requests.filter(r => r.method === method && r.path === path);
   /** Where the page asked the router to go — `navigate()` is an event, not a URL write. */
-  const wentTo = () => navigations.at(-1);
+  const wentTo = () => navigations[navigations.length - 1];
 
   beforeEach(async () => {
     dom = setupDOM();
     navigations = [];
-    dom.window.addEventListener('app:navigate', e => navigations.push(e.detail.path));
-    globalThis.Blob ??= class Blob { constructor(parts) { this.parts = parts; } };
-    globalThis.File ??= class File { constructor(parts, name, o) { this.parts = parts; this.name = name; this.type = o?.type; } };
+    dom.window.addEventListener('app:navigate', e => navigations.push((e as CustomEvent<{ path: string }>).detail.path));
     clearPostReadCache();
     routes = {
       'GET /api/posts/7': () => POST(),
@@ -124,7 +159,7 @@ describe('PostEditPage (mounted)', () => {
       'DELETE /api/posts/7': () => ({}),
     };
     fakeFetch();
-    setUser({ username: 'owner', is_admin: true });
+    setUser(mock<User>({ username: 'owner' }));
     setSettings({ blog_title: 'Test blog' });
     setToast(null);
     setAutosaveStatus(null);
@@ -138,9 +173,8 @@ describe('PostEditPage (mounted)', () => {
 
   afterEach(() => {
     try { page?.unmount(); } catch { /* torn down mid-flight */ }
-    page = null;
     dom.cleanup();
-    delete globalThis.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
   });
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -151,14 +185,14 @@ describe('PostEditPage (mounted)', () => {
 
       assert.equal(page.state.loading, false);
       assert.equal(page.state.post.status, 'published');
-      assert.equal(q('#title-input').value, 'Harbour lights');
-      assert.equal(q('#slug-input').value, 'harbour-lights');
+      assert.equal(get('#title-input').value, 'Harbour lights');
+      assert.equal(get('#slug-input').value, 'harbour-lights');
     });
 
     test('indexes the post media by path so the visual editor can name files', async () => {
       await mountPage({ params: { id: '7' } });
 
-      assert.equal(page._mediaByPath['/2024/08/harbour.jpg'].id, 3);
+      assert.equal(page._mediaByPath?.['/2024/08/harbour.jpg']?.id, 3);
     });
 
     test('parses the stored markdown into editable nodes', async () => {
@@ -201,12 +235,12 @@ describe('PostEditPage (mounted)', () => {
   describe('saving', () => {
     test('sends the form as typed, and reports it', async () => {
       await mountPage({ params: { id: '7' } });
-      type(q('#title-input'), 'Harbour lights, revisited');
+      type(get('#title-input'), 'Harbour lights, revisited');
 
       await page._save();
       await settle();
 
-      const body = sent('PUT', '/api/posts/7').at(-1).body;
+      const body = last(sent('PUT', '/api/posts/7')).body;
       assert.equal(body.title, 'Harbour lights, revisited');
       assert.equal(body.type, 'post');
       assert.equal(getToast().message, 'Saved.');
@@ -219,14 +253,14 @@ describe('PostEditPage (mounted)', () => {
       await page._save({ status: 'page' });
       await settle();
 
-      const body = sent('PUT', '/api/posts/7').at(-1).body;
+      const body = last(sent('PUT', '/api/posts/7')).body;
       assert.equal(body.status, 'published');
       assert.equal(body.type, 'page');
     });
 
     test('a first save creates the post and rewrites the URL to its id', async () => {
       await mountPage({});
-      type(q('#title-input'), 'Something new');
+      type(get('#title-input'), 'Something new');
 
       await page._save();
       await settle();
@@ -234,7 +268,7 @@ describe('PostEditPage (mounted)', () => {
       assert.equal(sent('POST', '/api/posts').length, 1);
       assert.equal(page.state.isNew, false);
       assert.equal(page.state.postId, 11);
-      assert.equal(dom.history.entries.at(-1)[1], '/light/posts/11/edit');
+      assert.equal(last(dom.history.entries)[1], '/light/posts/11/edit');
     });
 
     test('a failed save surfaces the server message and re-enables the form', async () => {
@@ -253,7 +287,7 @@ describe('PostEditPage (mounted)', () => {
   describe('autosave', () => {
     test('typing arms it, and it saves the pending edit', async () => {
       await mountPage({ params: { id: '7' } });
-      type(q('#title-input'), 'Edited');
+      type(get('#title-input'), 'Edited');
       page._onInput();
       assert.equal(page.state.hasPendingEdits, true);
 
@@ -284,7 +318,7 @@ describe('PostEditPage (mounted)', () => {
 
     test('a new post with a body becomes a draft and adopts the id', async () => {
       await mountPage({});
-      type(q('#title-input'), '');
+      type(get('#title-input'), '');
       page._nodes = [{ type: 'text', text: 'first words' }];
       page._mountVisualEditor();
       page.state.hasPendingEdits = true;
@@ -292,10 +326,10 @@ describe('PostEditPage (mounted)', () => {
       await page._autosave();
       await settle();
 
-      assert.equal(sent('POST', '/api/posts').at(-1).body.status, 'draft');
+      assert.equal(last(sent('POST', '/api/posts')).body.status, 'draft');
       assert.equal(page.state.postId, 11);
       // The backend titles an untitled post after the day; show that back.
-      assert.equal(q('#title-input').value, 'August 26');
+      assert.equal(get('#title-input').value, 'August 26');
     });
 
     test('a failure is recorded rather than thrown at the user mid-keystroke', async () => {
@@ -321,25 +355,25 @@ describe('PostEditPage (mounted)', () => {
      * does not have (Publish now is draft-only), so the map is called directly;
      * the delegation that reaches it is covered by its own test below.
      */
-    const menuAction = (action) => page.actions[action].call(page);
+    const menuAction = (action: keyof typeof page.actions) => page.actions[action].call(page);
 
     test('a click on a menu item reaches its action through the container', async () => {
       await mountPage({ params: { id: '7' } });
 
       // A published post's menu offers Unpublish — a real button, clicked for real.
-      click(q('[data-action="unpublish"]'));
+      click(get('[data-action="unpublish"]'));
       await settle();
 
-      assert.equal(sent('PUT', '/api/posts/7').at(-1).body.status, 'draft');
+      assert.equal(last(sent('PUT', '/api/posts/7')).body.status, 'draft');
     });
 
     test('publish-now, mark-hidden and unpublish each send their status', async () => {
       await mountPage({ params: { id: '7' } });
 
-      for (const [action, status] of [['publish-now', 'published'], ['mark-hidden', 'hidden'], ['unpublish', 'draft']]) {
+      for (const [action, status] of [['publish-now', 'published'], ['mark-hidden', 'hidden'], ['unpublish', 'draft']] as const) {
         menuAction(action);
         await settle();
-        assert.equal(sent('PUT', '/api/posts/7').at(-1).body.status, status, action);
+        assert.equal(last(sent('PUT', '/api/posts/7')).body.status, status, action);
       }
     });
 
@@ -348,7 +382,7 @@ describe('PostEditPage (mounted)', () => {
 
       menuAction('schedule');
 
-      assert.equal(q('#status-select').value, 'scheduled');
+      assert.equal(get('#status-select').value, 'scheduled');
     });
 
     test('arrange turns on the reordering mode and Escape turns it back off', async () => {
@@ -356,10 +390,9 @@ describe('PostEditPage (mounted)', () => {
 
       menuAction('arrange');
       assert.equal(page.state.arranging, true);
-      assert.equal(q('#arrange-bar').hidden, false);
+      assert.equal(get('#arrange-bar').hidden, false);
 
-      const esc = new globalThis.Event('keydown');
-      esc.key = 'Escape';
+      const esc = Object.assign(new globalThis.Event('keydown'), { key: 'Escape' });
       dom.document.dispatchEvent(esc);
       assert.equal(page.state.arranging, false);
     });
@@ -415,10 +448,13 @@ describe('PostEditPage (mounted)', () => {
   // ── Preview link ──────────────────────────────────────────────────────────
 
   describe('preview link', () => {
+    const setClipboard = (clipboard: Partial<Clipboard>) =>
+      Object.defineProperty(globalThis.navigator, 'clipboard', { value: mock<Clipboard>(clipboard), configurable: true, writable: true });
+
     test('copies the generated link to the clipboard', async () => {
       routes['POST /api/posts/7/preview'] = () => ({ preview_url: 'http://localhost/preview/abc' });
-      let copied = null;
-      globalThis.navigator.clipboard = { writeText: async t => { copied = t; } };
+      let copied: string | null = null;
+      setClipboard({ writeText: async t => { copied = t; } });
       await mountPage({ params: { id: '7' } });
 
       await page._generatePreviewLink();
@@ -431,9 +467,9 @@ describe('PostEditPage (mounted)', () => {
 
     test('falls back to a dialog when the clipboard is unavailable', async () => {
       routes['POST /api/posts/7/preview'] = () => ({ preview_url: 'http://localhost/preview/abc' });
-      globalThis.navigator.clipboard = { writeText: async () => { throw new Error('denied'); } };
-      globalThis.window.getSelection = () => ({ removeAllRanges() {}, addRange() {} });
-      dom.document.createRange = () => ({ selectNodeContents() {} });
+      setClipboard({ writeText: async () => { throw new Error('denied'); } });
+      globalThis.window.getSelection = () => mock<Selection>({ removeAllRanges() {}, addRange() {} });
+      dom.document.createRange = () => mock<Range>({ selectNodeContents() {} });
       await mountPage({ params: { id: '7' } });
 
       await page._generatePreviewLink();
@@ -465,7 +501,7 @@ describe('PostEditPage (mounted)', () => {
   // ── Instagram ─────────────────────────────────────────────────────────────
 
   describe('publishing to Instagram', () => {
-    const publishRoute = st => () => ({ ...POST(), instagram_status: st, instagram_error: 'rate limited' });
+    const publishRoute = (st: string) => () => ({ ...POST(), instagram_status: st, instagram_error: 'rate limited' });
 
     test('a published result reports success', async () => {
       routes['POST /api/posts/7/instagram/publish'] = publishRoute('published');
@@ -581,20 +617,20 @@ describe('PostEditPage (mounted)', () => {
     test('whole-post analysis fills the empty fields and merges tags', async () => {
       routes['POST /api/media/analyze-path'] = () => analysis;
       await mountPage({ params: { id: '7' } });
-      type(q('#title-input'), '');
+      type(get('#title-input'), '');
 
       await page._handleAnalyze({ path: '/2024/08/harbour.jpg' });
       await settle();
 
       assert.equal(page.state.post.title, 'Suggested title');
-      assert.deepEqual(page.state.post.tags.map(t => t.name), ['harbour', 'boats']);
+      assert.deepEqual(page.state.post.tags.map((t: { name: string }) => t.name), ['harbour', 'boats']);
       assert.equal(page._analyzing, false);
     });
 
     test('a failed whole-post analysis keeps the typed fields', async () => {
       routes['POST /api/media/analyze-path'] = () => fail(500, 'model unavailable');
       await mountPage({ params: { id: '7' } });
-      type(q('#title-input'), 'Typed by hand');
+      type(get('#title-input'), 'Typed by hand');
 
       await page._handleAnalyze({ path: '/2024/08/harbour.jpg' });
       await settle();
@@ -626,7 +662,7 @@ describe('PostEditPage (mounted)', () => {
       await settle();
 
       assert.equal(page._nodes.length, before + 1);
-      assert.equal(page._nodes.at(-1).path, '/2024/08/new.jpg');
+      assert.equal(last(page._nodes).path, '/2024/08/new.jpg');
     });
 
     test('a failed upload names the file in the error', async () => {
@@ -681,7 +717,7 @@ describe('PostEditPage (mounted)', () => {
       const cards = [...page.container.querySelectorAll('#ve-list .ve-card')];
       cards.forEach((card, i) => {
         card.getBoundingClientRect = () =>
-          ({ top: 100 * i, height: 100, bottom: 100 * i + 100, left: 0, right: 0, width: 0 });
+          mock<DOMRect>({ top: 100 * i, height: 100, bottom: 100 * i + 100, left: 0, right: 0, width: 0 });
       });
       return cards;
     }
@@ -691,9 +727,9 @@ describe('PostEditPage (mounted)', () => {
       await mountPage({ params: { id: '7' } });
       assert.deepEqual(page._nodes.map(n => n.type), ['image', 'text']);
       const [image] = cardsInRows();
-      const list = q('#ve-list');
+      const list = get('#ve-list');
 
-      fire(image.querySelector('.ve-handle'), 'mousedown');
+      fire(must(image.querySelector('.ve-handle')), 'mousedown');
       assert.equal(image.getAttribute('draggable'), 'true');
       fire(image, 'dragstart', { dataTransfer: dataTransfer() });
       assert.ok(image.classList.contains('dragging'));
@@ -710,9 +746,9 @@ describe('PostEditPage (mounted)', () => {
     test('a card dragged above the first card moves to the top', async () => {
       await mountPage({ params: { id: '7' } });
       const [, text] = cardsInRows();
-      const list = q('#ve-list');
+      const list = get('#ve-list');
 
-      fire(text.querySelector('.ve-handle'), 'mousedown');
+      fire(must(text.querySelector('.ve-handle')), 'mousedown');
       fire(text, 'dragstart', { dataTransfer: dataTransfer() });
       fire(list, 'dragover', { clientY: -10, dataTransfer: dataTransfer() });
       fire(list, 'drop', { clientY: -10, dataTransfer: dataTransfer() });
@@ -723,9 +759,9 @@ describe('PostEditPage (mounted)', () => {
     test('the drop line follows the pointer, and leaving the list removes it', async () => {
       await mountPage({ params: { id: '7' } });
       const [image, text] = cardsInRows();
-      const list = q('#ve-list');
+      const list = get('#ve-list');
 
-      fire(image.querySelector('.ve-handle'), 'mousedown');
+      fire(must(image.querySelector('.ve-handle')), 'mousedown');
       fire(image, 'dragstart', { dataTransfer: dataTransfer() });
 
       fire(list, 'dragover', { clientY: 120, dataTransfer: dataTransfer() });
@@ -744,9 +780,9 @@ describe('PostEditPage (mounted)', () => {
     test('a drag that does not start on the handle moves nothing', async () => {
       await mountPage({ params: { id: '7' } });
       const [image] = cardsInRows();
-      const list = q('#ve-list');
+      const list = get('#ve-list');
 
-      fire(image.querySelector('.ve-path'), 'mousedown');
+      fire(must(image.querySelector('.ve-path')), 'mousedown');
       fire(image, 'dragstart', { dataTransfer: dataTransfer() });
       const over = fire(list, 'dragover', { clientY: 250, dataTransfer: dataTransfer() });
       fire(list, 'drop', { clientY: 250, dataTransfer: dataTransfer() });
@@ -761,7 +797,7 @@ describe('PostEditPage (mounted)', () => {
   describe('switching editor mode', () => {
     test('visual → text keeps the fields that were typed', async () => {
       await mountPage({ params: { id: '7' } });
-      type(q('#title-input'), 'Kept across the switch');
+      type(get('#title-input'), 'Kept across the switch');
 
       page._switchMode('text');
 
@@ -803,13 +839,13 @@ describe('PostEditPage (mounted)', () => {
       const rows = queued();
       const restore = installFakeIndexedDB(rows);
       await mountPage({ params: { id: '7' } });
-      type(q('#title-input'), '');
+      type(get('#title-input'), '');
       try {
         await page._processShareQueue();
         await settle();
       } finally { restore(); }
 
-      assert.equal(q('#title-input').value, 'From the phone');
+      assert.equal(get('#title-input').value, 'From the phone');
       assert.equal(rows.length, 0, 'the queue is emptied once drained');
       assert.equal(sent('POST', '/api/posts').length, 1, 'the backlog entry becomes its own draft');
       assert.match(getToast().message, /1 offline shares saved as draft/);
@@ -824,14 +860,14 @@ describe('PostEditPage (mounted)', () => {
         await settle();
       } finally { restore(); }
 
-      assert.equal(sent('PUT', '/api/posts/11').at(-1).body.content, '/2024/08/shared.jpg');
+      assert.equal(last(sent('PUT', '/api/posts/11')).body.content, '/2024/08/shared.jpg');
     });
 
     test('a backlog entry that cannot be saved is reported, not swallowed', async () => {
       routes['POST /api/posts'] = () => fail(500, 'disk full');
       const restore = installFakeIndexedDB(queued());
       await mountPage({ params: { id: '7' } });
-      const seen = [];
+      const seen: string[] = [];
       const unsubscribe = onToast(t => t && seen.push(t.message));
       try {
         await page._processShareQueue();
@@ -882,15 +918,15 @@ describe('PostEditPage (mounted)', () => {
       await mountPage({ params: { id: '7' } });
 
       page._toggleDetails(true);
-      assert.equal(q('#details-panel').getAttribute('aria-hidden'), 'false');
+      assert.equal(get('#details-panel').getAttribute('aria-hidden'), 'false');
 
       page._toggleDetails(false);
-      assert.equal(q('#details-panel').getAttribute('aria-hidden'), 'true');
+      assert.equal(get('#details-panel').getAttribute('aria-hidden'), 'true');
     });
 
     test('summaries follow the fields', async () => {
       await mountPage({ params: { id: '7' } });
-      type(q('#title-input'), 'A new title');
+      type(get('#title-input'), 'A new title');
 
       page._updateDetailsSummaries();
 
@@ -909,20 +945,28 @@ describe('PostEditPage (mounted)', () => {
  * fail, which is the branch where an unreadable queue must be skipped rather
  * than crash the editor.
  */
-function installFakeIndexedDB(rows, { broken = false } = {}) {
+/** The part of an IDBRequest that utils/idb.ts reads. */
+interface FakeRequest {
+  result?: unknown;
+  error?: Error;
+  onsuccess?: (e?: { target: FakeRequest }) => void;
+  onerror?: (e: { target: FakeRequest }) => void;
+}
+
+function installFakeIndexedDB(rows: unknown[], { broken = false } = {}) {
   const saved = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
   const store = {
     getAll() {
-      const req = {};
+      const req: FakeRequest = {};
       setImmediate(() => { req.result = rows.slice(); req.onsuccess?.(); });
       return req;
     },
     clear() { rows.length = 0; },
-    put(entry) { rows.push(entry); },
+    put(entry: unknown) { rows.push(entry); },
   };
   const db = {
     transaction() {
-      const tx = { objectStore: () => store };
+      const tx: { objectStore: () => typeof store; oncomplete?: () => void } = { objectStore: () => store };
       setImmediate(() => tx.oncomplete?.());
       return tx;
     },
@@ -933,7 +977,7 @@ function installFakeIndexedDB(rows, { broken = false } = {}) {
       open() {
         // `result` / `error` on the request itself, the way a real IDBRequest
         // carries them — utils/idb.ts reads the request, not the event.
-        const req = {};
+        const req: FakeRequest = {};
         setImmediate(() => {
           if (broken) {
             req.error = new Error('no indexeddb');
@@ -949,6 +993,6 @@ function installFakeIndexedDB(rows, { broken = false } = {}) {
   });
   return () => {
     if (saved) Object.defineProperty(globalThis, 'indexedDB', saved);
-    else delete globalThis.indexedDB;
+    else Reflect.deleteProperty(globalThis, 'indexedDB');
   };
 }
