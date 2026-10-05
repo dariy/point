@@ -262,6 +262,14 @@ describe('Trusted Types', () => {
         customCss: (window.__PLUGINS__ || []).some((e) => e.id === 'custom-css'),
         spinner: !!document.querySelector('.loading-spinner'),
         error: document.querySelector('.error-state')?.textContent || null,
+        // Which stage the page reached: shell, loaded grid, mount point, editor.
+        shell: !!document.querySelector('.admin-layout, main'),
+        grid: !!document.querySelector('.themes-grid'),
+        mountPoint: document.querySelector('#css-editor-mount')?.innerHTML.length ?? null,
+        container: !!document.querySelector('.css-editor-container'),
+        editors: [...document.querySelectorAll('.codejar-editor')].map((e) => e.className),
+        readyState: document.readyState,
+        body: (document.body?.innerText || '').slice(0, 200),
       }));
       throw new Error(`the CSS editor did not mount: ${JSON.stringify(state)} errors=${JSON.stringify(pageErrors)}`);
     });

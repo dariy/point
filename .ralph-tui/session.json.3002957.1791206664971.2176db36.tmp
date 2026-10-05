@@ -3,7 +3,7 @@
   "sessionId": "55037591-b47d-4a0e-80fd-322da6d5e2c8",
   "status": "running",
   "startedAt": "2026-10-05T12:57:04.530Z",
-  "updatedAt": "2026-10-05T13:23:10.129Z",
+  "updatedAt": "2026-10-05T13:24:24.966Z",
   "currentIteration": 7,
   "maxIterations": 0,
   "tasksCompleted": 7,
@@ -5490,8 +5490,6 @@
   ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
-  "activeTaskIds": [
-    "p-flaky-tt-undo-n9op"
-  ],
+  "activeTaskIds": [],
   "subagentPanelVisible": false
 }

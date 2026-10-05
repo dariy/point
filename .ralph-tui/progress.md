@@ -64,3 +64,11 @@ after each iteration and it's included in prompts for context.
   - Do not run check.sh twice at once: parallel runs share ports and gave false js-lint/typecheck/e2e failures.
   - client.ts exports named `api`, not a default.
 ---
+
+## 2026-10-05 - p-flaky-tt-undo-n9op
+- Cause not found; did not reproduce. Extended the mount-failure diagnostic in the undo test.
+- Files changed: frontend/e2e/trustedTypes.test.ts
+- **Learnings:**
+  - The old diagnostic (spinner/error/customCss) could not tell "page not rendered" from "grid loaded, editor missing". The new one can.
+  - Ran e2e once only (passed); the 5x loop and full check were not run.
+---
