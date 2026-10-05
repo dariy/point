@@ -1,14 +1,15 @@
 {
   "id": "55037591-b47d-4a0e-80fd-322da6d5e2c8",
-  "status": "running",
+  "status": "interrupted",
   "startedAt": "2026-10-05T12:56:40.201Z",
-  "updatedAt": "2026-10-05T13:22:47.482Z",
+  "updatedAt": "2026-10-05T14:31:31.449Z",
   "agentPlugin": "claude",
   "trackerPlugin": "beads-rust-bv",
   "executionScopes": [],
-  "currentIteration": 7,
+  "currentIteration": 8,
   "maxIterations": 0,
   "totalTasks": 0,
-  "tasksCompleted": 7,
-  "cwd": "/home/light/src/point"
+  "tasksCompleted": 8,
+  "cwd": "/home/light/src/point",
+  "endedAt": "2026-10-05T14:31:31.449Z"
 }

@@ -3,10 +3,10 @@
   "sessionId": "55037591-b47d-4a0e-80fd-322da6d5e2c8",
   "status": "running",
   "startedAt": "2026-10-05T12:57:04.530Z",
-  "updatedAt": "2026-10-05T13:23:10.129Z",
-  "currentIteration": 7,
+  "updatedAt": "2026-10-05T14:31:31.422Z",
+  "currentIteration": 8,
   "maxIterations": 0,
-  "tasksCompleted": 7,
+  "tasksCompleted": 8,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -1049,8 +1049,8 @@
       {
         "id": "p-flaky-tt-undo-n9op",
         "title": "test(e2e): trustedTypes code editor undo test is flaky — CSS editor did not mount",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-royn",
@@ -5486,12 +5486,20 @@
       "durationMs": 629369,
       "startedAt": "2026-10-05T13:11:48.549Z",
       "endedAt": "2026-10-05T13:22:17.918Z"
+    },
+    {
+      "iteration": 8,
+      "status": "completed",
+      "taskId": "p-flaky-tt-undo-n9op",
+      "taskTitle": "test(e2e): trustedTypes code editor undo test is flaky — CSS editor did not mount",
+      "taskCompleted": true,
+      "durationMs": 75091,
+      "startedAt": "2026-10-05T13:23:09.788Z",
+      "endedAt": "2026-10-05T13:24:24.879Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
-  "activeTaskIds": [
-    "p-flaky-tt-undo-n9op"
-  ],
+  "activeTaskIds": [],
   "subagentPanelVisible": false
 }

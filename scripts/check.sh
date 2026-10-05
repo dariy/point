@@ -129,7 +129,7 @@ step_js_typecheck() {
     js_files=$(git ls-files '*.js' '*.mjs' '*.cjs' | grep -v '^frontend/vendor/' || true)
     if [ -n "$js_files" ]; then
         echo "  FAIL  tracked JS file outside frontend/vendor/ (write it as .ts):" >&2
-        printf '        %s\n' $js_files >&2
+        printf '%s\n' "$js_files" | sed 's/^/        /' >&2
         return 1
     fi
     node_modules/.bin/tsc -p tsconfig.json
