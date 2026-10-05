@@ -19,3 +19,12 @@ after each iteration and it's included in prompts for context.
   - `c.Path()` gives the route pattern, so scope checks match registered routes, not raw URLs.
   - A duplicate-column error in a migration counts as a no-op, so a new column can go in both schema.sql and the migration list.
 ---
+
+## 2026-10-05 - p-carousel-touch-layout-vfs1
+- This bead is the S10 epic. All nine children (.1 to .9) were already closed. I made no code change.
+- The S10 code is on branch `carousel-studio`, not on `ts-tests`. I found `createMultiTapWatcher` and `isTouchLayout` there.
+- I closed the epic.
+- **Learnings:**
+  - Run `br show <id>` first. If the type is epic, check the children before any work.
+  - Carousel work lives on `carousel-studio`. `frontend/src/plugins/carousel` does not exist on other branches.
+---
