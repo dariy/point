@@ -21,7 +21,7 @@ import { mock } from './helpers/mock.ts';
  */
 
 const SW_SOURCE = readFileSync(
-  fileURLToPath(new URL('../sw.js', import.meta.url)),
+  fileURLToPath(new URL('../sw.ts', import.meta.url)),
   'utf8',
 );
 

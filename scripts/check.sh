@@ -112,7 +112,7 @@ step_govulncheck() {
 # The lockfile-pinned Oxlint (.oxlintrc.json, plugin scripts/oxlint-point.mjs).
 step_js_lint() {
     cd "$ROOT_DIR"
-    node_modules/.bin/oxlint frontend/src frontend/sw.js scripts/*.mjs \
+    node_modules/.bin/oxlint frontend/src frontend/sw.ts scripts/*.mjs \
         demo/mock demo/*.mjs demo/scripts/*.mjs
 }
 

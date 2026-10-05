@@ -38,6 +38,13 @@ const TREES = [
     classify: (f) => (f === "theme.css" ? null : cssOnly(f)),
   },
   { dir: "frontend/css/light", classify: cssOnly },
+  // The service worker source. build-js.sh writes frontend/sw.js beside it, so
+  // this tree is shallow: its subdirectories (js, css, src) are not watched here.
+  {
+    dir: "frontend",
+    shallow: true,
+    classify: (f) => (f === "sw.ts" ? "js" : null),
+  },
   { dir: "frontend/css/public", classify: cssOnly },
   {
     dir: "api",
@@ -182,7 +189,7 @@ async function drain() {
 // reports its entries by name, whatever inode they have.
 const watchers = new Map();
 
-function watchTree(root, onChange) {
+function watchTree(root, onChange, shallow = false) {
   const add = (dir) => {
     if (watchers.has(dir)) return;
     let w;
@@ -191,7 +198,7 @@ function watchTree(root, onChange) {
         if (!name) return;
         const path = join(dir, name.toString());
         // A directory created (or moved in) after startup gets its own watch.
-        if (!watchers.has(path) && isDir(path)) add(path);
+        if (!shallow && !watchers.has(path) && isDir(path)) add(path);
         onChange(relative(root, path));
       });
     } catch {
@@ -203,6 +210,7 @@ function watchTree(root, onChange) {
       watchers.delete(dir);
     });
     watchers.set(dir, w);
+    if (shallow) return;
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (e.isDirectory() && !e.name.startsWith(".")) add(join(dir, e.name));
     }
@@ -218,13 +226,13 @@ function isDir(path) {
   }
 }
 
-for (const { dir, classify } of TREES) {
+for (const { dir, shallow, classify } of TREES) {
   const abs = join(ROOT, dir);
   if (!existsSync(abs)) continue;
   watchTree(abs, (rel) => {
     const kind = classify(rel);
     if (kind) schedule(kind);
-  });
+  }, shallow);
 }
 
 async function shutdown() {

@@ -93,3 +93,5 @@ demo/mock/fixtures/fixtures.json
 # br doctor per-run artifacts
 .doctor/
 *.bak
+# Built from frontend/sw.ts by scripts/build-js.sh; served at /sw.js.
+frontend/sw.js

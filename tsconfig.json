@@ -33,7 +33,7 @@
   },
   "include": [
     "frontend/src/**/*.ts",
-    "frontend/*.js",
+    "frontend/sw.ts",
     "frontend/index.html",
     "frontend/types/**/*.d.ts"
   ],
