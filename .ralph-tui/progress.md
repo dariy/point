@@ -49,3 +49,10 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - `PostMediaRef` has no `type`. Derive the type from `path`.
 ---
+
+## 2026-10-05 - p-royn
+- `ViewContext.toUrl` now keeps `/map` (and `/map/`) like `/tags`. A timeline change on `/map` stays on `/map?timeline=<from>-<to>`.
+- Files changed: frontend/src/utils/viewContext.ts, frontend/test/viewContext.test.ts
+- **Learnings:**
+  - Any new module path with its own timeline must be added to the module check in `toUrl`, or it falls back to `/`.
+---

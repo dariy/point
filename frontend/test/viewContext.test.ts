@@ -31,6 +31,13 @@ describe('ViewContext.toUrl', () => {
     assert.strictEqual(url('/tags', { timeline: '2019-2024' }), '/tags?timeline=2019-2024');
   });
 
+  test('map keeps its path and the timeline range', () => {
+    assert.strictEqual(url('/map'), '/map');
+    assert.strictEqual(url('/map', { timeline: '2019-2023' }), '/map?timeline=2019-2023');
+    assert.strictEqual(url('/map/', { timeline: '2019-2023' }), '/map?timeline=2019-2023');
+    assert.strictEqual(url('/map', { q: 'ukraine' }), '/search?q=ukraine');
+  });
+
   test('search from an open post drops the post slug', () => {
     assert.strictEqual(url('/posts/some-post', { q: 'ukraine' }), '/search?q=ukraine');
   });

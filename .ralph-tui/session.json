@@ -3,10 +3,10 @@
   "sessionId": "55037591-b47d-4a0e-80fd-322da6d5e2c8",
   "status": "running",
   "startedAt": "2026-10-05T12:57:04.530Z",
-  "updatedAt": "2026-10-05T13:09:27.764Z",
-  "currentIteration": 4,
+  "updatedAt": "2026-10-05T13:10:46.872Z",
+  "currentIteration": 5,
   "maxIterations": 0,
-  "tasksCompleted": 4,
+  "tasksCompleted": 5,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -4253,8 +4253,8 @@
       {
         "id": "p-967m",
         "title": "fix(frontend): shouldUseImmersive reads media.type, which the API does not send",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-refactor-tag-clan.5",
@@ -5456,12 +5456,22 @@
       "durationMs": 103949,
       "startedAt": "2026-10-05T13:06:49.202Z",
       "endedAt": "2026-10-05T13:08:33.151Z"
+    },
+    {
+      "iteration": 5,
+      "status": "completed",
+      "taskId": "p-967m",
+      "taskTitle": "fix(frontend): shouldUseImmersive reads media.type, which the API does not send",
+      "taskCompleted": true,
+      "durationMs": 29377,
+      "startedAt": "2026-10-05T13:09:27.280Z",
+      "endedAt": "2026-10-05T13:09:56.657Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [
-    "p-967m"
+    "p-royn"
   ],
   "subagentPanelVisible": false
 }
