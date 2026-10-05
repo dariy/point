@@ -21,6 +21,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import type { Theme } from "../../frontend/src/api/themes.ts";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -46,10 +47,10 @@ const COLOR_LITERAL_RE =
   /^(#[0-9a-fA-F]{3,8}|rgba?\([0-9.,%\s/]+\)|hsla?\([0-9.,%\s/deg]+\))$/;
 
 /** Plain colour literals from the light-mode :root block, keyed by property. */
-function rootColorVars(content) {
+function rootColorVars(content: string): Record<string, string> {
   const block = ROOT_BLOCK_RE.exec(content);
   if (!block) return {};
-  const vars = {};
+  const vars: Record<string, string> = {};
   for (const [, prop, raw] of block[1].matchAll(DECL_RE)) {
     const value = raw.trim();
     if (COLOR_LITERAL_RE.test(value)) vars[prop] = value;
@@ -62,7 +63,7 @@ const files = fs
   .filter((f) => f.endsWith(".css"))
   .sort();
 
-const themes = [];
+const themes: Theme[] = [];
 for (const file of files) {
   const slug = file.replace(/\.css$/, "");
   const content = fs.readFileSync(path.join(SRC, file), "utf8");

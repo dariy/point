@@ -92,10 +92,10 @@ function buildBanner() {
     <button type="button" data-demo-reset>Reset demo</button>
     <button type="button" data-demo-dismiss aria-label="Hide this notice">Hide</button>
   `);
-  bar.querySelector("[data-demo-reset]").addEventListener("click", () => {
+  bar.querySelector("[data-demo-reset]")!.addEventListener("click", () => {
     window.__DEMO_RESET__?.();
   });
-  bar.querySelector("[data-demo-dismiss]").addEventListener("click", () => {
+  bar.querySelector("[data-demo-dismiss]")!.addEventListener("click", () => {
     bar.hidden = true;
     document.body.classList.remove("has-demo-banner");
     try {
@@ -123,7 +123,7 @@ function buildBanner() {
 // `hidden = true` onto an element that is already hidden still queues a
 // mutation record, and the observer would re-enter itself forever.
 function syncAdminLink() {
-  const link = document.querySelector(".demo-admin-link");
+  const link = document.querySelector<HTMLElement>(".demo-admin-link");
   const hide = window.location.pathname.startsWith("/light");
   if (link && link.hidden !== hide) link.hidden = hide;
 }
@@ -136,7 +136,7 @@ function syncAdminLink() {
  * full-screen image are different states.
  */
 function syncBannerVisibility() {
-  const bar = document.querySelector(".demo-banner");
+  const bar = document.querySelector<HTMLElement>(".demo-banner");
   if (!bar) return;
   const immersive = !!document.querySelector(".immersive-layout");
   if (bar.classList.contains("is-immersive") !== immersive) {
@@ -159,12 +159,12 @@ function syncBannerVisibility() {
  */
 function watchForLogin() {
   const fill = () => {
-    const input = document.querySelector("#password-input");
+    const input = document.querySelector<HTMLInputElement>("#password-input");
     if (!input || input.dataset.demoFilled) return;
     input.dataset.demoFilled = "1";
     input.value = CREDENTIAL;
     const form = input.closest("form");
-    if (form && !form.parentElement.querySelector(".demo-login-hint")) {
+    if (form && !form.parentElement?.querySelector(".demo-login-hint")) {
       const hint = document.createElement("p");
       hint.className = "demo-login-hint";
       hint.textContent = `Demo password. Any value works.`;

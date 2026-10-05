@@ -27,7 +27,7 @@
  * visitors home (app.ts resolveTagsModule). Showing it is most of the point of
  * a demo.
  */
-export const REPLACE_SETTINGS = {
+export const REPLACE_SETTINGS: Record<string, string> = {
   blog_title: "Point Demo",
   blog_subtitle: "A demo of the Point photo blog engine",
   author_name: "Demo",
@@ -53,7 +53,7 @@ export const REPLACE_SETTINGS = {
  * channel marker counted server-side; see point-hosting
  * docs/10-funnel-measurement.md.
  */
-export const ADD_SETTINGS = {
+export const ADD_SETTINGS: Record<string, string> = {
   // © is the character, not `&copy;`, and the credit is held to one line
   // with a non-breaking space rather than <nobr> — entity and tag alike are
   // escaped and shown as the markup they are, which is what the paragraph
@@ -66,18 +66,21 @@ export const ADD_SETTINGS = {
 /** A recorded object carrying this key is a settings map. */
 export const SETTINGS_MARKER = "blog_title";
 
+/** A recorded settings map: setting key to value. */
+export type SettingsMap = Record<string, unknown>;
+
 /** True when `value` is a recorded settings map. */
-export function isSettingsMap(value) {
-  return Boolean(value) && typeof value === "object" && SETTINGS_MARKER in value;
+export function isSettingsMap(value: unknown): value is SettingsMap {
+  return typeof value === "object" && value !== null && SETTINGS_MARKER in value;
 }
 
 /** Overlay the demo values onto one settings map, returning a new map. */
-export function applyDemoSettings(settings) {
-  const out = { ...settings };
+export function applyDemoSettings<T extends SettingsMap>(settings: T): T {
+  const out: SettingsMap = { ...settings };
   for (const [k, v] of Object.entries(REPLACE_SETTINGS)) {
     if (k in out) out[k] = v;
   }
-  return { ...out, ...ADD_SETTINGS };
+  return { ...out, ...ADD_SETTINGS } as T;
 }
 
 /**
@@ -87,10 +90,11 @@ export function applyDemoSettings(settings) {
  * (`settings`, `publicSettings`, `pages.home.settings`), so a payload that
  * starts embedding settings later is covered without a change here.
  */
-export function applyDemoSettingsDeep(value) {
+export function applyDemoSettingsDeep<T>(value: T): T;
+export function applyDemoSettingsDeep(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(applyDemoSettingsDeep);
   if (value && typeof value === "object") {
-    const out = {};
+    const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) out[k] = applyDemoSettingsDeep(v);
     return isSettingsMap(out) ? applyDemoSettings(out) : out;
   }

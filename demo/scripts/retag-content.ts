@@ -26,6 +26,9 @@
 
 import { DatabaseSync } from "node:sqlite";
 
+import type { Post, PostTag } from "../../frontend/src/api/posts.ts";
+import type { Tag } from "../../frontend/src/api/tags.ts";
+
 import {
   LOCATIONS,
   YEARS,
@@ -35,16 +38,16 @@ import {
   toTopic,
 } from "../world.ts";
 
-const args = Object.fromEntries(
+const args: Record<string, string | true> = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const [k, ...v] = a.replace(/^--/, "").split("=");
     return [k, v.join("=") || true];
   }),
 );
 
-const BASE = args.base || "http://127.0.0.1:8002";
-const SESSION = args.session || "";
-const DB_PATH = args.db || "";
+const BASE = String(args.base || "http://127.0.0.1:8002");
+const SESSION = String(args.session || "");
+const DB_PATH = String(args.db || "");
 
 for (const [name, value] of [
   ["--session", SESSION],
@@ -67,22 +70,30 @@ for (const [name, value] of [
  * at least one must stay enabled (api/internal/plugins/registry.go), so Sheet
  * is turned on before Standard is turned off. The order is load-bearing.
  */
-const PLUGIN_STATE = [
+const PLUGIN_STATE: [id: string, enabled: boolean][] = [
   ["tag-cloud", false],
   ["tags-atlas", true],
   ["immersive-sheet", true],
   ["immersive", false],
 ];
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** The timestamps of one row of the posts table. */
+interface Stamp {
+  id: number;
+  published_at: string | null;
+  created_at: string | null;
+}
 
-async function api(method, path, body) {
-  const init = {
-    method,
-    headers: { Cookie: `session=${SESSION}`, Accept: "application/json" },
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {
+    Cookie: `session=${SESSION}`,
+    Accept: "application/json",
   };
+  const init: RequestInit = { method, headers };
   if (body !== undefined) {
-    init.headers["Content-Type"] = "application/json";
+    headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(body);
   }
 
@@ -97,7 +108,7 @@ async function api(method, path, body) {
     if (!res.ok) {
       throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 300)}`);
     }
-    return text ? JSON.parse(text) : null;
+    return (text ? JSON.parse(text) : null) as T;
   }
 }
 
@@ -108,20 +119,23 @@ async function api(method, path, body) {
  * than rejected, so getting it wrong silently returns the first default-sized
  * page and every later step quietly operates on a fraction of the data.
  */
-async function listAll(path, key) {
+async function listAll<T extends { id: number }>(path: string, key: string): Promise<T[]> {
   const PER_PAGE = 100;
-  const out = [];
-  const seen = new Set();
+  const out: T[] = [];
+  const seen = new Set<number>();
   for (let page = 1; page <= 50; page++) {
-    const data = await api("GET", `${path}?page=${page}&per_page=${PER_PAGE}`);
-    const batch = data?.[key] || [];
+    const data = await api<({ pages?: number } & Record<string, T[] | number | undefined>) | null>(
+      "GET",
+      `${path}?page=${page}&per_page=${PER_PAGE}`,
+    );
+    const batch = (data?.[key] as T[] | undefined) || [];
     const fresh = batch.filter((row) => !seen.has(row.id));
     fresh.forEach((row) => seen.add(row.id));
     out.push(...fresh);
 
     if (!fresh.length) break;
-    if (data.pages && page >= data.pages) break;
-    if (!data.pages && batch.length < PER_PAGE) break;
+    if (data?.pages && page >= data.pages) break;
+    if (!data?.pages && batch.length < PER_PAGE) break;
   }
   return out;
 }
@@ -135,7 +149,7 @@ async function listAll(path, key) {
  * does not match that shape is left alone — a hand-edited post should not be
  * silently rewritten.
  */
-function splitBody(content) {
+function splitBody(content: string): { image: string; prose: string } | null {
   const lines = content.split("\n");
   const first = lines.findIndex((l) => l.trim() !== "");
   if (first === -1 || !/^\/.+$/.test(lines[first].trim())) return null;
@@ -149,7 +163,7 @@ function splitBody(content) {
 }
 
 /** Collapses Markdown paragraphs into one plain-text run for the excerpt field. */
-function toExcerpt(prose) {
+function toExcerpt(prose: string): string {
   return prose
     .split(/\n{2,}/)
     .map((p) => p.replace(/\s+/g, " ").trim())
@@ -172,8 +186,8 @@ const YEAR_NAMES = new Set(YEARS.map(String));
  * archive, but it makes the Atlas's timeline filter look broken — narrowing the
  * range can never drop a place from the map when every place is in every range.
  */
-function yearScheduler() {
-  const seen = new Map();
+function yearScheduler(): (cityName: string) => number | null {
+  const seen = new Map<string, number>();
   return (cityName) => {
     const loc = LOCATIONS.find((l) => l.name === cityName);
     if (!loc) return null;
@@ -190,7 +204,7 @@ function yearScheduler() {
  * tags, the post cards print the date — so rescheduling a post's year without
  * this would leave a "2026" post dated 2020.
  */
-function restamp(stamp, year) {
+function restamp(stamp: string | null, year: string): string | null {
   if (typeof stamp !== "string" || !/^\d{4}-/.test(stamp)) return stamp;
   const moved = `${year}${stamp.slice(4)}`;
   // Same clamp generate-content.ts applies: the current year is only partly
@@ -205,7 +219,7 @@ function restamp(stamp, year) {
 async function main() {
   console.log(`Restructuring ${BASE}`);
 
-  const posts = await listAll("/api/posts", "posts");
+  const posts = await listAll<Post>("/api/posts", "posts");
   console.log(`· ${posts.length} post(s)`);
   // Deal the years in a stable order, so a re-run reproduces the same archive.
   posts.sort((a, b) => a.id - b.id);
@@ -218,17 +232,20 @@ async function main() {
     db
       .prepare("SELECT id, published_at, created_at FROM posts")
       .all()
-      .map((r) => [r.id, r]),
+      .map((r) => {
+        const row = r as unknown as Stamp;
+        return [row.id, row];
+      }),
   );
 
-  const dropped = new Set();
-  const used = new Set();
+  const dropped = new Set<string>();
+  const used = new Set<string>();
   const nextYear = yearScheduler();
   let moved = 0;
 
   for (const summary of posts) {
-    const post = await api("GET", `/api/posts/${summary.id}`);
-    const names = (post.tags || []).map((t) => (typeof t === "string" ? t : t.name));
+    const post = await api<Post>("GET", `/api/posts/${summary.id}`);
+    const names = (post.tags || []).map((t: PostTag | string) => (typeof t === "string" ? t : t.name));
 
     const city = names.find((n) => CITY_NAMES.has(n));
     if (!city || !names.some((n) => YEAR_NAMES.has(n))) {
@@ -244,7 +261,7 @@ async function main() {
       stamp.created_at = restamp(stamp.created_at, year);
     }
 
-    const topics = [];
+    const topics: string[] = [];
     for (const name of names) {
       if (CITY_NAMES.has(name) || YEAR_NAMES.has(name)) continue;
       if (name === countryOf(city)) continue;
@@ -257,7 +274,9 @@ async function main() {
     }
     topics.forEach((t) => used.add(t));
 
-    const body = { tags: postTags(city, year, topics) };
+    const body: { tags: string[]; content?: string; excerpt?: string } = {
+      tags: postTags(city, year, topics),
+    };
 
     const split = splitBody(post.content || "");
     if (split) {
@@ -293,9 +312,12 @@ async function main() {
   await api("POST", "/api/tags/recalculate-counts").catch(() => {});
 
   const counts = new Map(
-    ((await api("GET", "/api/tags"))?.tags || []).map((t) => [t.name, t.post_count || 0]),
+    ((await api<{ tags?: Tag[] } | null>("GET", "/api/tags"))?.tags || []).map((t) => [t.name, t.post_count || 0]),
   );
-  const thin = [...used].filter((t) => counts.get(t) < 2);
+  const thin = [...used].filter((t) => {
+    const n = counts.get(t);
+    return n !== undefined && n < 2;
+  });
   if (thin.length) {
     console.error(`\nFAIL — topic(s) on fewer than 2 posts: ${thin.join(", ")}`);
     console.error("Nothing was deleted. Widen TOPIC_ALIASES in demo/world.ts.");
@@ -316,7 +338,7 @@ async function main() {
     ...YEARS.map(String),
     ...used,
   ]);
-  const groups = await api("GET", "/api/tags");
+  const groups = await api<{ tags?: Tag[] }>("GET", "/api/tags");
   for (const tag of groups.tags || []) {
     // Subject groups (terrain, water, …) are keyed off their parent rather
     // than listed twice; anything else outside the tree goes.
@@ -347,7 +369,7 @@ async function main() {
   await api("POST", "/api/system/media/recalculate-visibility").catch(() => {});
   await api("POST", "/api/tags/recalculate-counts").catch(() => {});
 
-  const final = await api("GET", "/api/tags");
+  const final = await api<{ tags: Tag[] }>("GET", "/api/tags");
   console.log(`\n${final.tags.length} tag(s), ${used.size} topic(s), all on 2+ posts.`);
 }
 

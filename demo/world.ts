@@ -44,7 +44,53 @@
  * and El Chaltén — while still leaving every year with at least one place, so
  * the timeline's own histogram has no empty column.
  */
-export const LOCATIONS = [
+/** A place posts are filed under. */
+export interface Location {
+  name: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  years: number[];
+  hidden?: boolean;
+  hidesPosts?: boolean;
+}
+
+/** A coordinate pair, as the tag API takes it. */
+export interface Coords {
+  latitude: number;
+  longitude: number;
+}
+
+/** The fields of an API tag that the scaffold reads. */
+export interface ApiTag {
+  id: number;
+  name: string;
+  nav_order?: number | null;
+  locations?: Coords[];
+  hidden?: boolean;
+  hides_posts?: boolean;
+}
+
+/** The body the scaffold sends for one tag. */
+interface TagBody {
+  name: string;
+  kind: string;
+  description?: string;
+  nav_order?: number;
+  latitude?: number;
+  longitude?: number;
+  hidden?: boolean;
+  hides_posts?: boolean;
+  parent_ids?: number[];
+}
+
+/** `(method, path, body) => Promise<json>`; the caller names the JSON shape. */
+export type ApiCall = <T = unknown>(method: string, path: string, body?: unknown) => Promise<T>;
+
+/** The roles a post in a batch can have (see `visibilityPlan`). */
+export type Role = "published" | "scheduled" | "private" | "hidden";
+
+export const LOCATIONS: Location[] = [
   { name: "Lisbon", country: "Portugal", latitude: 38.7223, longitude: -9.1393, years: [2020, 2021, 2022, 2023] },
   { name: "Reykjavík", country: "Iceland", latitude: 64.1466, longitude: -21.9426, years: [2021, 2022, 2023] },
   { name: "Kyoto", country: "Japan", latitude: 35.0116, longitude: 135.7681, years: [2023, 2024, 2025, 2026] },
@@ -66,7 +112,7 @@ export const LOCATIONS = [
  * from a post), so "somewhere sensibly inside the country" is the whole
  * requirement.
  */
-export const COUNTRY_COORDS = {
+export const COUNTRY_COORDS: Record<string, Coords> = {
   Portugal: { latitude: 39.5, longitude: -8.0 },
   Iceland: { latitude: 64.9631, longitude: -19.0208 },
   Japan: { latitude: 36.2048, longitude: 138.2529 },
@@ -91,7 +137,7 @@ export const COUNTRY_COORDS = {
  * a branch a guest can still see — a hidden root would only prove that
  * an absent subtree is absent. See docs/features/hidden-visibility.md.
  */
-export const PRIVATE_LOCATION = {
+export const PRIVATE_LOCATION: Location = {
   name: "Mirandela",
   country: "Portugal",
   latitude: 41.4781,
@@ -111,7 +157,7 @@ export const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
  * not a hierarchy. Twenty-five terms over 28 posts guarantees every term is a
  * real facet that narrows the archive to more than one entry.
  */
-export const SUBJECT_GROUPS = {
+export const SUBJECT_GROUPS: Record<string, string[]> = {
   terrain: ["mountains", "forest", "coastline", "valley", "flora"],
   water: ["ocean", "waves", "still-water", "droplets"],
   built: ["architecture", "street-life", "cityscape", "winding-road"],
@@ -132,7 +178,7 @@ export const TOPICS = Object.values(SUBJECT_GROUPS).flat();
  * "landscape", "light" and friends applied to nearly every post and so
  * separated nothing.
  */
-export const TOPIC_ALIASES = {
+export const TOPIC_ALIASES: Record<string, string | null> = {
   forest: "forest", woodland: "forest", path: "forest", moss: "forest",
   mountains: "mountains", "mountain-landscape": "mountains", alpine: "mountains",
   wilderness: "mountains", peak: "mountains",
@@ -186,18 +232,18 @@ export const TOPIC_ALIASES = {
 };
 
 /** Canonicalises a keyword, or returns null if it has no place in the tree. */
-export function toTopic(raw) {
+export function toTopic(raw: unknown): string | null {
   const key = String(raw)
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-  if (Object.hasOwn(TOPIC_ALIASES, key)) return TOPIC_ALIASES[key];
+  if (Object.hasOwn(TOPIC_ALIASES, key)) return TOPIC_ALIASES[key] ?? null;
   return TOPICS.includes(key) ? key : null;
 }
 
 /** The country that owns a place name. */
-export function countryOf(cityName) {
+export function countryOf(cityName: string): string | null {
   return LOCATIONS.find((l) => l.name === cityName)?.country || null;
 }
 
@@ -216,17 +262,20 @@ export function countryOf(cityName) {
  *
  * `api` is `(method, path, body) => Promise<json>`.
  */
-export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
+export async function buildTagScaffold(
+  api: ApiCall,
+  { topics = TOPICS }: { topics?: string[] } = {},
+): Promise<Record<string, ApiTag>> {
   const existing = new Map(
-    ((await api("GET", "/api/tags"))?.tags || []).map((t) => [t.name.toLowerCase(), t]),
+    ((await api<{ tags?: ApiTag[] }>("GET", "/api/tags"))?.tags || []).map((t) => [t.name.toLowerCase(), t]),
   );
-  const created = {};
+  const created: Record<string, ApiTag> = {};
 
-  const makeTag = async (body) => {
+  const makeTag = async (body: TagBody): Promise<ApiTag> => {
     const hit = existing.get(body.name.toLowerCase());
     let tag = hit;
     if (!tag) {
-      tag = await api("POST", "/api/tags", {
+      tag = await api<ApiTag>("POST", "/api/tags", {
         in_breadcrumbs: true,
         in_ancestor_flyout: true,
         ...body,
@@ -242,7 +291,7 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
       // API auto-creates them when the first post is tagged), so without this
       // they would never gain any. PUT is partial-update, so it touches nothing
       // else.
-      const patch = {};
+      const patch: Partial<TagBody> = {};
       if (body.nav_order != null && tag.nav_order !== body.nav_order) {
         patch.nav_order = body.nav_order;
       }
@@ -258,11 +307,11 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
       // adopted, not created, on the second pass (its first post tagged it
       // into existence), and an adopted tag that stays public is the one
       // failure this whole branch of the demo would not survive.
-      for (const flag of ["hidden", "hides_posts"]) {
+      for (const flag of ["hidden", "hides_posts"] as const) {
         if (body[flag] != null && tag[flag] !== body[flag]) patch[flag] = body[flag];
       }
       if (Object.keys(patch).length) {
-        tag = await api("PUT", `/api/tags/${tag.id}`, patch);
+        tag = await api<ApiTag>("PUT", `/api/tags/${tag.id}`, patch);
         existing.set(tag.name.toLowerCase(), tag);
       }
     }
@@ -358,8 +407,8 @@ export async function buildTagScaffold(api, { topics = TOPICS } = {}) {
 }
 
 /** The tags a post carries: its country, its city, its year, then its topics. */
-export function postTags(cityName, year, topics) {
-  return [countryOf(cityName), cityName, String(year), ...topics].filter(Boolean);
+export function postTags(cityName: string, year: number | string, topics: string[]): string[] {
+  return [countryOf(cityName), cityName, String(year), ...topics].filter((t): t is string => Boolean(t));
 }
 
 /**
@@ -371,7 +420,7 @@ export function postTags(cityName, year, topics) {
  * so the archive is a spread rather than a full location × year grid — which is
  * what lets the timeline actually empty part of the map.
  */
-export function placementFor(index) {
+export function placementFor(index: number): { location: Location; year: number } {
   const location = LOCATIONS[index % LOCATIONS.length];
   const round = Math.floor(index / LOCATIONS.length);
   return { location, year: location.years[round % location.years.length] };
@@ -395,7 +444,7 @@ export function placementFor(index) {
  * so the paginator's left edge lands on page 0 with the queue partly filled —
  * a full page would read as a coincidence of the count.
  */
-export const SPECIAL_MIX = { scheduled: 6, private: 5, hidden: 3 };
+export const SPECIAL_MIX: Record<Exclude<Role, "published">, number> = { scheduled: 6, private: 5, hidden: 3 };
 
 /**
  * The role of each post in a batch of `count`: one of `published`, `scheduled`,
@@ -406,9 +455,9 @@ export const SPECIAL_MIX = { scheduled: 6, private: 5, hidden: 3 };
  * A batch smaller than the mix keeps the roles in SPECIAL_MIX order rather than
  * silently dropping one kind to zero.
  */
-export function visibilityPlan(count) {
-  const roles = [];
-  for (const [role, n] of Object.entries(SPECIAL_MIX)) {
+export function visibilityPlan(count: number): Role[] {
+  const roles: Role[] = [];
+  for (const [role, n] of Object.entries(SPECIAL_MIX) as [Role, number][]) {
     for (let i = 0; i < n && roles.length < count; i++) roles.push(role);
   }
   while (roles.length < count) roles.push("published");
@@ -424,7 +473,11 @@ export function visibilityPlan(count) {
  * one; that narrows them to the places whose window reaches it. Everything else
  * follows the ordinary round-robin.
  */
-export function placementForRole(role, index, now = new Date()) {
+export function placementForRole(
+  role: Role,
+  index: number,
+  now = new Date(),
+): { location: Location; year: number } {
   if (role === "private") {
     const years = PRIVATE_LOCATION.years;
     return { location: PRIVATE_LOCATION, year: years[index % years.length] };

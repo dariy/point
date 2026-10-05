@@ -22,15 +22,16 @@
  */
 
 import { chromium } from "playwright";
+import type { Page } from "playwright";
 
-const args = Object.fromEntries(
+const args: Record<string, string | true> = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const [k, ...v] = a.replace(/^--/, "").split("=");
     return [k, v.join("=") || true];
   }),
 );
 
-const BASE = args.base || "http://localhost:3000";
+const BASE = String(args.base || "http://localhost:3000");
 
 const PUBLIC_ROUTES = ["/", "/tags", "/map", "/search"];
 const ADMIN_ROUTES = [
@@ -65,12 +66,32 @@ const REVELIO_OFF = { headers: { "X-Point-Revelio": "off" } };
  * does. `withStatus` returns the status alongside the body, for the checks
  * where a 404 is the correct answer rather than a failure.
  */
-async function api(page, path, init = {}, withStatus = false) {
+/** A fetch init that page.evaluate can pass into the page. */
+interface PageInit {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+/** The fields of a mocked API reply that the checks below read. */
+interface ApiReply {
+  status?: number;
+  pagination?: { page?: number; min_page?: number; total?: number; scheduled?: boolean };
+  posts?: { id: number; status?: string; scheduled_at?: string | null }[];
+  tags?: { slug: string }[];
+}
+
+async function api(
+  page: Page,
+  path: string,
+  init: PageInit = {},
+  withStatus = false,
+): Promise<ApiReply> {
   return page.evaluate(
-    async ([p, i, s]) => {
+    async ([p, i, s]: [string, PageInit, boolean]) => {
       const res = await fetch(p, i);
       const text = await res.text();
-      let body = {};
+      let body: ApiReply = {};
       try {
         body = text ? JSON.parse(text) : {};
       } catch {
@@ -78,15 +99,15 @@ async function api(page, path, init = {}, withStatus = false) {
       }
       return s ? { status: res.status, ...body } : body;
     },
-    [path, init, withStatus],
+    [path, init, withStatus] as [string, PageInit, boolean],
   );
 }
 
-const pageHasText = (page, text) =>
+const pageHasText = (page: Page, text: string) =>
   page.evaluate((t) => document.body.innerText.includes(t), text);
 
-const failures = [];
-const apiCalls = [];
+const failures: string[] = [];
+const apiCalls: string[] = [];
 
 async function main() {
   const browser = await chromium.launch();
@@ -100,7 +121,7 @@ async function main() {
     }
   });
 
-  const consoleErrors = [];
+  const consoleErrors: string[] = [];
   page.on("console", (msg) => {
     if (msg.type() !== "error") return;
     const text = msg.text();
@@ -109,7 +130,7 @@ async function main() {
   });
   page.on("pageerror", (err) => consoleErrors.push(`uncaught: ${err.message}`));
 
-  const visit = async (route, { expectAdmin = false } = {}) => {
+  const visit = async (route: string, { expectAdmin = false } = {}) => {
     consoleErrors.length = 0;
     await page.goto(BASE + route, { waitUntil: "networkidle", timeout: 30000 });
     // Give lazily-imported page chunks a moment to mount and fetch.
@@ -232,9 +253,9 @@ async function main() {
     await page.goto(`${BASE}${editHref}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1200);
     const filled = await page.evaluate(() => ({
-      title: document.getElementById("title-input")?.value || "",
-      slug: document.getElementById("slug-input")?.value || "",
-      excerpt: document.getElementById("excerpt-editor")?.value || "",
+      title: document.querySelector<HTMLInputElement>("#title-input")?.value || "",
+      slug: document.querySelector<HTMLInputElement>("#slug-input")?.value || "",
+      excerpt: document.querySelector<HTMLTextAreaElement>("#excerpt-editor")?.value || "",
     }));
     const empty = Object.entries(filled)
       .filter(([, v]) => !v.trim())
@@ -288,8 +309,8 @@ async function main() {
   const beforeTheme = await themeTitle();
   const listed = await page.evaluate(() =>
     [...document.querySelectorAll(".theme-card")]
-      .map((c) => c.querySelector(".theme-name")?.textContent.trim())
-      .filter(Boolean),
+      .map((c) => c.querySelector(".theme-name")?.textContent?.trim())
+      .filter((n): n is string => Boolean(n)),
   );
   const other =
     listed.find((n) => n.toLowerCase() !== beforeTheme.toLowerCase()) || null;
@@ -328,7 +349,7 @@ async function main() {
   // and the fixture's frozen list is being served instead.
   const shipped = await page.evaluate(async () => {
     const res = await fetch("/assets/themes/index.json");
-    return res.ok ? (await res.json()).map((t) => t.name) : [];
+    return res.ok ? ((await res.json()) as { name: string }[]).map((t) => t.name) : [];
   });
   const offered = new Set(listed.map((n) => n.toLowerCase()));
   const absent = shipped.filter((n) => !offered.has(n.toLowerCase()));
@@ -398,7 +419,7 @@ async function main() {
     hiddenTag: await api(page, `/api/pages/tags/${HIDDEN_TAG}`, {}, true),
     graph: await api(page, "/api/pages/graph"),
   };
-  const guestSees = (payload) =>
+  const guestSees = (payload: ApiReply) =>
     (payload.tags || []).some((t) => t.slug === HIDDEN_TAG);
 
   if (guest.home.pagination?.min_page !== 1) {
@@ -433,7 +454,7 @@ async function main() {
     tags: await api(page, "/api/tags"),
     graph: await api(page, "/api/pages/graph"),
   };
-  if (!(owner.home.pagination?.total > guest.home.pagination?.total)) {
+  if (!(Number(owner.home.pagination?.total) > Number(guest.home.pagination?.total))) {
     failures.push(
       `the owner's feed holds ${owner.home.pagination?.total} post(s) and a guest's ${guest.home.pagination?.total} — the hidden ones are not being revealed`,
     );

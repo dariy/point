@@ -27,6 +27,12 @@
 
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+
+import type { Media } from "../../frontend/src/api/media.ts";
+import type { Post } from "../../frontend/src/api/posts.ts";
+import type { Tag } from "../../frontend/src/api/tags.ts";
+import type { TimelinePayload } from "../../frontend/src/api/timeline.ts";
+import type { ListPost } from "../mock/store.ts";
 import {
   REPLACE_SETTINGS,
   ADD_SETTINGS,
@@ -35,16 +41,16 @@ import {
 
 // ── Args ──────────────────────────────────────────────────────────────────
 
-const args = Object.fromEntries(
+const args: Record<string, string | true> = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const [k, ...v] = a.replace(/^--/, "").split("=");
     return [k, v.join("=") || true];
   }),
 );
 
-const BASE = args.base || "http://localhost:8001";
-const SESSION = args.session || process.env.POINT_SESSION || "";
-const OUT = resolve(args.out || "demo/mock/fixtures");
+const BASE = String(args.base || "http://localhost:8001");
+const SESSION = String(args.session || process.env.POINT_SESSION || "");
+const OUT = resolve(String(args.out || "demo/mock/fixtures"));
 
 if (!SESSION) {
   console.error("Missing --session=<token>. Admin-only endpoints need one.");
@@ -91,10 +97,10 @@ const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
  * copy embedded in `/api/pages/home`), so a page payload that starts embedding
  * settings later carries them too.
  */
-function scrub(value) {
+function scrub(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(scrub);
   if (value && typeof value === "object") {
-    const out = {};
+    const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
       if (k.startsWith("_")) continue;
       if (DROP_SETTING_KEYS.includes(k)) continue;
@@ -110,7 +116,7 @@ function scrub(value) {
 
 let failures = 0;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // The server's publicLimiter allows ~10 req/s sustained (rate.Every(100ms),
 // burst 200 — see api/cmd/api/main.go). Recording is a few hundred requests, so
@@ -118,7 +124,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // rest of the run.
 const THROTTLE_MS = 120;
 
-async function get(path, { retries = 3 } = {}) {
+async function get<T = unknown>(path: string, { retries = 3 } = {}): Promise<T | null> {
   for (let attempt = 0; ; attempt++) {
     await sleep(THROTTLE_MS);
     const res = await fetch(BASE + path, {
@@ -135,7 +141,7 @@ async function get(path, { retries = 3 } = {}) {
       return null;
     }
     const ct = res.headers.get("content-type") || "";
-    return ct.includes("json") ? scrub(await res.json()) : null;
+    return ct.includes("json") ? (scrub(await res.json()) as T) : null;
   }
 }
 
@@ -147,14 +153,16 @@ async function get(path, { retries = 3 } = {}) {
  * infinite loop. MAX_PAGES is the backstop for any future endpoint that does
  * the same.
  */
-async function getAll(path, key, perPage = 100) {
+async function getAll<T extends { id: number }>(path: string, key: string, perPage = 100): Promise<T[]> {
   const MAX_PAGES = 50;
-  const out = [];
-  const seen = new Set();
+  const out: T[] = [];
+  const seen = new Set<number>();
   for (let page = 1; page <= MAX_PAGES; page++) {
     const sep = path.includes("?") ? "&" : "?";
-    const data = await get(`${path}${sep}page=${page}&per_page=${perPage}`);
-    const batch = data?.[key];
+    const data = await get<{ pages?: number } & Record<string, unknown>>(
+      `${path}${sep}page=${page}&per_page=${perPage}`,
+    );
+    const batch = data?.[key] as T[] | undefined;
     if (!Array.isArray(batch) || batch.length === 0) break;
 
     // An unpaginated endpoint returns the same rows for every page; detecting
@@ -164,8 +172,8 @@ async function getAll(path, key, perPage = 100) {
     out.push(...fresh);
     if (fresh.length === 0) break;
 
-    if (data.pages && page >= data.pages) break;
-    if (!data.pages && batch.length < perPage) break;
+    if (data?.pages && page >= data.pages) break;
+    if (!data?.pages && batch.length < perPage) break;
   }
   return out;
 }
@@ -175,7 +183,9 @@ async function getAll(path, key, perPage = 100) {
 async function main() {
   console.log(`Recording from ${BASE}`);
 
-  const fx = {
+  // Filled in key by key below; the typed collections are kept in locals too,
+  // since the steps that follow read them.
+  const fx: Record<string, unknown> = {
     recordedAt: new Date().toISOString(),
     source: "point-demo-recorder",
   };
@@ -190,18 +200,21 @@ async function main() {
   fx.customCss = await get("/api/themes/custom-css");
 
   console.log("· posts");
-  fx.posts = await getAll("/api/posts", "posts");
-  console.log(`  ${fx.posts.length} posts`);
+  const posts = await getAll<ListPost>("/api/posts", "posts");
+  fx.posts = posts;
+  console.log(`  ${posts.length} posts`);
 
   // Full single-post payloads: the list endpoint omits `content`, and both the
   // public PostPage and the admin editor need it.
   console.log("· post detail + navigation");
-  fx.postDetail = {};
-  fx.postNavigation = {};
-  for (const p of fx.posts) {
-    const detail = await get(`/api/posts/${p.id}`);
+  const postDetail: Record<string, Post> = {};
+  const postNavigation: Record<string, unknown> = {};
+  fx.postDetail = postDetail;
+  fx.postNavigation = postNavigation;
+  for (const p of posts) {
+    const detail = await get<Post>(`/api/posts/${p.id}`);
     if (detail) {
-      fx.postDetail[String(p.id)] = detail;
+      postDetail[String(p.id)] = detail;
       // `scheduled_at` back onto the list row, which the mock's post store is
       // seeded from. The admin list query does not select the column
       // (buildPostsQuery, api/internal/repository/queries_posts.go), so every
@@ -214,27 +227,31 @@ async function main() {
       }
     }
     const nav = await get(`/api/posts/${p.id}/navigation`);
-    if (nav) fx.postNavigation[String(p.id)] = nav;
+    if (nav) postNavigation[String(p.id)] = nav;
   }
 
   console.log("· tags");
-  fx.tags = await getAll("/api/tags", "tags");
+  const tags = await getAll<Tag>("/api/tags", "tags");
+  fx.tags = tags;
   fx.tagCloud = await get("/api/tags/cloud");
-  console.log(`  ${fx.tags.length} tags`);
+  console.log(`  ${tags.length} tags`);
 
   console.log("· media");
-  fx.media = await getAll("/api/media", "media");
+  const media = await getAll<Media>("/api/media", "media");
+  fx.media = media;
   fx.mediaStats = await get("/api/media/stats");
   fx.mediaFolders = await get("/api/media/folders");
-  console.log(`  ${fx.media.length} media`);
+  console.log(`  ${media.length} media`);
 
   console.log("· compound page payloads");
+  const tagSamples: Record<string, unknown> = {};
   fx.pages = {
     home: await get("/api/pages/home"),
     tags: await get("/api/pages/tags"),
     graph: await get("/api/pages/graph"),
     map: await get("/api/pages/map"),
     nav: await get("/api/pages/nav"),
+    tagSamples,
   };
 
   // Tag pages are SYNTHESIZED by the mock (see mock/routes.ts) rather than
@@ -245,30 +262,31 @@ async function main() {
   //
   // A few are still recorded as reference samples so the synthesis can be
   // diffed against real output when the API changes.
-  fx.pages.tagSamples = {};
-  const sampleTags = fx.tags
+  const sampleTags = tags
     .filter((t) => (t.post_count || 0) > 0)
     .sort((a, b) => (b.post_count || 0) - (a.post_count || 0))
     .slice(0, 3);
   for (const t of sampleTags) {
     const page = await get(`/api/pages/tags/${encodeURIComponent(t.slug)}`);
-    if (page) fx.pages.tagSamples[t.slug] = page;
+    if (page) tagSamples[t.slug] = page;
   }
-  console.log(`  ${Object.keys(fx.pages.tagSamples).length} tag page samples`);
+  console.log(`  ${Object.keys(tagSamples).length} tag page samples`);
 
   console.log("· timeline, analytics, system");
-  fx.timeline = await get("/api/timeline");
+  const timeline = await get<Partial<TimelinePayload>>("/api/timeline");
+  fx.timeline = timeline;
 
   // /api/timeline/locations is per-tag (it 400s without one), so record it for
   // each timeline pill — that is exactly the set the timeline UI can request.
-  fx.timelineLocations = {};
-  for (const pill of fx.timeline?.pills || []) {
-    const locs = await get(
+  const timelineLocations: Record<string, unknown[]> = {};
+  fx.timelineLocations = timelineLocations;
+  for (const pill of timeline?.pills || []) {
+    const locs = await get<unknown[]>(
       `/api/timeline/locations?tag=${encodeURIComponent(pill.slug)}`,
     );
-    if (locs && locs.length) fx.timelineLocations[pill.slug] = locs;
+    if (locs && locs.length) timelineLocations[pill.slug] = locs;
   }
-  console.log(`  ${Object.keys(fx.timelineLocations).length} timeline location sets`);
+  console.log(`  ${Object.keys(timelineLocations).length} timeline location sets`);
 
   fx.analytics = await get("/api/posts/analytics");
   fx.system = {
@@ -281,8 +299,8 @@ async function main() {
   // Every media path the demo must ship as a real file. build.sh reads
   // this to copy (and downscale) exactly the images that are referenced —
   // walking the source media directory would sweep in unpublished originals.
-  const paths = new Set();
-  const collect = (v) => {
+  const paths = new Set<string>();
+  const collect = (v: unknown): void => {
     if (Array.isArray(v)) return v.forEach(collect);
     if (v && typeof v === "object") return Object.values(v).forEach(collect);
     if (typeof v === "string" && /^\/\d{4}\/\d{2}\/[^?]+/.test(v)) {
@@ -290,8 +308,9 @@ async function main() {
     }
   };
   collect(fx);
-  fx.mediaFiles = [...paths].sort();
-  console.log(`  ${fx.mediaFiles.length} media files referenced`);
+  const mediaFiles = [...paths].sort();
+  fx.mediaFiles = mediaFiles;
+  console.log(`  ${mediaFiles.length} media files referenced`);
 
   await mkdir(dirname(resolve(OUT, "fixtures.json")), { recursive: true });
   const target = resolve(OUT, "fixtures.json");
@@ -305,7 +324,7 @@ async function main() {
   // Checked against KEYS and against literal value patterns — not raw substring
   // search, which false-positives on innocent content (a migration is actually
   // named `migrate_secret_key_to_secrets`).
-  const leaks = [];
+  const leaks: string[] = [];
   // Anchored at the end so `<name>_is_set` keys survive: those are presence
   // booleans the settings UI renders to show whether a credential is
   // configured, and they carry no value.
@@ -315,7 +334,7 @@ async function main() {
     /\bGTM-[A-Z0-9]+\b/,
     /\$argon2/, // password hash
   ];
-  const audit = (v, path = "") => {
+  const audit = (v: unknown, path = ""): void => {
     if (Array.isArray(v)) return v.forEach((x, i) => audit(x, `${path}[${i}]`));
     if (v && typeof v === "object") {
       for (const [k, val] of Object.entries(v)) {

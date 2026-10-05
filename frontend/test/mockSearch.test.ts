@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
 
-import { routes } from "../../demo/mock/routes.js";
+import { routes } from "../../demo/mock/routes.ts";
 
 // The demo's search is the two endpoints the search page fetches in parallel —
 // GET /api/posts?q= for the grid and GET /api/tags?q= for the chip strip. Both

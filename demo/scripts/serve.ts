@@ -17,22 +17,36 @@
  */
 
 import { createServer } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { createReadStream } from "node:fs";
 import { stat, readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 
-const args = Object.fromEntries(
+const args: Record<string, string | true> = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const [k, ...v] = a.replace(/^--/, "").split("=");
     return [k, v.join("=") || true];
   }),
 );
 
-const ROOT = resolve(args.dir || "demo/dist");
-const HOST = args.host || "127.0.0.1";
+const ROOT = resolve(String(args.dir || "demo/dist"));
+const HOST = String(args.host || "127.0.0.1");
 const PORT = Number(args.port || 8002);
 
-const MIME = {
+/** One `_redirects` rule. */
+interface Redirect {
+  pattern: RegExp;
+  destination: string;
+  status: number;
+}
+
+/** A file under ROOT that a request resolved to. */
+interface ServedFile {
+  abs: string;
+  size: number;
+}
+
+const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
@@ -66,8 +80,8 @@ const MIME = {
  * supported — an unrecognised source is reported rather than silently ignored,
  * since a rule that quietly does nothing is exactly how the admin UI 404s.
  */
-async function loadRedirects(dir) {
-  let text;
+async function loadRedirects(dir: string): Promise<Redirect[]> {
+  let text: string;
   try {
     text = await readFile(join(dir, "_redirects"), "utf8");
   } catch {
@@ -75,12 +89,12 @@ async function loadRedirects(dir) {
     return [];
   }
 
-  const rules = [];
+  const rules: Redirect[] = [];
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
 
-    const [source, destination, status] = trimmed.split(/\s+/);
+    const [source = "", destination, status] = trimmed.split(/\s+/);
     if (!destination) {
       console.warn(`! ignoring malformed _redirects line: ${trimmed}`);
       continue;
@@ -98,10 +112,10 @@ async function loadRedirects(dir) {
   return rules;
 }
 
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Resolves a URL path to a file inside ROOT, or null. Refuses to escape ROOT. */
-async function resolveFile(urlPath) {
+async function resolveFile(urlPath: string): Promise<ServedFile | null> {
   const decoded = decodeURIComponent(urlPath);
   const rel = normalize(decoded.endsWith("/") ? `${decoded}index.html` : decoded);
   const abs = join(ROOT, rel);
@@ -116,7 +130,7 @@ async function resolveFile(urlPath) {
   }
 }
 
-function send(res, status, file, req) {
+function send(res: ServerResponse, status: number, file: ServedFile, req: IncomingMessage) {
   const type = MIME[extname(file.abs).toLowerCase()] || "application/octet-stream";
   const headers = {
     "Content-Type": type,
@@ -173,7 +187,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Not found\n");
   } catch (err) {
-    console.error(`  500 ${urlPath}: ${err.message}`);
+    console.error(`  500 ${urlPath}: ${err instanceof Error ? err.message : String(err)}`);
     res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Internal error\n");
   }

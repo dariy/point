@@ -34,21 +34,26 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { Media } from "../../frontend/src/api/media.ts";
+import type { Post } from "../../frontend/src/api/posts.ts";
+import type { Tag } from "../../frontend/src/api/tags.ts";
+import type { Fixtures } from "../mock/store.ts";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEMO_DIR = path.resolve(HERE, "..");
 
-const args = Object.fromEntries(
+const args: Record<string, string | true> = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const [k, ...v] = a.replace(/^--/, "").split("=");
     return [k, v.join("=") || true];
   }),
 );
 
-const BASE = args.base || "http://localhost:8002";
-const SESSION = args.session || "";
-const DB_PATH = args.db || "";
-const FIXTURES = args.fixtures || path.join(DEMO_DIR, "mock/fixtures/fixtures.json");
-const MEDIA_SRC = args.media || path.join(DEMO_DIR, ".scratch/media/originals");
+const BASE = String(args.base || "http://localhost:8002");
+const SESSION = String(args.session || "");
+const DB_PATH = String(args.db || "");
+const FIXTURES = String(args.fixtures || path.join(DEMO_DIR, "mock/fixtures/fixtures.json"));
+const MEDIA_SRC = String(args.media || path.join(DEMO_DIR, ".scratch/media/originals"));
 
 for (const [name, value] of [
   ["--session", SESSION],
@@ -60,19 +65,30 @@ for (const [name, value] of [
   }
 }
 
+/** What restoreTimestamps writes back for one imported post. */
+interface TimestampRow {
+  id: number;
+  published_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  view_count: number;
+  title: string;
+}
+
 // ── HTTP ──────────────────────────────────────────────────────────────────
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function api(method, path, body) {
-  const init = {
-    method,
-    headers: { Cookie: `session=${SESSION}`, Accept: "application/json" },
+async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {
+    Cookie: `session=${SESSION}`,
+    Accept: "application/json",
   };
+  const init: RequestInit = { method, headers };
   if (body instanceof FormData) {
     init.body = body;
   } else if (body !== undefined) {
-    init.headers["Content-Type"] = "application/json";
+    headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(body);
   }
 
@@ -87,7 +103,7 @@ async function api(method, path, body) {
     if (!res.ok) {
       throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 300)}`);
     }
-    return text ? JSON.parse(text) : null;
+    return (text ? JSON.parse(text) : null) as T;
   }
 }
 
@@ -108,12 +124,12 @@ async function api(method, path, body) {
  *
  * Returns old tag id → new tag id.
  */
-async function importTags(tags) {
-  const idMap = new Map();
+async function importTags(tags: Tag[]): Promise<Map<number, number>> {
+  const idMap = new Map<number, number>();
 
   for (const tag of [...tags].sort((a, b) => a.id - b.id)) {
     const at = (tag.locations || [])[0];
-    const created = await api("POST", "/api/tags", {
+    const created = await api<Tag>("POST", "/api/tags", {
       name: tag.name,
       slug: tag.slug,
       kind: tag.kind || "",
@@ -130,7 +146,7 @@ async function importTags(tags) {
   }
 
   for (const tag of tags) {
-    const parents = (tag.parents || []).map((p) => idMap.get(p.id)).filter(Boolean);
+    const parents = (tag.parents || []).map((p) => idMap.get(p.id)).filter((id): id is number => Boolean(id));
     if (!parents.length) continue;
     await api("PUT", `/api/tags/${idMap.get(tag.id)}/parents`, { ids: parents });
   }
@@ -153,8 +169,8 @@ async function importTags(tags) {
  * reference their photograph by path, and a body still pointing at the old one
  * is a post with a broken image.
  */
-async function importMedia(media) {
-  const pathMap = new Map();
+async function importMedia(media: Media[]): Promise<Map<string, string>> {
+  const pathMap = new Map<string, string>();
   let missing = 0;
 
   for (const item of [...media].sort((a, b) => a.id - b.id)) {
@@ -169,10 +185,14 @@ async function importMedia(media) {
     const bytes = await readFile(file);
     form.append(
       "file",
-      new Blob([bytes], { type: item.mime_type || "image/jpeg" }),
+      new Blob([new Uint8Array(bytes)], { type: item.mime_type || "image/jpeg" }),
       item.filename || path.basename(file),
     );
-    const uploaded = await api("POST", "/api/media/upload", form);
+    const uploaded = await api<Media & { url?: string; media?: { path?: string } }>(
+      "POST",
+      "/api/media/upload",
+      form,
+    );
     const newPath = uploaded.path || uploaded.url || uploaded.media?.path;
     if (!newPath) {
       throw new Error(`upload returned no path: ${JSON.stringify(uploaded).slice(0, 200)}`);
@@ -197,7 +217,7 @@ async function importMedia(media) {
 // ── Posts ─────────────────────────────────────────────────────────────────
 
 /** Rewrite every recorded media path in a body to the path it now lives at. */
-function rewriteMediaPaths(text, pathMap) {
+function rewriteMediaPaths(text: string | null | undefined, pathMap: Map<string, string>): string {
   let out = String(text ?? "");
   for (const [oldPath, newPath] of pathMap) {
     out = out.split(oldPath).join(newPath);
@@ -217,14 +237,14 @@ function rewriteMediaPaths(text, pathMap) {
  *
  * Returns the rows the timestamp restore needs.
  */
-async function importPosts(fixtures, pathMap) {
-  const created = [];
+async function importPosts(fixtures: Fixtures, pathMap: Map<string, string>): Promise<TimestampRow[]> {
+  const created: TimestampRow[] = [];
 
-  for (const listed of [...fixtures.posts].sort((a, b) => a.id - b.id)) {
-    const detail = fixtures.postDetail[String(listed.id)] || {};
+  for (const listed of [...(fixtures.posts || [])].sort((a, b) => a.id - b.id)) {
+    const detail: Partial<Post> = fixtures.postDetail?.[String(listed.id)] || {};
     const tags = (detail.tags || listed.tags || []).map((t) => t.name).filter(Boolean);
 
-    const post = await api("POST", "/api/posts", {
+    const post = await api<Post>("POST", "/api/posts", {
       title: detail.title ?? listed.title ?? "",
       slug: listed.slug,
       content: rewriteMediaPaths(detail.content, pathMap),
@@ -271,13 +291,13 @@ async function importPosts(fixtures, pathMap) {
  *
  * SQLite stores these as `YYYY-MM-DD HH:MM:SS`; the fixture carries RFC3339.
  */
-function restoreTimestamps(rows) {
+function restoreTimestamps(rows: TimestampRow[]): void {
   const db = new DatabaseSync(DB_PATH);
   const update = db.prepare(
     "UPDATE posts SET published_at = ?, created_at = ?, updated_at = ?, view_count = ? WHERE id = ?",
   );
 
-  const sqlite = (iso) =>
+  const sqlite = (iso: string | null) =>
     iso ? new Date(iso).toISOString().replace("T", " ").replace(/\.\d+Z?$/, "") : null;
 
   for (const row of rows) {
@@ -296,7 +316,7 @@ function restoreTimestamps(rows) {
 // ── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
-  const fixtures = JSON.parse(await readFile(FIXTURES, "utf8"));
+  const fixtures: Fixtures = JSON.parse(await readFile(FIXTURES, "utf8"));
   console.log(
     `Importing ${fixtures.posts?.length ?? 0} post(s), ${fixtures.tags?.length ?? 0} tag(s), ` +
       `${fixtures.media?.length ?? 0} media into ${BASE}`,
@@ -307,8 +327,8 @@ async function main() {
   // Importing into an instance that already holds posts would duplicate the
   // archive rather than restore it, and the duplicate is only visible once the
   // fixtures have been re-recorded over the good ones.
-  const existing = await api("GET", "/api/posts?per_page=1");
-  if (existing?.total > 0) {
+  const existing = await api<{ total?: number } | null>("GET", "/api/posts?per_page=1");
+  if (existing?.total && existing.total > 0) {
     throw new Error(`${BASE} already holds ${existing.total} post(s) — import wants an empty instance`);
   }
 

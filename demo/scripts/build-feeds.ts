@@ -10,6 +10,7 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { Fixtures, ListPost } from "../mock/store.ts";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -33,7 +34,7 @@ const escapeXml = (s = "") =>
     .replace(/'/g, "&apos;");
 
 async function main() {
-  const fx = JSON.parse(await readFile(FIXTURES, "utf8"));
+  const fx: Fixtures = JSON.parse(await readFile(FIXTURES, "utf8"));
   const settings = fx.publicSettings || {};
 
   // What a guest may read: published, not hidden on its own account, and not
@@ -44,11 +45,11 @@ async function main() {
   // status test: a post that has not gone live has nothing to syndicate.
   const posts = (fx.posts || [])
     .filter(
-      (p) =>
+      (p): p is ListPost & { published_at: string } =>
         p.status === "published" &&
         !p.is_hidden &&
         !p.is_hidden_by_tag &&
-        p.published_at,
+        Boolean(p.published_at),
     )
     .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at));
 

@@ -1,13 +1,37 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
 
-import { byNewest, nextId, paginate, toListShape } from "../../demo/mock/store.js";
+import { byNewest, nextId, paginate, toListShape } from "../../demo/mock/store.ts";
 import {
   feedPage,
   feedPosts,
   hiddenSets,
   scheduledQueue,
-} from "../../demo/mock/routes.js";
+} from "../../demo/mock/routes.ts";
+import type { ListPost, State } from "../../demo/mock/store.ts";
+import type { Post, PostMediaRef, PostTag } from "../src/api/posts.ts";
+import type { Tag, TagStub } from "../src/api/tags.ts";
+
+/** A post holding only the fields the code under test reads. */
+type PostFixture = Omit<Partial<Post>, "tags" | "media"> & {
+  tags?: Partial<PostTag>[];
+  media?: Partial<PostMediaRef>[];
+};
+
+/** A store holding only the fields the code under test reads. */
+type StateFixture = Omit<Partial<State>, "tags" | "posts"> & {
+  tags?: (Omit<Partial<Tag>, "children"> & { children?: Partial<TagStub>[] })[];
+  posts?: PostFixture[];
+};
+
+/** Use a fixture where the code under test expects the demo's store. */
+const fixtureState = (fields: StateFixture): State => fields as State;
+
+/** Use fixtures where the code under test expects list-shaped posts. */
+const fixturePosts = (rows: PostFixture[]): ListPost[] => rows as ListPost[];
+
+/** Use a fixture where the code under test expects a single-post payload. */
+const fixturePost = (fields: PostFixture): Post => fields as Post;
 
 // The static demo (demo/scripts/build.sh) answers every API call from these
 // helpers, so their edge cases are the demo's edge cases: a wrong sort or a
@@ -50,8 +74,8 @@ describe("byNewest", () => {
 // answer again as a guest.
 
 /** A tree where `secret` hides its posts and everything under it. */
-function visibilityState({ authenticated = false } = {}) {
-  return {
+function visibilityState({ authenticated = false } = {}): State {
+  return fixtureState({
     authenticated,
     tags: [
       { id: 1, slug: "japan", children: [{ id: 2 }] },
@@ -70,7 +94,7 @@ function visibilityState({ authenticated = false } = {}) {
       { id: 7, status: "published", tags: [{ slug: "under-it" }] },
       { id: 8, status: "scheduled", scheduled_at: "2030-01-01T00:00:00Z", tags: [] },
     ],
-  };
+  });
 }
 
 describe("hiddenSets", () => {
@@ -86,12 +110,12 @@ describe("hiddenSets", () => {
   test("terminates on a cycle rather than hanging the page", () => {
     // The graph is a DAG in practice, but a demo edit could produce anything,
     // and an unguarded walk would spin instead of rendering.
-    const state = {
+    const state = fixtureState({
       tags: [
         { id: 1, slug: "a", hidden: true, children: [{ id: 2 }] },
         { id: 2, slug: "b", children: [{ id: 1 }] },
       ],
-    };
+    });
     assert.deepEqual([...hiddenSets(state).hidden].sort(), [1, 2]);
   });
 });
@@ -146,9 +170,9 @@ describe("paginate", () => {
 });
 
 describe("feedPage", () => {
-  const rows = Array.from({ length: 7 }, (_, i) => ({ id: i + 1 }));
-  const queue = Array.from({ length: 3 }, (_, i) => ({ id: 100 + i }));
-  const owner = { authenticated: true };
+  const rows = fixturePosts(Array.from({ length: 7 }, (_, i) => ({ id: i + 1 })));
+  const queue = fixturePosts(Array.from({ length: 3 }, (_, i) => ({ id: 100 + i })));
+  const owner = fixtureState({ authenticated: true });
 
   test("nests pagination the way the public payloads do", () => {
     const out = feedPage(owner, rows, [], { page: 2 }, 6);
@@ -205,20 +229,20 @@ describe("nextId", () => {
 
 describe("toListShape", () => {
   test("derives media_url from the first attached media", () => {
-    const out = toListShape({
+    const out = toListShape(fixturePost({
       id: 1,
       slug: "s",
       title: "T",
       status: "published",
       media: [{ path: "/2024/05/a.jpg" }, { path: "/2024/05/b.jpg" }],
-    });
+    }));
     assert.equal(out.media_url, "/2024/05/a.jpg");
   });
 
   test("keeps the previous media_url when the detail has no media", () => {
     // An edit that does not touch media must not blank the list thumbnail.
     const out = toListShape(
-      { id: 1, slug: "s", title: "T", status: "published" },
+      fixturePost({ id: 1, slug: "s", title: "T", status: "published" }),
       { media_url: "/2024/05/existing.jpg", created_at: "2024-01-01T00:00:00Z" },
     );
     assert.equal(out.media_url, "/2024/05/existing.jpg");
@@ -226,7 +250,7 @@ describe("toListShape", () => {
   });
 
   test("coerces the hidden flags to booleans", () => {
-    const out = toListShape({ id: 1, slug: "s", title: "T", status: "draft" });
+    const out = toListShape(fixturePost({ id: 1, slug: "s", title: "T", status: "draft" }));
     assert.equal(out.is_hidden, false);
     assert.equal(out.is_featured, false);
     assert.deepEqual(out.tags, []);

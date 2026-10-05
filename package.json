@@ -8,7 +8,7 @@
   },
   "scripts": {
     "lint": "./scripts/check.sh --lint",
-    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && tsc -p tsconfig.scripts.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && tsc -p tsconfig.scripts.json && tsc -p tsconfig.demo.json",
     "build": "./scripts/rebuild.sh",
     "test": "./scripts/run-tests.sh",
     "test:frontend": "node --test frontend/test/*.test.[jt]s",

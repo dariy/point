@@ -35,14 +35,14 @@ import { resolve } from "node:path";
 
 import { LOCATIONS, TOPICS, YEARS, countryOf } from "../world.ts";
 
-const args = Object.fromEntries(
+const args: Record<string, string | true> = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const [k, ...v] = a.replace(/^--/, "").split("=");
     return [k, v.join("=") || true];
   }),
 );
 
-const FIXTURES = resolve(args.fixtures || "demo/mock/fixtures/fixtures.json");
+const FIXTURES = resolve(String(args.fixtures || "demo/mock/fixtures/fixtures.json"));
 const FORCE = Boolean(args.force);
 const DRY_RUN = Boolean(args["dry-run"]);
 const SEED = Number(args.seed || 0);
@@ -50,7 +50,7 @@ const SEED = Number(args.seed || 0);
 // ── Deterministic randomness ──────────────────────────────────────────────
 
 /** mulberry32 — small, seedable, and stable across Node versions. */
-function rng(seed) {
+function rng(seed: number): () => number {
   let a = (seed + SEED) >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -60,12 +60,12 @@ function rng(seed) {
   };
 }
 
-const pick = (rand, list) => list[Math.floor(rand() * list.length)];
+const pick = <T>(rand: () => number, list: readonly T[]): T => list[Math.floor(rand() * list.length)];
 
 /** Picks `n` distinct entries, or as many as the list holds. */
-function sample(rand, list, n) {
+function sample<T>(rand: () => number, list: readonly T[], n: number): T[] {
   const pool = [...list];
-  const out = [];
+  const out: T[] = [];
   while (out.length < n && pool.length) {
     out.push(...pool.splice(Math.floor(rand() * pool.length), 1));
   }
@@ -80,7 +80,7 @@ function sample(rand, list, n) {
  * with 28 posts drawing 2–4 topics, a single variant repeats often enough to
  * read as a template.
  */
-const TOPIC_CLAUSES = {
+const TOPIC_CLAUSES: Record<string, string[]> = {
   mountains: ["the ridgeline held its edge until the last of the light left it", "the range stacked itself into flat grey planes, each one paler than the last"],
   forest: ["the path gave out under a canopy that swallowed the sound of it", "moss had taken the north side of everything, patient about it"],
   coastline: ["the shoreline kept rewriting itself an inch at a time", "the cliffs dropped away without ceremony, the way they always do here"],
@@ -166,18 +166,26 @@ const COUNTRY_NAMES = new Set(LOCATIONS.map((l) => l.country));
 const YEAR_NAMES = new Set(YEARS.map(String));
 const TOPIC_NAMES = new Set(TOPICS);
 
-const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Lowercases only the leading letter — `toLowerCase()` would eat a mid-sentence "I". */
-const decapitalize = (s) => s.charAt(0).toLowerCase() + s.slice(1);
+const decapitalize = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** A post-shaped node in the fixture bundle (see walk). */
+interface PostNode {
+  id: unknown;
+  title: unknown;
+  excerpt: unknown;
+  tags?: (string | { name: string })[];
+}
 
 /** Splits a post's tag names into the four facets `world.ts` assigns. */
-function facets(post) {
+function facets(post: PostNode) {
   const names = (post.tags || []).map((t) => (typeof t === "string" ? t : t.name));
   const city = names.find((n) => CITY_NAMES.has(n));
   return {
     city,
-    country: names.find((n) => COUNTRY_NAMES.has(n)) || (city ? countryOf(city) : ""),
+    country: names.find((n) => COUNTRY_NAMES.has(n)) || (city ? (countryOf(city) ?? "") : ""),
     year: names.find((n) => YEAR_NAMES.has(n)),
     topics: names.filter((n) => TOPIC_NAMES.has(n)),
   };
@@ -191,14 +199,14 @@ function facets(post) {
  * Sheet linkifies it into another): the break is the honest shape of the text,
  * and it costs nothing where it collapses.
  */
-function excerptFor(post) {
+function excerptFor(post: PostNode): string {
   const rand = rng(Number(post.id) || 0);
   const { city, country, year, topics } = facets(post);
 
   const placed = Boolean(city || country);
   const opener = pick(rand, placed ? OPENERS : OPENERS_PLACELESS)
     .replace("{city}", city || country)
-    .replace("{country}", country || city)
+    .replace("{country}", country || city || "")
     .replace("{year}", year || "undated");
 
   // Three topic clauses at most, each from a different tag, then padded with
@@ -209,12 +217,12 @@ function excerptFor(post) {
     .map((t) => pick(rand, TOPIC_CLAUSES[t] || []))
     .filter(Boolean);
   const spare = sample(rand, FILLERS, FILLERS.length);
-  const next = () => clauses.shift() || decapitalize(spare.shift().replace(/\.$/, ""));
+  const next = () => clauses.shift() || decapitalize((spare.shift() ?? "").replace(/\.$/, ""));
 
   const first = [
     opener,
     `${capitalize(next())}, and ${next()}.`,
-    capitalize(spare.shift()),
+    capitalize(spare.shift() ?? ""),
   ].join(" ");
 
   // Two paragraphs on roughly half the posts: a uniform length across 28 cards
@@ -232,7 +240,7 @@ function excerptFor(post) {
  * prerendered page payloads — so the text is generated once per id and then
  * stamped onto every copy, or the same post previews differently per page.
  */
-function walk(node, visit) {
+function walk(node: unknown, visit: (post: PostNode) => void): void {
   if (Array.isArray(node)) {
     node.forEach((n) => walk(n, visit));
   } else if (node && typeof node === "object") {
@@ -242,9 +250,9 @@ function walk(node, visit) {
 }
 
 async function main() {
-  const fx = JSON.parse(await readFile(FIXTURES, "utf8"));
+  const fx: unknown = JSON.parse(await readFile(FIXTURES, "utf8"));
 
-  const texts = new Map();
+  const texts = new Map<string, string>();
   let copies = 0;
   let skipped = 0;
 
@@ -261,7 +269,7 @@ async function main() {
 
   const order = [...texts.keys()].sort((a, b) => Number(a) - Number(b));
   for (const id of order) {
-    const text = texts.get(id);
+    const text = texts.get(id) ?? "";
     console.log(`  ${id.padStart(2)} ${text.split("\n\n").length}¶ ${text.split(/\s+/).length}w  ${text.slice(0, 68)}…`);
   }
   console.log(

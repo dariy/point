@@ -21,7 +21,9 @@
  */
 
 import { routes } from "./routes.ts";
+import type { Handler, RouteResult } from "./routes.ts";
 import { getState, resetState, storeContent } from "./store.ts";
+import type { State } from "./store.ts";
 
 const state = await getState();
 
@@ -74,13 +76,13 @@ async function themeCss() {
 // the UI look like it is skipping work.
 const LATENCY_MS = 90;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ── Route matching ────────────────────────────────────────────────────────
 
 /** Compile `/api/posts/:id/tags` into a regex + ordered param names. */
-function compile(pattern) {
-  const names = [];
+function compile(pattern: string): { re: RegExp; names: string[] } {
+  const names: string[] = [];
   const source = pattern
     .split("/")
     .map((seg) => {
@@ -99,13 +101,16 @@ const compiled = routes.map(([method, pattern, handler]) => ({
   pattern,
 }));
 
-function match(method, pathname) {
+function match(
+  method: string,
+  pathname: string,
+): { handler: Handler; params: Record<string, string> } | null {
   for (const route of compiled) {
     if (route.method !== method) continue;
     const m = route.re.exec(pathname);
     if (!m) continue;
-    const params = {};
-    route.names.forEach((name, i) => (params[name] = decodeURIComponent(m[i + 1])));
+    const params: Record<string, string> = {};
+    route.names.forEach((name, i) => (params[name] = decodeURIComponent(m[i + 1] ?? "")));
     return { handler: route.handler, params };
   }
   return null;
@@ -120,13 +125,13 @@ function match(method, pathname) {
  * uses more than one of them — client.js builds an object, other callers hand
  * over a Request. Normalising here keeps the check below to one line.
  */
-function headerValue(headers, name) {
+function headerValue(headers: HeadersInit | null | undefined, name: string): string | null {
   if (!headers) return null;
   const wanted = name.toLowerCase();
-  if (typeof headers.get === "function") return headers.get(name);
+  if (headers instanceof Headers) return headers.get(name);
   if (Array.isArray(headers)) {
-    const hit = headers.find(([k]) => String(k).toLowerCase() === wanted);
-    return hit ? hit[1] : null;
+    const hit = headers.find(([k]: string[]) => String(k).toLowerCase() === wanted);
+    return hit?.[1] ?? null;
   }
   for (const [k, v] of Object.entries(headers)) {
     if (k.toLowerCase() === wanted) return v;
@@ -162,7 +167,7 @@ const NOT_NARROWABLE = ["/api/posts/analytics"];
  * Writes are never narrowed — a request that changes something is behind
  * AuthMiddleware, which the header does not reach.
  */
-function isGuestView(method, pathname, headers) {
+function isGuestView(method: string, pathname: string, headers: HeadersInit | null | undefined): boolean {
   if (method !== "GET") return false;
   if (String(headerValue(headers, "X-Point-Revelio") || "").toLowerCase() !== "off") {
     return false;
@@ -179,7 +184,7 @@ function isGuestView(method, pathname, headers) {
  * visibility tests branch on is shadowed. Nothing writes through it — writes
  * are never narrowed (see isGuestView).
  */
-function guestView(state) {
+function guestView(state: State): State {
   return Object.create(state, {
     authenticated: { value: false, enumerable: true },
     // Handlers that answer differently for a real guest and for the owner
@@ -201,13 +206,18 @@ function guestView(state) {
  * would eject a visitor from the demo mid-click. An empty body just renders an
  * empty section.
  */
-async function dispatch(method, url, rawBody, headers) {
+async function dispatch(
+  method: string,
+  url: string,
+  rawBody: unknown,
+  headers: HeadersInit | null | undefined,
+): Promise<RouteResult> {
   const parsed = new URL(url, window.location.origin);
   const query = Object.fromEntries(parsed.searchParams.entries());
   const state = await getState();
   const view = isGuestView(method, parsed.pathname, headers) ? guestView(state) : state;
 
-  let body = rawBody;
+  let body: unknown = rawBody;
   if (typeof rawBody === "string") {
     try {
       body = JSON.parse(rawBody);
@@ -225,7 +235,9 @@ async function dispatch(method, url, rawBody, headers) {
   }
 
   try {
-    const result = await found.handler({ state: view, params: found.params, query, body });
+    // The one boundary where the parsed body meets the handler's declared body
+    // type (see Handler in routes.ts).
+    const result: unknown = await found.handler({ state: view, params: found.params, query, body: body as never });
     // Anything but a read may have changed the posts or the tags, so the
     // snapshot is refreshed here rather than inside each handler that writes —
     // the same reasoning as patching `fetch` instead of client.js. A handler
@@ -233,7 +245,7 @@ async function dispatch(method, url, rawBody, headers) {
     if (method !== "GET") storeContent(state);
     // Handlers may return a bare value or an explicit {status, body}.
     if (result && typeof result === "object" && "status" in result && "body" in result) {
-      return result;
+      return result as RouteResult;
     }
     return { status: 200, body: result ?? {} };
   } catch (err) {
@@ -242,7 +254,7 @@ async function dispatch(method, url, rawBody, headers) {
   }
 }
 
-function toResponse({ status, body }) {
+function toResponse({ status, body }: RouteResult): Response {
   if (status === 204 || body === null) {
     return new Response(null, { status: 204 });
   }
@@ -254,16 +266,16 @@ function toResponse({ status, body }) {
 
 // ── fetch ─────────────────────────────────────────────────────────────────
 
-window.fetch = async function mockFetch(input, init = {}) {
-  const url = typeof input === "string" ? input : input.url;
+window.fetch = async function mockFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const pathname = new URL(url, window.location.origin).pathname;
 
   // themeLoader.ts cache-busts with a ?t= query, so match on the path alone.
   if (pathname === THEME_CSS) return themeCss();
   if (!INTERCEPT.test(pathname)) return nativeFetch(input, init);
 
-  const method = (init.method || (typeof input === "object" && input.method) || "GET").toUpperCase();
-  const headers = init.headers || (typeof input === "object" ? input.headers : null);
+  const method = (init.method || (input instanceof Request && input.method) || "GET").toUpperCase();
+  const headers = init.headers || (input instanceof Request ? input.headers : null);
   await sleep(LATENCY_MS);
   return toResponse(await dispatch(method, url, init.body, headers));
 };
@@ -275,14 +287,32 @@ window.fetch = async function mockFetch(input, init = {}) {
 // responseText plus load and progress events — and delegates anything it does
 // not own to the real implementation.
 
-window.XMLHttpRequest = function MockXHR() {
+/** The part of XMLHttpRequest the mock implements. */
+interface MockXhr {
+  upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number; total: number }) => void };
+  readyState: number;
+  status: number;
+  responseText: string;
+  response?: string;
+  onload: (() => void) | null;
+  onerror: (() => void) | null;
+  onreadystatechange: (() => void) | null;
+  open(m: string, u: string, async?: boolean, user?: string | null, password?: string | null): void;
+  setRequestHeader(name: string, value: string): void;
+  send(payload?: Document | XMLHttpRequestBodyInit | null): Promise<void> | void;
+  abort(): void;
+  getAllResponseHeaders(): string;
+  addEventListener(type: string, fn: () => void): void;
+}
+
+function MockXHR(): MockXhr {
   const native = new NativeXHR();
   let intercepted = false;
   let method = "GET";
   let url = "";
-  const headers = {};
+  const headers: Record<string, string> = {};
 
-  const self = {
+  const self: MockXhr = {
     upload: {},
     readyState: 0,
     status: 0,
@@ -291,19 +321,19 @@ window.XMLHttpRequest = function MockXHR() {
     onerror: null,
     onreadystatechange: null,
 
-    open(m, u, ...rest) {
+    open(m, u, async = true, user, password) {
       method = String(m).toUpperCase();
       url = u;
       intercepted = INTERCEPT.test(new URL(u, window.location.origin).pathname);
-      if (!intercepted) return native.open(m, u, ...rest);
+      if (!intercepted) return native.open(m, u, async, user, password);
       self.readyState = 1;
     },
 
-    setRequestHeader(...args) {
-      if (!intercepted) return native.setRequestHeader(...args);
+    setRequestHeader(name, value) {
+      if (!intercepted) return native.setRequestHeader(name, value);
       // Kept so an intercepted upload is answered under the same rules as the
       // fetch path — the revelio header included.
-      headers[String(args[0])] = args[1];
+      headers[String(name)] = value;
     },
 
     async send(payload) {
@@ -343,7 +373,11 @@ window.XMLHttpRequest = function MockXHR() {
   };
 
   return self;
-};
+}
+
+// MockXHR implements only the part of the interface the app uses, so this is
+// the one cast at the boundary to the lib DOM type.
+window.XMLHttpRequest = MockXHR as unknown as typeof XMLHttpRequest;
 
 // ── Demo controls ─────────────────────────────────────────────────────────
 

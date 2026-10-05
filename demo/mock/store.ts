@@ -34,11 +34,145 @@
  * record.
  */
 
+import type { User } from "../../frontend/src/api/auth.ts";
+import type { Media } from "../../frontend/src/api/media.ts";
+import type { NavTagNode } from "../../frontend/src/api/nav.ts";
+import type { TagCloudItem } from "../../frontend/src/api/pages.ts";
+import type { PluginView } from "../../frontend/src/api/plugins.ts";
+import type { Post, PostStub } from "../../frontend/src/api/posts.ts";
+import type { Settings } from "../../frontend/src/api/settings.ts";
+import type { Tag } from "../../frontend/src/api/tags.ts";
+import type { Theme } from "../../frontend/src/api/themes.ts";
+import type { LocationLink, TimelinePayload } from "../../frontend/src/api/timeline.ts";
 import { applyDemoSettings, applyDemoSettingsDeep } from "../settings.ts";
 
-let fixtures = null;
-let themeCatalog = null;
-let state = null;
+// ── Types ─────────────────────────────────────────────────────────────────
+//
+// The recorded fixtures are API responses, so the frontend's API types describe
+// them. The recorded blobs the demo only passes through stay `unknown`.
+
+/** A nav menu node: a tag (NavTagNode) or an authored `{name, url}` link. */
+export type NavItem = Partial<Omit<NavTagNode, "children">> & {
+  name: string;
+  children: NavItem[];
+};
+
+/** One tag node of the recorded tag graph (GET /api/pages/graph). */
+export interface GraphTag {
+  id: number;
+  is_hidden?: boolean;
+  post_count?: number;
+  [key: string]: unknown;
+}
+
+/** One post node of the recorded tag graph. */
+export interface GraphPost {
+  id: number;
+  status?: string;
+  is_hidden?: boolean;
+  [key: string]: unknown;
+}
+
+/** The recorded tag graph. */
+export interface Graph {
+  tags?: GraphTag[];
+  hierarchyEdges?: { parent: number; child: number }[];
+  posts?: GraphPost[];
+  membershipEdges?: { post: number; tag: number }[];
+  [key: string]: unknown;
+}
+
+/** The recorded page payloads (GET /api/pages/*). */
+export interface Pages {
+  home?: { tag_cloud?: TagCloudItem[]; menu?: NavItem[]; [key: string]: unknown };
+  tags?: { tags?: Tag[]; [key: string]: unknown };
+  map?: unknown;
+  graph?: Graph;
+  nav?: { menu: NavItem[]; tags?: NavItem[] };
+}
+
+/** The recorded system payloads (GET /api/system/*). */
+export interface SystemBlobs {
+  stats?: unknown;
+  health?: unknown;
+  disk?: unknown;
+  migrations?: unknown;
+}
+
+/** demo/mock/fixtures/fixtures.json, as record-fixtures.ts writes it. */
+export interface Fixtures {
+  recordedAt?: string;
+  settings?: Settings;
+  publicSettings?: Settings;
+  user?: User | null;
+  posts?: ListPost[];
+  postDetail?: Record<string, Post>;
+  postNavigation?: Record<string, { prev?: PostStub | null; next?: PostStub | null }>;
+  tags?: Tag[];
+  media?: Media[];
+  plugins?: PluginView[];
+  themes?: Theme[];
+  activeTheme?: Theme | null;
+  customCss?: { css: string };
+  pages?: Pages;
+  timeline?: Partial<TimelinePayload>;
+  timelineLocations?: Record<string, LocationLink[]>;
+  tagCloud?: State["tagCloud"];
+  analytics?: unknown;
+  mediaStats?: unknown;
+  mediaFolders?: unknown[];
+  system?: SystemBlobs;
+}
+
+/**
+ * A post in the list shape (toListShape). A post the demo created has no
+ * `type`, `view_count` or `updated_at` until a recorded row supplies them.
+ */
+export type ListPost = Omit<Post, "type" | "view_count" | "updated_at"> &
+  Partial<Pick<Post, "type" | "view_count" | "updated_at">>;
+
+/** The demo's mutable store: the fixtures as seeded, then edited. */
+export interface State {
+  settings: Settings;
+  publicSettings: Settings;
+  user: User | null;
+  authenticated: boolean;
+  posts: ListPost[];
+  /** Single-post shapes, by post id. */
+  postDetail: Record<string, Post>;
+  postNavigation: NonNullable<Fixtures["postNavigation"]>;
+  tags: Tag[];
+  media: Media[];
+  plugins: PluginView[];
+  pluginPresets: Record<string, string[]>;
+  activePreset: string;
+  themes: Theme[];
+  activeTheme: Theme | null;
+  customCss: { css: string };
+  pages: Pages;
+  navTagTree: NavItem[];
+  timeline: Partial<TimelinePayload>;
+  timelineLocations: Record<string, LocationLink[]>;
+  /** Recorded as `{tags}`; an older bundle recorded the bare array. */
+  tagCloud: TagCloudItem[] | { tags?: TagCloudItem[] };
+  analytics: unknown;
+  mediaStats: unknown;
+  mediaFolders: unknown[];
+  system: SystemBlobs;
+}
+
+/** The content snapshot storeContent writes (see CONTENT_KEY). */
+interface ContentSnapshot {
+  v: number;
+  recordedAt: string | null;
+  posts: ListPost[];
+  postDetail: Record<string, Post>;
+  tags: Tag[];
+}
+
+let fixtures: Fixtures | null = null;
+let themeCatalog: Theme[] | null = null;
+let state: State | null = null;
 
 /**
  * Whether the visitor has "logged in".
@@ -54,7 +188,7 @@ let state = null;
  */
 const AUTH_KEY = "demo-authenticated";
 
-export function isAuthenticated() {
+export function isAuthenticated(): boolean {
   try {
     return sessionStorage.getItem(AUTH_KEY) === "1";
   } catch {
@@ -62,7 +196,7 @@ export function isAuthenticated() {
   }
 }
 
-export function setAuthenticated(value) {
+export function setAuthenticated(value: boolean): void {
   try {
     if (value) sessionStorage.setItem(AUTH_KEY, "1");
     else sessionStorage.removeItem(AUTH_KEY);
@@ -87,7 +221,7 @@ export function setAuthenticated(value) {
  */
 const THEME_KEY = "demo-active-theme";
 
-export function storedThemeName() {
+export function storedThemeName(): string | null {
   try {
     return sessionStorage.getItem(THEME_KEY) || null;
   } catch {
@@ -95,7 +229,7 @@ export function storedThemeName() {
   }
 }
 
-export function storeThemeName(name) {
+export function storeThemeName(name: string | null): void {
   try {
     if (name) sessionStorage.setItem(THEME_KEY, name);
     else sessionStorage.removeItem(THEME_KEY);
@@ -113,16 +247,16 @@ export function storeThemeName(name) {
  */
 const PLUGINS_KEY = "demo-active-plugins";
 
-export function storedPlugins() {
+export function storedPlugins(): string[] | null {
   try {
     const val = sessionStorage.getItem(PLUGINS_KEY);
-    return val ? JSON.parse(val) : null;
+    return val ? (JSON.parse(val) as string[]) : null;
   } catch {
     return null;
   }
 }
 
-export function storePlugins(plugins) {
+export function storePlugins(plugins: PluginView[] | null): void {
   try {
     if (plugins) {
       sessionStorage.setItem(PLUGINS_KEY, JSON.stringify(plugins.filter((p) => p.enabled).map((p) => p.id)));
@@ -172,19 +306,20 @@ const CONTENT_VERSION = 1;
  * falls back to the deprecated enum, and one with neither keeps its edits —
  * the failure that leaves the demo working.
  */
-function isReload() {
+function isReload(): boolean {
   try {
     const [nav] = performance.getEntriesByType("navigation");
-    if (nav) return /** @type {PerformanceNavigationTiming} */ (nav).type === "reload";
+    if (nav) return (nav as PerformanceNavigationTiming).type === "reload";
     // The deprecated fallback: gone from the DOM types, still there in an old
     // enough browser.
-    return /** @type {any} */ (performance).navigation?.type === 1;
+    const legacy = performance as { navigation?: { type: number } };
+    return legacy.navigation?.type === 1;
   } catch {
     return false;
   }
 }
 
-export function clearContent() {
+export function clearContent(): void {
   try {
     sessionStorage.removeItem(CONTENT_KEY);
   } catch {
@@ -203,16 +338,16 @@ if (isReload()) clearContent();
  * different archive, and restoring the old posts over it would show content the
  * build no longer has the photographs for.
  */
-function storedContent(fx) {
+function storedContent(fx: Fixtures): ContentSnapshot | null {
   try {
     const raw = sessionStorage.getItem(CONTENT_KEY);
     if (!raw) return null;
-    const saved = JSON.parse(raw);
+    const saved = JSON.parse(raw) as Partial<ContentSnapshot> | null;
     if (saved?.v !== CONTENT_VERSION) return null;
     if (saved.recordedAt !== (fx.recordedAt ?? null)) return null;
     if (!Array.isArray(saved.posts) || !Array.isArray(saved.tags)) return null;
     if (!saved.postDetail || typeof saved.postDetail !== "object") return null;
-    return saved;
+    return saved as ContentSnapshot;
   } catch {
     return null;
   }
@@ -228,7 +363,7 @@ function storedContent(fx) {
  * including any handler added later — is covered without having to remember to
  * call anything.
  */
-export function storeContent(s) {
+export function storeContent(s: State | null): void {
   if (!s) return;
   try {
     sessionStorage.setItem(
@@ -257,7 +392,7 @@ export function storeContent(s) {
  * Core areas are re-filled by the apply logic whatever the membership says, so
  * a preset only has to enumerate the rest.
  */
-function defaultPresets(plugins) {
+function defaultPresets(plugins: PluginView[]): Record<string, string[]> {
   const all = plugins.map((p) => p.id);
   const advanced = new Set(["ai-analysis", "instagram", "immersive-sheet"]);
   return {
@@ -278,20 +413,26 @@ function defaultPresets(plugins) {
  * the site-title dropdown (GetNavMenu in api/internal/api/pages.go), which
  * applyNavMenu below mirrors.
  */
-const DEMO_NAV_LINKS = [
+const DEMO_NAV_LINKS: NavLink[] = [
   { name: "Portugal", url: "/tags/portugal" },
   { name: "Reykjavík", url: "/tags/reykjavik" },
   { name: "2024", url: "/tags/2024" },
   { name: "Light", url: "/tags/light" },
 ];
 
+/** An authored nav menu link. */
+export interface NavLink {
+  name: string;
+  url: string;
+}
+
 /** `{name,url}` → the NavTagNode shape the nav endpoints speak. */
-function navNodes(links) {
+function navNodes(links: NavLink[]): NavItem[] {
   return links.map(({ name, url }) => ({ name, url, children: [] }));
 }
 
 /** `{name,url}` → the `- [Label](url)` source the menu editor round-trips. */
-export function navMarkdown(links) {
+export function navMarkdown(links: NavLink[]): string {
   return links.map(({ name, url }) => `- [${name}](${url})`).join("\n");
 }
 
@@ -304,7 +445,10 @@ export function navMarkdown(links) {
  * `navTagTree` is the recorded tags-mode tree, held aside so switching away
  * from custom mode and back restores it.
  */
-export function applyNavMenu(s, { mode, items, markdown }) {
+export function applyNavMenu(
+  s: State,
+  { mode, items, markdown }: { mode: string; items: NavItem[]; markdown: string },
+): void {
   s.settings.nav_menu_mode = mode;
   s.settings.custom_nav_menu = JSON.stringify(items);
   s.settings.custom_markdown = markdown;
@@ -318,7 +462,7 @@ export function applyNavMenu(s, { mode, items, markdown }) {
  * Find a theme by name, case-insensitively — the comparison the backend makes
  * when it resolves a theme name to a file.
  */
-export function findTheme(themes, name) {
+export function findTheme(themes: Theme[], name: unknown): Theme | null {
   const wanted = String(name || "").toLowerCase();
   return themes.find((t) => String(t.name || "").toLowerCase() === wanted) || null;
 }
@@ -328,7 +472,7 @@ export function findTheme(themes, name) {
  * tab, else the recorded one, else the first in the catalogue so the page is
  * never left without a theme.
  */
-function initialTheme(themes, fx) {
+function initialTheme(themes: Theme[], fx: Fixtures): Theme | null {
   return (
     findTheme(themes, storedThemeName()) ||
     findTheme(themes, fx.activeTheme?.name) ||
@@ -349,7 +493,7 @@ function initialTheme(themes, fx) {
  * `catalog` is the build's theme list (demo/scripts/build-themes.ts); the
  * fixture's own list is the fallback for a build that predates it.
  */
-function seed(fx, catalog) {
+function seed(fx: Fixtures, catalog: Theme[] | null): State {
   // The visitor's edits, if this document was navigated to rather than
   // reloaded. Replaces the recorded collections wholesale: the snapshot *is*
   // the fixture as edited, so there is nothing to merge.
@@ -366,7 +510,7 @@ function seed(fx, catalog) {
 
   const themes = structuredClone(catalog?.length ? catalog : fx.themes || []);
   const activeTheme = initialTheme(themes, fx);
-  const s = {
+  const s: State = {
     settings: { ...fx.settings },
     publicSettings: { ...fx.publicSettings },
     user: fx.user ? { ...fx.user } : null,
@@ -429,12 +573,12 @@ function seed(fx, catalog) {
  * Fetched through the *patched* window.fetch, which passes /assets/ straight to
  * the network — the shim owns /api/ and theme.css, nothing else.
  */
-async function loadThemeCatalog() {
+async function loadThemeCatalog(): Promise<Theme[] | null> {
   try {
     const res = await fetch("/assets/themes/index.json");
     if (!res.ok) return null;
-    const list = await res.json();
-    return Array.isArray(list) && list.length ? list : null;
+    const list: unknown = await res.json();
+    return Array.isArray(list) && list.length ? (list as Theme[]) : null;
   } catch {
     // A build predating the manifest, or an offline reload: fall back to the
     // themes recorded in the fixture rather than leaving the page with none.
@@ -448,24 +592,24 @@ async function loadThemeCatalog() {
  * Dynamically imported so esbuild emits the fixture JSON as its own chunk
  * instead of inlining ~750KB into app.js — the shell paints while it loads.
  */
-export async function getState() {
+export async function getState(): Promise<State> {
   if (state) return state;
   if (!fixtures) {
     const [mod, catalog] = await Promise.all([
       // @ts-ignore — fixtures.json is generated and gitignored, so it is not
       // there in a clean clone; the typecheck must not depend on it being built.
-      import("./fixtures/fixtures.json"),
+      import("./fixtures/fixtures.json") as Promise<{ default?: unknown }>,
       loadThemeCatalog(),
     ]);
-    fixtures = mod.default || mod;
+    fixtures = (mod.default || mod) as Fixtures;
     themeCatalog = catalog;
   }
-  state = seed(fixtures, themeCatalog);
+  state = seed(fixtures as Fixtures, themeCatalog);
   return state;
 }
 
 /** Re-seed from the fixture. Backs the demo's "reset" control. */
-export async function resetState() {
+export async function resetState(): Promise<State> {
   state = null;
   setAuthenticated(false);
   // Reset means the recorded state, and the theme is part of it.
@@ -475,9 +619,15 @@ export async function resetState() {
   return getState();
 }
 
+/** A request's query string, as the shim parses it. */
+export type Query = Record<string, string>;
+
+/** The query fields the paging helpers read; each goes through Number(). */
+export type PageQuery = Partial<Record<string, string | number>>;
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-export function nextId(collection) {
+export function nextId(collection: { id?: number }[]): number {
   return collection.reduce((max, row) => Math.max(max, row.id || 0), 0) + 1;
 }
 
@@ -486,20 +636,28 @@ export function nextId(collection) {
 // a row, and the same walk answers for tags, for posts, and for the scheduled
 // queue.
 
+/** The dates byNewest reads. */
+type Dated = { published_at?: string | null; created_at?: string | null };
+
 /**
  * Sort newest-first by publish date, falling back to creation date.
  *
  * Some posts carry a null published_at (the engine's standalone "about" page,
  * for one), so an unguarded Date parse yields NaN and scrambles the order.
  */
-export function byNewest(a, b) {
-  const at = Date.parse(a.published_at || a.created_at || 0) || 0;
-  const bt = Date.parse(b.published_at || b.created_at || 0) || 0;
+export function byNewest(a: Dated, b: Dated): number {
+  const at = Date.parse(a.published_at || a.created_at || "") || 0;
+  const bt = Date.parse(b.published_at || b.created_at || "") || 0;
   return bt - at;
 }
 
 /** `{page, pages, per_page, <key>}` — the shape of the admin list endpoints. */
-export function paginate(rows, query, key, defaultPerPage = 20) {
+export function paginate<T>(
+  rows: T[],
+  query: PageQuery,
+  key: string,
+  defaultPerPage = 20,
+): { page: number; pages: number; per_page: number; total: number; [key: string]: number | T[] } {
   const perPage = Number(query.per_page) || defaultPerPage;
   const page = Number(query.page) || 1;
   const start = (page - 1) * perPage;
@@ -525,7 +683,7 @@ export function paginate(rows, query, key, defaultPerPage = 20) {
  * An absent or partial range means "all years", which is what the timeline
  * sends when it is showing everything.
  */
-export function withinYears(rows, query) {
+export function withinYears<T extends Pick<Post, "tags">>(rows: T[], query: PageQuery): T[] {
   const from = Number(query.year_from);
   const to = Number(query.year_to);
   if (!(from > 0 && to > 0)) return rows;
@@ -550,7 +708,7 @@ export function withinYears(rows, query) {
  * edited in the demo has to be written back to both stores or it appears
  * correct on one screen and broken on the next.
  */
-export function toListShape(detail, previous = {}) {
+export function toListShape(detail: Post, previous: Partial<ListPost> = {}): ListPost {
   return {
     ...previous,
     id: detail.id,

@@ -35,6 +35,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { Buffer } from "node:buffer";
 
+import type { Media } from "../../frontend/src/api/media.ts";
+import type { Post } from "../../frontend/src/api/posts.ts";
+import type { Tag } from "../../frontend/src/api/tags.ts";
+
 import {
   YEARS,
   TOPICS,
@@ -44,21 +48,22 @@ import {
   toTopic,
   visibilityPlan,
 } from "../world.ts";
+import type { Location, Role } from "../world.ts";
 
-const args = Object.fromEntries(
+const args: Record<string, string | true> = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const [k, ...v] = a.replace(/^--/, "").split("=");
     return [k, v.join("=") || true];
   }),
 );
 
-const BASE = args.base || "http://localhost:8002";
-const SESSION = args.session || "";
-const DB_PATH = args.db || "";
-const GEMINI_KEY = args["gemini-key"] || process.env.GEMINI_API_KEY || "";
+const BASE = String(args.base || "http://localhost:8002");
+const SESSION = String(args.session || "");
+const DB_PATH = String(args.db || "");
+const GEMINI_KEY = String(args["gemini-key"] || process.env.GEMINI_API_KEY || "");
 const ADD = Number(args.add) || 0;
 const COUNT = ADD || Number(args.count) || 28;
-const MODEL = args.model || "gemini-2.5-flash";
+const MODEL = String(args.model || "gemini-2.5-flash");
 const CONCURRENCY = Number(args.concurrency) || 4;
 
 for (const [name, value] of [
@@ -83,7 +88,7 @@ for (const [name, value] of [
  * location assignment. A demo that reshuffles itself on every rebuild makes
  * screenshots and bug reports impossible to compare.
  */
-function makeRandom(seed) {
+function makeRandom(seed: number): () => number {
   let a = seed;
   return () => {
     a |= 0;
@@ -97,17 +102,23 @@ const random = makeRandom(20260803);
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function api(method, path, body, { raw = false } = {}) {
-  const init = {
-    method,
-    headers: { Cookie: `session=${SESSION}`, Accept: "application/json" },
+async function api<T = unknown>(
+  method: string,
+  path: string,
+  body?: unknown,
+  { raw = false } = {},
+): Promise<T> {
+  const headers: Record<string, string> = {
+    Cookie: `session=${SESSION}`,
+    Accept: "application/json",
   };
+  const init: RequestInit = { method, headers };
   if (body instanceof FormData) {
     init.body = body;
   } else if (body !== undefined) {
-    init.headers["Content-Type"] = "application/json";
+    headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(body);
   }
 
@@ -122,8 +133,8 @@ async function api(method, path, body, { raw = false } = {}) {
     if (!res.ok) {
       throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 300)}`);
     }
-    if (raw) return text;
-    return text ? JSON.parse(text) : null;
+    if (raw) return text as T;
+    return (text ? JSON.parse(text) : null) as T;
   }
 }
 
@@ -143,7 +154,23 @@ const SCHEMA = {
   required: ["title", "excerpt", "body", "tags"],
 };
 
-function promptFor(photo, location, year) {
+/** One entry of the picsum catalogue (picsum.photos/v2/list). */
+interface Photo {
+  id: string;
+  author: string;
+  width: number;
+  height: number;
+}
+
+/** What Gemini returns, per SCHEMA. */
+interface Generated {
+  title: string;
+  excerpt: string;
+  body: string;
+  tags?: string[];
+}
+
+function promptFor(photo: Photo, location: Location, year: number): string {
   return `You are writing a short entry for a personal photography blog.
 
 Look at the attached photograph and write about it as if you took it yourself,
@@ -167,7 +194,12 @@ Return JSON with:
 The photograph is credited to ${photo.author}.`;
 }
 
-async function generateText(photo, imageBase64, location, year) {
+async function generateText(
+  photo: Photo,
+  imageBase64: string,
+  location: Location,
+  year: number,
+): Promise<Generated> {
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent` +
     `?key=${GEMINI_KEY}`;
@@ -201,10 +233,12 @@ async function generateText(photo, imageBase64, location, year) {
     if (!res.ok) {
       throw new Error(`gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    } | null;
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new Error("gemini returned no text");
-    return JSON.parse(text);
+    return JSON.parse(text) as Generated;
   }
   throw new Error("gemini: retries exhausted");
 }
@@ -221,22 +255,22 @@ async function generateText(photo, imageBase64, location, year) {
  * already shows — with different prose, which reads as a bug rather than a
  * repetition.
  */
-async function usedPhotoIds() {
-  const res = await api("GET", "/api/media?per_page=500");
-  const ids = new Set();
+async function usedPhotoIds(): Promise<Set<string>> {
+  const res = await api<{ media?: Media[] } | null>("GET", "/api/media?per_page=500");
+  const ids = new Set<string>();
   for (const item of res?.media || []) {
     const hit = /demo-(\d+)\./.exec(item.filename || "");
-    if (hit) ids.add(hit[1]);
+    if (hit?.[1]) ids.add(hit[1]);
   }
   return ids;
 }
 
-async function fetchPhotoList(count, exclude = new Set()) {
-  const candidates = [];
+async function fetchPhotoList(count: number, exclude = new Set<string>()): Promise<Photo[]> {
+  const candidates: Photo[] = [];
   for (let page = 1; page <= 6; page++) {
     const res = await fetch(`https://picsum.photos/v2/list?page=${page}&limit=100`);
     if (!res.ok) throw new Error(`picsum list ${res.status}`);
-    const batch = await res.json();
+    const batch = (await res.json()) as Photo[];
     if (!batch.length) break;
     // Landscape only: the grid and immersive viewer are built around wide
     // images, and portrait originals make the demo look inconsistent.
@@ -268,13 +302,40 @@ async function fetchPhotoList(count, exclude = new Set()) {
   return (varied.length >= count ? varied : fresh).slice(0, count);
 }
 
-async function download(url) {
+async function download(url: string): Promise<Buffer> {
   for (let attempt = 0; attempt < 4; attempt++) {
     const res = await fetch(url, { redirect: "follow" });
     if (res.ok) return Buffer.from(await res.arrayBuffer());
     await sleep(1500 * (attempt + 1));
   }
   throw new Error(`download failed: ${url}`);
+}
+
+/** One post to create: its photograph and the place, year and role dealt to it. */
+interface Job {
+  photo: Photo;
+  index: number;
+  role: Role;
+  location: Location;
+  year: number;
+  scheduledAt: string | null;
+  featured: boolean;
+}
+
+/** A post createOne made. */
+interface Created {
+  post: Post;
+  index: number;
+  role: Role;
+  year: number;
+  location: Location;
+  topics: string[];
+  title: string;
+}
+
+/** A job that threw (see pool). */
+interface Failure {
+  error: unknown;
 }
 
 // ── Post creation ─────────────────────────────────────────────────────────
@@ -287,14 +348,14 @@ async function download(url) {
  * would leave the reader looking at a page of posts all going live at once.
  * Deterministic, like everything else the generator lays out.
  */
-function scheduleAt(nth, now = new Date()) {
+function scheduleAt(nth: number, now = new Date()): string {
   const when = new Date(now.getTime());
   when.setUTCDate(when.getUTCDate() + 2 + nth * 3);
   when.setUTCHours(9 + (nth % 3) * 4, 0, 0, 0);
   return when.toISOString();
 }
 
-async function createOne(photo, job) {
+async function createOne(photo: Photo, job: Job): Promise<Created> {
   const { index, role, location, year, scheduledAt, featured } = job;
 
   // Two sizes: a wide one for the blog, and a small one for Gemini — sending a
@@ -311,8 +372,12 @@ async function createOne(photo, job) {
   // Upload the image, then embed its returned path in the post body so the
   // server links the media record to the post the same way the editor does.
   const form = new FormData();
-  form.append("file", new Blob([full], { type: "image/jpeg" }), `demo-${photo.id}.jpg`);
-  const uploaded = await api("POST", "/api/media/upload", form);
+  form.append("file", new Blob([new Uint8Array(full)], { type: "image/jpeg" }), `demo-${photo.id}.jpg`);
+  const uploaded = await api<Media & { url?: string; media?: { path?: string } }>(
+    "POST",
+    "/api/media/upload",
+    form,
+  );
   const mediaPath = uploaded.path || uploaded.url || uploaded.media?.path;
   if (!mediaPath) {
     throw new Error(`upload returned no path: ${JSON.stringify(uploaded).slice(0, 200)}`);
@@ -322,7 +387,9 @@ async function createOne(photo, job) {
   // `excerpt`, which is what the Sheet immersive viewer renders and what the
   // post cards preview. A demo whose prose only appears below the fold of the
   // article page is prose nobody in the demo reads.
-  const topics = [...new Set((text.tags || []).map(toTopic).filter(Boolean))].slice(0, 4);
+  const topics = [
+    ...new Set((text.tags || []).map(toTopic).filter((t): t is string => Boolean(t))),
+  ].slice(0, 4);
 
   // `private` is not a status — the post is published like any other and is
   // withheld by the place it was taken in, whose tag carries `hides_posts`.
@@ -330,7 +397,7 @@ async function createOne(photo, job) {
   // depending on a tag someone else can flip.
   const status = role === "scheduled" || role === "hidden" ? role : "published";
 
-  const post = await api("POST", "/api/posts", {
+  const post = await api<Post>("POST", "/api/posts", {
     title: text.title,
     content: `${mediaPath}`,
     excerpt: [text.excerpt.trim(), text.body.trim().replace(/\s*\n+\s*/g, " ")]
@@ -351,14 +418,18 @@ async function createOne(photo, job) {
 }
 
 /** Run `worker` over `items` with a bounded number in flight. */
-async function pool(items, limit, worker) {
-  const results = [];
+async function pool<I, R>(
+  items: I[],
+  limit: number,
+  worker: (item: I, index: number) => Promise<R>,
+): Promise<(R | Failure)[]> {
+  const results: (R | Failure)[] = [];
   let cursor = 0;
   const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (cursor < items.length) {
       const index = cursor++;
       try {
-        results[index] = await worker(items[index], index);
+        results[index] = await worker(items[index] as I, index);
       } catch (err) {
         results[index] = { error: err };
       }
@@ -377,14 +448,14 @@ async function pool(items, limit, worker) {
  * publish time, and a past `scheduled_at` publishes immediately rather than
  * backdating. Writing it directly is the only way to build a multi-year archive.
  */
-function backdate(assignments) {
+function backdate(assignments: { postId: number; year: number }[]): void {
   const db = new DatabaseSync(DB_PATH);
   const update = db.prepare(
     "UPDATE posts SET published_at = ?, created_at = ?, updated_at = ? WHERE id = ?",
   );
 
   const now = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
+  const pad = (n: number) => String(n).padStart(2, "0");
 
   // Ceiling of an hour ago: the current year is only partly elapsed, so an
   // unbounded date publishes posts in the future, where they sort above
@@ -428,12 +499,12 @@ function backdate(assignments) {
  * times in the archive is a facet, not a dead end, and stripping it would edit
  * posts the run was told not to touch.
  */
-async function balanceTopics(results, baseline = new Map()) {
-  const holders = new Map();
+async function balanceTopics(results: Created[], baseline = new Map<string, number>()): Promise<void> {
+  const holders = new Map<string, Created[]>();
   for (const r of results) {
     for (const topic of r.topics) {
       if (!holders.has(topic)) holders.set(topic, []);
-      holders.get(topic).push(r);
+      holders.get(topic)?.push(r);
     }
   }
 
@@ -442,7 +513,7 @@ async function balanceTopics(results, baseline = new Map()) {
     .map(([t]) => t);
   if (!singletons.length) return;
 
-  const touched = new Set(singletons.flatMap((t) => holders.get(t)));
+  const touched = new Set(singletons.flatMap((t) => holders.get(t) ?? []));
   for (const r of touched) {
     r.topics = r.topics.filter((t) => !singletons.includes(t));
     await api("PATCH", `/api/posts/${r.post.id}/tags`, {
@@ -458,9 +529,9 @@ async function balanceTopics(results, baseline = new Map()) {
 // ── Main ──────────────────────────────────────────────────────────────────
 
 /** Topic → how many posts already carry it, for the topic balance. */
-async function existingTopicCounts() {
-  const listed = await api("GET", "/api/tags");
-  const counts = new Map();
+async function existingTopicCounts(): Promise<Map<string, number>> {
+  const listed = await api<{ tags?: Tag[] } | null>("GET", "/api/tags");
+  const counts = new Map<string, number>();
   for (const tag of listed?.tags || []) {
     if (TOPICS.includes(tag.name)) counts.set(tag.name, tag.post_count || 0);
   }
@@ -476,12 +547,12 @@ async function existingTopicCounts() {
  * scheduled posts count within themselves — they draw from pools of their own
  * and know nothing about how long the archive already is.
  */
-function planJobs(photos, offset) {
+function planJobs(photos: Photo[], offset: number): Job[] {
   const roles = visibilityPlan(photos.length);
-  const nth = new Map();
+  const nth = new Map<Role, number>();
 
   return photos.map((photo, i) => {
-    const role = roles[i];
+    const role = roles[i] as Role;
     const seen = nth.get(role) || 0;
     nth.set(role, seen + 1);
 
@@ -517,10 +588,10 @@ async function main() {
 
   // What the instance already holds. All three are empty on a fresh run, which
   // is what makes the rest of this function one code path rather than two.
-  const listed = ADD ? await api("GET", "/api/posts?per_page=1") : null;
+  const listed = ADD ? await api<{ total?: number } | null>("GET", "/api/posts?per_page=1") : null;
   const offset = listed?.total || 0;
-  const used = ADD ? await usedPhotoIds() : new Set();
-  const baseline = ADD ? await existingTopicCounts() : new Map();
+  const used = ADD ? await usedPhotoIds() : new Set<string>();
+  const baseline = ADD ? await existingTopicCounts() : new Map<string, number>();
   if (ADD) console.log(`  ${offset} existing post(s), ${used.size} photograph(s) already used`);
 
   console.log("· fetching picsum catalogue");
@@ -531,7 +602,10 @@ async function main() {
   }
 
   const jobs = planJobs(photos, offset);
-  const mix = jobs.reduce((acc, j) => ({ ...acc, [j.role]: (acc[j.role] || 0) + 1 }), {});
+  const mix = jobs.reduce<Record<string, number>>(
+    (acc, j) => ({ ...acc, [j.role]: (acc[j.role] || 0) + 1 }),
+    {},
+  );
   console.log(`  mix: ${Object.entries(mix).map(([k, v]) => `${v} ${k}`).join(", ")}`);
 
   console.log(`· generating posts (Gemini ${MODEL}, ${CONCURRENCY} at a time)`);
@@ -544,9 +618,11 @@ async function main() {
     return out;
   });
 
-  const ok = results.filter((r) => r && !r.error);
-  const failed = results.filter((r) => r && r.error);
-  for (const f of failed) console.warn(`  ! ${f.error.message}`);
+  const ok = results.filter((r): r is Created => Boolean(r) && !("error" in r));
+  const failed = results.filter((r): r is Failure => Boolean(r) && "error" in r);
+  for (const f of failed) {
+    console.warn(`  ! ${f.error instanceof Error ? f.error.message : String(f.error)}`);
+  }
 
   await balanceTopics(ok, baseline);
 

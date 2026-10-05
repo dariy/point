@@ -120,7 +120,7 @@ step_js_lint() {
 # fails this step, so the move to TypeScript cannot go back. JS stays only in
 # frontend/vendor/. tsconfig.test.json
 # checks the .ts tests, the E2E tests and their helpers; tsconfig.scripts.json
-# checks scripts/*.ts. Part of --lint,
+# checks scripts/*.ts; tsconfig.demo.json checks demo/. Part of --lint,
 # because a broken type is a static error like any other.
 step_js_typecheck() {
     cd "$ROOT_DIR"
@@ -132,6 +132,7 @@ step_js_typecheck() {
     node_modules/.bin/tsc -p tsconfig.json
     node_modules/.bin/tsc -p tsconfig.test.json
     node_modules/.bin/tsc -p tsconfig.scripts.json
+    node_modules/.bin/tsc -p tsconfig.demo.json
 }
 
 # What the AST rules in scripts/oxlint-point.ts cannot see: hand-applied escapeHtml in

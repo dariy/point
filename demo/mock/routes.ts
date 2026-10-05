@@ -26,25 +26,81 @@ import {
   toListShape,
   withinYears,
 } from "./store.ts";
+import type { Graph, ListPost, NavItem, PageQuery, Query, State } from "./store.ts";
+import type { Post, PostTag } from "../../frontend/src/api/posts.ts";
+import type { TagCloudItem } from "../../frontend/src/api/pages.ts";
+import type { Tag } from "../../frontend/src/api/tags.ts";
+
+// ── Types ─────────────────────────────────────────────────────────────────
+
+/** What a handler answers: a status and a JSON body. */
+export interface RouteResult {
+  status: number;
+  body: unknown;
+}
+
+/**
+ * What a handler receives. `B` is the request body the handler expects; the
+ * shim passes the parsed JSON, so a handler names the shape it reads.
+ */
+export interface RouteContext<B = unknown> {
+  state: State;
+  params: Record<string, string>;
+  query: Query;
+  body: B;
+}
+
+/**
+ * The handler of one route. The context takes `never` as its body so that a
+ * handler can declare any body type; shim.ts dispatch is the one boundary that
+ * passes the parsed JSON in.
+ */
+export type Handler = (ctx: RouteContext<never>) => RouteResult | Promise<RouteResult>;
+
+/** `[method, pattern, handler]`. */
+export type Route = [method: string, pattern: string, handler: Handler];
+
+/** The visibility sets hiddenSets works out. */
+export interface HiddenSets {
+  hidden: Set<number>;
+  hidesPosts: Set<number>;
+  hidesPostsSlugs: Set<string>;
+  via: Map<number, number>;
+}
+
+/** The body of PUT /api/nav-menu. */
+interface NavMenuBody {
+  mode?: string;
+  items?: NavItem[];
+  custom_markdown?: string;
+  inline_max?: number;
+  more_title?: string;
+}
+
+/** A post with the tags the visibility checks read. */
+type Tagged = { tags?: PostTag[] };
+
+/** A post with the fields projectPost reads and strips. */
+type Projectable = Tagged & { status: string; is_hidden?: boolean; is_hidden_by_tag?: boolean };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-const ok = (body) => ({ status: 200, body });
-const noContent = () => ({ status: 204, body: null });
-const notFound = (msg = "not found") => ({ status: 404, body: { detail: msg } });
+const ok = (body: unknown): RouteResult => ({ status: 200, body });
+const noContent = (): RouteResult => ({ status: 204, body: null });
+const notFound = (msg = "not found"): RouteResult => ({ status: 404, body: { detail: msg } });
 
 /** Settings rows hold JSON as text; a malformed row degrades to the default. */
-function parseJson(raw, fallback) {
+function parseJson<T>(raw: string | undefined, fallback: T): T {
   if (!raw) return fallback;
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw) as T;
   } catch {
     return fallback;
   }
 }
 
 /** Links shown inline before "More ▾" — out-of-range or unset means 4. */
-function inlineMaxOrDefault(raw) {
+function inlineMaxOrDefault(raw: unknown): number {
   const n = Number(raw);
   return Number.isInteger(n) && n >= 1 && n <= 10 ? n : 4;
 }
@@ -73,17 +129,17 @@ function inlineMaxOrDefault(raw) {
  * ancestor set a tag hidden, which is what the admin tag list reports as
  * `hidden_via`.
  */
-export function hiddenSets(state) {
+export function hiddenSets(state: State): HiddenSets {
   const byId = new Map(state.tags.map((t) => [t.id, t]));
-  const hidden = new Set();
-  const hidesPosts = new Set();
-  const via = new Map();
+  const hidden = new Set<number>();
+  const hidesPosts = new Set<number>();
+  const via = new Map<number, number>();
 
-  const spread = (rootId, into, mark) => {
+  const spread = (rootId: number, into: Set<number>, mark: boolean) => {
     const queue = [rootId];
-    const seen = new Set();
+    const seen = new Set<number>();
     while (queue.length) {
-      const id = queue.shift();
+      const id = queue.shift() as number;
       if (seen.has(id)) continue;
       seen.add(id);
       into.add(id);
@@ -106,7 +162,7 @@ export function hiddenSets(state) {
 }
 
 /** Is this post withheld from the public by one of its tags? */
-function hiddenByTag(post, sets) {
+function hiddenByTag(post: Tagged, sets: HiddenSets): boolean {
   return (post.tags || []).some((t) => sets.hidesPostsSlugs.has(t.slug));
 }
 
@@ -119,7 +175,7 @@ const PUBLIC_STATUS = new Set(["published", "page"]);
  * `draft`, `hidden` and `scheduled` are all withheld, and so is a published
  * post filed under a tag that hides its posts.
  */
-function publiclyReadable(post, sets) {
+function publiclyReadable(post: Tagged & { status: string }, sets: HiddenSets): boolean {
   return PUBLIC_STATUS.has(post.status) && !hiddenByTag(post, sets);
 }
 
@@ -131,7 +187,7 @@ function publiclyReadable(post, sets) {
  * This is ListPosts with `IncludeDrafts: false, IncludeHidden: !publicOnly`,
  * which is what both the home feed and the tag pages ask for.
  */
-export function feedPosts(state, sets = hiddenSets(state)) {
+export function feedPosts(state: State, sets = hiddenSets(state)): ListPost[] {
   return state.posts.filter((p) => {
     if (p.status === "draft" || p.status === "scheduled" || p.status === "trashed") {
       return false;
@@ -142,7 +198,7 @@ export function feedPosts(state, sets = hiddenSets(state)) {
 }
 
 /** The queue: posts waiting to be published, soonest first. Owner-only. */
-export function scheduledQueue(state) {
+export function scheduledQueue(state: State): ListPost[] {
   if (!state.authenticated) return [];
   return state.posts
     .filter((p) => p.status === "scheduled")
@@ -151,7 +207,7 @@ export function scheduledQueue(state) {
       // the queue's own ORDER BY (`scheduled_at IS NULL` first in SQL).
       const at = Date.parse(a.scheduled_at || "") || Infinity;
       const bt = Date.parse(b.scheduled_at || "") || Infinity;
-      return at - bt || Date.parse(a.created_at || 0) - Date.parse(b.created_at || 0);
+      return at - bt || Date.parse(a.created_at || "") - Date.parse(b.created_at || "");
     });
 }
 
@@ -160,7 +216,7 @@ export function scheduledQueue(state) {
  * shows drafts and the scheduled queue because managing them is what it is for.
  * A guest gets the public set.
  */
-function readablePosts(state, sets = hiddenSets(state)) {
+function readablePosts(state: State, sets = hiddenSets(state)): ListPost[] {
   return state.authenticated
     ? state.posts.slice()
     : state.posts.filter((p) => publiclyReadable(p, sets));
@@ -174,7 +230,7 @@ function readablePosts(state, sets = hiddenSets(state)) {
  * mere presence — so leaving them in would mark a guest's own feed with locks
  * for posts that are not hidden from them at all.
  */
-function projectPost(state, post, sets) {
+function projectPost<P extends Projectable>(state: State, post: P, sets: HiddenSets) {
   if (state.authenticated) {
     return { ...post, is_hidden: post.status === "hidden", is_hidden_by_tag: hiddenByTag(post, sets) };
   }
@@ -184,7 +240,7 @@ function projectPost(state, post, sets) {
 }
 
 /** The same, for a list of posts. */
-function projectPosts(state, posts, sets) {
+function projectPosts<P extends Projectable>(state: State, posts: P[], sets: HiddenSets) {
   return posts.map((p) => projectPost(state, p, sets));
 }
 
@@ -192,13 +248,13 @@ function projectPosts(state, posts, sets) {
  * A tag as this viewer may see it: the owner gets the computed inheritance, a
  * guest gets neither the flags nor the tags they describe (filtered upstream).
  */
-function projectTag(state, tag, sets) {
+function projectTag(state: State, tag: Tag, sets: HiddenSets): Partial<Tag> {
   if (!state.authenticated) {
     // eslint-disable-next-line no-unused-vars
     const { hidden, hides_posts, effective_hidden, effective_hides_posts, hidden_via, ...rest } = tag;
     return rest;
   }
-  const out = {
+  const out: Tag = {
     ...tag,
     effective_hidden: sets.hidden.has(tag.id),
     effective_hides_posts: sets.hidesPosts.has(tag.id),
@@ -215,7 +271,7 @@ function projectTag(state, tag, sets) {
  * real one is filtered at the source (TagGraph skips effectively-hidden tags
  * before building it), so this is the same cut applied to the recording.
  */
-function visibleCloud(state, cloud, sets = hiddenSets(state)) {
+function visibleCloud(state: State, cloud: TagCloudItem[], sets = hiddenSets(state)): TagCloudItem[] {
   if (state.authenticated) return cloud;
   return (cloud || []).filter((t) => !sets.hidden.has(t.id));
 }
@@ -227,15 +283,15 @@ function visibleCloud(state, cloud, sets = hiddenSets(state)) {
  * its cities with it, and the flags inherit the same way (hiddenSets has
  * already worked out which ids that leaves).
  */
-function visibleNavTree(state, nodes, sets = hiddenSets(state)) {
+function visibleNavTree(state: State, nodes: NavItem[], sets = hiddenSets(state)): NavItem[] {
   if (state.authenticated) return nodes;
   return (nodes || [])
     .filter((n) => !n.id || !sets.hidden.has(n.id))
-    .map((n) => ({ ...n, children: visibleNavTree(state, n.children, sets) }));
+    .map((n): NavItem => ({ ...n, children: visibleNavTree(state, n.children, sets) }));
 }
 
 /** Tags this viewer may see at all. */
-function readableTags(state, sets = hiddenSets(state)) {
+function readableTags(state: State, sets = hiddenSets(state)): Partial<Tag>[] {
   const rows = state.authenticated
     ? state.tags
     : state.tags.filter((t) => !sets.hidden.has(t.id));
@@ -261,7 +317,13 @@ function readableTags(state, sets = hiddenSets(state)) {
  * A timeline scope turns the left half off: an unpublished post has no year to
  * be scoped by, and one that has not happened yet cannot be in range.
  */
-export function feedPage(state, rows, queue, query, perPageDefault) {
+export function feedPage(
+  state: State,
+  rows: ListPost[],
+  queue: ListPost[],
+  query: PageQuery,
+  perPageDefault: number,
+) {
   const perPage = Number(query.per_page) || perPageDefault;
   const scoped = withinYears(rows, query);
   const hasYearFilter = Number(query.year_from) > 0 && Number(query.year_to) > 0;
@@ -278,7 +340,7 @@ export function feedPage(state, rows, queue, query, perPageDefault) {
   const total = scoped.length;
   const pages = Math.max(1, Math.ceil(total / perPage));
 
-  let posts;
+  let posts: ListPost[];
   if (page < 1) {
     // Page 0 is the queue's first page, -1 its second, and so on.
     const start = -page * perPage;
@@ -301,7 +363,7 @@ export function feedPage(state, rows, queue, query, perPageDefault) {
   };
 }
 
-function findPost(state, idOrSlug) {
+function findPost(state: State, idOrSlug: string | number): ListPost | undefined {
   const id = Number(idOrSlug);
   return state.posts.find((p) =>
     Number.isFinite(id) && id > 0 ? p.id === id : p.slug === idOrSlug,
@@ -309,7 +371,7 @@ function findPost(state, idOrSlug) {
 }
 
 /** Detail payload for a post, synthesising one for posts created in-demo. */
-function postDetail(state, post) {
+function postDetail(state: State, post: ListPost): Post {
   const recorded = state.postDetail[String(post.id)];
   if (recorded) return { ...recorded, ...post, content: recorded.content, content_html: recorded.content_html };
   return {
@@ -333,10 +395,10 @@ function postDetail(state, post) {
  * index — so a tag is reachable by more than one path; `seen` terminates the
  * walk and keeps each tag visited once.
  */
-function tagSubtree(state, tag) {
-  const out = [];
-  const seen = new Set();
-  const walk = (t) => {
+function tagSubtree(state: State, tag: Tag): Tag[] {
+  const out: Tag[] = [];
+  const seen = new Set<number>();
+  const walk = (t: Tag | undefined) => {
     if (!t || seen.has(t.id)) return;
     seen.add(t.id);
     out.push(t);
@@ -357,7 +419,7 @@ function tagSubtree(state, tag) {
  * the real graph, so without this the demo's inner tags each work while every
  * grouping tag above them reads as empty.
  */
-function tagSlugClosure(state, tag) {
+function tagSlugClosure(state: State, tag: Tag): Set<string> {
   return new Set(tagSubtree(state, tag).map((t) => t.slug));
 }
 
@@ -368,18 +430,18 @@ function tagSlugClosure(state, tag) {
  * list for an unknown slug, so an unrecognised filter matches no posts rather
  * than quietly matching all of them.
  */
-function tagFilterSlugs(state, slug) {
+function tagFilterSlugs(state: State, slug: string): Set<string> {
   const tag = state.tags.find((t) => t.slug === slug);
-  return tag ? tagSlugClosure(state, tag) : new Set();
+  return tag ? tagSlugClosure(state, tag) : new Set<string>();
 }
 
 /** Whether a post carries any of `slugs`, directly. */
-function taggedWithAny(post, slugs) {
+function taggedWithAny(post: Tagged, slugs: Set<string>): boolean {
   return (post.tags || []).some((t) => slugs.has(t.slug));
 }
 
 /** Feed posts filed under a tag or any of its descendants, newest first. */
-function postsForTag(state, slug, sets = hiddenSets(state)) {
+function postsForTag(state: State, slug: string, sets = hiddenSets(state)): ListPost[] {
   const slugs = tagFilterSlugs(state, slug);
   return feedPosts(state, sets)
     .filter((p) => taggedWithAny(p, slugs))
@@ -391,7 +453,7 @@ function postsForTag(state, slug, sets = hiddenSets(state)) {
  * list is drawn from, so a parent tag shows its children's queue too
  * (TagService.GetScheduledPostsByTag).
  */
-function queueForTag(state, slug) {
+function queueForTag(state: State, slug: string): ListPost[] {
   const slugs = tagFilterSlugs(state, slug);
   return scheduledQueue(state).filter((p) => taggedWithAny(p, slugs));
 }
@@ -411,10 +473,10 @@ function queueForTag(state, slug) {
  * the demo's matches rather than widening them — everything found is something
  * a visitor can see the reason for on the results grid.
  */
-function postMatchesQuery(post, search) {
+function postMatchesQuery(post: ListPost, search: unknown): boolean {
   const needle = String(search || "").trim().toLowerCase();
   if (!needle) return true;
-  const has = (value) => String(value || "").toLowerCase().includes(needle);
+  const has = (value: unknown) => String(value || "").toLowerCase().includes(needle);
   return (
     has(post.title) ||
     has(post.slug) ||
@@ -430,7 +492,7 @@ function postMatchesQuery(post, search) {
  * downscaled) original — the demo's documented `?thumb` limitation rather than
  * a new one.
  */
-function atlasThumbUrl(url) {
+function atlasThumbUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   if (/^https?:\/\//.test(url)) return url;
   return url.split("?")[0] + "?thumb=128";
@@ -451,7 +513,7 @@ function atlasThumbUrl(url) {
  * narrowing the timeline changes which photographs a place offers, not what the
  * place is about.
  */
-function atlasCloud(state, tag, query) {
+function atlasCloud(state: State, tag: Tag, query: Query) {
   // atlasCloudLimit, which is also the atlas_post_limit default.
   const LIMIT = 10;
   const sets = hiddenSets(state);
@@ -463,7 +525,14 @@ function atlasCloud(state, tag, query) {
 
   const recent = withinYears(subtreePosts, query).sort(byNewest).slice(0, LIMIT);
   const posts = recent.map((p) => {
-    const node = {
+    const node: {
+      id: number;
+      slug: string;
+      title: string;
+      media_url: string | null;
+      status?: string;
+      is_hidden?: boolean;
+    } = {
       id: p.id,
       slug: p.slug,
       title: p.title,
@@ -484,7 +553,7 @@ function atlasCloud(state, tag, query) {
   // on name. The place itself is dropped; its descendants stay, since a
   // country's own cities are what make its cloud read as geography. Counted
   // over every post in the sub-tree, not only the few returned above.
-  const counts = new Map();
+  const counts = new Map<string, number>();
   for (const p of subtreePosts) {
     for (const t of p.tags || []) {
       if (t.slug === tag.slug || t.slug.startsWith("_")) continue;
@@ -494,14 +563,22 @@ function atlasCloud(state, tag, query) {
   const bySlug = new Map(state.tags.map((t) => [t.slug, t]));
   const tags = [...counts]
     .map(([slug, count]) => ({ tag: bySlug.get(slug), count }))
-    .filter((row) => row.tag)
+    .filter((row): row is { tag: Tag; count: number } => row.tag !== undefined)
     // A hidden tag is not offered to a guest — the cloud is public navigation
     // like any other, and a chip leading to a 404 is worse than an absence.
     .filter((row) => state.authenticated || !sets.hidden.has(row.tag.id))
     .sort((a, b) => b.count - a.count || a.tag.name.localeCompare(b.tag.name))
     .slice(0, LIMIT)
     .map(({ tag: t }) => {
-      const node = { id: t.id, name: t.name, slug: t.slug, kind: t.kind };
+      const node: {
+        id: number;
+        name: string;
+        slug: string;
+        kind: string;
+        latitude?: number;
+        longitude?: number;
+        is_hidden?: boolean;
+      } = { id: t.id, name: t.name, slug: t.slug, kind: t.kind };
       // Coordinates are what make a chip render as a place rather than a plain
       // tag (utils/tags.js tagKind).
       const at = (t.locations || [])[0];
@@ -519,14 +596,14 @@ function atlasCloud(state, tag, query) {
   wired.set(tag.slug, tag.id);
   const wiredIds = new Set(wired.values());
 
-  const membershipEdges = [];
+  const membershipEdges: { post: number; tag: number }[] = [];
   for (const p of recent) {
     for (const t of p.tags || []) {
-      if (wired.has(t.slug)) membershipEdges.push({ post: p.id, tag: wired.get(t.slug) });
+      if (wired.has(t.slug)) membershipEdges.push({ post: p.id, tag: wired.get(t.slug) as number });
     }
   }
 
-  const hierarchyEdges = [];
+  const hierarchyEdges: { parent: number; child: number }[] = [];
   for (const id of wiredIds) {
     const t = state.tags.find((x) => x.id === id);
     for (const parent of t?.parents || []) {
@@ -554,7 +631,7 @@ function atlasCloud(state, tag, query) {
  * direct tags would drop every country shape the moment the timeline narrowed —
  * emptying the Atlas of the very thing it draws.
  */
-function scopedGraph(state, query) {
+function scopedGraph(state: State, query: Query) {
   const graph = state.pages.graph || {};
   const sets = hiddenSets(state);
 
@@ -574,7 +651,7 @@ function scopedGraph(state, query) {
   const inRange = withinYears(feedPosts(state, sets), query);
   const inRangeIds = new Set(inRange.map((p) => p.id));
 
-  const counts = new Map();
+  const counts = new Map<number, number>();
   for (const tag of state.tags) {
     const slugs = tagSlugClosure(state, tag);
     const n = inRange.filter((p) =>
@@ -588,7 +665,7 @@ function scopedGraph(state, query) {
     .map((t) => ({ ...t, post_count: counts.get(t.id) }));
   const kept = new Set(tags.map((t) => t.id));
 
-  const scoped = {
+  const scoped: Graph = {
     ...graph,
     tags,
     hierarchyEdges: (graph.hierarchyEdges || []).filter(
@@ -624,15 +701,15 @@ function scopedGraph(state, query) {
  * root. Guarded against cycles — the tag graph allows multiple parents and a
  * malformed demo edit could otherwise hang the page.
  */
-function breadcrumbsFor(state, tag) {
-  const chain = [];
-  const seen = new Set();
-  let current = tag;
+function breadcrumbsFor(state: State, tag: Tag) {
+  const chain: { id: number; name: string; slug: string }[] = [];
+  const seen = new Set<number>();
+  let current: Tag | undefined = tag;
   while (current && !seen.has(current.id)) {
     seen.add(current.id);
-    const parentRef = (current.parents || [])[0];
+    const parentRef: { id: number } | undefined = (current.parents || [])[0];
     if (!parentRef) break;
-    const parent = state.tags.find((t) => t.id === parentRef.id);
+    const parent: Tag | undefined = state.tags.find((t) => t.id === parentRef.id);
     if (!parent) break;
     chain.unshift({ id: parent.id, name: parent.name, slug: parent.slug });
     current = parent;
@@ -641,7 +718,7 @@ function breadcrumbsFor(state, tag) {
 }
 
 /** `{presets, active}` — the shape of GET /api/plugins/presets. */
-function presetsView(state) {
+function presetsView(state: State) {
   return { presets: state.pluginPresets, active: state.activePreset };
 }
 
@@ -654,10 +731,10 @@ function presetsView(state) {
  * server's word for it — and a page revisit re-reads GET /api/plugins — so the
  * store has to keep the flag true.
  */
-function relockPlugins(state) {
+function relockPlugins(state: State): void {
   const REQUIRED_SLOT = new Set(["1", "1+"]);
   for (const p of state.plugins) {
-    if (!REQUIRED_SLOT.has(p.slot_rule)) continue;
+    if (!REQUIRED_SLOT.has(p.slot_rule ?? "")) continue;
     const enabled = state.plugins.filter((q) => q.slot === p.slot && q.enabled);
     p.locked = !!p.enabled && enabled.length === 1;
   }
@@ -675,23 +752,24 @@ function relockPlugins(state) {
  * map both claim /map, so only the first of those survives). Without both, the
  * demo would show states the real backend refuses to produce.
  */
-function applyPluginPreset(state, list) {
+function applyPluginPreset(state: State, list: string[]): void {
   const want = new Set(list);
   const REQUIRED_SLOT = new Set(["1", "1+"]);
   const SINGLE_CLAIM_SLOT = new Set(["0-1", "1"]);
 
-  const membersOf = (slot) => state.plugins.filter((p) => p.slot === slot);
+  const membersOf = (slot: string) => state.plugins.filter((p) => p.slot === slot);
 
   for (const p of state.plugins) {
-    if (!REQUIRED_SLOT.has(p.slot_rule) || !p.slot) continue;
+    if (!REQUIRED_SLOT.has(p.slot_rule ?? "") || !p.slot) continue;
     const members = membersOf(p.slot);
     if (members.some((m) => want.has(m.id))) continue;
-    want.add((members.find((m) => m.default_enabled) || members[0]).id);
+    const fallback = members.find((m) => m.default_enabled) || members[0];
+    if (fallback) want.add(fallback.id);
   }
 
-  const seenSlots = new Set();
+  const seenSlots = new Set<string>();
   for (const p of state.plugins) {
-    if (!SINGLE_CLAIM_SLOT.has(p.slot_rule) || !p.slot || seenSlots.has(p.slot)) continue;
+    if (!SINGLE_CLAIM_SLOT.has(p.slot_rule ?? "") || !p.slot || seenSlots.has(p.slot)) continue;
     seenSlots.add(p.slot);
     let kept = false;
     for (const m of membersOf(p.slot)) {
@@ -707,7 +785,7 @@ function applyPluginPreset(state, list) {
 
 // ── Routes ────────────────────────────────────────────────────────────────
 
-export const routes = [
+export const routes: Route[] = [
   // ── Bootstrap ───────────────────────────────────────────────────────────
 
   ["GET", "/api/setup/status", () => ok({ setup_complete: true })],
@@ -880,12 +958,12 @@ export const routes = [
   [
     "PUT",
     "/api/nav-menu",
-    ({ state, body }) => {
-      const mode = ["tags", "custom", "none"].includes(body.mode) ? body.mode : "tags";
+    ({ state, body }: RouteContext<NavMenuBody>) => {
+      const mode = ["tags", "custom", "none"].includes(body.mode ?? "") ? (body.mode as string) : "tags";
       const items = Array.isArray(body.items) ? body.items : [];
       applyNavMenu(state, { mode, items, markdown: body.custom_markdown || "" });
 
-      if (body.inline_max >= 1 && body.inline_max <= 10) {
+      if (body.inline_max !== undefined && body.inline_max >= 1 && body.inline_max <= 10) {
         state.settings.nav_inline_max = String(body.inline_max);
       }
       state.settings.nav_more_title = body.more_title || "More";
@@ -1058,9 +1136,11 @@ export const routes = [
   [
     "POST",
     "/api/posts",
-    ({ state, body }) => {
+    ({ state, body }: RouteContext<Partial<Post>>) => {
       const id = nextId(state.posts);
       const now = new Date().toISOString();
+      // Only the fields the editor sent, plus these: the demo's detail for a
+      // new post is partial, and postDetail fills the rest on read.
       const detail = {
         ...body,
         id,
@@ -1071,7 +1151,7 @@ export const routes = [
         published_at: body.status === "published" ? now : null,
         tags: body.tags || [],
         media: [],
-      };
+      } as Post;
       state.postDetail[String(id)] = detail;
       state.posts.unshift(toListShape(detail));
       return { status: 201, body: detail };
@@ -1081,7 +1161,7 @@ export const routes = [
   [
     "PUT",
     "/api/posts/:id",
-    ({ state, params, body }) => {
+    ({ state, params, body }: RouteContext<Partial<Post>>) => {
       const post = findPost(state, params.id);
       if (!post) return notFound("post not found");
       const merged = { ...postDetail(state, post), ...body, id: post.id };
@@ -1094,7 +1174,7 @@ export const routes = [
   [
     "PATCH",
     "/api/posts/:id/status",
-    ({ state, params, body }) => {
+    ({ state, params, body }: RouteContext<{ status: string }>) => {
       const post = findPost(state, params.id);
       if (!post) return notFound("post not found");
       post.status = body.status;
@@ -1110,13 +1190,13 @@ export const routes = [
   [
     "PATCH",
     "/api/posts/:id/tags",
-    ({ state, params, body }) => {
+    ({ state, params, body }: RouteContext<{ tag_ids?: (number | string)[]; tags?: (number | string)[] }>) => {
       const post = findPost(state, params.id);
       if (!post) return notFound("post not found");
       const ids = body.tag_ids || body.tags || [];
       post.tags = ids
         .map((id) => state.tags.find((t) => t.id === id || t.slug === id))
-        .filter(Boolean)
+        .filter((t): t is Tag => t !== undefined)
         .map((t) => ({ name: t.name, slug: t.slug, kind: t.kind, is_hidden_posts: false }));
       const detail = state.postDetail[String(post.id)];
       if (detail) detail.tags = post.tags;
@@ -1161,7 +1241,8 @@ export const routes = [
   [
     "POST",
     "/api/posts/preview-render",
-    ({ body }) => ok({ html: renderMarkdown(body?.content ?? "") }),
+    ({ body }: RouteContext<{ content?: string } | null>) =>
+      ok({ html: renderMarkdown(body?.content ?? "") }),
   ],
 
   // ── Tags ────────────────────────────────────────────────────────────────
@@ -1226,7 +1307,7 @@ export const routes = [
       }
       // `include_empty=false` (the search page and the header typeahead, which
       // offer tags as links) drops the ones that would lead to an empty page.
-      if (query.include_empty === "false") rows = rows.filter((t) => t.post_count > 0);
+      if (query.include_empty === "false") rows = rows.filter((t) => (t.post_count ?? 0) > 0);
       // The real endpoint returns the full set; the admin page paginates client
       // side. Matching that keeps the tag manager's counts honest.
       return ok({ tags: rows, total: rows.length });
@@ -1236,11 +1317,15 @@ export const routes = [
   [
     "POST",
     "/api/tags",
-    ({ state, body }) => {
+    ({ state, body }: RouteContext<Partial<Tag>>) => {
       const id = nextId(state.tags);
-      const tag = {
+      const name = body.name || "new-tag";
+      const tag: Tag = {
         id,
-        name: body.name || "new-tag",
+        name,
+        name_path: name,
+        nav_order: null,
+        show_related: false,
         slug: body.slug || String(body.name || `tag-${id}`).toLowerCase().replace(/\s+/g, "-"),
         kind: body.kind || "tag",
         description: body.description ?? null,
@@ -1375,7 +1460,7 @@ export const routes = [
   [
     "PUT",
     "/api/themes/active",
-    ({ state, body }) => {
+    ({ state, body }: RouteContext<{ name?: string }>) => {
       // Resolve against the catalogue rather than renaming the previous entry:
       // the response carries the theme's own description and swatch colours,
       // which the Themes page shows next to the highlight it just moved.
@@ -1396,7 +1481,7 @@ export const routes = [
   [
     "PUT",
     "/api/themes/custom-css",
-    ({ state, body }) => {
+    ({ state, body }: RouteContext<{ css?: string }>) => {
       state.customCss = { css: body.css ?? "" };
       return ok(state.customCss);
     },
@@ -1410,7 +1495,7 @@ export const routes = [
   [
     "PUT",
     "/api/plugins/presets/:id",
-    ({ state, params, body }) => {
+    ({ state, params, body }: RouteContext<{ plugins?: string[] } | null>) => {
       if (!state.pluginPresets[params.id]) return notFound("unknown preset");
       const known = new Set(state.plugins.map((p) => p.id));
       const wanted = Array.isArray(body?.plugins) ? body.plugins : [];
@@ -1437,7 +1522,7 @@ export const routes = [
   [
     "PATCH",
     "/api/plugins/:id",
-    ({ state, params, body }) => {
+    ({ state, params, body }: RouteContext<{ enabled?: boolean }>) => {
       const plugin = state.plugins.find((p) => p.id === params.id);
       if (!plugin) return notFound("plugin not found");
       plugin.enabled = !!body.enabled;
@@ -1500,8 +1585,8 @@ export const routes = [
  * `content_html` from the backend, so this only ever runs on text a visitor
  * typed themselves.
  */
-function renderMarkdown(src) {
-  const escape = (s) =>
+function renderMarkdown(src: string): string {
+  const escape = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   return escape(src)
@@ -1518,7 +1603,7 @@ function renderMarkdown(src) {
     .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .split(/\n{2,}/)
-    .map((block) =>
+    .map((block: string) =>
       /^\s*<(h\d|blockquote|img|ul|ol|pre)/.test(block)
         ? block
         : `<p>${block.replace(/\n/g, "<br>")}</p>`,

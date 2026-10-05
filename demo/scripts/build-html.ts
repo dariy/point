@@ -15,6 +15,7 @@
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { Fixtures } from "../mock/store.ts";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -51,12 +52,12 @@ const EXCLUDE = new Set(["comments", "mcp", "offline-sync"]);
 
 async function main() {
   const html = await readFile(SRC, "utf8");
-  const fx = JSON.parse(await readFile(FIXTURES, "utf8"));
+  const fx: Fixtures = JSON.parse(await readFile(FIXTURES, "utf8"));
 
   // Chunk map: plugin id -> built entry filename, written by build-js.sh.
   const chunkMapPath = join(JS_DIR, "plugin-manifest.json");
   const chunks = existsSync(chunkMapPath)
-    ? JSON.parse(await readFile(chunkMapPath, "utf8"))
+    ? (JSON.parse(await readFile(chunkMapPath, "utf8")) as Record<string, string>)
     : {};
 
   // CSS map: which plugins shipped a stylesheet chunk.
@@ -69,11 +70,11 @@ async function main() {
   // Mirrors plugins.BuildManifest: enabled-only, with the built entry URL and
   // optional CSS attached. The recorded /api/plugins response already carries
   // the enabled state from the source instance.
-  const manifest = [];
-  const allManifest = [];
+  const manifest: PluginManifestEntry[] = [];
+  const allManifest: PluginManifestEntry[] = [];
   for (const p of fx.plugins || []) {
     if (EXCLUDE.has(p.id)) continue;
-    const entry = {
+    const entry: PluginManifestEntry = {
       id: p.id,
       type: p.type,
       ...(p.slot ? { slot: p.slot } : {}),
