@@ -1,7 +1,7 @@
 /**
  * Image caching utilities using Cache API.
  *
- * The two caches mirror what the service worker looks in (sw.js, IMAGE_CACHES):
+ * The two caches mirror what the service worker looks in (sw.ts, IMAGE_CACHES):
  * original bytes in FULL_CACHE, thumbnail ladder rungs in THUMB_CACHE. Entries
  * are keyed by the full URL — query string included — so a rung and its
  * generation token are part of the key and a stale token is a miss, not a wrong

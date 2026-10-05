@@ -118,7 +118,7 @@ step_js_lint() {
 
 # frontend/src is TypeScript: tsc with no emit. A .js file under frontend/src
 # fails this step, so the move to TypeScript cannot go back. JS stays only in
-# frontend/sw.js, frontend/vendor/, the .js tests and demo/. tsconfig.test.json
+# frontend/vendor/, scripts/*.mjs and demo/. tsconfig.test.json
 # checks the .ts tests, the E2E tests and their helpers. Part of --lint,
 # because a broken type is a static error like any other.
 step_js_typecheck() {

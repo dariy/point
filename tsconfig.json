@@ -5,8 +5,8 @@
   // type-only imports use `import type` (verbatimModuleSyntax), and an import
   // names the real file, `./x.ts` or `./x.js` (allowImportingTsExtensions).
   //
-  // allowJs and checkJs stay on for frontend/sw.js, the one checked JS file.
-  // scripts/check.sh fails on a .js file under frontend/src.
+  // The service worker is frontend/sw.ts; scripts/build-js.sh writes the served
+  // frontend/sw.js from it. scripts/check.sh fails on a .js file under frontend/src.
   //
   // strict is on (epic p-3cfv). Fix a strict error with a real guard; a non-null
   // `!` is only for a DOM element that is certain to exist.
@@ -20,8 +20,9 @@
     "target": "ES2020",
     "module": "ES2020",
     "moduleResolution": "bundler",
+    // allowJs is for the vendored JS that frontend/src imports (codejar,
+    // prismjs): tsc reads their types from it. It does not check them.
     "allowJs": true,
-    "checkJs": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,

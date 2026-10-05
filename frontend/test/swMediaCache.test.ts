@@ -1,14 +1,15 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { mock } from './helpers/mock.ts';
 
 /**
- * The service worker's media branch (sw.js, serveMedia).
+ * The service worker's media branch (sw.ts, serveMedia).
  *
- * sw.js is a classic worker script, not a module — it cannot be imported. It is
+ * sw.ts is a classic worker script, not a module — it cannot be imported. It is
  * evaluated here in a vm context holding stand-ins for the worker globals; its
  * top-level function declarations land on that context's global object, so the
  * handler can be called directly.
@@ -20,9 +21,8 @@ import { mock } from './helpers/mock.ts';
  * approximate match kept only as an offline last resort.
  */
 
-const SW_SOURCE = readFileSync(
-  fileURLToPath(new URL('../sw.ts', import.meta.url)),
-  'utf8',
+const SW_SOURCE = stripTypeScriptTypes(
+  readFileSync(fileURLToPath(new URL('../sw.ts', import.meta.url)), 'utf8'),
 );
 
 /** A Cache holding whole URLs as keys, matching the Cache API's semantics. */
@@ -71,13 +71,13 @@ class FakeCacheStorage {
 }
 
 /**
- * Evaluate sw.js against stub globals and hand back the context, so the test can
+ * Evaluate sw.ts, its types stripped, against stub globals and hand back the context, so the test can
  * both call into the worker and see what it did.
  */
 /** What the request stand-in holds: the fields serveMedia reads. */
 interface SWRequest { url: string; method: string }
 
-/** The sw.js functions under test, as they land on the context's global object. */
+/** The sw.ts functions under test, as they land on the context's global object. */
 interface SWGlobals {
   isMediaPath(path: string): boolean;
   serveMedia(request: SWRequest): Promise<Response>;
@@ -123,7 +123,7 @@ const body = (response: Response) => response.text();
 
 const rung = (size: number) => `https://example.test/2026/03/p.jpg?s=${size}&v=abc123`;
 
-describe('sw.js — isMediaPath', () => {
+describe('sw.ts — isMediaPath', () => {
   let sw: SWGlobals;
   beforeEach(() => {
     sw = loadSW().sw;
@@ -141,7 +141,7 @@ describe('sw.js — isMediaPath', () => {
   });
 });
 
-describe('sw.js — serveMedia', () => {
+describe('sw.ts — serveMedia', () => {
   test('serves an exact hit from the full-size cache first', async () => {
     const { sw, fetchCalls } = loadSW({
       caches: new FakeCacheStorage({

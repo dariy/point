@@ -17,30 +17,51 @@ const CACHE_VERSION = "__BUILD_VERSION__";
  * `self` here is a ServiceWorkerGlobalScope, which is not in the DOM lib this
  * project typechecks against — the cast names only the two members used below.
  * Every other `self.` reference is `addEventListener`, which Window has too.
- *
- * @type {{skipWaiting: () => Promise<void>, clients: {claim: () => Promise<void>}}}
  */
-const swScope = /** @type {any} */ (self);
+interface SWScope {
+  skipWaiting: () => Promise<void>;
+  clients: { claim: () => Promise<void> };
+}
+const swScope = self as unknown as SWScope;
 const CACHE_NAME = `point-${CACHE_VERSION}`;
 
 /**
  * ExtendableEvent and FetchEvent are not in the DOM lib either. These name the
  * members this file uses; the listeners below cast their Event to them.
- *
- * @typedef {Event & {waitUntil: (p: Promise<unknown>) => void}} SWExtendableEvent
- * @typedef {SWExtendableEvent & {request: Request, respondWith: (r: Response | Promise<Response>) => void}} SWFetchEvent
  */
+type SWExtendableEvent = Event & { waitUntil: (p: Promise<unknown>) => void };
+type SWFetchEvent = SWExtendableEvent & {
+  request: Request;
+  respondWith: (r: Response | Promise<Response>) => void;
+};
 
 /**
  * Records of the point-offline database, as written by utils/offlineStore.ts.
  * Only the fields read here are named.
- *
- * @typedef {{id: number, name: string, slug: string, post_count: number, is_hidden?: boolean, is_featured?: boolean, include_in_breadcrumbs?: boolean, sort_order?: number}} OfflineTag
- * @typedef {{parent_id: number, child_id: number}} OfflineTagRel
- * @typedef {{tag_id: number, latitude: number, longitude: number}} OfflineTagLocation
- * @typedef {{id: number, slug: string, title: string, tags?: Array<{slug: string}>}} OfflinePost
- * @typedef {{id: number, name: string, slug: string, post_count: number, is_featured?: boolean, sort_order?: number, children: TagTreeNode[]}} TagTreeNode
  */
+interface OfflineTag {
+  id: number;
+  name: string;
+  slug: string;
+  post_count: number;
+  is_hidden?: boolean;
+  is_featured?: boolean;
+  include_in_breadcrumbs?: boolean;
+  sort_order?: number;
+}
+interface OfflineTagRel { parent_id: number; child_id: number }
+interface OfflineTagLocation { tag_id: number; latitude: number; longitude: number }
+interface OfflinePost { id: number; slug: string; title: string; tags?: Array<{ slug: string }> }
+interface OfflineSettings { posts_per_page?: string | number; min_tag_posts_to_show?: string | number }
+interface TagTreeNode {
+  id: number;
+  name: string;
+  slug: string;
+  post_count: number;
+  is_featured?: boolean;
+  sort_order?: number;
+  children: TagTreeNode[];
+}
 
 // Assets to cache on install (SPA shell).
 const SHELL_URLS = [
@@ -64,13 +85,12 @@ const IDB_STORE = "queue";
 const OFFLINE_DB = "point-offline";
 const OFFLINE_VERSION = 1;
 
-function offlineDbOpen() {
+function offlineDbOpen(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(OFFLINE_DB, OFFLINE_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      /** @type {Array<[string, IDBObjectStoreParameters]>} */
-      const stores = [
+      const stores: Array<[string, IDBObjectStoreParameters]> = [
         ["posts", { keyPath: "id" }],
         ["tags", { keyPath: "id" }],
         ["tag_relationships", { keyPath: ["parent_id", "child_id"] }],
@@ -91,11 +111,10 @@ function offlineDbOpen() {
 }
 
 /**
- * @param {string} storeName
- * @param {IDBValidKey} [query]
- * @returns {Promise<any>}
+ * Read one record (by key) or every record of a store. T names what the caller
+ * expects back; the store holds what utils/offlineStore.ts wrote.
  */
-async function idbGet(storeName, query) {
+async function idbGet<T>(storeName: string, query?: IDBValidKey): Promise<T> {
   const db = await offlineDbOpen();
   const tx = db.transaction(storeName, "readonly");
   const store = tx.objectStore(storeName);
@@ -121,7 +140,7 @@ async function idbGet(storeName, query) {
   });
 }
 
-function idbOpen() {
+function idbOpen(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_DB, 1);
     req.onupgradeneeded = () => {
@@ -132,13 +151,12 @@ function idbOpen() {
   });
 }
 
-/** @param {object} entry */
-async function idbPut(entry) {
+async function idbPut(entry: object) {
   const db = await idbOpen();
   const tx = db.transaction(IDB_STORE, "readwrite");
   tx.objectStore(IDB_STORE).put(entry);
-  return new Promise((res, rej) => {
-    tx.oncomplete = res;
+  return new Promise<void>((res, rej) => {
+    tx.oncomplete = () => res();
     tx.onerror = rej;
   });
 }
@@ -146,7 +164,7 @@ async function idbPut(entry) {
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 self.addEventListener("install", (e) => {
-  const event = /** @type {SWExtendableEvent} */ (e);
+  const event = e as SWExtendableEvent;
   event.waitUntil(
     caches
       .open(CACHE_NAME)
@@ -166,7 +184,7 @@ self.addEventListener("install", (e) => {
 });
 
 self.addEventListener("activate", (e) => {
-  const event = /** @type {SWExtendableEvent} */ (e);
+  const event = e as SWExtendableEvent;
   event.waitUntil(
     caches
       .keys()
@@ -190,7 +208,7 @@ self.addEventListener("activate", (e) => {
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
 self.addEventListener("fetch", (e) => {
-  const event = /** @type {SWFetchEvent} */ (e);
+  const event = e as SWFetchEvent;
   const { request } = event;
   const url = new URL(request.url);
 
@@ -308,10 +326,9 @@ self.addEventListener("fetch", (e) => {
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
-/** @param {Request} request */
-async function handleShareTarget(request) {
+async function handleShareTarget(request: Request) {
   const formData = await request.formData();
-  const sharedFiles = /** @type {File[]} */ (formData.getAll("media"));
+  const sharedFiles = formData.getAll("media") as File[];
   const title = formData.get("title") || "";
 
   const fileEntries = await Promise.all(
@@ -332,8 +349,7 @@ async function handleShareTarget(request) {
   return Response.redirect("/light/posts/new?share=pending", 303);
 }
 
-/** @param {string} path */
-function isMediaPath(path) {
+function isMediaPath(path: string) {
   return /^\/\d{4}\/\d{2}\/[^/]+$/.test(path);
 }
 
@@ -347,12 +363,12 @@ const IMAGE_CACHES = ["point-images-full-v1", "point-images-v1"];
  * a miss. The spec resolves undefined for an unknown cacheName, but older
  * implementations reject instead, and a user who has never pressed "Update
  * Offline Data" has neither cache.
- *
- * @param {string} cacheName
- * @param {string} url
- * @param {CacheQueryOptions} [options]
  */
-async function matchImageCache(cacheName, url, options = {}) {
+async function matchImageCache(
+  cacheName: string,
+  url: string,
+  options: CacheQueryOptions = {},
+) {
   try {
     return await caches.match(url, { ...options, cacheName });
   } catch {
@@ -369,10 +385,8 @@ async function matchImageCache(cacheName, url, options = {}) {
  * variant happened to be cached first — a 128px chip painted into a full-width
  * slot. Match exactly instead, and only when we cannot reach the network at all
  * fall back to an approximate hit: offline, a soft image beats a broken one.
- *
- * @param {Request} request
  */
-async function serveMedia(request) {
+async function serveMedia(request: Request) {
   for (const name of IMAGE_CACHES) {
     const hit = await matchImageCache(name, request.url);
     if (hit) return hit;
@@ -397,31 +411,29 @@ async function serveMedia(request) {
   return new Response("Not found", { status: 404 });
 }
 
-/** @param {Request} request */
-async function serveFromOfflineStore(request) {
+async function serveFromOfflineStore(request: Request) {
   const url = new URL(request.url);
   const path = url.pathname;
 
   try {
-    const settings = (await idbGet("meta", "blog_settings")) || {};
+    const settings =
+      (await idbGet<OfflineSettings | null>("meta", "blog_settings")) || {};
     const page = parseInt(url.searchParams.get("page") ?? "", 10) || 1;
     const perPage =
       parseInt(url.searchParams.get("per_page") ?? "", 10) ||
-      parseInt(settings.posts_per_page, 10) ||
+      parseInt(String(settings.posts_per_page), 10) ||
       10;
 
-    /** @type {OfflineTag[]} */
-    const allTags = await idbGet("tags");
-    /** @type {OfflineTagRel[]} */
-    const allRelationships = await idbGet("tag_relationships");
-    const minPosts = parseInt(settings.min_tag_posts_to_show || "0", 10);
+    const allTags = await idbGet<OfflineTag[]>("tags");
+    const allRelationships =
+      await idbGet<OfflineTagRel[]>("tag_relationships");
+    const minPosts = parseInt(
+      String(settings.min_tag_posts_to_show || "0"),
+      10,
+    );
 
     // Helper: Build tag hierarchy
-    /**
-     * @param {number | null} parentID
-     * @returns {TagTreeNode[]}
-     */
-    const buildTagTree = (parentID) => {
+    const buildTagTree = (parentID: number | null): TagTreeNode[] => {
       return allTags
         .filter((t) => {
           if (t.is_hidden) return false;
@@ -430,7 +442,7 @@ async function serveFromOfflineStore(request) {
           return rels.some((r) => r.parent_id === parentID);
         })
         .map(
-          /** @returns {TagTreeNode} */ (t) => ({
+          (t): TagTreeNode => ({
             id: t.id,
             name: t.name,
             slug: t.slug,
@@ -462,8 +474,7 @@ async function serveFromOfflineStore(request) {
           { status: 503, headers: { "Content-Type": "application/json" } },
         );
       }
-      /** @type {OfflinePost[]} */
-      const posts = await idbGet("posts");
+      const posts = await idbGet<OfflinePost[]>("posts");
 
       const tag_cloud = allTags
         .filter((t) => t.post_count >= minPosts && !t.is_hidden)
@@ -501,8 +512,7 @@ async function serveFromOfflineStore(request) {
     const postSlugMatch = path.match(/^\/api\/posts\/slug\/([^/]+)$/);
     if (postSlugMatch) {
       const slug = postSlugMatch[1];
-      /** @type {OfflinePost[]} */
-      const posts = await idbGet("posts");
+      const posts = await idbGet<OfflinePost[]>("posts");
       const post = posts.find((p) => p.slug === slug);
       if (post) {
         return new Response(JSON.stringify(post), {
@@ -521,8 +531,7 @@ async function serveFromOfflineStore(request) {
       const slug = tagPageMatch[1];
       const tag = allTags.find((t) => t.slug === slug);
       if (tag) {
-        /** @type {OfflinePost[]} */
-        const allPosts = await idbGet("posts");
+        const allPosts = await idbGet<OfflinePost[]>("posts");
         const posts = allPosts.filter(
           (p) => p.tags && p.tags.some((t) => t.slug === slug),
         );
@@ -536,16 +545,13 @@ async function serveFromOfflineStore(request) {
 
         // Breadcrumbs (reconstruct from relationships)
         const breadcrumbs = [];
-        /** @type {OfflineTag | null | undefined} */
-        let curr = tag;
+        let curr: OfflineTag | null | undefined = tag;
         while (curr) {
-          /** @type {number} */
-          const id = curr.id;
+          const id: number = curr.id;
           const rel = allRelationships.find((r) => r.child_id === id);
           if (rel) {
             const parentID = rel.parent_id;
-            /** @type {OfflineTag | undefined} */
-            const parent = allTags.find((t) => t.id === parentID);
+            const parent: OfflineTag | undefined = allTags.find((t) => t.id === parentID);
             if (parent && parent.include_in_breadcrumbs) {
               breadcrumbs.unshift({
                 id: parent.id,
@@ -616,10 +622,8 @@ async function serveFromOfflineStore(request) {
 
     // 2.3 /api/pages/map
     if (path === "/api/pages/map") {
-      /** @type {OfflineTagLocation[]} */
-      const allLocs = await idbGet("tag_locations");
-      /** @type {Record<number, OfflineTagLocation>} */
-      const locMap = {};
+      const allLocs = await idbGet<OfflineTagLocation[]>("tag_locations");
+      const locMap: Record<number, OfflineTagLocation> = {};
       allLocs.forEach((l) => (locMap[l.tag_id] = l));
 
       const mapTags = allTags
@@ -658,8 +662,7 @@ async function serveFromOfflineStore(request) {
     const navMatch = path.match(/^\/api\/posts\/(\d+)\/navigation$/);
     if (navMatch) {
       const id = parseInt(navMatch[1], 10);
-      /** @type {OfflinePost[]} */
-      const posts = await idbGet("posts");
+      const posts = await idbGet<OfflinePost[]>("posts");
       const idx = posts.findIndex((p) => p.id === id);
       if (idx !== -1) {
         const next =
@@ -701,8 +704,7 @@ async function serveFromOfflineStore(request) {
   }
 }
 
-/** @param {Request} request */
-async function staleWhileRevalidate(request) {
+async function staleWhileRevalidate(request: Request) {
   const cache = await caches.open(CACHE_NAME);
 
   // Match on the FULL URL including the query string: index.html references

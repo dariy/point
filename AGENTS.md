@@ -42,7 +42,7 @@ Read a file before you edit it — always.
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only, `--changed` only the lanes your branch touches, `--only <step>` one step — `--list` names them) <!-- verify:skip the gate CI already runs, one step per `--only` call --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
 | Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
-| Frontend typecheck | `npm run typecheck` — `tsc -p tsconfig.json` over `frontend/src` (TypeScript only) and `frontend/sw.js`; no emit, erasable syntax only |
+| Frontend typecheck | `npm run typecheck` — `tsc -p tsconfig.json` over `frontend/src` (TypeScript only) and `frontend/sw.ts`; no emit, erasable syntax only |
 | Browser automation | `npx --no-install playwright-cli --version` — drives a real Chromium from the shell, so a UI change can be looked at; see [Verifying your change](#verifying-your-change) |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
@@ -75,7 +75,7 @@ command you add cannot run unattended, mark it in the source with
   expands `SELECT *` by byte offset, so one em dash in a comment breaks every query after it.
 
 **`frontend/src` is TypeScript, and only TypeScript.** `scripts/check.sh` fails on a `.js` file
-there. JS stays in `frontend/sw.js`, `frontend/vendor/`, `frontend/test/`, `frontend/e2e/` and
+there. JS stays in `frontend/vendor/`, `frontend/test/`, `frontend/e2e/` and
 `demo/`. Node and the bundler remove the types, so there is no emit and the rules follow from that:
 
 - Erasable syntax only: no `enum`, no `namespace`, no parameter properties. Type-only imports use

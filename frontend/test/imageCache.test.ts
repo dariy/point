@@ -5,7 +5,7 @@ import { preCacheImages, clearImageCache } from '../src/utils/imageCache.ts';
 import { mock } from './helpers/mock.ts';
 
 /**
- * imageCache writes the two caches the service worker reads (sw.js,
+ * imageCache writes the two caches the service worker reads (sw.ts,
  * IMAGE_CACHES). The offline settings card used to call it as
  * `preCacheImages(urls, callback)`, which put the callback where the cache name
  * goes: `type === 'full'` was never true, so originals landed in the thumbnail
