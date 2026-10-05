@@ -10,8 +10,8 @@
 // already exported: FRONTEND_DEBUG picks the bundle set to rebuild (-d), and
 // DEV_VERSION is the Go version stamp. Node's fs.watch only — no dependencies.
 import { Buffer } from "node:buffer";
-import { spawn } from "node:child_process";
-import { existsSync, readdirSync, statSync, watch } from "node:fs";
+import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync, readdirSync, statSync, watch, type FSWatcher } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,13 +19,29 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DEBOUNCE_MS = 150;
 const STOP_TIMEOUT_MS = 5000;
 
-const cssOnly = (f) => (f.endsWith(".css") ? "css" : null);
+type Kind = "css" | "js" | "go";
+
+interface Tree {
+  dir: string;
+  shallow?: boolean;
+  classify: (f: string) => Kind | null;
+}
+
+interface Build {
+  label: string;
+  cmd: string;
+  args: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+}
+
+const cssOnly = (f: string): Kind | null => (f.endsWith(".css") ? "css" : null);
 
 // Each watched tree, and what a changed file in it rebuilds — null for a file
 // no build reads (editor swap files, Go tests). classify gets the path relative
 // to the tree. The build outputs (frontend/js*, the frontend/css/*.css bundles,
 // frontend/css/p) sit outside these trees, so a rebuild never triggers itself.
-const TREES = [
+const TREES: Tree[] = [
   // Plugin CSS partials live beside their JS under frontend/src/plugins/<id>/.
   {
     dir: "frontend/src",
@@ -58,10 +74,10 @@ const TREES = [
 
 // Build order when several kinds are pending: frontend first, so a restarted
 // server comes up on the new bundles.
-const ORDER = ["css", "js", "go"];
+const ORDER: Kind[] = ["css", "js", "go"];
 
 const debug = process.env.FRONTEND_DEBUG === "1";
-const BUILDS = {
+const BUILDS: Record<Kind, Build> = {
   css: { label: "CSS", cmd: "./scripts/build-css.sh", args: [] },
   js: {
     label: debug ? "JS (debug)" : "JS (release)",
@@ -84,18 +100,18 @@ const BUILDS = {
   },
 };
 
-const log = (msg) => console.log(`[watch] ${msg}`);
+const log = (msg: string) => console.log(`[watch] ${msg}`);
 
 // runBuild runs one build with its output captured, printing the output only
 // when the build fails — a successful save stays one line.
-function runBuild({ cmd, args, env, cwd }) {
+function runBuild({ cmd, args, env, cwd }: Build): Promise<{ ok: boolean; output: string }> {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, {
       cwd: cwd ?? ROOT,
       env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const out = [];
+    const out: Buffer[] = [];
     child.stdout.on("data", (b) => out.push(b));
     child.stderr.on("data", (b) => out.push(b));
     child.on("error", (err) => resolve({ ok: false, output: String(err) }));
@@ -107,7 +123,7 @@ function runBuild({ cmd, args, env, cwd }) {
 
 // ── Server ─────────────────────────────────────────────────────────────────
 
-let server = null;
+let server: ChildProcess | null = null;
 let stopping = false;
 
 function startServer() {
@@ -122,11 +138,11 @@ function startServer() {
   });
 }
 
-function stopServer() {
+function stopServer(): Promise<void> {
   const s = server;
   server = null;
   if (!s || s.exitCode !== null || s.signalCode !== null) return Promise.resolve();
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve) => {
     const kill = setTimeout(() => s.kill("SIGKILL"), STOP_TIMEOUT_MS);
     s.once("exit", () => {
       clearTimeout(kill);
@@ -138,11 +154,11 @@ function stopServer() {
 
 // ── Rebuild queue ──────────────────────────────────────────────────────────
 
-const pending = new Set();
-let timer = null;
+const pending = new Set<Kind>();
+let timer: NodeJS.Timeout | undefined;
 let building = false;
 
-function schedule(kind) {
+function schedule(kind: Kind) {
   pending.add(kind);
   clearTimeout(timer);
   timer = setTimeout(drain, DEBOUNCE_MS);
@@ -187,12 +203,12 @@ async function drain() {
 // moment the file is replaced rather than rewritten — an atomic editor save,
 // a git checkout — after which edits to it go unseen. A directory watch
 // reports its entries by name, whatever inode they have.
-const watchers = new Map();
+const watchers = new Map<string, FSWatcher>();
 
-function watchTree(root, onChange, shallow = false) {
-  const add = (dir) => {
+function watchTree(root: string, onChange: (rel: string) => void, shallow = false) {
+  const add = (dir: string) => {
     if (watchers.has(dir)) return;
-    let w;
+    let w: FSWatcher;
     try {
       w = watch(dir, (_event, name) => {
         if (!name) return;
@@ -218,7 +234,7 @@ function watchTree(root, onChange, shallow = false) {
   add(root);
 }
 
-function isDir(path) {
+function isDir(path: string) {
   try {
     return statSync(path).isDirectory();
   } catch {

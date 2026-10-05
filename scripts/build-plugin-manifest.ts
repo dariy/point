@@ -8,14 +8,19 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 
+// The part of the esbuild metafile this script reads.
+interface Metafile {
+  outputs?: Record<string, { entryPoint?: string }>;
+}
+
 const [metaPath, outPath] = process.argv.slice(2);
 if (!metaPath || !outPath) {
   console.error("usage: build-plugin-manifest.ts <meta.json> <out.json>");
   process.exit(1);
 }
 
-const meta = JSON.parse(readFileSync(metaPath, "utf8"));
-const manifest = {};
+const meta: Metafile = JSON.parse(readFileSync(metaPath, "utf8"));
+const manifest: Record<string, string> = {};
 
 for (const [outFile, info] of Object.entries(meta.outputs || {})) {
   const entry = info.entryPoint;

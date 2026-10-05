@@ -10,12 +10,18 @@
 // `left.property` stops matching once a wrapper sits in between. The helpers
 // below spell each position both ways: bare, and inside one wrapper.
 
+// The slice of the Oxlint JS plugin API this rule uses.
+interface RuleContext {
+  options: Array<{ skip?: string[] } | undefined>;
+  report(d: { node: unknown; message: string }): void;
+}
+
 const WRAPPERS = "TSAsExpression, TSNonNullExpression, TSSatisfiesExpression, TSTypeAssertion";
 
 // [path=value] for a path that may sit inside a wrapper: `left.property.name`
 // also matches `left.expression.property.name`, and so on for each segment
 // listed in `at` (the segments a wrapper can occupy).
-function attr(path, at = [path.split(".")[0]]) {
+function attr(path: string, at: string[] = [path.split(".")[0]]): string {
   const variants = new Set([path]);
   for (const seg of at) {
     for (const v of [...variants]) {
@@ -29,9 +35,9 @@ function attr(path, at = [path.split(".")[0]]) {
 }
 
 // `Parent > Child`, also when a wrapper sits between them.
-const child = (parent, kid) => `${parent} > ${kid}, ${parent} > :matches(${WRAPPERS}) > ${kid}`;
+const child = (parent: string, kid: string): string => `${parent} > ${kid}, ${parent} > :matches(${WRAPPERS}) > ${kid}`;
 
-export const RESTRICTED = [
+export const RESTRICTED: Array<{ id?: string; selector: string; message: string }> = [
   {
     // The sinks themselves are now off limits everywhere but the two lines of
     // utils/helpers.ts that implement setHTML()/insertHTML(), which carry a
@@ -135,12 +141,12 @@ export default {
       meta: {
         schema: [{ type: "object", properties: { skip: { type: "array", items: { type: "string" } } } }],
       },
-      create(context) {
+      create(context: RuleContext) {
         const skip = new Set(context.options[0]?.skip ?? []);
-        const visitors = {};
+        const visitors: Record<string, (node: unknown) => void> = {};
         for (const { id, selector, message } of RESTRICTED) {
           if (id && skip.has(id)) continue;
-          visitors[selector] = (node) => context.report({ node, message });
+          visitors[selector] = (node: unknown) => context.report({ node, message });
         }
         return visitors;
       },

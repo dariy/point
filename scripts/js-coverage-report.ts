@@ -59,8 +59,8 @@ if (linesFound === 0) {
   process.exit(2);
 }
 
-function walk(dir) {
-  const out = [];
+function walk(dir: string): string[] {
+  const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) out.push(...walk(full));
@@ -77,7 +77,7 @@ function walk(dir) {
 // demo/mock/ is the static demo's fixture-backed API stand-in
 // (demo/scripts/build.sh). It lives outside SRC_DIR, so it is already outside
 // the walk below; nothing in a normal build reaches it.
-const COVERAGE_EXCLUDE = [];
+const COVERAGE_EXCLUDE: RegExp[] = [];
 
 const allSrc = walk(SRC_DIR)
   .map((f) => relative(ROOT, f).split(sep).join("/"))

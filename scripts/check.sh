@@ -119,7 +119,8 @@ step_js_lint() {
 # frontend/src is TypeScript: tsc with no emit. A .js file under frontend/src
 # fails this step, so the move to TypeScript cannot go back. JS stays only in
 # frontend/vendor/ and demo/. tsconfig.test.json
-# checks the .ts tests, the E2E tests and their helpers. Part of --lint,
+# checks the .ts tests, the E2E tests and their helpers; tsconfig.scripts.json
+# checks scripts/*.ts. Part of --lint,
 # because a broken type is a static error like any other.
 step_js_typecheck() {
     cd "$ROOT_DIR"
@@ -130,6 +131,7 @@ step_js_typecheck() {
     fi
     node_modules/.bin/tsc -p tsconfig.json
     node_modules/.bin/tsc -p tsconfig.test.json
+    node_modules/.bin/tsc -p tsconfig.scripts.json
 }
 
 # What the AST rules in scripts/oxlint-point.ts cannot see: hand-applied escapeHtml in
@@ -196,7 +198,7 @@ if [ -n "$CHANGED" ]; then
     while IFS= read -r f; do
         case "$f" in
             api/*|scripts/check-sql-layer.sh|scripts/coverage-gate.sh) go=1 ;;
-            frontend/*|demo/*|scripts/*.ts|package.json|package-lock.json|.oxlintrc.json|tsconfig.json)
+            frontend/*|demo/*|scripts/*.ts|package.json|package-lock.json|.oxlintrc.json|tsconfig*.json)
                 js=1; e2e=1 ;;
             scripts/check-html-escaping.sh|scripts/check-vendor-sinks.sh) js=1 ;;
             scripts/run-e2e.sh|scripts/build-css.sh|scripts/build-js.sh) e2e=1 ;;
