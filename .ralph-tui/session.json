@@ -1,0 +1,5505 @@
+{
+  "version": 1,
+  "sessionId": "55037591-b47d-4a0e-80fd-322da6d5e2c8",
+  "status": "running",
+  "startedAt": "2026-10-05T12:57:04.530Z",
+  "updatedAt": "2026-10-05T14:31:31.422Z",
+  "currentIteration": 8,
+  "maxIterations": 0,
+  "tasksCompleted": 8,
+  "isPaused": false,
+  "agentPlugin": "claude",
+  "trackerState": {
+    "plugin": "beads-rust-bv",
+    "executionScopes": [],
+    "totalTasks": 900,
+    "tasks": [
+      {
+        "id": "p-0b98.1",
+        "title": "Timeline: stop hijacking page scroll on touch",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.2",
+        "title": "Timeline: Ctrl/Cmd+wheel zoom, plain wheel passes through",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dzi7",
+        "title": "Critical bug with infinite loop on onboarding",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg",
+        "title": "Tag system ground-up redesign",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-d5zg",
+        "title": "WU1: Poll container status before publishing",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-qfu3",
+        "title": "External photo library should be shown separately from the site media. It shouldn't be copied to the site media folder.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-6ac6",
+        "title": "Make a folder for user themes",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-14x",
+        "title": "Implement deploy to production via ephemeral tailscale agents.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-jgo",
+        "title": "Reset working tree before tagging",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-222",
+        "title": "Replace placeholder contact email",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-05m",
+        "title": "Purge internal AI/process docs from full git history",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x2a",
+        "title": "Prepare to open repo",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-e9h",
+        "title": "Backup enhancement and disk space warning indication",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-j5o",
+        "title": "Safety rails for AI generated content.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-107",
+        "title": "Remove build/gemini_api_key.age from git history",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-v9e",
+        "title": "Remove personal data from build/.env",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.3",
+        "title": "Timeline: re-enable chevron nav buttons",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-off-develop-hvt6",
+        "title": "chore(carousel): move Carousel Studio off develop onto the carousel-studio branch",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.4",
+        "title": "Timeline: touch target sizes",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.5",
+        "title": "Timeline: range readout chip + reset (filter mode)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hosting-ready-vyok",
+        "title": "epic(hosting): managed-hosting readiness — setup claim token, backups on by default, real 404s (review 2026-09-28)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.6",
+        "title": "Timeline: density histogram",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.7",
+        "title": "Timeline: honest collapsed state + one-time gesture hint",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.8",
+        "title": "Timeline: hover tooltips",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.9",
+        "title": "Timeline: center indicator rework",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o",
+        "title": "epic(media): photographer-grade media and trust fixes (review 2026-09-28)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.10",
+        "title": "Timeline: bottom sheet for mobile locations popover",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.11",
+        "title": "Timeline: momentum + extra zoom gestures",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.12",
+        "title": "Timeline: cluster fan-out transition",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.13",
+        "title": "Timeline: keyboard zoom, aria-live, popover focus management",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.14",
+        "title": "Timeline: haptic snap tick",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-overlay-scroll-lock-leak-adlj",
+        "title": "admin: overlays leak their body scroll lock when a re-render unmounts them",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.15",
+        "title": "Timeline: consolidate range indicators into one inline centered chip",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.16",
+        "title": "Timeline: aria-live announcements for range changes",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.17",
+        "title": "Timeline: filter-row year chip as fallback when timeline hidden",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98.18",
+        "title": "Timeline: density histogram invisible at rest (collapsed state)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.1",
+        "title": "ts strict: per-directory ratchet gate in check.sh",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.2",
+        "title": "ts strict: frontend/src/utils (278 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.3",
+        "title": "ts strict: frontend/src/core (181 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.4",
+        "title": "ts strict: api, src root, sw.js, components/shared+public (172 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.5",
+        "title": "ts strict: components/light media editors (~190 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.6",
+        "title": "ts strict: components/light other files (~200 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.7",
+        "title": "ts strict: pages/light PostEditPage + PostsListPage (186 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.8",
+        "title": "ts strict: pages/light other pages (169 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thumb-ladder-ph12",
+        "title": "epic: responsive thumbnail ladder + honest cache-busting",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-24ky",
+        "title": "Editor's Delete action calls a method that does not exist",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.9",
+        "title": "ts strict: plugins comments, nav-menu, timeline, public-header (179 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.10",
+        "title": "ts strict: other plugins + pages/public (149 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv.11",
+        "title": "ts strict: set strict true, remove the ratchet",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ri2.1",
+        "title": "Backend: move the two maps out of tags-route into a new single-claim map-route (/map)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3",
+        "title": "epic: make the repo agent-native — vision + first quarter",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-image-8o49",
+        "title": "fix: image decode is unbounded — no pixel guard, no concurrency limit",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ri2.2",
+        "title": "Frontend: add the /map route claimed by map-route; /tags resolves the graph only",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ri2.3",
+        "title": "Public navigation: a tags icon button and a map icon button, independently gated",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-page-xq8g",
+        "title": "fix: the public page cache is unsound (dead keys, torn reads, unbounded growth)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-email-service-bcxk",
+        "title": "fix: email_service.go review findings — envelope parsing, SMTP injection, STARTTLS downgrade, timeouts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-mcp-2ng7",
+        "title": "test: mcp/oauth is 478 LOC of OAuth at 0% coverage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-perf-immutable-pk8z",
+        "title": "perf: Cache-Control no-cache on provably-immutable assets",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-perf-enable-z3z3",
+        "title": "perf: enable gzip compression (none anywhere)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sec-cookie-jmbr",
+        "title": "sec: admin session cookies ship without Secure flag; no HSTS",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sec-ratelimit-5dp1",
+        "title": "sec: rate limiting is bypassable via X-Forwarded-For",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-media-2yvr",
+        "title": "fix: media-visibility sync fails silently in 8 places (privacy)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-perf-media-i99r",
+        "title": "perf: add index on media(original_path)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-pin-esbuild-1czo",
+        "title": "esbuild unpinned in Docker build (no lockfile, npx --yes fetches latest)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sw-app-xn75",
+        "title": "SW stale-while-revalidate defeats ?v= cache-busting on app.js",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-preview-page-ivfd",
+        "title": "SPA /preview/<token> page renders empty ('Preview: undefined') while preview API returns full data",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tag-update-umjf",
+        "title": "Tag update API treats partial updates as full replace — omitted fields are wiped",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ri2.4",
+        "title": "Admin Plugins page: split the tags wireframe into a /tags panel and a /map panel",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ri2.5",
+        "title": "Docs: document the two slots — /tags for the graph, /map for the maps",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-header-redesign-4rze",
+        "title": "Header redesign: four zones, one fold engine",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tezi",
+        "title": "Integrate point-mcp as in-process /mcp plugin",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dwmv",
+        "title": "Optimize SQLite read performance (PRAGMAs and sqlc queries)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.1",
+        "title": "chore: commit agent instructions and truthful dev-loop onboarding",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.2",
+        "title": "ci: verify every documented command actually runs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.3",
+        "title": "feat(scripts): doctor.sh — environment readiness with --json",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.4",
+        "title": "ci(release): publish GitHub Releases and linux tarballs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.5",
+        "title": "chore: commit the playwright-cli skill so contributors' agents inherit it",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.6",
+        "title": "docs: a verify-a-UI-change recipe for agents",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.7",
+        "title": "refactor: unify route registration in routes.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.8",
+        "title": "refactor: split main.go along its existing seams",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.9",
+        "title": "refactor: split post_service.go along its existing seams",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.10",
+        "title": "refactor: split PostEditPage.js along its existing seams",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.11",
+        "title": "docs: architecture/map.md — the where-does-X-live table",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.12",
+        "title": "chore: mirror curated beads to GitHub Issues as agent-ready work",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.13",
+        "title": "chore: set repo topics",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.14",
+        "title": "docs(readme): surface the MCP server and agent contribution",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.15",
+        "title": "docs: ai-declaration.md — provenance by category and level",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-agent-native-zjl3.16",
+        "title": "chore: gh-intake.sh — surface untriaged GitHub issues for beads intake",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.1",
+        "title": "feat(postNodes): carousel block keys and the pure node operations",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.2",
+        "title": "feat(publish): Instagram export is every image in the post, in order",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.3",
+        "title": "feat(api): carousels keyed by (post_id, block_key)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.4",
+        "title": "feat(carousel): the studio addresses one block among several",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.5",
+        "title": "feat(carousel): the studio adopts a plain carousel, and never deletes its photos",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.6",
+        "title": "refactor(editor): visual editor reorder moves to pointer events (and gains touch)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.7",
+        "title": "feat(pointerReorder): cross-container support — per-container axis, direct-child candidates",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z",
+        "title": "Public frontend UX overhaul",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.8",
+        "title": "feat(editor): slides reorder inside the carousel card's strip",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.9",
+        "title": "feat(editor): drag a photo into a carousel and a slide back out",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.2",
+        "title": "feat(carousel): document — toDeckDocument + updateSlideFraming",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.3",
+        "title": "feat(carousel): deck-mode geometry — deckSlideRects + deckSlideFitCSS",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.4",
+        "title": "feat(carousel): renderCarousel facade + renderDeck with fetch dedup",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.5",
+        "title": "feat(carousel): studio deck mode — doc as state, pan/zoom, CSS preview",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.6",
+        "title": "feat(carousel): background fill — contain letterbox, gradient, per-slide picker",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.7",
+        "title": "docs(carousel): graduate the S2 design into carousel-studio.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.1",
+        "title": "feat(carousel): layer schema — normalizeLayer, mutators, spanLayers in specHash",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ca7",
+        "title": "Address security scan #43: path traversal in serveSimplifiedMedia",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-uf59",
+        "title": "Fix GitHub code scanning security alerts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.2",
+        "title": "feat(carousel): layer geometry — layerRect/layerCSS pair + spanLayerRect",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.3",
+        "title": "feat(carousel): paint text layers — theme font stack, wrap and auto-fit",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.4",
+        "title": "feat(carousel): paint image, rect, counter and arrow layers",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.5",
+        "title": "refactor(carousel): split the studio god class before the layer UI lands",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.6",
+        "title": "feat(carousel): studio layer panel — add, select, edit, reorder, delete",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.7",
+        "title": "feat(carousel): direct manipulation — drag, resize and snap layers on the stage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ro42",
+        "title": "Visual mode in post editor should break the post body into several pieces by `---` like it does with photos.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hb9z",
+        "title": "index page is broken when `page` post is selected as index page.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-qq04",
+        "title": "Use Argon2id instad of bcrypt",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-e207",
+        "title": "Landing adaptation into a new theme.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zibl",
+        "title": "Security issues to be clear",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4yqb",
+        "title": "Add page break to post text.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-r8gw",
+        "title": "Fix or create scripts/SETUP-PRODUCTION.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-vlhn",
+        "title": "Audit internal directories for private info",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-eggp",
+        "title": "Separate development repo `point` from deployment repo `point-hosting`",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-drn",
+        "title": "Update ci pipelines from node 20 as deprecated to a modern one",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-evq",
+        "title": "Fix first-run: auto-create data dirs and fix permissions in docker-compose",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-6wd",
+        "title": "Cut first release tag v0.1.0 and verify image",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9tv",
+        "title": "Bake build version into the binary",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-osb",
+        "title": "Update README: clarify scripts, add image quickstart, badges, first-run note",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1of",
+        "title": "Audit .claude/.gemini/.metaswarm/.beads tracking",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-jkk",
+        "title": "Add license field to package.json",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1o1",
+        "title": "Fix pagination reset when timeline fires on init",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-jk1",
+        "title": "fix(timeline): zoom and pan broken in initial collapsed state",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-p40",
+        "title": "Fix timeline touch drag: mount.innerHTML destroys touch target mid-gesture",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-byw",
+        "title": "Fix timeline zoom anchor and touch drag click bleed",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8r5",
+        "title": "refactor(timeline): replace SVG+foreignObject with plain HTML",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0q0",
+        "title": "fix(timeline): mousedown capture mode for pill/cluster drag",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-05g",
+        "title": "Fix: #timeline-mount not found on /tag/:slug",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-u3o",
+        "title": "Fix Timeline bugs and usability",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-qr4",
+        "title": "Fix: timeline touch events bubble to page-level gesture controller",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-45r",
+        "title": "Fix /map page: map and timeline not rendering",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zha",
+        "title": "Theming foundation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-20m",
+        "title": "`media_import_path`",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dc9",
+        "title": "Fix duplicate drag-drop listeners causing 5x upload on drop",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ob",
+        "title": "Manage exif data",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-2y3",
+        "title": "External backup",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0s5",
+        "title": "\"Enable Back`up\" doesn't affect the backup flow",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-48x",
+        "title": "Fix media visibility on scheduler auto-publish",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-otx",
+        "title": "Add Search UI",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7bp",
+        "title": "Fix og:image + social meta tags on PostPage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-jzj",
+        "title": "Add SECURITY.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5xg",
+        "title": "Add CODE_OF_CONDUCT.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-gwg",
+        "title": "Add CONTRIBUTING.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-37p",
+        "title": "Fix carousel slide not clearing on navigation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9as",
+        "title": "fix: log actual error and fail fast when DB is read-only",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-kt7",
+        "title": "Test and fix install.sh end-to-end",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-jjo",
+        "title": "Fix tags-filters menu race conditions: click/hover listener conflicts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7j6",
+        "title": "Fix post visibility for logged-in users: tag page empty, pages in lists",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-q51",
+        "title": "Fix auth-scoped visibility: hidden tags/posts shown to admins, post page ancestor flyout missing",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4ri",
+        "title": "Tag ancestor flyout — global navTags cache + router fix + public page wiring",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.8",
+        "title": "feat(carousel): span layers — the across-slides editing surface and preview",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.9",
+        "title": "docs(carousel): record S3 layers in carousel-studio.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s4-zxae.1",
+        "title": "feat(carousel): template placeholders — applyTemplate and the envelope",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s4-zxae.2",
+        "title": "feat(api): carousel_templates table and /api/carousel/templates CRUD",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s4-zxae.3",
+        "title": "feat(carousel): dependency-free ZIP reader over DecompressionStream",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s4-zxae.4",
+        "title": "feat(carousel): PPTX importer — OOXML into a carousel template",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s4-zxae.5",
+        "title": "feat(carousel): SVG importer, and the outlined-text warning",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s4-zxae.6",
+        "title": "feat(carousel): template gallery, import dialog and the import report",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s4-zxae.7",
+        "title": "docs(carousel): record the template format and the PPTX/SVG importers",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6.1",
+        "title": "feat(carousel): give the stage room, and make the studio work narrow",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6.2",
+        "title": "feat(carousel): undo/redo over the carousel document",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6.3",
+        "title": "feat(carousel): the stage becomes the editing surface",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6.4",
+        "title": "feat(carousel): Panorama/Slides naming, and a per-slide source",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t",
+        "title": "epic(ts): move tests, e2e, sw, scripts and demo to checked TypeScript",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-flaky-tt-undo-n9op",
+        "title": "test(e2e): trustedTypes code editor undo test is flaky — CSS editor did not mount",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-royn",
+        "title": "fix(map): a timeline range change on /map navigates to the home page",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-rbu5",
+        "title": "test(js): eslintRules fixtures in frontend/src race htmlInterpolation's scan",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6.5",
+        "title": "feat(carousel): add, remove, duplicate and reorder slides",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-side-panel-bup2",
+        "title": "feat(atlas): desktop side panel lists all posts of the clicked place",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq75",
+        "title": "Remove Repowise from pipelines and plugins",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6.6",
+        "title": "feat(carousel): vertical anchor by direct drag on the stage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6.7",
+        "title": "fix(carousel): preview/render parity for text and arrows",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6.8",
+        "title": "docs(carousel): record the S6 studio surface",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.1",
+        "title": "fix(api): Instagram carousel slide order is arbitrary",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.2",
+        "title": "docs+test: pin the :::{.carousel-block} render contract",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.3",
+        "title": "fix(editor): visual editor destroys a :::{ } fence wrapping images",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.4",
+        "title": "feat(plugins): carousel plugin skeleton, gated end to end",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.5",
+        "title": "feat(carousel): pure geometry + document modules",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.6",
+        "title": "feat(api): carousels table and /api/carousel CRUD",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.7",
+        "title": "feat(carousel): splitter MVP - slice one image into 4:5 slides",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.8",
+        "title": "feat(carousel): slide cleanup and Instagram slide selection",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.9",
+        "title": "feat(frontend): render the carousel block on the public site",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.10",
+        "title": "feat(carousel): fit report and slide-count proposals in geometry",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.11",
+        "title": "feat(carousel): per-slide crop decode, drop the 4096px strip cap",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.12",
+        "title": "feat(carousel): fit panel — source size, count chips, strategy picker",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1",
+        "title": "carousel studio: the touch layout (S10)",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-carousel-studio-khzq.13",
+        "title": "fix(carousel): filmstrip preview stretches instead of cropping",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.14",
+        "title": "feat(carousel): render lifecycle — progress, dirty, skip, remove, cleanup",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.15",
+        "title": "docs(carousel): sizing model and studio UX pass",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.16",
+        "title": "feat(carousel): open Studio from the visual editor, and get back out",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.20",
+        "title": "Carousel Studio S7: direct manipulation — click-to-select, rotation, on-canvas text, guarded zoom",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.21",
+        "title": "reflow(carousel): Studio block placement — stage toolbar above canvas, doc controls into the properties sidebar, rendered strip regrouped",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.22",
+        "title": "fix(carousel): a rotated layer flashes to 0 degrees while you drag it",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.23",
+        "title": "fix(carousel): scale and grab a rotated layer in its own frame",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nidt",
+        "title": "refactor(editor): split VisualEditor — render, the bind methods, and _bindDrag",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.24",
+        "title": "fix(carousel): an old carousel opens with an empty layer list",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.25",
+        "title": "fix(carousel): the layer text box loses what you typed",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.26",
+        "title": "test(carousel): prove the plugin switches off cleanly, and refresh its plugin doc",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.27",
+        "title": "Carousel Studio S8: the studio is an app, not a page",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.28",
+        "title": "Carousel Studio S9: the ink layer — draw on a slide with a stylus",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.20.1",
+        "title": "fix(carousel): guard wheel-zoom behind Ctrl/Shift",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.20.2",
+        "title": "feat(carousel): layer schema — box.rotate field",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.20.3",
+        "title": "feat(carousel): click-to-select a layer directly on the stage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.20.4",
+        "title": "feat(carousel): render rotated layers (ctx.rotate)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd",
+        "title": "Carousel composition in the Visual editor: plain carousels, many per post, drag in and out",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-yf4q",
+        "title": "Carousel: redesign 'add-layer' buttons. Instead having 5+ buttons, make one drop down from them",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-h37g",
+        "title": "Carousel: redesign layer ordering. Remove buttons 'data-action=\"layer-raise\"' and 'layer-lower' insead introduce the 6 dot drag area at the beginning of the row. So, the user could drag the rows himself.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-prfq",
+        "title": "add visibility switch for all layer objects. So, the user could change it. Place it as eye icon button before the name of the object 'carousel-studio__layer-name'.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4ci7",
+        "title": "Frontend cleanup: unused props, bare object annotations, and PluginManifestEntry type",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-he6z",
+        "title": "add search by filename field in 'Insert Media' dialog.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.20.5",
+        "title": "feat(carousel): preview + rotate handle, drag-to-rotate",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.20.6",
+        "title": "feat(carousel): on-canvas text editing (double-click, contenteditable)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.20.7",
+        "title": "docs(carousel): record S7 direct manipulation in carousel-studio.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.27.1",
+        "title": "feat(carousel): the studio owns the viewport, and the page stops scrolling",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.27.2",
+        "title": "feat(carousel): one toolbar — mode, document controls and zoom on a single row",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.27.3",
+        "title": "feat(carousel): the rail becomes an inspector — properties under the selected object",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dev-pipeline-a8bl",
+        "title": "Optimize the development pipeline: bead context, CI wall-clock, check.sh, dev watch, process",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.27.4",
+        "title": "refactor(carousel): one pointer session under both gesture controllers",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.27.5",
+        "title": "feat(carousel): touch and stylus are first class on the stage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.27.6",
+        "title": "fix(editor): finish the Visual editor carousel card — slide handles and its two buttons",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.27.7",
+        "title": "docs(carousel): record the S8 studio shell",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.28.1",
+        "title": "feat(carousel): the ink layer schema — a sixth type in LAYER_BUILDERS",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.28.2",
+        "title": "feat(carousel): paint an ink layer, on canvas and in the preview",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.28.3",
+        "title": "feat(carousel): the draw tool — stylus strokes and a stroke eraser on the stage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq.28.4",
+        "title": "docs(carousel): record the ink layer, and narrow the no-vector-editor rejection",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ewpb",
+        "title": "fix(carousel): a refused render leaks the slides it already uploaded",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.1",
+        "title": "carousel: the touch-layout facts, and a fixed shell on a coarse pointer",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.2",
+        "title": "carousel: one slide, maximized and still",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.3",
+        "title": "carousel: the icon dock",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.4",
+        "title": "carousel: prev/next slide buttons and the counter",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.5",
+        "title": "carousel: no strip scroll on a coarse pointer",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.6",
+        "title": "carousel: the properties sheet behind the burger",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s4-zxae",
+        "title": "Carousel Studio S4: templates — the format, and PPTX/SVG import",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.7",
+        "title": "carousel: ink joins the object dropdown",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.8",
+        "title": "carousel: two- and three-finger tap undo and redo",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-touch-layout-vfs1.9",
+        "title": "carousel: document the touch layout",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dev-pipeline-a8bl.1",
+        "title": "tooling: bead context pack injected on `br <id>` (UserPromptSubmit hook)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dev-pipeline-a8bl.2",
+        "title": "tooling: cut fixed per-session context cost and fix Repowise synthesis",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dev-pipeline-a8bl.3",
+        "title": "ci: cut test.yml wall-clock from 5m20s to ≤2m30s",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s6-upv6",
+        "title": "Carousel Studio S6: the studio becomes one canvas",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-77uu",
+        "title": "bug: when I try to follow 'flyout-item ancestor-link' in post-details page it escapes the url and I got 'https://darii.net/tags/canada%3Fpath%3Dcountry' instead of 'https://darii.net/tags/canada?path=country'.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dev-pipeline-a8bl.4",
+        "title": "tooling: check.sh parallel lanes, quiet logs, --only/--changed; CI calls it",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dev-pipeline-a8bl.5",
+        "title": "dev: run.sh --watch — CSS/JS edits visible without a server restart",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dev-pipeline-a8bl.6",
+        "title": "process: grouped dependabot, CI on push to develop, pr-land script",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dev-pipeline-a8bl.7",
+        "title": "tooling: reconcile 298 stale Repowise pages (embed quota no longer blocks it)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-errorlint-jblz.1",
+        "title": "fix: grow the service error taxonomy into a documented sentinel set",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-errorlint-jblz.2",
+        "title": "fix: add a central sentinel-to-HTTP-status mapper in internal/api",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-errorlint-jblz.3",
+        "title": "refactor: migrate handlers onto the central error mapper",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-page-xq8g.1",
+        "title": "fix: tag-page cache keys contain '/', so path-scoped tag pages never cache",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-page-xq8g.2",
+        "title": "fix: cache writes are not atomic — a concurrent read can serve a truncated blob",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna",
+        "title": "Carousel Studio S3: layers — text, logo, counters, spanning layers",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-j8wt",
+        "title": "Add filters to '/light/tags' for list mode. So that I could filter all hidden tags, or all tags with coordinates and so on.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nlix",
+        "title": "bug: carousel/index.js:1380 imports deckSlideFitCSS from geometry.js, which doesn't export it.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tkq1",
+        "title": "When the dialog editor is opened (like tag editor), the notification bubbles appear behind it. Should be above.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts7-typecheck-6miv",
+        "title": "Migrate the JSDoc typecheck gate to TypeScript 7",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-artk",
+        "title": "Hidden tags should be shown in '/light/tags'",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-j3i6",
+        "title": "Support scoped API tokens (general and lightroom)",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-fix-page-xq8g.3",
+        "title": "perf: no stampede protection on cache miss — coalesce with singleflight",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-page-xq8g.4",
+        "title": "ops: cache directory has no size bound or eviction",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1wvr",
+        "title": "Enforce API key plugin toggle in authentication middleware",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-56qy",
+        "title": "feat(editor): select cards, Make carousel, Ungroup, Undo",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.1",
+        "title": "frontend: auto-released component resources and data-action event delegation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.2",
+        "title": "frontend: an in-place update path — update() hook, keyed list reconciler, interaction preservation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.3",
+        "title": "seo: server-inject metadata for the homepage and tag pages (post URLs done)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.4",
+        "title": "frontend: store notifies on unchanged values and has no selector subscriptions",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5",
+        "title": "Carousel Studio S2: framing — pan/zoom, fit, background, deck mode",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-cl69",
+        "title": "Implement rendering strategies for carousel image sliding",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-jjef",
+        "title": "Enhance live preview in post editor for carousel rendering",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.5",
+        "title": "security: enforce Trusted Types so a raw innerHTML write cannot compile",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.6",
+        "title": "frontend: store keys are stringly-typed and the documented key list has already drifted",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.7",
+        "title": "frontend: 567 JSDoc annotations are written and never checked — turn on checkJs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.8",
+        "title": "frontend: Component re-render leaks every resource afterRender() acquires",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.9",
+        "title": "security: enforce the Trusted Types CSP — deal with leaflet, prismjs and codejar first",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.10",
+        "title": "frontend: typecheck the pages — drop @ts-nocheck from frontend/src/pages",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.11",
+        "title": "frontend: typecheck the components — drop @ts-nocheck from frontend/src/components",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-f72t",
+        "title": "Two Leaflet map E2E tests fail under Trusted Types enforcement on develop",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.12",
+        "title": "frontend: typecheck the plugins — drop @ts-nocheck from frontend/src/plugins",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x.13",
+        "title": "frontend: decide the test suite's typecheck fate — 69 @ts-nocheck files",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.1",
+        "title": "chore(node): pin a Node that removes TypeScript types, on dev machines and in CI",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.2",
+        "title": "chore(lint): ESLint parses .ts next to TypeScript 7 — go/no-go for the epic",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5xqy",
+        "title": "editor: the post editor's media lookup is not filtered to the post",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-hidden-toggle-dkbx",
+        "title": "fix(atlas): the owner's Hidden legend toggle rendered as escaped text",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-edge-cache-session-shells-fckx",
+        "title": "ops: confirm the edge cache never stores a shell served to a logged-in viewer",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ri2",
+        "title": "Epic: split the tag vizzes — /tags keeps the graph, /map takes the two maps",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-15kz",
+        "title": "bug: API keys list always renders empty — _load reads the wrong field",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.3",
+        "title": "security(lint): the Trusted Types and html-tag lint rules match through TS casts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.4",
+        "title": "chore(typecheck): tsconfig.json replaces jsconfig.json, ready for .ts files",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.5",
+        "title": "chore(build): build and check scripts accept .ts sources and fail closed",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.6",
+        "title": "refactor(frontend): convert frontend/src/api/ to TypeScript (pilot)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.7",
+        "title": "refactor(frontend): convert frontend/src/utils/ to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.8",
+        "title": "refactor(frontend): convert core/, app, router, store and Component to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.9",
+        "title": "refactor(frontend): convert components/shared/ and components/public/ to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.10",
+        "title": "refactor(frontend): convert the top level of components/light/ to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dialog-keydown-leak-ovgi",
+        "title": "admin: media picker dialogs leave their document keydown listener attached when unmounted",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-35lw",
+        "title": "admin: media picker dialogs leave their document keydown listener attached when unmounted",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ipad-footer-4q3j",
+        "title": "frontend: footer geometry is unstable on iPad (public + admin)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.11",
+        "title": "refactor(frontend): convert components/light/tags/ and sections/ to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.12",
+        "title": "refactor(frontend): convert pages/light/ to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.13",
+        "title": "refactor(frontend): convert pages/public/ to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.14",
+        "title": "refactor(frontend): convert the 14 small plugins to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.15",
+        "title": "refactor(frontend): convert tags-atlas, tags-graph, tags-map and timeline to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.16",
+        "title": "chore(frontend): close the TypeScript move — no-new-.js guard, globs, docs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-studio-khzq",
+        "title": "Carousel Studio: Instagram carousel builder in the post editor",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xa5i",
+        "title": "bug: hover video preview on post cards is invisible — the <img> poster pushes it out of the card",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.17",
+        "title": "chore(carousel): merge the TypeScript develop into carousel-studio",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.18",
+        "title": "spike(lint): Oxlint enforces the security lint rules on .ts with TypeScript 7 only",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.19",
+        "title": "test(html): htmlInterpolation.test.js parses .ts files",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frol",
+        "title": "'Page not found' page doesn't have any way to go to main",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1ulz",
+        "title": "bug: prev/next navigation ignores hides-posts tags, so guest view steps onto a 404",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7w7f",
+        "title": "Thumbnails: check the rebuild flow",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.20",
+        "title": "security(codeql): js/xss-through-dom alert 170 on utils/videoPoster.ts blocks the ts PR",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu.21",
+        "title": "chore(frontend): land the ts PR on develop",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g34b.1",
+        "title": "Schema + model: imported_instagram_id column, scans, dedup query",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g34b.2",
+        "title": "InstagramService.ListUserMedia — paged Graph media fetch",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g34b.3",
+        "title": "Media download-from-URL helper → MediaService.UploadFile",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g34b.4",
+        "title": "InstagramImportService.ImportAccount orchestration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g34b.5",
+        "title": "API: POST /api/instagram/import + GET /api/instagram/import/status",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-remark42-6zd3",
+        "title": "security: verify whether remark42 locator.url can carry a hostile scheme into the admin page",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g34b.6",
+        "title": "Frontend: SystemPage import card + instagram.js API functions",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g34b.7",
+        "title": "Tests: dedup repo query + import-service unit tests",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.1",
+        "title": "Adopt AdminLayout on all admin pages",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.2",
+        "title": "Sidebar: WRITE/MANAGE groups + New post button",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-rendering-m06x",
+        "title": "frontend: strengthen the hand-rolled rendering layer instead of migrating to a framework",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic",
+        "title": "security: add an escape-by-default html`` helper and ban bare innerHTML",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-sqlc-0e2b",
+        "title": "refactor: sqlc-generated methods are silently shadowed by hand-written ones",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-realip-r1qi",
+        "title": "fix: rate limiter buckets a whole Cloudflare colo into one IP",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.3",
+        "title": "Editor canvas reduction: move secondary fields into Details disclosure",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.4",
+        "title": "Autosave chip + Publish/Update split-button",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-perf-search-31o2",
+        "title": "perf: search is an unindexable full-table LIKE scan; adopt FTS5",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-perf-post-8o0n",
+        "title": "perf: add idx_posts_live, ANALYZE, and an EXPLAIN QUERY PLAN test",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8f51",
+        "title": "window title doesn't change when admin part is opened or goes back to home page",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bb0k",
+        "title": "css: missed styles for .tm-unfiled-group block",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-75ur",
+        "title": "Small viewports: fix the post cards",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x5jl",
+        "title": "'Arrage fields' result in /light/post/:slug/* should be stored in global settings.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tags-deeplink-993i",
+        "title": "the /light/tags/:slug deep link erases its own URL on arrival",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-65z3",
+        "title": "CI: check if latest-slim version is created alongside with latest one",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8fu6",
+        "title": "Default value for Post title",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3a6u",
+        "title": "pin for post properties",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sb2j",
+        "title": "distruction-free plugin gestures",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-i5xb",
+        "title": "feat: video content should have thumbnail images",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-t2lm",
+        "title": "feat: site title should be a dropdown for root tags",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.5",
+        "title": "Phone bottom tab bar; remove hamburger drawer",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.6",
+        "title": "Posts list as cards on phones",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.7",
+        "title": "Admin touch pass: 44px targets, no hover-only controls",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.8",
+        "title": "Details right rail / bottom sheet",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.9",
+        "title": "Hierarchy-aware tag autocomplete",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.10",
+        "title": "Deliberate tag creation popover",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-jrmy",
+        "title": "bug: ancestor menu on post card shows links like this: '/tags/mountains?path=nature' but then I click on it, it goes to '/tags/mountains%3Fpath%3Dnature' and fails.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-924a",
+        "title": "bug: immersive (Standard). Check the markup render of the post with mixed images and texts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x4rq",
+        "title": "Password recovery: 'Restore password' link on login + point reset-password CLI",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-tag-clan",
+        "title": "refactor: decompose the tag domain — 5 of 7 children done, 2 in review",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-deploy-ywu7",
+        "title": "ops: scripts/deploy.sh points at a compose file that does not exist",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-backups-woui",
+        "title": "ops: BACKUP_HOOK to copy each backup off-host",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-logs-a002",
+        "title": "ops: admin Logs page is permanently empty in Docker",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-frontend-0kh7",
+        "title": "test: frontend coverage — 73.8% measured and gated, 34 src files reached by no test",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-migrations-jrtd",
+        "title": "test: internal/migrations at 0% coverage (mutates user data)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-errorlint-jblz",
+        "title": "fix: enable errorlint and centralize HTTP error mapping",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-migration-q4i1",
+        "title": "fix: a failed migration does not stop the boot",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-instagram-a71e",
+        "title": "fix: Instagram cross-post fails silently",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sec-svg-kfku",
+        "title": "sec: SVG uploads allowlisted and served unsanitized same-origin",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sec-custom-xrxf",
+        "title": "sec: global custom CSS bypasses SanitizePostCSS",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sec-public-i83d",
+        "title": "sec: no rate limit on the public API surface",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-perf-settings-fxyf",
+        "title": "perf: cache GetAllSettings (uncached, hit several times per request)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-perf-sqlite-ysoj",
+        "title": "perf: SetMaxOpenConns(1) serializes the entire app behind one DB conn",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-perf-media-yp10",
+        "title": "perf: N+1 in UpdateMediaVisibilityForPaths; batch method exists unused",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-index-html-yf41",
+        "title": "Kill the index.html mutation dance: template __BUILD_VERSION__ at serve time",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lazy-load-jus6",
+        "title": "Broaden image lazy-loading: loading=lazy + decoding=async on grids/timeline/atlas",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-upload-mime-r8ck",
+        "title": "Upload validation: server-side MIME allowlist + verify body-size limit enforcement",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-background-job-x86c",
+        "title": "Background jobs lose errors: fmt.Printf in scheduler, discarded cross-post errors, no panic recovery",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ci-parity-vutk",
+        "title": "PR CI is a strict subset of scripts/check.sh — add JS lint, JS tests, govulncheck",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-pin-golangci-7h6g",
+        "title": "Pin golangci-lint + add .golangci.yml; pin REMARK42_VERSION",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-merge-dead-r2rd",
+        "title": "Merge stranded chore/frontend-dead-code-cleanup branch (~1260 dead lines)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-viewer-css-bgh8",
+        "title": "viewer.css committed but wired nowhere — wire it in or drop it",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-csp-inline-x2h7",
+        "title": "Hardcoded CSP inline-script hash is fragile coupling to index.html",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-meta-tf6h",
+        "title": "esbuild metafile plugin-meta.json is served publicly",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dockerfile-debug-wq0s",
+        "title": "Dockerfile ships js-debug bundle despite comment claiming it doesn't",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-remark42-notify-zxts",
+        "title": "run-remark42-local.sh: default NOTIFY_ADMINS to none (remark42 1.16.1 rejects empty)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-esbuild-7pfd",
+        "title": "frontend: real lazy loading — single esbuild pass with code splitting",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-npm-assets-ik5m",
+        "title": "NPM asset cache serves stale 404s for media (assets.conf caches 'any' 30m + use_stale http_404)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hidden-tag-ckne",
+        "title": "No warning when public pages link to posts hidden by a hides-posts tag (feature catalog was invisible)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.11",
+        "title": "Merge tags (API + UI)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.12",
+        "title": "Posts list: status chips + tag filter; tag= param on GET /api/posts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.13",
+        "title": "Home: compose strip + Continue writing",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9wxc",
+        "title": "CSS sanitizer mangles justify-content (over-broad 'content' strip pattern)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-onp1",
+        "title": "add bool settings to remark42 plugin's settings page: 'simple_view' true by default, and 'no_footer' true by default.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ilrc",
+        "title": "feat: footer slider button",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9kvc",
+        "title": "feat: comments admin '/light/comments'",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.14",
+        "title": "Media on phones: capture buttons, breadcrumb folders, long-press select",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.15",
+        "title": "Tablet icon rail + desktop sidebar collapse",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.16",
+        "title": "Admin phone-landscape compact chrome",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.17",
+        "title": "Editor live preview pane on ultrawide",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m3sv",
+        "title": "comments plugin",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-icqy",
+        "title": "smooth public post-list swipe: blink on release, wrong card size, dead space below footer",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nn15",
+        "title": "zoom by pinch is broken in immersive mode",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8re1",
+        "title": "Extract 'Post navigation' block as a separate plugin that can be switched on/off. So that in non-immersive mode you can deside if you want it there.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-wzvx",
+        "title": "'/light/menu' when I fill the Label and the URL and clicked 'Save Menu Configuration' it doesn't save it. Only if I create a new item, it saves the previous one.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ti5d",
+        "title": "Time to time the scroll stops working in admin part. Currently, I experience it in /light/plugins page, but also it was on /light/posts and /light/tags.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lk2h",
+        "title": "Resolve mess with settings in 'tags atlas', 'tags maps', and 'tags graph'. Only one of them or none can be active. So, the settings 'Show tags' is deprecated by plugin list level activation. Create a general approach for the plugins that are alternatives to each other with only one selected at a time.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m403",
+        "title": "use full length of the window for '/light/posts/:id/edit'",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tj6k",
+        "title": "when clicked on log out button, log out happens but nothing is refreshed.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-37md",
+        "title": "preserve the entrance link (/light) when logged in and show log out button next to it. So the admins could enter the admin panel in one tap",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-62zu",
+        "title": "footer plugin: should be able to edit the copyright verbige. Use pseudo templates like '{{author_name}} {{engine}}' that go to '&copy; :author_name, powered by :point_link_on_github'",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-z3o7",
+        "title": "feat: slideshow switch to loop/not loop the slides.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7od9",
+        "title": "Create a minimal css theme with bare basic styles to be as a base for usage 'a micro-site in every post'. So, it should influence on in-post styles as less as possible.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hjg7",
+        "title": "remove the second title in Backups settings. it is a duplication",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ryrm",
+        "title": "Backups. Should be rotatable to not to overflow the drive. Should be settings like how many backup files should be kept simultaneously, how often make them: once a day, once a week, once a month, every n days...",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ufxk",
+        "title": "'/light/menu' is not accessible even then the plugin is enabled.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ldla",
+        "title": "Remove 'Analytics' page '/light/analytics'. We already have it in /light/",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.18",
+        "title": "Admin ultrawide caps",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.19",
+        "title": "Command palette (Ctrl+K)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.20",
+        "title": "Keyboard map + ? overlay",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.21",
+        "title": "Post cards: swipe quick-actions",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.22",
+        "title": "Tag chip unification + shared family popover",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.23",
+        "title": "Admin accessibility sweep",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.24",
+        "title": "Editor header split-button + overflow menu unstyled",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c.25",
+        "title": "Editor: menu re-render discards edits, listener leaks, field wipe",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-header-redesign-4rze.1",
+        "title": "Fold engine: four-zone header + declarative fold controller",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-header-redesign-4rze.2",
+        "title": "NavMenu: inline links in nav zone + More overflow + burger",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng",
+        "title": "slideshow plugin: auto-advancing immersive viewer",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9ec3",
+        "title": "'/light/tags' 'In public navigation' toggle doesn't really saved. Assume, other toggles could have similar problem. Fix them all.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-td3k",
+        "title": "'light/tags' 'Unfiled' items should be draggable",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7z7h",
+        "title": "'/light/posts': the post list should calculate its height till the end of the window. Currently, it renders 5 items and leave a half of the space under the list empty.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-djqr",
+        "title": "Ultra-wide screens and '/light/media'. Adapt the width of the gallery with the width of the available space. And pagination should be visible without scrolling.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lkb3",
+        "title": "rework admin ui on ultrawide screens.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-oxtq",
+        "title": "bug: '/tags' Atlas mode. I don't see header, timeline and footer.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-kgyv",
+        "title": "bug: When I switched off 'Custom CSS' plugin, '/light/themes' stopped loading, '/light/posts/:id/edit' still shows 'Custom CSS' property in Details.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-s9gb",
+        "title": "make '/feed.xml' - rss as optional plugin.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-172m",
+        "title": "bug: I don't see breadcrumbs on public part even when the plugin is enabled.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7pb3",
+        "title": "bug: theme mode toggle is broken on public part",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xdg1",
+        "title": "bug: i don't see the image in immersive mode after the plugins were introduced",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-header-redesign-4rze.3",
+        "title": "Breadcrumbs: drop site-title flyout as nav surface",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-header-redesign-4rze.4",
+        "title": "Backend: nav_menu_mode=none, nav_inline_max, pinned tags source",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-header-redesign-4rze.5",
+        "title": "Admin /light/menu: source picker + inline cap + live preview",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-header-redesign-4rze.6",
+        "title": "Header redesign: defaults, migration notes, CHANGELOG",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw",
+        "title": "Plugin system refactor: toggleable, lazily-loaded feature plugins",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-syzd",
+        "title": "make it obvious how to save the post in '/light/posts/:slug/edit' but preserve the state (hidden, draft, or any other and not to publish it.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-2eer",
+        "title": "header-back-link should return to the previous post list position (specific page in post list) if applicable",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-w043",
+        "title": "'/light/posts' keyboard navigation for suggested tags",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g6nb",
+        "title": "Visual bug on '/light/posts/'",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-o6lx",
+        "title": "Stylize the create tag inline popup on 'tag-create-popover'",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bedp",
+        "title": "'/map', '/atlas' - figure out why shape for Czech republic doesn't appear.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nh52",
+        "title": "introduce timeline control filtering to '/tags'",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5bo4",
+        "title": "'/tags'. Each tag selection should change the url to '/tags?:slug' like '/tags?urban'",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ej5f",
+        "title": "reintroduce EXIF data for images in public part",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hosting-ready-vyok.1",
+        "title": "fix(security): a fresh install can only be claimed with a one-time setup token",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hosting-ready-vyok.2",
+        "title": "fix(backup): fresh installs back up by default, and a managed flag pins backups on",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hosting-ready-vyok.3",
+        "title": "fix(routes): unknown paths answer 404, not the SPA shell with 200",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ipad-footer-4q3j.1",
+        "title": "frontend: computePerPage fits window.innerHeight while the layout box is 100dvh",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ipad-footer-4q3j.2",
+        "title": "frontend: an iPad toolbar collapse fires resize, which refetches the whole grid",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ipad-footer-4q3j.3",
+        "title": "admin: fixed bottom chrome does not track the iOS toolbar",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g34b",
+        "title": "Import Instagram account into Point engine",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ipad-footer-4q3j.4",
+        "title": "css: public footer breakpoints are px while every other tier is em",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ipad-footer-4q3j.5",
+        "title": "admin: .light-main reserves a hardcoded 3.5rem for a content-sized bottom bar",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ipad-footer-4q3j.6",
+        "title": "css: rules left on bare vh where the codebase uses dvh",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m3sv.1",
+        "title": "remark42: Docker packaging + entrypoint + compose env",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m3sv.2",
+        "title": "remark42: plugin registry entry + gated /comments reverse proxy",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m3sv.3",
+        "title": "remark42: frontend comments plugin chunk (embed widget)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m3sv.4",
+        "title": "remark42: docs + end-to-end verification",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m3sv.5",
+        "title": "remark42: /light/comments admin moderation page",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.1",
+        "title": "fix(mcp): the OAuth sign-in page names where access goes, and refresh tokens expire",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.2",
+        "title": "fix(privacy): guest post payloads carry no GPS, and only the EXIF the UI shows",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.3",
+        "title": "fix(media): variants and stored dimensions follow EXIF orientation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.4",
+        "title": "fix(backup): a vanished file no longer fails the backup, and derived data stays out",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.5",
+        "title": "fix(mcp): credential changes revoke OAuth tokens, and the owner can revoke a connected app",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.6",
+        "title": "feat(privacy): served originals carry no GPS by default",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.7",
+        "title": "fix(media): WebP uploads get a size and ladder variants",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.8",
+        "title": "fix(media): ladder variants keep the source ICC profile",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.9",
+        "title": "perf(media): 1600 and 2048 rungs, and width and height on article images",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.10",
+        "title": "feat(media): decode AVIF and HEIC without cgo, with a JPEG for each HEIC",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.11",
+        "title": "refactor(media): resize with x/image/draw and drop disintegration/imaging",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.12",
+        "title": "design(media): the server video path - transcode, posters, a durable job",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-trust-dh9o.13",
+        "title": "feat(privacy): strip GPS from served PNG/WebP/HEIC/TIFF originals and vendor XMP (drone-dji:Gps*)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nwj.1",
+        "title": "WU-1: Centralized Rule & Base Cleanup",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nwj.2",
+        "title": "WU-2: Public UI Cleanup & Transition Updates",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nwj.3",
+        "title": "WU-3: Admin & Common Transition Updates",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0b98",
+        "title": "Timeline control UX overhaul",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-krcu",
+        "title": "Timeline control: best-in-class UX proposal document",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-leq2",
+        "title": "Add PrismJS syntax highlighting to public code blocks",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4x6b",
+        "title": "WU4: Validate account type on connect",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ggi6",
+        "title": "WU3: Richer Instagram API error parsing",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y5zg",
+        "title": "WU2: Use authoritative IG user ID from token exchange",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5ope",
+        "title": "Refresh map pins on '/map' when the current date tag is changed even if the user didn't release the click/tap",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nwj.4",
+        "title": "WU-4: Final Verification",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-no-trkp.1",
+        "title": "ops: engine-side /metrics endpoint, hand-rolled and allow-listed",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-no-trkp.2",
+        "title": "ops: panic recovery gaps in background goroutines + dead LOG_LEVEL/DEBUG config",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28",
+        "title": "Integration with Instagram",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-yyvt",
+        "title": "Timeline performance optimization",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-wa2p",
+        "title": "bug: .settings-help-icon span is cut by the edge of .card-body. Should be seen in full.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-03wr",
+        "title": "Add 'Save' button to maximized textarea mode (.textarea-maximize-btn) to be able to save the post and check it in the other window without leaving the full-screen mode in the editor window.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-px0c",
+        "title": "'.tm-flag-location' button is not self descriptive. It is just a red square. Also, it should go to '/map' with respective tag popup.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dp8j",
+        "title": "visual bug of ui in tree view '/light/tags'. Currently, intendation of children and next sibling is the same, so visually, they are on the same level. And the user cannot easily identify where is the sibling, and where is the child tag.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-csg2",
+        "title": "Bug: with uploading new photo",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0w35",
+        "title": "Add a 'copy' button to the right-top corner of any <code> tag field that copies the inner text (code). For example, for copy install.sh string.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-d8kc",
+        "title": "Add system-wide css definitions like it works for the specific post but applied for entire site. So, it is a way to make custom user theme for the site. '/light/themes' sounds like a good place to add the editor with maximize button like in posts.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-d9ml",
+        "title": "Fix Code-Scanning Alert #1: actions/missing-workflow-permissions in .github/workflows/release.yml",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1mnl",
+        "title": "Fix Code-Scanning Alert #3: js/xss-through-dom in frontend/src/pages/light/SettingsPage.js",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thvp",
+        "title": "Fix Code-Scanning Alert #2: js/xss-through-dom in frontend/src/components/shared/ConfirmDialog.js",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-n4uk",
+        "title": "Fix Code-Scanning Alert #4: js/xss-through-dom in frontend/src/pages/light/SettingsPage.js",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-a13r",
+        "title": "Fix Code-Scanning Alert #6: js/incomplete-multi-character-sanitization in frontend/src/components/public/PostContent.js",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-cm2d",
+        "title": "Fix Code-Scanning Alert #5: js/incomplete-multi-character-sanitization in frontend/src/components/public/PostContent.js",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bpd8",
+        "title": "Fix Code-Scanning Alert #7: js/incomplete-multi-character-sanitization in frontend/src/components/public/PostContent.js",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-s5rj",
+        "title": "Fix Code-Scanning Alert #8: js/incomplete-multi-character-sanitization in frontend/src/utils/formatters.js",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lt94",
+        "title": "Fix Code-Scanning Alert #9: go/request-forgery in api/internal/api/util.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4v7q",
+        "title": "Fix Code-Scanning Alert #11: go/incorrect-integer-conversion in api/internal/api/media.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xz28",
+        "title": "Fix Code-Scanning Alert #10: go/email-injection in api/internal/services/email_service.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4bfg",
+        "title": "Fix Code-Scanning Alert #12: go/incorrect-integer-conversion in api/internal/api/media.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-wqvv",
+        "title": "Fix Code-Scanning Alert #13: go/incorrect-integer-conversion in api/internal/api/media.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sgcx",
+        "title": "Fix Code-Scanning Alert #14: go/incorrect-integer-conversion in api/internal/api/media.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-epfz",
+        "title": "Fix Code-Scanning Alert #16: go/incorrect-integer-conversion in api/internal/api/pages.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x9mf",
+        "title": "Fix Code-Scanning Alert #15: go/incorrect-integer-conversion in api/internal/api/pages.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y9gm",
+        "title": "Fix Code-Scanning Alert #17: go/incorrect-integer-conversion in api/internal/api/pages.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-prz1",
+        "title": "Fix Code-Scanning Alert #18: go/incorrect-integer-conversion in api/internal/api/pages.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xsri",
+        "title": "Fix Code-Scanning Alert #19: go/incorrect-integer-conversion in api/internal/api/posts.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-udnk",
+        "title": "Fix Code-Scanning Alert #20: go/incorrect-integer-conversion in api/internal/api/posts.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-z6bf",
+        "title": "Fix Code-Scanning Alert #21: go/incorrect-integer-conversion in api/internal/api/posts.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7cqn",
+        "title": "Fix Code-Scanning Alert #22: go/incorrect-integer-conversion in api/internal/api/posts.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4nx3",
+        "title": "Fix Code-Scanning Alert #23: go/incorrect-integer-conversion in api/internal/api/tags.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ur6u",
+        "title": "Fix Code-Scanning Alert #24: go/incorrect-integer-conversion in api/internal/api/tags.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-isxr",
+        "title": "Fix Code-Scanning Alert #26: go/path-injection in api/cmd/api/main.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-wfri",
+        "title": "Fix Code-Scanning Alert #25: go/path-injection in api/cmd/api/main.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y5pv",
+        "title": "Fix Code-Scanning Alert #27: go/path-injection in api/cmd/api/main.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-pxnz",
+        "title": "Fix Code-Scanning Alert #28: go/path-injection in api/internal/services/cache_service.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-s7n4",
+        "title": "Fix Code-Scanning Alert #29: go/path-injection in api/internal/services/cache_service.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hm8r",
+        "title": "Fix Code-Scanning Alert #30: go/path-injection in api/internal/services/cache_service.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-72fm",
+        "title": "Fix Code-Scanning Alert #32: go/path-injection in api/internal/services/cache_service.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nz4y",
+        "title": "Fix Code-Scanning Alert #31: go/path-injection in api/internal/services/cache_service.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dkwt",
+        "title": "Fix Code-Scanning Alert #33: go/path-injection in api/internal/services/theme_service.go",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1yuc",
+        "title": "Tests: Improve coverage for PR 175 (API Keys & Auth)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4aqs",
+        "title": "Security: Replace weak SHA-256 pre-hashing for passwords",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-l65y",
+        "title": "Implementation Plan: Analytics Tools (API-driven)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-6m5j",
+        "title": "Improve SQLite Concurrency to Prevent SQLITE_BUSY Errors",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-czbu",
+        "title": "When local run sits in the root of the repo and calls 'api/api' it cannot find themes due to wrong path: 'warning: failed to sync active theme: failed to get active theme: failed to load fallback theme: failed to read theme file: open ../frontend/themes/default.css: no such file or directory' address it.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xihi",
+        "title": "Do not enlarge image in immersive mode by defaulat if it is smaller than viewport. Enlarge it only when the user zooms in",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-pcal",
+        "title": "A6: Tests & Documentation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-rw60",
+        "title": "A5: Management Endpoints & CLI",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-r970",
+        "title": "A4: Middleware Integration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dzod",
+        "title": "A3: API Key Service",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-6f20",
+        "title": "A2: sqlc queries",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-qo19",
+        "title": "A1: Schema + migration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bqgw",
+        "title": "Implement API-Key Authentication",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5268",
+        "title": "Feature: on pasting the link to a post (like 'https://darii.net/posts/onigiri-reflections') in telegram should show the post image in preview.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-2c72",
+        "title": "Bug: links in post content are under the left-right navigation panes. So, when the user want to click to the link - it goes to the next or previous slide instead of visiting the link",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3n6q",
+        "title": "Open external links in post content in a new window by default. Same for Menu.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-k9aj",
+        "title": "Make context help for all settings in '/light'. Items like 'Use Thumbnails', 'Show Tag Cloud' have not intuitive behavior",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-692p",
+        "title": "Combine 'Offline Data' and 'Offline Sync' in one block with two items in '/light/system'. Same way as it is for 'Maintenance' block. Unify button widths across this page.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5isr",
+        "title": "'/api/pages/home?page=1' returns the list of posts with view_count field even if show view_count flag is false. Should not expose view_counts even in api in this case.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-a4aw",
+        "title": "Rework clicks-taps on post cards.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xkdd",
+        "title": "'Update is available' is shown even when the current version is higher than available update.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-s0au",
+        "title": "Quickstart: create admin account from install.sh",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xc1r",
+        "title": "security scan",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g0uj",
+        "title": "Fix version bump CI failure on protected branches",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bm7r",
+        "title": "Frontend: passkey login on LoginPage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-mk4d",
+        "title": "Frontend: passkey registration on SecurityPage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lsfj",
+        "title": "Backend: WebAuthn service and API endpoints",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-6ypx",
+        "title": "DB migration: webauthn_credentials table",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-wjia",
+        "title": "Remove the blink on moving from one post to another.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-phqt",
+        "title": "Remove automatic hiding the overlay in immersive mode",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3d46",
+        "title": "Block system menu on long tap. Block selection of the image in immersive mode on long tap.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5ogm",
+        "title": "All `.header-action` buttons should have 2 sizes: icon + text and icon-only.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9d22",
+        "title": "left-right arrow improvement",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m11w",
+        "title": "`site-header-group` folding reinvention",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-uf20",
+        "title": "Add block class as a separate input on the top of `ve-card ve-card--text`",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ffgf",
+        "title": "\"Maximize\" button to enlarge the textarea.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-q3u7",
+        "title": "Add nested blocks in markdown for styling",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-2ib4",
+        "title": "Implement WebAuthn authentication",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zhc7",
+        "title": "custom post css is not applied to immersive mode",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-rdvn",
+        "title": "Refactor themes to plain css.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-aqy8",
+        "title": "Fine-tune landing content with proper css",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zf2m",
+        "title": "Custom menu",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-i8nj",
+        "title": "Remove overlay reaction on mouse move",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-j9km",
+        "title": "When the user slides through the blocks/images of one post, the url should be updated.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-d6u3",
+        "title": "Make docs/architecture/backend.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-pyts",
+        "title": "install in one command via curl: . use @quickstart/install.sh as a target script",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4xic",
+        "title": "Make any post with type:page as home page",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-mrbp",
+        "title": "Reconcile env var naming inconsistencies",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4pt",
+        "title": "When the server is unavailable and there is no stored local copy, show human-readable message about maintenance.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-736",
+        "title": "Ensure empty MEDIA_IMPORT_PATH does not break build/deploy",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7zl",
+        "title": "Implement /light/pss password reset endpoint with email",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-21x",
+        "title": "Restyle /setup page to match admin site design",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m9f",
+        "title": "Fix /setup endpoint: use 'the_owner' default username, remove username field",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dsg",
+        "title": "Fix CodeQL: upgrade to v4, fix JS build-mode",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-24g",
+        "title": "Fix CodeQL workflow: add actions:read permission",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8pl",
+        "title": "Add Go vulnerability scan to release CI",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8on",
+        "title": "Add Docker-build smoke test to PR CI",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7lw",
+        "title": "Add SIGTERM graceful shutdown",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-6lj",
+        "title": "Reconcile env var naming inconsistencies",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7vy",
+        "title": "Add GitHub issue and PR templates",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-yjd",
+        "title": "Add CHANGELOG.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-p3w",
+        "title": "Change the server from DO to H",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4r9",
+        "title": "Timeline filter: sync URL and preserve in pagination",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-i34",
+        "title": "Timeline filter mode for home page post list",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-57b",
+        "title": "Smooth animated movement of timeline on tag/pill click",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-f29",
+        "title": "Smooth movement of the timeline on tag click",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fll",
+        "title": "Timeline: remove duplicate filter chip, fix touch drag on pills",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-cpy",
+        "title": "Timeline: remove axis dots, reverse zoom direction, cap max zoom",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-2tz",
+        "title": "Timeline: one-finger vertical zoom, external filter indicator, edge fade",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-b81",
+        "title": "Timeline: border padding.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-eut",
+        "title": "Add breadcrumb to MapPage (map / filter year)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dbc",
+        "title": "E2E manual verification: Map page filtering",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-oyw",
+        "title": "E2E manual verification: Home + Tag pages",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-e23",
+        "title": "Timeline keyboard navigation + ARIA",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-a28",
+        "title": "Timeline CSS module",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-l82",
+        "title": "Mount Timeline (filter mode) on MapPage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-qpe",
+        "title": "Frontend: extend getMapPage with year params",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zcj",
+        "title": "Timeline filter mode (pin/clear + range emit)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4mx",
+        "title": "Settings UI: timeline_mode pill group",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tvx",
+        "title": "Mount Timeline on HomePage and TagPage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-rfm",
+        "title": "Timeline popover (related location tags)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ght",
+        "title": "Timeline cluster expansion behavior",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9rz",
+        "title": "Timeline collision algorithm + cluster badges",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-epo",
+        "title": "Timeline drag pan + edge chevrons",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-177",
+        "title": "Timeline wheel + pinch zoom",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-849",
+        "title": "Timeline pill rendering with extent-fit scale",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4xm",
+        "title": "Timeline component skeleton",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4g0",
+        "title": "Frontend: timeline API module",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ey8",
+        "title": "Tests: TimelineService + map year-range filter",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-g58",
+        "title": "Tests: timeline + map handler integration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bhc",
+        "title": "Extend GET /api/pages/map with year_from/year_to",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-i21",
+        "title": "Repo: ListMapTagsForYearRange",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y89",
+        "title": "Handlers: GET /api/timeline + /api/timeline/locations",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-359",
+        "title": "Service: TimelineService (year parsing + payload)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3wt",
+        "title": "Repo: GetLocationTagsCoOccurringWith",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5pa",
+        "title": "Repo: ListInTimelineDescendants (+ context variant)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-w7o",
+        "title": "Add timeline_mode setting + migration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4uj",
+        "title": "Add _in_timeline system tag",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7ea",
+        "title": "Epic: Timeline date-tag navigation control",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-o14",
+        "title": "Arrow keys navigation through post lists",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-no-trkp.3",
+        "title": "ops(hosting): Prometheus TSDB retention.size unset, image tags unpinned",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-no-trkp.4",
+        "title": "ops(hosting): unbounded container logs, no log aggregation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-no-trkp.5",
+        "title": "ops: decide error tracking (Sentry vs GlitchTip vs counter+alert) after a month of counter data",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.1",
+        "title": "Plugin system Phase 1: backend foundation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9kj",
+        "title": "Add subtle outlines to images",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nn8",
+        "title": "Apply tabular-nums to dynamic counts and timers",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0lb",
+        "title": "Refactor transition: all to specific properties",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fuo",
+        "title": "Update typography with text-wrap: balance/pretty",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nwj",
+        "title": "Implement tactile feedback (Scale on Press) for buttons",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-83c",
+        "title": "Apply 'make-interfaces-feel-better' principles",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-m6n",
+        "title": "Add Sepia theme",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.2",
+        "title": "Plugin system Phase 2: frontend foundation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.3",
+        "title": "Plugin system Phase 3: admin Plugins page",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.4",
+        "title": "Plugin extract: tag visualizations (atlas/map/graph)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.5",
+        "title": "Plugin extract: timeline",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.6",
+        "title": "Plugin extract: immersive mode",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ppo",
+        "title": "Add Delete post button to PostEditPage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.7",
+        "title": "Plugin extract: tag cloud (ExploreBlock)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.8",
+        "title": "Plugin extract: nav menu",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.9",
+        "title": "Plugin extract: breadcrumbs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.10",
+        "title": "Plugin gate: backend services (instagram, ai, passkeys, api-keys, backups, custom-css)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.11",
+        "title": "Plugin gate: admin routes (media-library, posts-list, dashboard, offline-sync)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3nv",
+        "title": "Make a link to settings page for \"Set a Photo Library path (media_import_path) in Settings first.\" So that, the user could just click and go to settings page.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-p8l",
+        "title": "Add map page states: `public`, `private`, `off`",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bsh",
+        "title": "Fix Scheduled post state in posts list",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xpq",
+        "title": "Unify post editor form input heights, alignment, and hint colors",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4wr",
+        "title": "Service layer: scheduled post methods",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-cbp",
+        "title": "API handler: accept and return scheduled_at",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-iik",
+        "title": "sqlc queries for scheduled publishing",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-s3m",
+        "title": "DB migration: add scheduled_at column to posts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-z8b",
+        "title": "Frontend: schedule picker + scheduled badge",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fw8",
+        "title": "Scheduled Publishing epic",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-754",
+        "title": "Do not count views of registered users (admins) in \"View Counts\".",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-a0a",
+        "title": "Add write-only GEMINI_API_KEY field in /light/settings",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-00x",
+        "title": "Soft-fail when GEMINI_API_KEY is wrong or missing",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ck1",
+        "title": "Implement Scheduled Publishing",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dbv",
+        "title": "Add Canonical tags to posts/tags pages",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1sm",
+        "title": "Add Schema.org JSON-LD (BlogPosting) to PostPage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8kc",
+        "title": "Add semi-transparent nav arrow buttons to post view",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0iu",
+        "title": "fix password login mismatch after setup",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-qlx",
+        "title": "Prompt for analyse should be editable in ‘/light/settings’",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5io",
+        "title": "Add install.sh setup wizard for one-command deployment",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ppd",
+        "title": "feat: EXIF data if available",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ooj",
+        "title": "Fix post-card UI. Title, excerpt and meta should be at the top of the card. Tags should be at the bottom.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-5y9",
+        "title": "Unify public button/pill styles and interaction model",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-pm3",
+        "title": "Ancestor menu on post-cards has visual bugs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-38k",
+        "title": "Unify tag pill ancestor flyout across post-cards and post pages",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dpx",
+        "title": "Fix ancestor flyout visual states in immersive mode",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ovl",
+        "title": "Tag pills: visual state for open-menu vs navigate actions",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ah7",
+        "title": "Fix tag suggestion dropdown not visible",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fim",
+        "title": "Implement tag hiding threshold",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0rc",
+        "title": "Implement thumbnail synchronization in RebuildThumbnails",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7o6",
+        "title": "Implement background scheduler and view count buffering",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-o05",
+        "title": "Enhance Go API security headers",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-24m",
+        "title": "Implement custom error response format for Go API",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1d51",
+        "title": "flaky: htmlInterpolation.test.js reads a rule fixture that a parallel test deleted",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3j64",
+        "title": "api/client.ts request(): ...init overwrites the merged headers",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-plugin-system-tdgw.12",
+        "title": "Plugin extract: public header + footer (embed/minimal mode)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.13",
+        "title": "Plugin system Phase 5: hardening + per-plugin CSS + minimal embed preset",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-plugin-system-tdgw.12.1",
+        "title": "WU-001: Extract public header and footer plugins",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ppo.1",
+        "title": "Task 1: Update Imports and State",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ppo.2",
+        "title": "Task 2: Create Behavioral Test (TDD)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ppo.3",
+        "title": "Task 3: Update Render Method",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ppo.4",
+        "title": "Task 4: Implement Delete Logic and Autosave Guard",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ppo.5",
+        "title": "Task 5: Verification",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-tag-clan.1",
+        "title": "refactor: extract tag graph/hierarchy out of TagService",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-tag-clan.2",
+        "title": "refactor: extract tag locations and tag counts/cloud out of TagService",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-tag-clan.3",
+        "title": "refactor: decompose TagsManagerPage.js (1,679 LOC / 36 funcs)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-glwq",
+        "title": "refactor(carousel): convert the Carousel Studio files to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-tag-clan.4",
+        "title": "refactor: thin api/internal/api/tags.go (878 LOC)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-3cfv",
+        "title": "epic(frontend): turn on TypeScript strict for frontend/src",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-967m",
+        "title": "fix(frontend): shouldUseImmersive reads media.type, which the API does not send",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-refactor-tag-clan.5",
+        "title": "refactor: decompose tagGraph.js (913 LOC single class)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-tag-clan.6",
+        "title": "refactor: split frontend/css/light/tags.css (1,305 LOC)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-tag-clan.7",
+        "title": "refactor: split frontend/src/utils/tags.js (609 LOC)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.1",
+        "title": "security: close the three unescaped interpolations hiding inside raw()",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.2",
+        "title": "security: make Component.render() return html`` — contract, shared/, public/",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.3",
+        "title": "security: migrate pages/light to html`` (108 sites)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.4",
+        "title": "security: migrate components/light core widgets to html`` (~64 sites)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.5",
+        "title": "security: migrate components/light/sections to html`` (~24 sites)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.6",
+        "title": "security: migrate the tags subsystem to html`` (~52 sites)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.7",
+        "title": "security: migrate the remaining plugins to html`` (~35 sites)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.8",
+        "title": "security: migrate core/ pagers and remaining utils to html`` (~12 sites)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-security-html-9lic.9",
+        "title": "security: flip the ESLint rule strict — raw() only around constants",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.1",
+        "title": "slideshow: scaffold plugin + registry + CSS wiring",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.2",
+        "title": "slideshow: MediaViewer controller hook",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.3",
+        "title": "slideshow: top-right toggle button",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.4",
+        "title": "slideshow: timed advance loop",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.5",
+        "title": "slideshow: video plays in full",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.6",
+        "title": "slideshow: bottom-center control bar",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-ts-7pfu",
+        "title": "epic(frontend): move frontend/src from JSDoc-typed JS to TypeScript",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-template-node-test-3fcc",
+        "title": "fix(beads): body template shows node --test, not a bare test placeholder",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.7",
+        "title": "slideshow: shuffle ordering",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.8",
+        "title": "slideshow: auto-hide chrome while running",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.9",
+        "title": "slideshow: cross-post resume",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.10",
+        "title": "slideshow: persistence + visibilitychange",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-slideshow-plugin-n9ng.11",
+        "title": "slideshow: build + manual QA",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-frontend-0kh7.1",
+        "title": "test: measure JS coverage in CI",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-frontend-0kh7.2",
+        "title": "test: cover the pure-logic utils (tags.js, tagGraph.js)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-frontend-0kh7.3",
+        "title": "test: cover MediaViewer and the immersive slide pipeline",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-frontend-0kh7.4",
+        "title": "test: add a smoke e2e suite for the public reading path",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s",
+        "title": "epic(media): the server video path - transcode, posters, a durable job store",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-7181",
+        "title": "test(backup): TestSystemService_CreateBackup_InsufficientDisk is flaky on CI",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-thumb-ladder-ph12.1",
+        "title": "media: variant ladder + ?s=&v= URL scheme with back-compat ?thumb",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-e2e-undo-flake-ijme",
+        "title": "test(e2e): the code-editor undo test rejects an auto-closed brace, so it flakes",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thumb-ladder-ph12.2",
+        "title": "media: rebuild = purge tree + bump token + invalidate page cache + prewarm",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thumb-ladder-ph12.3",
+        "title": "media: ship the generation token to clients (__MEDIA__, atlas, mappers, prerender)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thumb-ladder-ph12.4",
+        "title": "media: srcset on server-rendered article images",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thumb-ladder-ph12.5",
+        "title": "frontend: mediaUrl.js helper + migrate admin image surfaces",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thumb-ladder-ph12.6",
+        "title": "frontend: PostCard background-image -> <img srcset>, atlas chips",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thumb-ladder-ph12.7",
+        "title": "frontend: SW cache keys per rung, exif normalizeSrc, offline precache fixes",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-thumb-ladder-ph12.8",
+        "title": "cleanup: drop thumbnail size settings, rebuild copy, de-Cloudflare the engine",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.1",
+        "title": "test(ts): typed test helpers and a test typecheck gate",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.2",
+        "title": "test(ts): run .test.ts files and add the JS test ratchet",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-n2g8",
+        "title": "Extract TagsManagerPage's list-view DOM wiring out of afterRender",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ix7c",
+        "title": "fix(carousel): a slide deleted from a fence by hand leaks its rendered media row",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-o9fj",
+        "title": "feat(carousel): a photo added by hand to a split carousel's fence survives the next render",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-orphan-sweep-1y4f",
+        "title": "chore(carousel): sweep carousels rows whose block_key is gone from every post",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.3",
+        "title": "test(ts): convert the core and utils tests",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.4",
+        "title": "test(ts): convert the component tests",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.5",
+        "title": "test(ts): convert the tag tests",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.6",
+        "title": "test(ts): convert the media and grid tests",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.7",
+        "title": "test(ts): convert the post tests",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tu1i",
+        "title": "feat(carousel): direct manipulation for span layers on the stage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9tit",
+        "title": "refactor(carousel): move the studio's live controls onto delegated data-action handlers",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.8",
+        "title": "test(ts): convert the page and plugin tests",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-docs-commands-esbuild-flake-v0bo",
+        "title": "docs-commands: dev-server smoke flakes on npx esbuild download in build-css.sh",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-yfor",
+        "title": "ops(hosting): Loki for cross-tenant container log aggregation",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.9",
+        "title": "test(ts): convert the E2E tests",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.10",
+        "title": "refactor(ts): convert the service worker to sw.ts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.11",
+        "title": "refactor(ts): convert scripts/*.mjs to TS",
+        "status": "in_progress",
+        "completedInSession": false
+      },
+      {
+        "id": "p-mcp-plugin-gates-5ggc",
+        "title": "MCP tools bypass the RequirePlugin gates their REST routes carry",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.12",
+        "title": "refactor(ts): convert demo/ to TS",
+        "status": "in_progress",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ts-tests-mf3t.13",
+        "title": "chore(ts): close out the TS epic, guard against JS, land ts-tests",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.1",
+        "title": "Public tags: one click = navigate everywhere",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.2",
+        "title": "Public tags: fix tag-visibility 404s",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.3",
+        "title": "Public: 44px touch targets",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.4",
+        "title": "Public: hover parity for touch",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.5",
+        "title": "Map page: visible fetch error state",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.6",
+        "title": "URL-backed view context module",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.7",
+        "title": "Filter chips row",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.8",
+        "title": "Scoped search + tag-name matching",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-trusted-proxies-kz8c",
+        "title": "feat: TRUSTED_PROXIES config for deployments behind a public-IP reverse proxy",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.9",
+        "title": "Ultrawide grid tier",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.10",
+        "title": "Phone-landscape compact header + coarse pointer styles",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.11",
+        "title": "Share / copy-link on posts and immersive slides",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.12",
+        "title": "Footer sitemap links + canonical burger ordering",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.13",
+        "title": "Unified tag family flyout (hover intent / long-press sheet)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.14",
+        "title": "Search typeahead + recent searches",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.15",
+        "title": "Immersive mode toggle + slide progress dots",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.16",
+        "title": "Post page ultrawide: side rail + figure breakout",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-pages-i5ep",
+        "title": "refactor: pages.go BFF handlers are 150-235 line aggregates",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-refactor-setup-in92",
+        "title": "refactor: setupEcho is still 355 lines; CSP assembly has no test seam",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.17",
+        "title": "Replace TagCloud with Explore block",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.18",
+        "title": "/tags directory: per-branch collapse + filter box",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z.19",
+        "title": "Converge MediaLightbox and immersive carousel",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tags-load-80li",
+        "title": "a failed tag load looks identical to having no tags",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-mkmr",
+        "title": "fix: the Merge… dialog has no CSS",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-0314",
+        "title": "fix: filter chips lose their icon when re-rendered",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-w01j",
+        "title": "refactor: unify GetHierarchicalNavTags with TagGraph.buildNavTree",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.1",
+        "title": "IG: schema & settings foundation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.2",
+        "title": "IG: Instagram Graph API client service",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.3",
+        "title": "IG: OAuth connect/disconnect/status endpoints",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.4",
+        "title": "IG: long-lived token auto-refresh task",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.5",
+        "title": "IG: post -> Instagram publish service method",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lebq",
+        "title": "Raise MCP tools.go / resources.go test coverage",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-no-trkp",
+        "title": "ops: no metrics, tracing, or error tracking",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-stale-1s72",
+        "title": "ops: .dockerignore is stale (Python-era paths)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-ci-m1ue",
+        "title": "ops: CI lints less than check.sh does (sw.js, scripts/*.mjs skipped)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-ci-xh9r",
+        "title": "ops: CI Go version mismatch (1.26.4 vs go.mod 1.26.5)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-delete-ota5",
+        "title": "ops: delete dead api/fix.py and api/refactor.py",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ops-buildmeta-id0u",
+        "title": "ops: esbuild metafile is publicly served (leaks module graph)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-integration-nusk",
+        "title": "test: document that the integration build tag is load-bearing",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-test-coverage-6hm1",
+        "title": "test: reconcile the two contradictory coverage configs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-rows-xenj",
+        "title": "fix: audit the rows.Err() gap (53 checks / 64 query sites)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-rehash-flu3",
+        "title": "fix: log the bcrypt->Argon2id rehash failure",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-fix-parse-8ask",
+        "title": "fix: add parseIDParam to util.go (34 verbatim copies)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sec-gosec-i38m",
+        "title": "sec: add gosec to golangci; add container image scan",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sec-secret-i7fr",
+        "title": "sec: SECRET_KEY is dead code (false assurance)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-system-health-bwv6",
+        "title": "System-health admin surface: last-run status + last error per background job",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-tag-service-6sys",
+        "title": "Decompose tag_service.go (1521 lines): isolate the graph cache behind its own type",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-mcp-oauth-ebxr",
+        "title": "Add tests for internal/mcp/oauth (478-line from-scratch OAuth 2.1 provider, zero tests)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-css-sanitizer-r8w5",
+        "title": "SanitizePostCSS: replace regex denylist with parser-based allowlist",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-css-esbuild-ggxd",
+        "title": "CSS pipeline parity with JS: replace build-css.sh cat with esbuild (minify + hash + manifest)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-main-go-tz5m",
+        "title": "Decompose cmd/api/main.go (1278 lines): migrations registry + per-domain route registration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-repo-debris-9x43",
+        "title": "Repo debris: patch_registry.patch, stale coverage.out, misplaced Golden theme.css, CHANGELOG drift",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-sw-cache-einw",
+        "title": "SW cache never pruned per deploy + activate wipes image caches",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-esbuild-target-a2qz",
+        "title": "esbuild has no --target; output syntax floats with tool version",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lint-sw-s5cf",
+        "title": "eslint misses sw.js and build-plugin-manifest.mjs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-registry-custom-9qnx",
+        "title": "Stale custom-css EntryName in plugin registry (no such plugin dir)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-token-idsx",
+        "title": "frontend: consolidate CSS design-token files",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-frontend-collapse-7p23",
+        "title": "frontend: fold never-disableable core plugins back into the core route table",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.6",
+        "title": "IG: manual 'Publish to Instagram now' endpoint",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.7",
+        "title": "IG: auto cross-post hook on manual & scheduled publish",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.8",
+        "title": "IG: admin Settings 'Instagram' section",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.9",
+        "title": "IG: PostEditPage share toggle, status badge & publish button",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xq28.10",
+        "title": "IG: docs, env vars & integration verification",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y1d.1",
+        "title": "Built-in theme JSON files and documentation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y1d.2",
+        "title": "Backend ThemeService and API endpoints",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y1d.3",
+        "title": "Frontend themeParser and API client",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y1d.4",
+        "title": "Admin UI (ThemesPage) and settings integration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y1d.5",
+        "title": "CSS styling and E2E verification",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.1",
+        "title": "Schema migration tag_flags_from_system_tags",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.2",
+        "title": "Cycle rejection at write time in AddTagRelationship",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.3",
+        "title": "Tag-graph snapshot in TagService + port all read paths",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.4",
+        "title": "Delete legacy set-builders, slug-prefix checks, CTE preambles",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.5",
+        "title": "Tag write API: PATCH, structure endpoints, move operation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.6",
+        "title": "TagsManagerPage rework: truthful tree, badges, Unfiled, new modal",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.7",
+        "title": "Tree ordering: per-edge drag-and-drop, drag-onto confirm, Move… dialog",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.8",
+        "title": "Tag docs rewrite",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.9",
+        "title": "Post type off tags",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.10",
+        "title": "Free the underscore slug prefix",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.11",
+        "title": "Fix guest hides_posts leak: re-seed CTEs in repository queries",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.12",
+        "title": "Fix guest hides_posts leak: re-seed CTEs in sqlc source + regenerate",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.13",
+        "title": "Remove _pending auto-assign from getOrCreateTag",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.14",
+        "title": "Regression test: guest must not see posts under hides_posts tags",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.15",
+        "title": "Tests: PATCH partial semantics and MoveTag sibling-group scoping",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zagg.16",
+        "title": "Epic close-out: full verification sweep, commit, close p-zagg",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.1",
+        "title": "feat(jobs): a durable SQLite job table and one worker",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.2",
+        "title": "refactor(instagram): cross-posts run as a durable job",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hc4c",
+        "title": "Admin frontend (/light) UX overhaul",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.3",
+        "title": "feat(build): the full image ships ffmpeg, and the server detects it",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.4",
+        "title": "feat(media): transcode uploaded video to H.264/AAC MP4 as a job",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.5",
+        "title": "feat(media): the server writes a video poster when none exists",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.6",
+        "title": "feat(media): slim installs flag HEVC video the browser may not play",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.7",
+        "title": "feat(media): backfill transcodes and posters for existing videos",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.8",
+        "title": "feat(jobs): the admin System page shows the job queue",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ub4u",
+        "title": "WU5: Loosen cross-post goroutine timeout",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-zm2s.9",
+        "title": "feat(jobs): prune old done jobs; clear failed jobs only by hand",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-w6p4",
+        "title": "When start a new post and change the editor from visual to text, it resets the other fields.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-vq0e",
+        "title": "When a new theme is activated, the button of this theme doesn't change the state.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-hls",
+        "title": "Add CODEOWNERS",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-z5n",
+        "title": "Add CodeQL and Dependabot",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-dz8",
+        "title": "Pin Alpine and esbuild versions",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-6w9",
+        "title": "Remove dead password-length check on server",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-qso",
+        "title": "Tag Manager UX: parenting decade/year root to _in_timeline",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-2nj",
+        "title": "Timeline reduced-motion respect",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-nj6",
+        "title": "Add timeline.css to public CSS bundle",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-piq",
+        "title": "dolt issue",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-vf6",
+        "title": "Restructure the go tests to a meaningful named files instead of \"coverage_boost\" generics.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-te9",
+        "title": "Add CHANGELOG.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-d1d",
+        "title": "Implement Post bulk operations",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-2um",
+        "title": "Convert all CSS px measurements to relative units",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-ikn",
+        "title": "Verify frontend environment configuration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-jab",
+        "title": "Perform end-to-end API verification",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-om5",
+        "title": "Implement file-based caching for feeds",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-6y0",
+        "title": "Implement metadata extraction in MediaService",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-media-worker-fkuj",
+        "title": "Async media processing: worker pool for thumbnails on bulk import",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-quickstart-ci-0boe",
+        "title": "Quickstart wizard CI smoke test; consolidate to one EXIF library",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-oh1g",
+        "title": "feat: password-protected posts",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y3s4",
+        "title": "Add post history",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-djjh",
+        "title": "There are no logs of current connections in `podman logs -f <container_name>`",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-58k4",
+        "title": "The build version (%.%.% like 0.1.3) should be changed in `/lgiht/*`",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-cd89",
+        "title": "Custom svg icon as main logo",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-u7de",
+        "title": "`/tags` review",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-1i2",
+        "title": "Add migration status endpoint",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bsm",
+        "title": "Add SBOM and cosign image signatures",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-4xy",
+        "title": "Show post status in immersive mode for registered users (admins).",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-y1d",
+        "title": "Pre-defined and user created css themes for the blog.",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8sn",
+        "title": "Implement soft-delete and undo mechanics for posts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lmy",
+        "title": "Add Nginx config example",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-d4k",
+        "title": "Export posts as Markdown",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-lua",
+        "title": "Add Audio post UI",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-bet",
+        "title": "Implement Lightbox keyboard focus trap",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-9an",
+        "title": "feat: Extract coordinates from exif with AI",
+        "status": "completed",
+        "completedInSession": false
+      }
+    ]
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "p-j3i6",
+      "taskTitle": "Support scoped API tokens (general and lightroom)",
+      "taskCompleted": true,
+      "durationMs": 261432,
+      "startedAt": "2026-10-05T12:59:07.860Z",
+      "endedAt": "2026-10-05T13:03:29.292Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "p-carousel-touch-layout-vfs1",
+      "taskTitle": "carousel studio: the touch layout (S10)",
+      "taskCompleted": true,
+      "durationMs": 20065,
+      "startedAt": "2026-10-05T13:04:13.043Z",
+      "endedAt": "2026-10-05T13:04:33.108Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "p-7181",
+      "taskTitle": "test(backup): TestSystemService_CreateBackup_InsufficientDisk is flaky on CI",
+      "taskCompleted": true,
+      "durationMs": 32783,
+      "startedAt": "2026-10-05T13:05:23.937Z",
+      "endedAt": "2026-10-05T13:05:56.720Z"
+    },
+    {
+      "iteration": 4,
+      "status": "completed",
+      "taskId": "p-template-node-test-3fcc",
+      "taskTitle": "fix(beads): body template shows node --test, not a bare test placeholder",
+      "taskCompleted": true,
+      "durationMs": 103949,
+      "startedAt": "2026-10-05T13:06:49.202Z",
+      "endedAt": "2026-10-05T13:08:33.151Z"
+    },
+    {
+      "iteration": 5,
+      "status": "completed",
+      "taskId": "p-967m",
+      "taskTitle": "fix(frontend): shouldUseImmersive reads media.type, which the API does not send",
+      "taskCompleted": true,
+      "durationMs": 29377,
+      "startedAt": "2026-10-05T13:09:27.280Z",
+      "endedAt": "2026-10-05T13:09:56.657Z"
+    },
+    {
+      "iteration": 6,
+      "status": "completed",
+      "taskId": "p-royn",
+      "taskTitle": "fix(map): a timeline range change on /map navigates to the home page",
+      "taskCompleted": true,
+      "durationMs": 16870,
+      "startedAt": "2026-10-05T13:10:46.426Z",
+      "endedAt": "2026-10-05T13:11:03.296Z"
+    },
+    {
+      "iteration": 7,
+      "status": "completed",
+      "taskId": "p-3j64",
+      "taskTitle": "api/client.ts request(): ...init overwrites the merged headers",
+      "taskCompleted": true,
+      "durationMs": 629369,
+      "startedAt": "2026-10-05T13:11:48.549Z",
+      "endedAt": "2026-10-05T13:22:17.918Z"
+    },
+    {
+      "iteration": 8,
+      "status": "completed",
+      "taskId": "p-flaky-tt-undo-n9op",
+      "taskTitle": "test(e2e): trustedTypes code editor undo test is flaky — CSS editor did not mount",
+      "taskCompleted": true,
+      "durationMs": 75091,
+      "startedAt": "2026-10-05T13:23:09.788Z",
+      "endedAt": "2026-10-05T13:24:24.879Z"
+    }
+  ],
+  "skippedTaskIds": [],
+  "cwd": "/home/light/src/point",
+  "activeTaskIds": [],
+  "subagentPanelVisible": false
+}

@@ -230,7 +230,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at DATETIME,
     expires_at  DATETIME,                        -- NULL = never
-    revoked_at  DATETIME
+    revoked_at  DATETIME,
+    scope       TEXT NOT NULL DEFAULT 'general' -- 'general' = full access, 'lightroom' = create-only
 );
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
 

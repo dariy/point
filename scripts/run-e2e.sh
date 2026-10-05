@@ -78,4 +78,4 @@ export E2E_BASE_URL="http://127.0.0.1:$PORT"
 # them race on creating the owner, which the engine answers with a 409 for the
 # loser at best and a 500 at worst. Serial also keeps a failure readable — the
 # browser log belongs to one file.
-node --test --test-concurrency=1 frontend/e2e/*.test.js
+node --test --test-concurrency=1 frontend/e2e/*.test.ts

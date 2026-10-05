@@ -75,7 +75,7 @@ fi
 
 # A tarball missing the bundles installs a server that serves a blank page, and
 # nothing downstream would notice until a user opened the site.
-for required in frontend/js/app.js frontend/css/main.css frontend/css/light.css; do
+for required in frontend/js/app.js frontend/sw.js frontend/css/main.css frontend/css/light.css; do
     [ -f "$ROOT_DIR/$required" ] || {
         echo "missing build output: $required (drop --skip-frontend)" >&2
         exit 1

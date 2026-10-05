@@ -112,7 +112,7 @@ func TestAuthMiddleware_APIKeyRefusedWhenPluginDisabled(t *testing.T) {
 	}
 
 	enableAPIKeysPlugin(t, settingsSvc)
-	rawKey, _, err := apiKeySvc.GenerateAPIKey(ctx, user.ID, "admin-key", nil)
+	rawKey, _, err := apiKeySvc.GenerateAPIKey(ctx, user.ID, "admin-key", "", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
@@ -151,5 +151,71 @@ func TestAuthMiddleware_APIKeyRefusedWhenPluginDisabled(t *testing.T) {
 	}
 	if reached {
 		t.Error("disabled plugin: the handler must not run for an API-key request")
+	}
+}
+
+// A lightroom key may only create posts, tags and media; everything else,
+// including reads, is refused with 403 before the handler runs.
+func TestAuthMiddleware_LightroomScope(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	settingsSvc := services.NewSettingsService(repo)
+	apiKeySvc := services.NewApiKeyService(repo, settingsSvc)
+	middleware := AuthMiddleware(services.NewAuthService(repo), apiKeySvc)
+
+	user, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "lr", Email: "lr@t.com", PasswordHash: "h", DisplayName: "LR",
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	enableAPIKeysPlugin(t, settingsSvc)
+	lrKey, _, err := apiKeySvc.GenerateAPIKey(ctx, user.ID, "lr", services.ScopeLightroom, nil)
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	genKey, _, err := apiKeySvc.GenerateAPIKey(ctx, user.ID, "gen", services.ScopeGeneral, nil)
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+
+	e := echo.New()
+	call := func(key, method, path string) int {
+		req := httptest.NewRequest(method, path, nil)
+		req.Header.Set("Authorization", "Bearer "+key)
+		c := e.NewContext(req, httptest.NewRecorder())
+		c.SetPath(path)
+		err := middleware(func(c echo.Context) error { return c.NoContent(http.StatusOK) })(c)
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
+			return he.Code
+		}
+		return http.StatusOK
+	}
+
+	cases := []struct {
+		method, path string
+		want         int
+	}{
+		{http.MethodPost, "/api/posts", http.StatusOK},
+		{http.MethodPost, "/api/tags", http.StatusOK},
+		{http.MethodPost, "/api/media/upload", http.StatusOK},
+		{http.MethodPost, "/api/media/upload/multiple", http.StatusOK},
+		{http.MethodGet, "/api/posts", http.StatusForbidden},
+		{http.MethodPut, "/api/posts/:id", http.StatusForbidden},
+		{http.MethodDelete, "/api/posts/:id", http.StatusForbidden},
+		{http.MethodDelete, "/api/tags/:id", http.StatusForbidden},
+		{http.MethodPost, "/api/posts/:id/publish", http.StatusForbidden},
+		{http.MethodPost, "/api/media/bulk-delete", http.StatusForbidden},
+	}
+	for _, tc := range cases {
+		if got := call(lrKey, tc.method, tc.path); got != tc.want {
+			t.Errorf("lightroom %s %s = %d, want %d", tc.method, tc.path, got, tc.want)
+		}
+		if got := call(genKey, tc.method, tc.path); got != http.StatusOK {
+			t.Errorf("general %s %s = %d, want 200", tc.method, tc.path, got)
+		}
 	}
 }

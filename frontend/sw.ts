@@ -1,0 +1,732 @@
+/**
+ * Point — Service Worker
+ *
+ * Responsibilities:
+ *  1. Intercept POST /share-target (Web Share Target Level 2).
+ *  2. Shell caching (stale-while-revalidate) for offline support.
+ *  3. Offline API and Image serving.
+ */
+
+// Stamped by the server when /sw.js is served (main.go replaces
+// __BUILD_VERSION__ with the running build's version), so every deploy gets a
+// fresh shell cache and the activate handler below prunes the previous
+// build's — old hashed plugin chunks don't accumulate across deploys.
+const CACHE_VERSION = "__BUILD_VERSION__";
+
+/**
+ * `self` here is a ServiceWorkerGlobalScope, which is not in the DOM lib this
+ * project typechecks against — the cast names only the two members used below.
+ * Every other `self.` reference is `addEventListener`, which Window has too.
+ */
+interface SWScope {
+  skipWaiting: () => Promise<void>;
+  clients: { claim: () => Promise<void> };
+}
+const swScope = self as unknown as SWScope;
+const CACHE_NAME = `point-${CACHE_VERSION}`;
+
+/**
+ * ExtendableEvent and FetchEvent are not in the DOM lib either. These name the
+ * members this file uses; the listeners below cast their Event to them.
+ */
+type SWExtendableEvent = Event & { waitUntil: (p: Promise<unknown>) => void };
+type SWFetchEvent = SWExtendableEvent & {
+  request: Request;
+  respondWith: (r: Response | Promise<Response>) => void;
+};
+
+/**
+ * Records of the point-offline database, as written by utils/offlineStore.ts.
+ * Only the fields read here are named.
+ */
+interface OfflineTag {
+  id: number;
+  name: string;
+  slug: string;
+  post_count: number;
+  is_hidden?: boolean;
+  is_featured?: boolean;
+  include_in_breadcrumbs?: boolean;
+  sort_order?: number;
+}
+interface OfflineTagRel { parent_id: number; child_id: number }
+interface OfflineTagLocation { tag_id: number; latitude: number; longitude: number }
+interface OfflinePost { id: number; slug: string; title: string; tags?: Array<{ slug: string }> }
+interface OfflineSettings { posts_per_page?: string | number; min_tag_posts_to_show?: string | number }
+interface TagTreeNode {
+  id: number;
+  name: string;
+  slug: string;
+  post_count: number;
+  is_featured?: boolean;
+  sort_order?: number;
+  children: TagTreeNode[];
+}
+
+// Assets to cache on install (SPA shell).
+const SHELL_URLS = [
+  "/",
+  "/assets/js/app.js",
+  "/assets/css/main.css",
+  "/assets/css/light.css",
+  "/assets/css/viewer.css",
+  "/assets/images/favicon.svg",
+  "/assets/images/favicon-128.png",
+  "/assets/images/favicon-512.png",
+  "/assets/images/favicon-dark-128.png",
+  "/assets/images/favicon-dark-512.png",
+];
+
+// ── IndexedDB helpers ─────────────────────────────────────────────────────────
+
+const IDB_DB = "point-share";
+const IDB_STORE = "queue";
+
+const OFFLINE_DB = "point-offline";
+const OFFLINE_VERSION = 1;
+
+function offlineDbOpen(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(OFFLINE_DB, OFFLINE_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      const stores: Array<[string, IDBObjectStoreParameters]> = [
+        ["posts", { keyPath: "id" }],
+        ["tags", { keyPath: "id" }],
+        ["tag_relationships", { keyPath: ["parent_id", "child_id"] }],
+        ["tag_locations", { keyPath: "tag_id" }],
+        ["media", { keyPath: "id" }],
+        ["mutation_queue", { keyPath: "id" }],
+        ["meta", { keyPath: "key" }],
+        ["blobs", { keyPath: "id" }],
+      ];
+      stores.forEach(([name, opts]) => {
+        if (!db.objectStoreNames.contains(name))
+          db.createObjectStore(name, opts);
+      });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Read one record (by key) or every record of a store. T names what the caller
+ * expects back; the store holds what utils/offlineStore.ts wrote.
+ */
+async function idbGet<T>(storeName: string, query?: IDBValidKey): Promise<T> {
+  const db = await offlineDbOpen();
+  const tx = db.transaction(storeName, "readonly");
+  const store = tx.objectStore(storeName);
+  return new Promise((res, rej) => {
+    const req = query ? store.get(query) : store.getAll();
+    req.onsuccess = () => {
+      let result = req.result;
+      if (query && storeName === "meta") {
+        // Return value property for meta records
+        result = result ? result.value : null;
+      }
+      if (!query && storeName === "posts" && Array.isArray(result)) {
+        // Default sort for posts: published_at DESC, created_at DESC
+        result = result.sort((a, b) => {
+          const dateA = a.published_at || a.created_at;
+          const dateB = b.published_at || b.created_at;
+          return new Date(dateB).getTime() - new Date(dateA).getTime();
+        });
+      }
+      res(result);
+    };
+    req.onerror = () => rej(req.error);
+  });
+}
+
+function idbOpen(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_DB, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(IDB_STORE, { keyPath: "id" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbPut(entry: object) {
+  const db = await idbOpen();
+  const tx = db.transaction(IDB_STORE, "readwrite");
+  tx.objectStore(IDB_STORE).put(entry);
+  return new Promise<void>((res, rej) => {
+    tx.oncomplete = () => res();
+    tx.onerror = rej;
+  });
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────────
+
+self.addEventListener("install", (e) => {
+  const event = e as SWExtendableEvent;
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then(async (cache) => {
+        await Promise.allSettled(
+          SHELL_URLS.map((url) =>
+            cache
+              .add(url)
+              .catch((err) =>
+                console.warn("[SW] Failed to pre-cache:", url, err),
+              ),
+          ),
+        );
+      })
+      .then(() => swScope.skipWaiting()),
+  );
+});
+
+self.addEventListener("activate", (e) => {
+  const event = e as SWExtendableEvent;
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            // Drop stale shell caches only. The point-images-* caches are
+            // written by the offline-sync plugin from the page context and
+            // must survive SW updates. They are keyed by full URL, generation
+            // token included, so a thumbnail rebuild orphans every entry — the
+            // SW cannot see window.__MEDIA__ to notice, so OfflineDataSection
+            // clears them before each re-precache instead.
+            .filter((k) => k !== CACHE_NAME && !k.startsWith("point-images-"))
+            .map((k) => caches.delete(k)),
+        ),
+      )
+      .then(() => swScope.clients.claim()),
+  );
+});
+
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+
+self.addEventListener("fetch", (e) => {
+  const event = e as SWFetchEvent;
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // 0. Cross-origin requests (analytics beacons, map tiles, third-party
+  // scripts) are the browser's to handle natively — governed directly by the
+  // document's CSP (script-src / img-src / connect-src). Routing them through
+  // the SW turns a native script/image load into a SW `fetch()`, which counts
+  // against connect-src and gets blocked (e.g. the Cloudflare Web Analytics
+  // beacon on static.cloudflareinsights.com), then returns a bogus 503. Let
+  // them pass through untouched.
+  if (url.origin !== self.location.origin) return;
+
+  // 1. Share target: intercept POST entirely
+  if (url.pathname === "/share-target" && request.method === "POST") {
+    event.respondWith(handleShareTarget(request));
+    return;
+  }
+
+  // 2. Image intercept (path pattern /:year/:month/:filename)
+  if (isMediaPath(url.pathname)) {
+    event.respondWith(
+      serveMedia(request).catch(
+        () => new Response("Not found", { status: 404 }),
+      ),
+    );
+    return;
+  }
+
+  // 3. API reads: Network-first with IDB fallback
+  if (url.pathname.startsWith("/api/") && request.method === "GET") {
+    event.respondWith(
+      fetch(request).catch(() => serveFromOfflineStore(request)),
+    );
+    return;
+  }
+
+  // 4. API responses (non-GET) must never be cached in the shell cache.
+  if (url.pathname.startsWith("/api/")) return;
+
+  // 5. SW and manifest must not be cached.
+  if (url.pathname === "/sw.js" || url.pathname === "/manifest.webmanifest")
+    return;
+
+  // 5b. theme.css changes at runtime when user activates a theme; always fetch
+  // from network. Every branch must resolve to a real Response — a bare
+  // caches.match() can resolve to undefined (cache miss), and respondWith(undefined)
+  // throws "Failed to convert value to 'Response'".
+  if (url.pathname === "/assets/css/common/theme.css") {
+    event.respondWith(
+      fetch(request)
+        .catch(() => caches.match("/assets/css/common/theme.css"))
+        .then(
+          (r) =>
+            r ||
+            new Response("", {
+              status: 200,
+              headers: { "Content-Type": "text/css" },
+            }),
+        ),
+    );
+    return;
+  }
+
+  // 5c. Real server-served files (RSS feed, sitemap, robots). These are NOT SPA
+  // routes — let them hit the network so the backend serves the actual file
+  // instead of the cached app shell.
+  if (
+    url.pathname === "/feed" ||
+    url.pathname === "/feed.xml" ||
+    url.pathname === "/sitemap.xml" ||
+    url.pathname === "/robots.txt"
+  ) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // 6. Navigation requests (HTML): network-first (SPA shell).
+  //
+  // The shell is NOT a static asset: the server injects a per-build, enabled-only
+  // plugin manifest (window.__PLUGINS__) carrying content-hashed chunk URLs, and a
+  // matching per-request CSP script-src hash. A cache-first shell goes stale after
+  // any rebuild — it references chunk filenames that now 404 (so slots like the
+  // immersive post-viewer never mount) and can pair an old inline manifest with a
+  // CSP that no longer allows it. So we always prefer the network and fall back to
+  // the cached shell only when offline.
+  if (request.mode === "navigate") {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        try {
+          const response = await fetch(request);
+          if (response.status === 200)
+            cache.put("/", response.clone()).catch(() => {});
+          return response;
+        } catch {
+          // Offline: any navigation falls back to the cached SPA shell.
+          const cached = await cache.match("/");
+          if (cached) return cached;
+          return new Response(
+            '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>' +
+              '<body style="font-family:sans-serif;padding:2rem">' +
+              "<h1>You're offline</h1>" +
+              "<p>Reload the page once you're back online.</p>" +
+              "</body></html>",
+            { headers: { "Content-Type": "text/html" } },
+          );
+        }
+      }),
+    );
+    return;
+  }
+
+  // 7. Static assets: stale-while-revalidate.
+  event.respondWith(staleWhileRevalidate(request));
+});
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
+async function handleShareTarget(request: Request) {
+  const formData = await request.formData();
+  const sharedFiles = formData.getAll("media") as File[];
+  const title = formData.get("title") || "";
+
+  const fileEntries = await Promise.all(
+    sharedFiles.map(async (file) => ({
+      name: file.name,
+      type: file.type,
+      data: await file.arrayBuffer(),
+    })),
+  );
+
+  await idbPut({
+    id: crypto.randomUUID(),
+    files: fileEntries,
+    title,
+    timestamp: Date.now(),
+  });
+
+  return Response.redirect("/light/posts/new?share=pending", 303);
+}
+
+function isMediaPath(path: string) {
+  return /^\/\d{4}\/\d{2}\/[^/]+$/.test(path);
+}
+
+// The offline image caches, most faithful first. Both are written from the page
+// context by the offline-sync plugin (utils/imageCache.ts): the original bytes
+// go to point-images-full-v1, the ladder rungs to point-images-v1.
+const IMAGE_CACHES = ["point-images-full-v1", "point-images-v1"];
+
+/**
+ * caches.match for one named cache, treating a cache that was never created as
+ * a miss. The spec resolves undefined for an unknown cacheName, but older
+ * implementations reject instead, and a user who has never pressed "Update
+ * Offline Data" has neither cache.
+ */
+async function matchImageCache(
+  cacheName: string,
+  url: string,
+  options: CacheQueryOptions = {},
+) {
+  try {
+    return await caches.match(url, { ...options, cacheName });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Serve a media request from the offline caches, then the network.
+ *
+ * The query is part of the cache key here, deliberately. A media URL now names
+ * one rung of the thumbnail ladder (`?s=512&v=…`), so the `ignoreSearch: true`
+ * this used to pass would answer a request for the 1024 rung with whichever
+ * variant happened to be cached first — a 128px chip painted into a full-width
+ * slot. Match exactly instead, and only when we cannot reach the network at all
+ * fall back to an approximate hit: offline, a soft image beats a broken one.
+ */
+async function serveMedia(request: Request) {
+  for (const name of IMAGE_CACHES) {
+    const hit = await matchImageCache(name, request.url);
+    if (hit) return hit;
+  }
+
+  if (navigator.onLine) {
+    try {
+      return await fetch(request);
+    } catch {
+      // Online by the flag, unreachable in fact (captive portal, flaky link) —
+      // the approximate match below is still better than nothing.
+    }
+  }
+
+  for (const name of IMAGE_CACHES) {
+    const hit = await matchImageCache(name, request.url, {
+      ignoreSearch: true,
+    });
+    if (hit) return hit;
+  }
+
+  return new Response("Not found", { status: 404 });
+}
+
+async function serveFromOfflineStore(request: Request) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  try {
+    const settings =
+      (await idbGet<OfflineSettings | null>("meta", "blog_settings")) || {};
+    const page = parseInt(url.searchParams.get("page") ?? "", 10) || 1;
+    const perPage =
+      parseInt(url.searchParams.get("per_page") ?? "", 10) ||
+      parseInt(String(settings.posts_per_page), 10) ||
+      10;
+
+    const allTags = await idbGet<OfflineTag[]>("tags");
+    const allRelationships =
+      await idbGet<OfflineTagRel[]>("tag_relationships");
+    const minPosts = parseInt(
+      String(settings.min_tag_posts_to_show || "0"),
+      10,
+    );
+
+    // Helper: Build tag hierarchy
+    const buildTagTree = (parentID: number | null): TagTreeNode[] => {
+      return allTags
+        .filter((t) => {
+          if (t.is_hidden) return false;
+          const rels = allRelationships.filter((r) => r.child_id === t.id);
+          if (parentID === null) return rels.length === 0;
+          return rels.some((r) => r.parent_id === parentID);
+        })
+        .map(
+          (t): TagTreeNode => ({
+            id: t.id,
+            name: t.name,
+            slug: t.slug,
+            post_count: t.post_count,
+            is_featured: t.is_featured,
+            sort_order: t.sort_order,
+            children: buildTagTree(t.id),
+          }),
+        )
+        .filter(
+          (t) =>
+            t.is_featured || t.post_count >= minPosts || t.children.length > 0,
+        )
+        .sort(
+          (a, b) =>
+            (a.sort_order || 0) - (b.sort_order || 0) ||
+            a.name.localeCompare(b.name),
+        );
+    };
+
+    // 1. /api/pages/home
+    if (path === "/api/pages/home") {
+      const lastSync = await idbGet("meta", "last_sync");
+      if (!lastSync) {
+        return new Response(
+          JSON.stringify({
+            message:
+              "The site is temporarily unavailable. Please try again later.",
+          }),
+          { status: 503, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      const posts = await idbGet<OfflinePost[]>("posts");
+
+      const tag_cloud = allTags
+        .filter((t) => t.post_count >= minPosts && !t.is_hidden)
+        .map((t) => ({
+          name: t.name,
+          slug: t.slug,
+          count: t.post_count,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20);
+
+      const nav_tags = buildTagTree(null);
+
+      const offset = (page - 1) * perPage;
+      const paginatedPosts = posts.slice(offset, offset + perPage);
+
+      return new Response(
+        JSON.stringify({
+          posts: paginatedPosts,
+          pagination: {
+            page,
+            per_page: perPage,
+            total: posts.length,
+            pages: Math.ceil(posts.length / perPage),
+          },
+          tag_cloud,
+          nav_tags,
+          settings: settings,
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    // 2. /api/posts/slug/:slug
+    const postSlugMatch = path.match(/^\/api\/posts\/slug\/([^/]+)$/);
+    if (postSlugMatch) {
+      const slug = postSlugMatch[1];
+      const posts = await idbGet<OfflinePost[]>("posts");
+      const post = posts.find((p) => p.slug === slug);
+      if (post) {
+        return new Response(JSON.stringify(post), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "Post not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 2.1 /api/pages/tags/:slug
+    const tagPageMatch = path.match(/^\/api\/pages\/tag\/([^/]+)$/);
+    if (tagPageMatch) {
+      const slug = tagPageMatch[1];
+      const tag = allTags.find((t) => t.slug === slug);
+      if (tag) {
+        const allPosts = await idbGet<OfflinePost[]>("posts");
+        const posts = allPosts.filter(
+          (p) => p.tags && p.tags.some((t) => t.slug === slug),
+        );
+
+        const offset = (page - 1) * perPage;
+        const paginatedPosts = posts.slice(offset, offset + perPage);
+
+        // Sub-nav for this tag
+        const childItems = buildTagTree(tag.id);
+        const rootNavTags = buildTagTree(null);
+
+        // Breadcrumbs (reconstruct from relationships)
+        const breadcrumbs = [];
+        let curr: OfflineTag | null | undefined = tag;
+        while (curr) {
+          const id: number = curr.id;
+          const rel = allRelationships.find((r) => r.child_id === id);
+          if (rel) {
+            const parentID = rel.parent_id;
+            const parent: OfflineTag | undefined = allTags.find((t) => t.id === parentID);
+            if (parent && parent.include_in_breadcrumbs) {
+              breadcrumbs.unshift({
+                id: parent.id,
+                name: parent.name,
+                slug: parent.slug,
+                post_count: parent.post_count,
+              });
+              curr = parent;
+            } else {
+              curr = null;
+            }
+          } else {
+            curr = null;
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            tag: {
+              ...tag,
+              parents: [],
+              children: allTags.filter((t) =>
+                allRelationships.some(
+                  (r) => r.parent_id === tag.id && r.child_id === t.id,
+                ),
+              ),
+              locations: [],
+            },
+            breadcrumbs: breadcrumbs,
+            posts: paginatedPosts,
+            root_nav_tags: rootNavTags,
+            pagination: {
+              page,
+              per_page: perPage,
+              total: posts.length,
+              pages: Math.ceil(posts.length / perPage),
+            },
+            nav_tags: childItems,
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "Tag not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 2.2 /api/pages/tags
+    if (path === "/api/pages/tags") {
+      const tags = allTags
+        .filter((t) => !t.is_hidden)
+        .map((t) => ({
+          ...t,
+          parents: allRelationships
+            .filter((r) => r.child_id === t.id)
+            .map((r) => allTags.find((p) => p.id === r.parent_id))
+            .filter(Boolean),
+          children: allRelationships
+            .filter((r) => r.parent_id === t.id)
+            .map((r) => allTags.find((c) => c.id === r.child_id))
+            .filter(Boolean),
+        }));
+      return new Response(JSON.stringify({ tags, total: tags.length }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 2.3 /api/pages/map
+    if (path === "/api/pages/map") {
+      const allLocs = await idbGet<OfflineTagLocation[]>("tag_locations");
+      const locMap: Record<number, OfflineTagLocation> = {};
+      allLocs.forEach((l) => (locMap[l.tag_id] = l));
+
+      const mapTags = allTags
+        .filter((t) => locMap[t.id])
+        .map((t) => ({
+          name: t.name,
+          slug: t.slug,
+          post_count: t.post_count,
+          lat: locMap[t.id].latitude,
+          lng: locMap[t.id].longitude,
+          type: "other", // Simplified for offline
+          years: [],
+        }));
+
+      return new Response(JSON.stringify({ tags: mapTags }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 3. /api/tags
+    if (path === "/api/tags") {
+      return new Response(
+        JSON.stringify(
+          allTags.map((t) => ({
+            id: t.id,
+            name: t.name,
+            slug: t.slug,
+            post_count: t.post_count,
+          })),
+        ),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    // 4. /api/posts/:id/navigation
+    const navMatch = path.match(/^\/api\/posts\/(\d+)\/navigation$/);
+    if (navMatch) {
+      const id = parseInt(navMatch[1], 10);
+      const posts = await idbGet<OfflinePost[]>("posts");
+      const idx = posts.findIndex((p) => p.id === id);
+      if (idx !== -1) {
+        const next =
+          idx > 0
+            ? {
+                id: posts[idx - 1].id,
+                title: posts[idx - 1].title,
+                slug: posts[idx - 1].slug,
+              }
+            : null;
+        const prev =
+          idx < posts.length - 1
+            ? {
+                id: posts[idx + 1].id,
+                title: posts[idx + 1].title,
+                slug: posts[idx + 1].slug,
+              }
+            : null;
+        return new Response(JSON.stringify({ prev, next }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "Post not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Offline" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("[SW] Offline store error:", err);
+    return new Response(JSON.stringify({ error: "Offline store error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+async function staleWhileRevalidate(request: Request) {
+  const cache = await caches.open(CACHE_NAME);
+
+  // Match on the FULL URL including the query string: index.html references
+  // app.js/css with a ?v=<build> stamp precisely so a redeploy busts caches.
+  // Stripping the search here would turn the new version into a cache hit on
+  // the old bundle — stale app.js paired with a freshly injected __PLUGINS__
+  // manifest. An exact miss falls through to the network instead.
+  const cached = await cache.match(request);
+  const fetchPromise = fetch(request)
+    .then((response) => {
+      if (response.status === 200)
+        cache.put(request, response.clone()).catch(() => {});
+      return response;
+    })
+    .catch(async () => {
+      // Offline: accept a different-version copy (e.g. the unversioned
+      // pre-cached shell asset) rather than failing the request outright.
+      const fallback =
+        cached || (await cache.match(request, { ignoreSearch: true }));
+      return fallback || new Response("Offline", { status: 503 });
+    });
+
+  return cached || fetchPromise;
+}

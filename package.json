@@ -8,11 +8,11 @@
   },
   "scripts": {
     "lint": "./scripts/check.sh --lint",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && tsc -p tsconfig.scripts.json && tsc -p tsconfig.demo.json",
     "build": "./scripts/rebuild.sh",
     "test": "./scripts/run-tests.sh",
-    "test:frontend": "node --test frontend/test/*.test.js",
-    "test:e2e": "node --test frontend/e2e/*.test.js"
+    "test:frontend": "node --test frontend/test/*.test.ts",
+    "test:e2e": "node --test frontend/e2e/*.test.ts"
   },
   "devDependencies": {
     "@playwright/cli": "0.1.21",

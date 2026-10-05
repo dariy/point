@@ -4,7 +4,7 @@
     "correctness": "off"
   },
   "jsPlugins": [
-    "./scripts/oxlint-point.mjs"
+    "./scripts/oxlint-point.ts"
   ],
   "ignorePatterns": [
     "data/**",
@@ -83,7 +83,7 @@
     {
       "files": [
         "frontend/src/**/*.ts",
-        "demo/mock/**/*.js"
+        "demo/mock/**/*.ts"
       ],
       "globals": {
         "globalThis": "readonly",
@@ -94,6 +94,8 @@
         "sessionStorage": "readonly",
         "location": "readonly",
         "fetch": "readonly",
+        "Request": "readonly",
+        "Headers": "readonly",
         "Response": "readonly",
         "structuredClone": "readonly",
         "XMLHttpRequest": "readonly",
@@ -168,7 +170,7 @@
     },
     {
       "files": [
-        "frontend/sw.js"
+        "frontend/sw.ts"
       ],
       "globals": {
         "self": "readonly",
@@ -190,8 +192,9 @@
     },
     {
       "files": [
-        "scripts/**/*.mjs",
-        "demo/**/*.mjs"
+        "scripts/**/*.ts",
+        "demo/*.ts",
+        "demo/scripts/*.ts"
       ],
       "globals": {
         "process": "readonly",
@@ -207,7 +210,7 @@
     },
     {
       "files": [
-        "demo/scripts/test.mjs"
+        "demo/scripts/test.ts"
       ],
       "globals": {
         "process": "readonly",

@@ -5,25 +5,25 @@
   // type-only imports use `import type` (verbatimModuleSyntax), and an import
   // names the real file, `./x.ts` or `./x.js` (allowImportingTsExtensions).
   //
-  // allowJs and checkJs stay on for frontend/sw.js, the one checked JS file.
-  // scripts/check.sh fails on a .js file under frontend/src.
+  // The service worker is frontend/sw.ts; scripts/build-js.sh writes the served
+  // frontend/sw.js from it. scripts/check.sh fails on a tracked .js, .mjs or .cjs
+  // file outside frontend/vendor/.
   //
   // strict is on (epic p-3cfv). Fix a strict error with a real guard; a non-null
   // `!` is only for a DOM element that is certain to exist.
   //
-  // frontend/test/** is deliberately NOT in the checked set. Checking it once
-  // cost 401 errors across 70 files, and a file-by-file audit of them found
-  // exactly one real defect: linkedom's DOM is not the DOM lib's DOM, mocks are
-  // partial objects on purpose, and tests attach their own tracker properties
-  // to instances. The value of this gate is enforcing the types in src/, and
-  // the src/ types a test exercises are checked from src/ either way. An honest
-  // exclusion beats 70 @ts-nocheck pragmas nobody intends to remove.
+  // frontend/test/** is not in this checked set. tsconfig.test.json checks it
+  // (and frontend/e2e/), tsconfig.scripts.json checks scripts/*.ts and
+  // tsconfig.demo.json checks demo/, all with these options. The linkedom DOM
+  // mismatch has one cast, in frontend/test/helpers/dom.ts; partial mocks use
+  // mock<T>() from frontend/test/helpers/mock.ts.
   "compilerOptions": {
     "target": "ES2020",
     "module": "ES2020",
     "moduleResolution": "bundler",
+    // allowJs is for the vendored JS that frontend/src imports (codejar,
+    // prismjs): tsc reads their types from it. It does not check them.
     "allowJs": true,
-    "checkJs": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
@@ -35,7 +35,7 @@
   },
   "include": [
     "frontend/src/**/*.ts",
-    "frontend/*.js",
+    "frontend/sw.ts",
     "frontend/index.html",
     "frontend/types/**/*.d.ts"
   ],

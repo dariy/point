@@ -94,17 +94,17 @@ export function shouldUseImmersive(post: Post | null | undefined): boolean {
   const body = post.content_html || "";
   if (body.includes("<hr>") || body.includes("<hr/>") || body.includes("<hr />")) return true;
   if (post.type === "page" || post.status === "page") return false;
-  // PostMediaRef has no `type`: the API does not send it, so both audio
-  // checks below never match. Cast kept until p-967m fixes it.
-  const media = (post.media || []) as (PostMediaRef & { type?: string })[];
-  if (media.length && media.every((m) => m.type === "audio")) return false;
+  // The API sends no media `type`; derive it from the path.
+  const media = post.media || [];
+  const isAudio = (m: PostMediaRef) => mediaTypeFromPath(m.path) === "audio";
+  if (media.length && media.every(isAudio)) return false;
   const text = stripHtml(body).replace(/&nbsp;/g, " ").trim();
   if (text.length !== 0) {
     const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
     const allMedia = lines.every((l) => /^(?:https?:\/\/|\/)\S+$/.test(l) && mediaTypeFromPath(l));
     if (!allMedia) return false;
   }
-  const hasVisualMedia = media.some((m) => m.type !== "audio");
+  const hasVisualMedia = media.some((m) => !isAudio(m));
   const hasContentMedia = body.trim().length > 0;
   return hasVisualMedia || hasContentMedia;
 }

@@ -48,7 +48,11 @@ export interface ApiKey {
   last_used_at: string | null;
   expires_at: string | null;
   revoked_at: string | null;
+  /** `general` = full access; `lightroom` = may only create posts, tags and media. */
+  scope: ApiKeyScope;
 }
+
+export type ApiKeyScope = 'general' | 'lightroom';
 
 /**
  * SHA-256 hash a string. Uses Web Crypto API when available (secure context),
@@ -303,8 +307,9 @@ export function getApiKeys(): Promise<{ api_keys: ApiKey[], total: number }> {
 export function createApiKey(
   name: string,
   expiresAt: string | null = null,
+  scope: ApiKeyScope = 'general',
 ): Promise<{ api_key: ApiKey, raw_key: string }> {
-  return api.post('/api/auth/api-keys', { name, expires_at: expiresAt });
+  return api.post('/api/auth/api-keys', { name, expires_at: expiresAt, scope });
 }
 
 /** Revoke an API key. */

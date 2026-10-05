@@ -421,7 +421,7 @@ func TestOptionalAuthMiddleware_RevelioOff(t *testing.T) {
 	// api-keys plugin refuses the key outright (ValidateAPIKey), which would
 	// make the assertion below pass for the wrong reason.
 	enableAPIKeysPlugin(t, settingsSvc)
-	plain, _, err := apiKeySvc.GenerateAPIKey(context.Background(), user.ID, "revelio", nil)
+	plain, _, err := apiKeySvc.GenerateAPIKey(context.Background(), user.ID, "revelio", "", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}

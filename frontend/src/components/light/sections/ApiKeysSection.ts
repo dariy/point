@@ -9,7 +9,7 @@
 
 import { Component } from "../../Component.ts";
 import { getApiKeys, createApiKey, deleteApiKey, getOAuthClients, revokeOAuthClient } from "../../../api/auth.ts";
-import type { ApiKey, OAuthClient } from "../../../api/auth.ts";
+import type { ApiKey, ApiKeyScope, OAuthClient } from "../../../api/auth.ts";
 import { setToast } from "../../../store.ts";
 import { html } from "../../../utils/helpers.ts";
 import { formatDateShort } from "../../../utils/formatters.ts";
@@ -35,6 +35,7 @@ export class ApiKeysSection extends Component {
                 <tr>
                   <th>Name</th>
                   <th>Key Prefix</th>
+                  <th>Scope</th>
                   <th>Created</th>
                   <th class="text-right">Actions</th>
                 </tr>
@@ -46,6 +47,7 @@ export class ApiKeysSection extends Component {
                   <tr>
                     <td><strong>${k.name}</strong></td>
                     <td><code class="font-mono">${k.prefix}…</code></td>
+                    <td>${k.scope === "lightroom" ? "Lightroom (create only)" : "General"}</td>
                     <td>${formatDateShort(k.created_at)}</td>
                     <td class="text-right">
                       <button class="btn btn-sm btn-danger delete-api-key-btn" data-id="${k.id}" title="Delete">Delete</button>
@@ -61,6 +63,7 @@ export class ApiKeysSection extends Component {
       <div class="section-actions">
         <span class="section-actions-spacer"></span>
         <button id="create-api-key-btn" class="btn btn-sm btn-primary">Create API Key</button>
+        <button id="create-lightroom-key-btn" class="btn btn-sm">Create Lightroom Key</button>
       </div>
       ${list}
       ${this._renderOAuthClients(oauthClients)}`;
@@ -99,6 +102,7 @@ export class ApiKeysSection extends Component {
 
   afterRender() {
     this.$("#create-api-key-btn")?.addEventListener("click", () => this._handleCreate());
+    this.$("#create-lightroom-key-btn")?.addEventListener("click", () => this._handleCreate("lightroom"));
     this.$$(".delete-api-key-btn").forEach((btn) => {
       btn.addEventListener("click", () => this._handleDelete(Number(btn.dataset.id)));
     });
@@ -121,15 +125,17 @@ export class ApiKeysSection extends Component {
     this.setState({ loading: false, apiKeys: apiKeys.api_keys || [], oauthClients: oauth.clients || [] });
   }
 
-  _handleCreate() {
+  _handleCreate(scope: ApiKeyScope = "general") {
     showPrompt({
-      title: "Create API Key",
-      message: "Enter a name for the new API key:",
+      title: scope === "lightroom" ? "Create Lightroom Key" : "Create API Key",
+      message: scope === "lightroom"
+        ? "Enter a name for the new key. It can only create posts, tags and media:"
+        : "Enter a name for the new API key:",
       confirmText: "Create",
       onConfirm: async (name) => {
         if (!name) return;
         try {
-          const result = await createApiKey(name);
+          const result = await createApiKey(name, null, scope);
           showConfirm({
             title: "API Key Created",
             message: `Please copy your API key now. It will not be shown again:\n\n${result.raw_key}`,

@@ -44,7 +44,7 @@ func TestApiKeyService_Lifecycle(t *testing.T) {
 	})
 
 	// 1. Generate API Key
-	rawKey, apiKey, err := service.GenerateAPIKey(ctx, user.ID, "test-key", nil)
+	rawKey, apiKey, err := service.GenerateAPIKey(ctx, user.ID, "test-key", "", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey failed: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestApiKeyService_Expiry(t *testing.T) {
 
 	// Expired key
 	expiresAt := time.Now().Add(-1 * time.Hour)
-	rawKey, _, _ := service.GenerateAPIKey(ctx, user.ID, "expired", &expiresAt)
+	rawKey, _, _ := service.GenerateAPIKey(ctx, user.ID, "expired", "", &expiresAt)
 
 	_, err := service.ValidateAPIKey(ctx, rawKey)
 	if err == nil || err.Error() != "API key expired" {
@@ -143,7 +143,7 @@ func TestApiKeyService_ValidateRefusedWhenPluginDisabled(t *testing.T) {
 	if err := settings.SetSetting(ctx, plugins.EnabledKey("api-keys"), "true", "string"); err != nil {
 		t.Fatalf("enable api-keys plugin: %v", err)
 	}
-	rawKey, _, err := service.GenerateAPIKey(ctx, user.ID, "toggle-key", nil)
+	rawKey, _, err := service.GenerateAPIKey(ctx, user.ID, "toggle-key", "", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
@@ -167,5 +167,36 @@ func TestApiKeyService_ValidateRefusedWhenPluginDisabled(t *testing.T) {
 	}
 	if _, err := service.ValidateAPIKey(ctx, rawKey); err != nil {
 		t.Errorf("key must validate again once the plugin is re-enabled: %v", err)
+	}
+}
+
+func TestApiKeyService_Scope(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	service := newAPIKeyServiceWithPlugin(t, repo)
+	ctx := context.Background()
+
+	user, _ := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "scoped", Email: "scoped@example.com", PasswordHash: "hash", DisplayName: "S",
+	})
+
+	raw, key, err := service.GenerateAPIKey(ctx, user.ID, "default", "", nil)
+	if err != nil || key.Scope != ScopeGeneral {
+		t.Fatalf("empty scope: got %q, err %v; want %q", key.Scope, err, ScopeGeneral)
+	}
+	if got, err := service.ValidateAPIKey(ctx, raw); err != nil || got.Scope != ScopeGeneral {
+		t.Errorf("validate general: scope %q, err %v", got.Scope, err)
+	}
+
+	raw, _, err = service.GenerateAPIKey(ctx, user.ID, "lr", ScopeLightroom, nil)
+	if err != nil {
+		t.Fatalf("lightroom: %v", err)
+	}
+	if got, err := service.ValidateAPIKey(ctx, raw); err != nil || got.Scope != ScopeLightroom {
+		t.Errorf("validate lightroom: scope %q, err %v", got.Scope, err)
+	}
+
+	if _, _, err := service.GenerateAPIKey(ctx, user.ID, "bad", "root", nil); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("unknown scope: want ErrInvalidInput, got %v", err)
 	}
 }

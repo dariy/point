@@ -1,7 +1,7 @@
 #!/bin/bash
 # The html`` convention, asserted against the tree rather than trusted.
 #
-# scripts/oxlint-point.mjs catches the shapes a parser can see: raw() around a call or a
+# scripts/oxlint-point.ts catches the shapes a parser can see: raw() around a call or a
 # template literal, an interpolation in an unquoted attribute, a bare innerHTML.
 # This covers the two things it cannot:
 #
@@ -15,7 +15,7 @@
 #      the frontend — so a new one is a deliberate act, not a quiet edit.
 #
 # A third shape needs a parser rather than a grep, so it lives in
-# frontend/test/htmlInterpolation.test.js: markup in a plain template literal
+# frontend/test/htmlInterpolation.test.ts: markup in a plain template literal
 # interpolated into html``, which the tag escapes into visible text.
 #
 # Usage: scripts/check-html-escaping.sh

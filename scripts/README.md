@@ -21,7 +21,7 @@ outside this repo — see [Production](#production) below.
 - **build-js.sh**: Bundles and minifies frontend JS with esbuild. Produces both a
   debug and a minified bundle set so the backend can serve either without a
   rebuild (`FRONTEND_DEBUG`).
-- **build-plugin-manifest.mjs**: Writes the hashed plugin manifest consumed by the
+- **build-plugin-manifest.ts**: Writes the hashed plugin manifest consumed by the
   plugin loader. Invoked by `build-js.sh`; not run directly.
 - **run-remark42-local.sh**: Runs the bundled remark42 comments engine locally
   for dev, mirroring what `build/Dockerfile` + `entrypoint.sh` do in the

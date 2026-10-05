@@ -126,12 +126,14 @@ export class ViewContext {
     // Tags module view (tag cloud / map / atlas are all served at /tags).
     // Carries only the timeline year range as a query param. A search leaves
     // the module entirely, so it must not be short-circuited back to /tags.
-    if (!this.query && (this.path === '/tags' || this.path === '/tags/')) {
+    // /map is the same module under its own path and keeps it the same way.
+    const modulePath = this.path.replace(/\/$/, '');
+    if (!this.query && (modulePath === '/tags' || modulePath === '/map')) {
       if (this.years) {
         params.set('timeline', `${this.years[0]}-${this.years[1]}`);
       }
       const tagsSearch = params.toString();
-      return tagsSearch ? `/tags?${tagsSearch}` : '/tags';
+      return tagsSearch ? `${modulePath}?${tagsSearch}` : modulePath;
     }
 
     // Search view

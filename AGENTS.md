@@ -41,8 +41,8 @@ Read a file before you edit it — always.
 | Dev server (Docker) | `./scripts/rebuild.sh` — port 8000 <!-- verify:skip needs Docker; the image is built by the docker-smoke job --> |
 | Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only, `--changed` only the lanes your branch touches, `--only <step>` one step — `--list` names them) <!-- verify:skip the gate CI already runs, one step per `--only` call --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
-| Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
-| Frontend typecheck | `npm run typecheck` — `tsc -p tsconfig.json` over `frontend/src` (TypeScript only) and `frontend/sw.js`; no emit, erasable syntax only |
+| Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.ts` |
+| Frontend typecheck | `npm run typecheck` — `tsc -p tsconfig.json` over `frontend/src` (TypeScript only) and `frontend/sw.ts`; no emit, erasable syntax only |
 | Browser automation | `npx --no-install playwright-cli --version` — drives a real Chromium from the shell, so a UI change can be looked at; see [Verifying your change](#verifying-your-change) |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
@@ -74,9 +74,10 @@ command you add cannot run unattended, mark it in the source with
   `api/sqlc.yaml`. `extra.go` in the same package is hand-written. Keep `queries.sql` ASCII: sqlc
   expands `SELECT *` by byte offset, so one em dash in a comment breaks every query after it.
 
-**`frontend/src` is TypeScript, and only TypeScript.** `scripts/check.sh` fails on a `.js` file
-there. JS stays in `frontend/sw.js`, `frontend/vendor/`, `frontend/test/`, `frontend/e2e/` and
-`demo/`. Node and the bundler remove the types, so there is no emit and the rules follow from that:
+**First-party code is TypeScript, and only TypeScript.** This includes `frontend/src`, the tests
+in `frontend/test/` and `frontend/e2e/`, `frontend/sw.ts`, `scripts/*.ts` and `demo/`.
+`scripts/check.sh` fails on a tracked `.js`, `.mjs` or `.cjs` file outside `frontend/vendor/`.
+Generated bundles (for example `frontend/sw.js`) are gitignored. Node and the bundler remove the types, so there is no emit and the rules follow from that:
 
 - Erasable syntax only: no `enum`, no `namespace`, no parameter properties. Type-only imports use
   `import type`.

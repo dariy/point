@@ -38,10 +38,18 @@ func TestSystemService_CreateBackup_InsufficientDisk(t *testing.T) {
 
 	// A sparse file in the data dir larger than free space makes the estimated
 	// backup size (≈ data-dir size) exceed what the filesystem can hold.
-	fakeSize := info.Free + 1
+	// The margin (1 TiB) keeps the result independent of free-space drift
+	// on a shared runner between this read and the check in CreateBackup.
+	fakeSize := info.Free + 1<<40
 	fakeFile := filepath.Join(tmpDir, "huge.bin")
-	f, _ := os.Create(fakeFile)
-	_ = f.Truncate(fakeSize)
+	f, err := os.Create(fakeFile)
+	if err != nil {
+		t.Fatalf("create sparse file: %v", err)
+	}
+	if err := f.Truncate(fakeSize); err != nil {
+		_ = f.Close()
+		t.Skipf("filesystem cannot hold a sparse file of %d bytes: %v", fakeSize, err)
+	}
 	_ = f.Close()
 
 	_, _, err = svc.CreateBackup(context.Background())

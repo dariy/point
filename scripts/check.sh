@@ -109,28 +109,36 @@ step_govulncheck() {
     govulncheck ./...
 }
 
-# The lockfile-pinned Oxlint (.oxlintrc.json, plugin scripts/oxlint-point.mjs).
+# The lockfile-pinned Oxlint (.oxlintrc.json, plugin scripts/oxlint-point.ts).
 step_js_lint() {
     cd "$ROOT_DIR"
-    node_modules/.bin/oxlint frontend/src frontend/sw.js scripts/*.mjs \
-        demo/mock demo/*.mjs demo/scripts/*.mjs
+    node_modules/.bin/oxlint frontend/src frontend/sw.ts scripts/*.ts \
+        demo/mock demo/*.ts demo/scripts/*.ts
 }
 
-# frontend/src is TypeScript: tsc with no emit. A .js file under frontend/src
-# fails this step, so the move to TypeScript cannot go back. JS stays only in
-# frontend/sw.js, frontend/vendor/, the tests and demo/. Part of --lint,
+# All first-party JS is TypeScript: tsc with no emit. A tracked .js, .mjs or
+# .cjs file outside frontend/vendor/ fails this step, so the move to
+# TypeScript cannot go back. Generated bundles are gitignored, so git ls-files
+# does not list them. tsconfig.test.json
+# checks the .ts tests, the E2E tests and their helpers; tsconfig.scripts.json
+# checks scripts/*.ts; tsconfig.demo.json checks demo/. Part of --lint,
 # because a broken type is a static error like any other.
 step_js_typecheck() {
     cd "$ROOT_DIR"
-    if [ -n "$(find frontend/src -name '*.js' -print -quit)" ]; then
-        echo "  FAIL  .js file under frontend/src (write it as .ts):" >&2
-        find frontend/src -name '*.js' -printf '        %p\n' >&2
+    local js_files
+    js_files=$(git ls-files '*.js' '*.mjs' '*.cjs' | grep -v '^frontend/vendor/' || true)
+    if [ -n "$js_files" ]; then
+        echo "  FAIL  tracked JS file outside frontend/vendor/ (write it as .ts):" >&2
+        printf '%s\n' "$js_files" | sed 's/^/        /' >&2
         return 1
     fi
     node_modules/.bin/tsc -p tsconfig.json
+    node_modules/.bin/tsc -p tsconfig.test.json
+    node_modules/.bin/tsc -p tsconfig.scripts.json
+    node_modules/.bin/tsc -p tsconfig.demo.json
 }
 
-# What the AST rules in scripts/oxlint-point.mjs cannot see: hand-applied escapeHtml in
+# What the AST rules in scripts/oxlint-point.ts cannot see: hand-applied escapeHtml in
 # an interpolation, and growth in the set of raw() exceptions.
 step_html_escaping() {
     "$SCRIPT_DIR/check-html-escaping.sh"
@@ -150,11 +158,11 @@ step_js_test() {
         --test-coverage-include='frontend/src/**' \
         --test-reporter=spec --test-reporter-destination=stdout \
         --test-reporter=lcov --test-reporter-destination=coverage-frontend.lcov \
-        frontend/test/*.test.js
+        frontend/test/*.test.ts
 }
 
 step_js_coverage() {
-    node "$SCRIPT_DIR/js-coverage-report.mjs" "$ROOT_DIR/coverage-frontend.lcov"
+    node "$SCRIPT_DIR/js-coverage-report.ts" "$ROOT_DIR/coverage-frontend.lcov"
 }
 
 # Builds its own binary and serves it on E2E_PORT (default 8005).
@@ -184,7 +192,7 @@ if [ -n "$CHANGED" ]; then
     while IFS= read -r f; do
         case "$f" in
             api/*|scripts/check-sql-layer.sh|scripts/coverage-gate.sh) go=1 ;;
-            frontend/*|demo/*|scripts/*.mjs|package.json|package-lock.json|.oxlintrc.json|tsconfig.json)
+            frontend/*|demo/*|scripts/*.ts|package.json|package-lock.json|.oxlintrc.json|tsconfig*.json)
                 js=1; e2e=1 ;;
             scripts/check-html-escaping.sh|scripts/check-vendor-sinks.sh) js=1 ;;
             scripts/run-e2e.sh|scripts/build-css.sh|scripts/build-js.sh) e2e=1 ;;

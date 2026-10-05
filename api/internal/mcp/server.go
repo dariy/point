@@ -175,7 +175,7 @@ func (d Deps) authMiddleware(provider *oauth.Provider) echo.MiddlewareFunc {
 
 			if h := c.Request().Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 				token := strings.TrimPrefix(h, "Bearer ")
-				if key, err := d.ApiKey.ValidateAPIKey(ctx, token); err == nil {
+				if key, err := d.ApiKey.ValidateAPIKey(ctx, token); err == nil && key.Scope == services.ScopeGeneral {
 					principal = key
 				} else if provider.ValidateToken(ctx, token) {
 					principal = models.GetAPIKeyByHashRow{UserID: d.OwnerUserID}

@@ -3,7 +3,7 @@
 #
 # The build is the whole *local* pipeline — JS (mock entry), CSS, themes,
 # static assets, index.html, media and the host config — so anything you edit
-# in frontend/src, frontend/css, demo/mock or demo/settings.mjs is on screen
+# in frontend/src, frontend/css, demo/mock or demo/settings.ts is on screen
 # after the next run. It takes a few seconds; pass --no-build to skip it and
 # serve demo/dist as it stands.
 #
@@ -12,7 +12,7 @@
 # instance are separate, explicit steps — demo/scripts/make-content.sh — and
 # their output, demo/mock/fixtures/fixtures.json, is an input here.
 #
-# Serving goes through demo/scripts/serve.mjs rather than `npx serve` because
+# Serving goes through demo/scripts/serve.ts rather than `npx serve` because
 # the demo needs the SPA fallback declared in the build's own `_redirects` —
 # without it every /light route 404s and the admin demo is unreachable.
 #
@@ -62,4 +62,4 @@ lsof -ti:"$PORT" | xargs kill -9 2>/dev/null || true
 echo "==> Serving demo/dist on http://$HOST:$PORT"
 echo "Press Ctrl+C to stop"
 
-exec node demo/scripts/serve.mjs --dir=demo/dist --host="$HOST" --port="$PORT"
+exec node demo/scripts/serve.ts --dir=demo/dist --host="$HOST" --port="$PORT"

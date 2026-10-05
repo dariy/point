@@ -280,7 +280,7 @@ func TestAuthMiddleware_APIKeyAuthenticatesAsItsOwner(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 	enableAPIKeys(t, d)
-	raw, _, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", nil)
+	raw, _, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", "", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestAuthMiddleware_RejectsRevokedAPIKey(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 	enableAPIKeys(t, d)
-	raw, key, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", nil)
+	raw, key, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", "", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestAuthMiddleware_RejectsAPIKeyWhenPluginDisabled(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 	enableAPIKeys(t, d)
-	raw, _, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", nil)
+	raw, _, err := d.ApiKey.GenerateAPIKey(ctx, 7, "mcp", "", nil)
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}

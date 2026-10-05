@@ -98,7 +98,7 @@ build_set() {
   # remaining "$@" = extra esbuild flags (e.g. --minify)
 
   manifest="$js_dir/plugin-manifest.json"
-  # The esbuild metafile is a build intermediate: build-plugin-manifest.mjs is
+  # The esbuild metafile is a build intermediate: build-plugin-manifest.ts is
   # its only consumer. It must NOT live in $js_dir — the server exposes that
   # whole directory at /assets/js (routes.go: e.Static), and the metafile spells
   # out the full module graph. Keep it outside the served tree.
@@ -125,7 +125,7 @@ build_set() {
       --outdir="$js_dir"
 
   if [ "$PLUGIN_COUNT" -gt 0 ]; then
-    node "$SCRIPT_DIR/build-plugin-manifest.mjs" "$meta" "$manifest"
+    node "$SCRIPT_DIR/build-plugin-manifest.ts" "$meta" "$manifest"
   else
     echo '{}' > "$manifest"
     echo "No plugin entries — wrote empty $manifest"
@@ -149,6 +149,12 @@ build_set() {
 
   echo "Built $js_dir: app.js ($(wc -c < "$js_dir/app.js") bytes, __DEBUG__=${debug_val}), ${PLUGIN_COUNT} plugin entrie(s), $(ls "$js_dir/chunks" 2>/dev/null | wc -l | tr -d ' ') shared/page chunk(s)"
 }
+
+# The service worker is a classic script at the frontend root, not part of the
+# module graph: one unbundled pass strips the types of frontend/sw.ts and writes
+# frontend/sw.js, which routes.go serves at /sw.js (it stamps __BUILD_VERSION__).
+"$ESBUILD" "$ROOT_DIR/frontend/sw.ts" --target="$ES_TARGET" --log-level=warning \
+    --outfile="$ROOT_DIR/frontend/sw.js"
 
 # Release set — minified, debug logging stripped.
 # Set BUILD_RELEASE_FRONTEND=0 to skip it (e.g. a debug-only local run).

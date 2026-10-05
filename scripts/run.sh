@@ -13,7 +13,7 @@ cd "$PROJECT_ROOT"
 # frontend; otherwise build and serve only the release frontend. Either way we
 # build a single set instead of both.
 #
-# Watch switch: -w/--watch keeps rebuilding after startup (scripts/watch.mjs).
+# Watch switch: -w/--watch keeps rebuilding after startup (scripts/watch.ts).
 # A CSS or JS edit is rebuilt and shows on the next page reload, with the server
 # left running; a Go edit rebuilds and restarts only the Go binary.
 DEBUG=${DEBUG:-0}
@@ -125,9 +125,9 @@ echo "Press Ctrl+C to stop"
 
 if [ "$WATCH" = "1" ]; then
     # The server re-reads the build manifests when a rebuild changes them (see
-    # liveAssets in api/cmd/api/assets.go); watch.mjs runs ./point itself.
+    # liveAssets in api/cmd/api/assets.go); watch.ts runs ./point itself.
     export DEV_ASSET_RELOAD=1
-    DEV_VERSION=$DEV_VERSION node scripts/watch.mjs
+    DEV_VERSION=$DEV_VERSION node scripts/watch.ts
 else
     ./point
 fi

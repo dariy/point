@@ -1,0 +1,14 @@
+{
+  // The static demo under demo/: the mock API in demo/mock/ (bundled into the
+  // browser build) and the Node scripts in demo/scripts/ (node strips the types).
+  // npm run typecheck and scripts/check.sh::step_js_typecheck run it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["demo/**/*.ts", "frontend/types/**/*.d.ts"],
+  "exclude": ["node_modules", "demo/dist"]
+}

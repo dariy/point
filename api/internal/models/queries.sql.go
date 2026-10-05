@@ -213,11 +213,11 @@ func (q *Queries) CountTrashedPosts(ctx context.Context) (int64, error) {
 const createAPIKey = `-- name: CreateAPIKey :one
 
 INSERT INTO api_keys (
-    user_id, name, key_hash, prefix, expires_at, created_at
+    user_id, name, key_hash, prefix, expires_at, scope, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+    ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
 )
-RETURNING id, user_id, name, key_hash, prefix, created_at, last_used_at, expires_at, revoked_at
+RETURNING id, user_id, name, key_hash, prefix, created_at, last_used_at, expires_at, revoked_at, scope
 `
 
 type CreateAPIKeyParams struct {
@@ -226,6 +226,7 @@ type CreateAPIKeyParams struct {
 	KeyHash   string       `json:"key_hash"`
 	Prefix    string       `json:"prefix"`
 	ExpiresAt sql.NullTime `json:"expires_at"`
+	Scope     string       `json:"scope"`
 }
 
 // API KEYS
@@ -236,6 +237,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		arg.KeyHash,
 		arg.Prefix,
 		arg.ExpiresAt,
+		arg.Scope,
 	)
 	var i ApiKey
 	err := row.Scan(
@@ -248,6 +250,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		&i.LastUsedAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.Scope,
 	)
 	return i, err
 }
@@ -636,7 +639,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, arg DeleteUserSessions
 }
 
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT k.id, k.user_id, k.name, k.key_hash, k.prefix, k.created_at, k.last_used_at, k.expires_at, k.revoked_at, u.username, u.display_name
+SELECT k.id, k.user_id, k.name, k.key_hash, k.prefix, k.created_at, k.last_used_at, k.expires_at, k.revoked_at, k.scope, u.username, u.display_name
 FROM api_keys k
 JOIN users u ON k.user_id = u.id
 WHERE k.key_hash = ? AND k.revoked_at IS NULL LIMIT 1
@@ -652,6 +655,7 @@ type GetAPIKeyByHashRow struct {
 	LastUsedAt  sql.NullTime `json:"last_used_at"`
 	ExpiresAt   sql.NullTime `json:"expires_at"`
 	RevokedAt   sql.NullTime `json:"revoked_at"`
+	Scope       string       `json:"scope"`
 	Username    string       `json:"username"`
 	DisplayName string       `json:"display_name"`
 }
@@ -669,6 +673,7 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKe
 		&i.LastUsedAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.Scope,
 		&i.Username,
 		&i.DisplayName,
 	)
@@ -1402,7 +1407,7 @@ func (q *Queries) IncrementPostViewCount(ctx context.Context, id int64) error {
 }
 
 const listAPIKeysByUser = `-- name: ListAPIKeysByUser :many
-SELECT id, user_id, name, key_hash, prefix, created_at, last_used_at, expires_at, revoked_at FROM api_keys
+SELECT id, user_id, name, key_hash, prefix, created_at, last_used_at, expires_at, revoked_at, scope FROM api_keys
 WHERE user_id = ?
 ORDER BY created_at DESC
 `
@@ -1426,6 +1431,7 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey
 			&i.LastUsedAt,
 			&i.ExpiresAt,
 			&i.RevokedAt,
+			&i.Scope,
 		); err != nil {
 			return nil, err
 		}

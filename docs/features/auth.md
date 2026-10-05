@@ -24,7 +24,9 @@ Single-admin authentication with several credential surfaces. Services:
 - **API keys** (plugin `api-keys`, routes `/api/api-keys`): long-lived revocable keys
   for programmatic access via `Authorization: Bearer` — used by scripts, the MCP
   sidecar deployments, and any REST client. Keys are hashed at rest and never
-  redisplayed.
+  redisplayed. Each key has a scope. `general` keys have full admin access.
+  `lightroom` keys can only `POST` new posts, tags and media; every other route
+  answers 403, and they get the guest view on public reads and no MCP access.
 - **Password recovery**, two paths:
   - **SMTP reset emails** (`email_service.go`): configured via `SMTP_HOST/PORT/
     USERNAME/PASSWORD/FROM`; reset tokens are hashed, single-use, 1-hour expiry.

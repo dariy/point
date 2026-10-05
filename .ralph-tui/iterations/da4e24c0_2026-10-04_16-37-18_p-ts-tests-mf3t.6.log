@@ -1,0 +1,152 @@
+# Iteration 1 Log
+
+## Metadata
+
+- **Task ID**: p-ts-tests-mf3t.6
+- **Task Title**: test(ts): convert the media and grid tests
+- **Description**: Convert these tests to `.ts` (`git mv` commit, then a types commit). Use the helpers from p-ts-tests child 1. Lower the ratchet baseline.
+
+## Files
+- `frontend/test/MediaBrowser.test.js`
+- `frontend/t...
+- **Status**: completed
+- **Task Completed**: Yes
+- **Promise Detected**: Yes
+- **Started At**: 2026-10-04T20:37:18.606Z
+- **Ended At**: 2026-10-04T20:55:33.912Z
+- **Duration**: 18m 15s
+- **Input Tokens**: 490
+- **Output Tokens**: 63227
+- **Total Tokens**: 63717
+- **Agent**: claude
+- **Model**: claude-opus-5-5
+- **Sandbox Mode**: auto
+- **Sandbox Network**: Enabled
+--- RAW OUTPUT ---
+[94m[Bash][0m $ grep -rn JS_TEST_BASELINE scripts | head
+Let me look at how prior conversions were done.
+[94m[Bash][0m $ sed -n 120,175p scripts/check.sh
+[94m[Bash][0m $ node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | cut -d'(' -f1 | sort | uniq -c
+[94m[Bash][0m $ grep -A30 '## Decisions' tmp/bead-context/p-ts-tests-mf3t.6.md 2>/dev/null | head -50
+[94m[Bash][0m $ br show p-ts-tests-mf3t 2>/dev/null | sed -n '/Decisions/,/Module map/p' | head -40
+[94m[Bash][0m $ wc -l frontend/test/{mediaUrl,mediaByPaths,gridZoom,gridPerPage,mediaFolderChips}.test.ts
+[94m[Bash][0m $ grep -n "globalThis\.\(document\|window\|localStorage\|fetch\|CustomEvent\)\s*=" frontend/test/*.tes...
+I renamed the 16 tests to `.ts`. Now I'm fixing their type errors file by file. There are about 750 errors in total.
+[94m[Bash][0m $ sed -n 210,253p frontend/test/gridZoom.test.ts
+[94m[Bash][0m $ grep -n "querySelectorAll: () =>" frontend/test/*.test.ts | grep mock | head -3
+[94m[Bash][0m $ sed -n 1,70p frontend/test/gridPerPage.test.ts
+[94m[Bash][0m $ el.style = mock<CSSStyleDeclaration>({       set cssText(v: string) {""") open(p,'w').write(s) EOF s...
+[94m[Bash][0m $ node --test frontend/test/grid{Zoom,PerPage}.test.ts 2>&1 | grep -E '^ℹ (tests|fail)'
+Now mediaUrl, mediaByPaths, mediaFolderChips.
+[94m[Bash][0m $ sed -n 60,79p frontend/test/mediaFolderChips.test.ts
+[94m[Bash][0m $ grep -n "export function \(thumbUrl\|thumbAttrs\|getMediaByPaths\)\|export interface Media\b\|export...
+[94m[Bash][0m $ sed -n 11,40p frontend/src/api/media.ts
+[94m[Bash][0m $ """) open(p,'w').write(s) EOF grep -n "^export\|MediaBootstrap" frontend/types/globals.d.ts | head -...
+[94m[Bash][0m $ grep -rn "\.at(" frontend/test/*.ts | head -3
+[94m[Bash][0m $ cat frontend/test/exif.test.ts | head -80
+The five small files pass. Now I'm working on exif, gestures and adminThumbnails.
+[94m[Bash][0m $ sed -n 80,400p frontend/test/exif.test.ts | grep -n "makeEl\|allText\|children\|_attrs\|_s\b\|classL...
+[94m[Bash][0m $ grep -n "export function attachExifToImage" -A30 frontend/src/utils/exif.ts | head -50
+[94m[Bash][0m $ node --test frontend/test/exif.test.ts 2>&1 | grep -E '^ℹ (tests|fail)|not ok|Error' | head
+[94m[Bash][0m $ grep -n "constructor\|export class\|interface\|^  [a-zA-Z]*(" frontend/src/utils/gestures.ts 2>/dev/...
+[94m[Bash][0m $ grep -n "constructor\|export \|options\b\|on[A-Z][a-zA-Z]*?" frontend/src/core/gestures.ts | head -3...
+[94m[Bash][0m $ node --test frontend/test/gestures.test.ts 2>&1 | grep -E '^ℹ (tests|fail)'
+Exif and gestures are done. Next is adminThumbnails.
+[94m[Bash][0m $ cat frontend/test/adminThumbnails.test.ts
+[94m[Bash][0m $ grep -n "constructor(" frontend/src/core/component.ts 2>/dev/null || grep -rn "class Component" fron...
+[94m[Bash][0m $ grep -n "mock<.*Component\|null as unknown\|mock<HTMLElement>({})" frontend/test/*.test.ts | head -5
+[94m[Bash][0m $ grep -rn "export type EditorNode\|export interface EditorNode" frontend/src | head
+[94m[Bash][0m $ node --test frontend/test/adminThumbnails.test.ts 2>&1 | grep -E '^ℹ (tests|fail)'
+[94m[Bash][0m $ sed -n 125,170p frontend/test/adminThumbnails.test.ts
+[94m[Bash][0m $ node --test frontend/test/adminThumbnails.test.ts 2>&1 | grep -E '^ℹ (tests|fail)|not ok|Error' | he...
+[94m[Bash][0m $ node --test $f 2>&1 | grep -E '^ℹ (tests|fail)'
+Now imageCache, swMediaCache and gridFlip.
+[94m[Bash][0m $ node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | grep -E '^frontend/test/imageCache' | cut -c1-200
+[94m[Bash][0m $ node --test frontend/test/imageCache.test.ts 2>&1 | grep -E '^ℹ (tests|fail)'
+[94m[Bash][0m $ node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | grep -E '^frontend/test/swMedia' | cut -c1-180
+[94m[Bash][0m $ sed -n 120,260p frontend/test/swMediaCache.test.ts | grep -n "sw\.\|fetch\|FakeCacheStorage\|request...
+[94m[Bash][0m $ sed -n 124,132p frontend/test/swMediaCache.test.ts
+[94m[Bash][0m $ node --test frontend/test/swMediaCache.test.ts 2>&1 | grep -E '^ℹ (tests|fail)'
+Next are gridFlip and videoPoster.
+[94m[Bash][0m $ node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | grep -E '^frontend/test/gridFlip' | cut -c1-200
+[94m[Bash][0m $ grep -n "export function flipGrid" -A3 frontend/src/utils/gridFlip.ts
+[94m[Bash][0m $ node --test frontend/test/gridFlip.test.ts 2>&1 | grep -E '^ℹ (tests|fail)'
+[94m[Bash][0m $ node --test frontend/test/gridFlip.test.ts 2>&1 | grep -E '^ℹ (tests|fail)'
+gridFlip is done. Next is videoPoster.
+[94m[Bash][0m $ grep -n "^export" frontend/src/utils/videoPoster.ts 2>/dev/null || grep -rln "capturePoster\|videoPo...
+[94m[Bash][0m $ node --test frontend/test/videoPoster.test.ts 2>&1 | grep -E '^ℹ (tests|fail)'
+[94m[Bash][0m $ grep -rn "getContext" frontend/test/*.ts | grep -v videoPoster | head
+Following the precedent in tagGraph.test.ts.
+[94m[Bash][0m $ node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | grep -cE '^frontend/test/'
+Four files are left: mediaPager, gridPager, MediaBrowser and MediaViewer.
+[94m[Bash][0m $ sed -n 1,140p frontend/test/mediaPager.test.ts
+[94m[Bash][0m $ sed -n 140,373p frontend/test/mediaPager.test.ts | grep -on "\(root\|area\|grid\|body\|ghosts()\[[0-...
+[94m[Bash][0m $ sed -n 140,200p frontend/test/mediaPager.test.ts
+[94m[Bash][0m $ grep -n "interface MediaPagerOptions\|constructor(" -A12 frontend/src/core/mediaPager.ts | head -30
+I'll put the hand-rolled element stub that both pager tests use into one typed helper.
+[94m[Write][0m [95m/home/light/src/point/frontend/test/helpers/stubElement.ts[0m "/**
+ * Hand-rolled element stubs for the pager tests (gridPager, mediaPager).
+ *
+ * The pagers touch only inline styles, classList, listeners and a few layout
+ * reads, so a plain object is enough. Th... (2815 chars)"
+[94m[Bash][0m $ sed -n 200,373p frontend/test/mediaPager.test.ts
+[94m[Bash][0m $ grep -rn "export.*RawHtml\|export function raw\b\|export function html\b" frontend/src | head
+[94m[Bash][0m $ grep -rn "export function raw\|export const raw\|export function html" frontend/src/utils/*.ts | hea...
+[94m[Bash][0m $ node --test frontend/test/mediaPager.test.ts 2>&1 | grep -E '^ℹ (tests|fail)|not ok' | head
+[94m[Bash][0m $ grep -n "addEventListener" frontend/test/{pointerMode,distractionFree,refitPage,immersiveNav}.test.t...
+[94m[Bash][0m $ grep -n "swipeHandlers" frontend/test/distractionFree.test.ts | head -5
+[94m[Bash][0m $ sed -n 20,84p frontend/test/distractionFree.test.ts
+[94m[Bash][0m $ node --test frontend/test/{mediaPager,gridZoom}.test.ts 2>&1 | grep -E '^ℹ (tests|fail)|not ok' | he...
+[94m[Bash][0m $ node --test frontend/test/gridZoom.test.ts 2>&1 | grep -E '^ℹ (tests|fail)|not ok' | head
+Now gridPager.
+[94m[Bash][0m $ sed -n 140,526p frontend/test/gridPager.test.ts
+[94m[Bash][0m $ grep -n "^  _[a-zA-Z]*[?]*:\|arm(\|_opts\|_lastFired" frontend/src/core/gridPager.ts frontend/src/co...
+[94m[Bash][0m $ grep -n "constructor" -A3 frontend/src/components/shared/Pagination.ts | head
+[94m[Bash][0m $ grep -rn "warmed" frontend/types/*.d.ts | head -2
+[94m[Bash][0m $ } EOF
+[94m[Bash][0m $ node --test frontend/test/gridPager.test.ts 2>&1 | grep -E '^ℹ (tests|fail)|not ok' | head
+gridPager passes its tests. Two read-only errors are left to fix.
+[94m[Bash][0m $ cat frontend/test/MediaViewer.test.ts | head -110
+[94m[Bash][0m $ grep -rn "export interface MediaItem\|export type MediaItem\|export interface PostStub\|export type ...
+[94m[Bash][0m $ grep -n "_zoomState\|_sheetOpen\|_onSwipeCommit" frontend/src/components/shared/MediaViewer.ts front...
+[94m[Bash][0m $ ") s=s.replace("const mountWith = (item) => {","const mountWith = (item: MediaItem) => {") open(p,'w...
+[94m[Bash][0m $ node --test frontend/test/MediaViewer.test.ts 2>&1 | grep -E '^ℹ (tests|fail)|not ok'
+MediaViewer is done. MediaBrowser is the last file.
+[94m[Bash][0m $ node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | grep -E '^frontend/test/MediaBrowser' | sed -E 's...
+[94m[Bash][0m $ node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | grep -E '^frontend/test/MediaBrowser' | cut -c1-2...
+[94m[Bash][0m $ node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | grep -E '^frontend/test/MediaBrowser' | cut -c1-2...
+[94m[Bash][0m $ done
+[94m[Bash][0m $ grep -n "clipboard" frontend/test/*.test.ts | grep -v MediaBrowser | head -3
+[94m[Bash][0m $ """) open(p,'w').write(s) EOF node_modules/.bin/tsc -p tsconfig.test.json 2>&1 | grep -E '^frontend/...
+[94m[Bash][0m $ node --test $f 2>&1 | grep -E '^ℹ (tests|fail)|not ok'
+All 16 files now type-check. Next I'll lower the ratchet and run the full check.
+[94m[Bash][0m $ node --test --test-reporter=tap frontend/test/*.test.[jt]s 2>&1 | grep -E '^# (tests|pass|fail)'
+1707 tests, the same total as before. Now the full `scripts/check.sh`.
+[94m[Bash][0m $ tail -30 /tmp/check.out
+Only one Go test failed, and this change touches no Go code. I'll rerun that test alone to see if it is flaky.
+[94m[Bash][0m $ go test ./internal/services/ -run TestRebuildThumbnails_ReturnsWithoutDecodingTheLibrary -count=3 2>...
+The test passes three times when run alone, so the failure is a timing flake under load. I'll rerun the full check to get a green result.
+[94m[Bash][0m $ grep -E "^\s+(PASS|FAIL|SKIP)\s|check\(s\)" /tmp/check.out | tail -20
+[94m[Bash][0m $ it passes alone)." && br sync --flush-only
+Now I'll update the progress log.
+[94m[Bash][0m $ setupDOM (linkedom) replaced it with no change to the assertions.   - The CustomEvent stubs in gridZ...
+All 16 media and grid tests are now `.ts` and fully typed. `scripts/check.sh` passes, and the `node --test` total is 1707 before and after.
+
+- **Ratchet:** `JS_TEST_BASELINE` in `scripts/check.sh` went from 48 to 32, which matches the 32 `.js` tests that are left.
+- **New helpers:**
+  - `helpers/mock.ts` has `memoryStorage(map)` for an in-memory `localStorage` and `nodeList(items)` for stub `querySelectorAll` results.
+  - New file `helpers/stubElement.ts` holds one typed version of the hand-made element stub that gridPager and mediaPager each had. It also has the helpers that pass a stub to the code under test and get it back.
+- **Simpler tests:**
+  - `exif.test.ts` now uses `setupDOM` instead of its own fake DOM. The assertions did not change.
+  - The `CustomEvent` stubs in gridZoom and gridPerPage were removed, because Node already has `CustomEvent`.
+- **Type escapes:** there is no `any` and no `@ts-nocheck`. `@ts-expect-error` is used only where a test sends bad input on purpose. There are two commented casts:
+  - `getContext` in `videoPoster.test.ts`, the same as the existing one in `tagGraph.test.ts`.
+  - `asElement` in `stubElement.ts`, the same pattern as `distractionFree.test.ts`.
+
+**Single commit:** the epic wants the rename and the type fixes in two separate commits. The engine commits automatically, so both changes will land as one commit. If the separate rename commit is important for blame history, split them by hand.
+
+**Flaky Go test:** on the first run of `check.sh`, the Go test `TestRebuildThumbnails_ReturnsWithoutDecodingTheLibrary` failed with "prewarm did not finish". It passed three times when run alone, and the second full run passed. This change touches no Go code.
+
+I closed the bead with a handoff reason, flushed the tracker, and added an entry and the reusable patterns to `.ralph-tui/progress.md`.
+
+<promise>COMPLETE</promise>

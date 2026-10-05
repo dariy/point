@@ -29,8 +29,8 @@ A read-only backend was the obvious alternative and is strictly worse here:
 ```
 demo/
   README.md       this document
-  world.mjs       tag universe, locations and topical vocabulary
-  settings.mjs    the settings the demo presents (titles, footer line)
+  world.ts       tag universe, locations and topical vocabulary
+  settings.ts    the settings the demo presents (titles, footer line)
   mock/
     entry.ts      build entry — imports the shim, then the real app.ts
     shim.ts       patches window.fetch + XMLHttpRequest
@@ -40,17 +40,17 @@ demo/
     fixtures/     recorded API payloads (gitignored)
   scripts/
     make-content.sh      throwaway instance → generated content → fixtures
-    generate-content.mjs picsum photos + Gemini prose
-    retag-content.mjs    restructure tags without regenerating prose
-    record-fixtures.mjs  record an instance's API responses
-    import-fixtures.mjs  the inverse: a recorded bundle → a live instance
-    fill-excerpts.mjs    synthetic excerpt prose for posts recorded without one
+    generate-content.ts picsum photos + Gemini prose
+    retag-content.ts    restructure tags without regenerating prose
+    record-fixtures.ts  record an instance's API responses
+    import-fixtures.ts  the inverse: a recorded bundle → a live instance
+    fill-excerpts.ts    synthetic excerpt prose for posts recorded without one
     build.sh             fixtures + frontend → demo/dist/
-    build-html.mjs       index.html templating the Go server normally does
-    build-themes.mjs     the theme catalogue, read from frontend/themes/
-    build-feeds.mjs      static feed.xml and sitemap.xml
-    run.sh / serve.mjs   build, then serve with the build's SPA fallback
-    test.mjs             acceptance check against a served build
+    build-html.ts       index.html templating the Go server normally does
+    build-themes.ts     the theme catalogue, read from frontend/themes/
+    build-feeds.ts      static feed.xml and sitemap.xml
+    run.sh / serve.ts   build, then serve with the build's SPA fallback
+    test.ts             acceptance check against a served build
   dist/           build output (gitignored)
   .scratch/       throwaway instance (gitignored)
   .media-cache/   transcoded media, reused across builds (gitignored)
@@ -108,7 +108,7 @@ reverts the moment it is opened.
 
 The archive is not uniformly public — an archive where every post is visible
 makes Point's whole visibility model invisible with it. The demo carries all
-four states (`demo/world.mjs`, `visibilityPlan`):
+four states (`demo/world.ts`, `visibilityPlan`):
 
 | State | In the demo | What a guest gets |
 |---|---|---|
@@ -148,7 +148,7 @@ Because the recorded blobs were recorded *as the owner*, the ones that describe
 the archive get the same cut applied on the way out: the tags index, the tag
 cloud, the nav trees, the Atlas graph (nodes, their `is_hidden` marking and the
 edges that would dangle), and the timeline's per-year counts, which are a count
-of posts and so change with who is counting. `build-feeds.mjs` applies it too —
+of posts and so change with who is counting. `build-feeds.ts` applies it too —
 without that the static `feed.xml` and `sitemap.xml` would publish the URLs of
 the very posts the demo conceals everywhere else.
 
@@ -183,7 +183,7 @@ would freeze them at whatever they were when the fixtures were recorded:
     `ThemeService.ListThemes` derives it from the files in `frontend/themes/` on
     every request, so a recorded copy freezes the demo at the themes that
     existed on recording day — a theme added later ships in the bundle and is
-    still missing from the Themes page. `build-themes.mjs` parses the same
+    still missing from the Themes page. `build-themes.ts` parses the same
     metadata out of the same files (`theme-title`, `description`,
     `preview-color`, the `:root` colour literals behind the admin swatch, and
     whether a `[data-theme="dark"]` block is present) into
@@ -222,18 +222,18 @@ just an input. Everything after it is local and repeatable:
 ```bash
 # Once (~5 min, needs network + a Gemini key): content + recorded fixtures
 GEMINI_API_KEY=... demo/scripts/make-content.sh
-node demo/scripts/fill-excerpts.mjs   # fill any excerpt the recording left empty
+node demo/scripts/fill-excerpts.ts   # fill any excerpt the recording left empty
 
 # Later: grow the archive without touching what is already in it
 GEMINI_API_KEY=... demo/scripts/make-content.sh --add=20
 
 # Every time: build and serve, with the backend STOPPED
 demo/scripts/run.sh                                       # http://localhost:8002
-node demo/scripts/test.mjs --base=http://localhost:8002
+node demo/scripts/test.ts --base=http://localhost:8002
 ```
 
 `run.sh` builds before it serves, so an edit to `frontend/src`, `frontend/css`,
-`demo/mock/` or `demo/settings.mjs` is on screen after the next run — no network,
+`demo/mock/` or `demo/settings.ts` is on screen after the next run — no network,
 no re-recording. A warm build is a second or two; media is transcoded into
 `demo/.media-cache/` and re-encoded only when an original changes.
 
@@ -241,7 +241,7 @@ no re-recording. A warm build is a second or two; media is transcoded into
 - `--skip-media` leaves the build without images — worth it only when iterating
   on markup or styling from a cold cache.
 
-`test.mjs` drives a real browser: `npm install`, then `npx playwright
+`test.ts` drives a real browser: `npm install`, then `npx playwright
 install chromium` if the browser is not already cached.
 
 ### Adding to the archive rather than replacing it
@@ -252,7 +252,7 @@ mean a full `make-content.sh` run, which regenerates *everything*: new pictures
 and new Gemini prose for posts that were already good.
 
 It works because the fixture bundle is a complete description of the archive,
-and `import-fixtures.mjs` is the inverse of the recorder — it stands the whole
+and `import-fixtures.ts` is the inverse of the recorder — it stands the whole
 thing back up in an empty instance through the REST API, so the scratch database
 is genuinely a working copy rather than the master. Given a scratch instance the
 run reuses it; given none, it rebuilds one from `fixtures.json` plus the
@@ -269,7 +269,7 @@ not pixels), so `--add` needs them on disk. `make-content.sh` stages
 `demo/.scratch/media/originals` aside before it wipes the scratch directory;
 `--media=/path/to/originals` points it somewhere else.
 
-What the added batch is *made of* is `visibilityPlan` in `demo/world.mjs` — the
+What the added batch is *made of* is `visibilityPlan` in `demo/world.ts` — the
 scheduled, hidden and privately-filed posts described above. New photographs are
 picked with the ones already in the archive excluded, by picsum id and by
 photographer, so an add run widens the archive instead of revisiting the same
@@ -277,11 +277,11 @@ afternoon.
 
 ### Changing what the demo says
 
-`demo/settings.mjs` holds the settings the demo presents — blog title, author,
+`demo/settings.ts` holds the settings the demo presents — blog title, author,
 the footer copyright line. Both the recorder and the mock store apply it, so
 editing it and re-running `run.sh` is enough; re-recording is not. Anything that
 *hides* rather than presents (dropped keys, scrubbed emails) stays at the
-recording boundary in `record-fixtures.mjs`, so a raw fixture never hits disk.
+recording boundary in `record-fixtures.ts`, so a raw fixture never hits disk.
 
 ### Excerpts
 
@@ -290,10 +290,10 @@ The demo's post bodies hold a photograph and nothing else — the writing lives 
 renders. The recorded bundle nevertheless came back with `excerpt: null` on
 every post: `PUT /api/posts/:id` merges an omitted `title`, `content`, `slug`,
 `formatter`, `status` and `type` from the stored post but *not* an omitted
-`excerpt`, so `retag-content.mjs`'s tags-only write cleared the field for every
+`excerpt`, so `retag-content.ts`'s tags-only write cleared the field for every
 post whose body it had already stripped of prose.
 
-`fill-excerpts.mjs` writes one or two paragraphs onto each post that has none,
+`fill-excerpts.ts` writes one or two paragraphs onto each post that has none,
 seeded from the post's id (so re-runs are byte-identical and the copies of a
 post across `posts`, `postDetail` and the prerendered `pages` payloads all
 agree) and assembled from its own city, country, year and topic tags. It is
@@ -304,7 +304,7 @@ see the text without writing.
 
 ### Serving it
 
-`demo/scripts/run.sh` runs `demo/scripts/serve.mjs`, which reads the build's own
+`demo/scripts/run.sh` runs `demo/scripts/serve.ts`, which reads the build's own
 `_redirects` and applies it the way Cloudflare Pages does: static file first,
 rules only when nothing matched.
 
@@ -317,7 +317,7 @@ local server from `_redirects` keeps the two from drifting.
 
 ### The demo's tag tree
 
-`demo/world.mjs` is the single definition of the demo's tag universe,
+`demo/world.ts` is the single definition of the demo's tag universe,
 shared by the generator and the restructuring script so the two cannot describe
 different worlds:
 
@@ -382,7 +382,7 @@ of the tree is decorative.
 `demo/.scratch/` — its own database and storage — fills it, records it, and tears
 it down. Your real instance is never touched.
 
-`demo/scripts/generate-content.mjs` does the filling:
+`demo/scripts/generate-content.ts` does the filling:
 
 1. Samples the [picsum.photos](https://picsum.photos) catalogue (Unsplash-sourced,
    freely usable). Landscape only, and at most one photo per contributor —
@@ -428,7 +428,7 @@ reports impossible to compare. Gemini's prose still varies.
 demo/scripts/make-content.sh --retag   # no Gemini key, no new photographs
 ```
 
-Runs `demo/scripts/retag-content.mjs` against the existing `demo/.scratch/`
+Runs `demo/scripts/retag-content.ts` against the existing `demo/.scratch/`
 instance: it folds each post's keywords onto the controlled vocabulary
 (`TOPIC_ALIASES`), rebuilds the tree around what survived, moves the prose into
 `excerpt`, sets the plugin selection, and re-records. Existing titles and text
@@ -441,10 +441,10 @@ timestamps are captured up front and restored afterwards — the API owns
 
 ### Recording from a real instance instead
 
-`demo/scripts/record-fixtures.mjs` works against any instance:
+`demo/scripts/record-fixtures.ts` works against any instance:
 
 ```bash
-node demo/scripts/record-fixtures.mjs --base=http://localhost:8001 --session=<token>
+node demo/scripts/record-fixtures.ts --base=http://localhost:8001 --session=<token>
 MEDIA_SRC=/path/to/data/media/originals demo/scripts/build.sh
 ```
 
@@ -463,7 +463,7 @@ happened to omit.
 ### What the build reproduces
 
 The Go server rewrites `index.html` in memory on every request and never touches
-the file on disk (`api/cmd/api/main.go`). `demo/scripts/build-html.mjs` does that
+the file on disk (`api/cmd/api/main.go`). `demo/scripts/build-html.ts` does that
 work at build time:
 
 - `__BUILD_VERSION__` → a fixed demo string
@@ -474,7 +474,7 @@ work at build time:
   emit an empty manifest.
 
 `feed.xml` and `sitemap.xml` are server-rendered in production, so
-`demo/scripts/build-feeds.mjs` writes them out as files.
+`demo/scripts/build-feeds.ts` writes them out as files.
 
 ### Plugins withheld from the demo
 
@@ -482,7 +482,7 @@ work at build time:
 |---|---|
 | `comments` | Loads `/comments/web/embed.mjs` from a remark42 sidecar that does not exist. Omitting it also stops `CommentsAdminPage` (which calls `api.*` directly) from mounting |
 | `mcp` | Server-side capability with no meaning without a server |
-| `offline-sync` | Registers `/sw.ts` and enables the IndexedDB mutation queue. A service worker would serve stale bundles, and the queue would accumulate writes that never drain |
+| `offline-sync` | Registers `/sw.js` and enables the IndexedDB mutation queue. A service worker would serve stale bundles, and the queue would accumulate writes that never drain |
 
 `app.ts` falls back to importing `offline-sync` statically when the manifest is
 **empty**, so the manifest must be present and non-empty for that omission to
@@ -525,7 +525,7 @@ Photographs come from picsum.photos, which serves Unsplash images under the
 attribution required). Post text is model-generated. Nothing in the demo bundle
 is anyone's real content.
 
-The footer credits the source anyway — `ADD_SETTINGS` in `record-fixtures.mjs`
+The footer credits the source anyway — `ADD_SETTINGS` in `record-fixtures.ts`
 writes `footer_copyright` into every recorded settings map, so the demo reads
 "© UI showcase of Point, photos are from picsum.photos, admin UI" with the last
 two linked. It is an addition rather than a `REPLACE_SETTINGS` entry because an
@@ -547,7 +547,7 @@ without re-running `make-content.sh` leaves the demo showing the old values.
   They render and respond plausibly rather than being hidden — seeing that the
   features exist is the point.
 - **The mock is a parallel implementation and will drift.** Fixtures being
-  recorded rather than transcribed limits this, and `demo/scripts/test.mjs`
+  recorded rather than transcribed limits this, and `demo/scripts/test.ts`
   catches it. Re-record at each release.
 
 ## Deploying

@@ -919,7 +919,7 @@ which turns the same typo into a build failure that names the fix:
           Did you mean to import "getUser" instead?
 ```
 
-A `point/restricted-syntax` lint rule (`scripts/oxlint-point.mjs`) rejects a string-literal key
+A `point/restricted-syntax` lint rule (`scripts/oxlint-point.ts`) rejects a string-literal key
 outside `store.ts` — for `merge` and `subscribeSelector` as much as for the
 basic three — so the raw form cannot come back. A hand-written list of
 "well-known keys" lived here and in a comment at the tail of `store.ts` before
@@ -1402,11 +1402,11 @@ what the one before it misses:
    buffer. Zero violations is otherwise trivially satisfied by a map that never
    initialises.
 
-The Oxlint rule `point/restricted-syntax` (`scripts/oxlint-point.mjs`, enabled in
+The Oxlint rule `point/restricted-syntax` (`scripts/oxlint-point.ts`, enabled in
 `.oxlintrc.json`) is what keeps the funnel a funnel: a bare `.innerHTML =`,
 `.outerHTML =` or `insertAdjacentHTML(` anywhere under `frontend/src` or
 `demo/mock` is an error, as is `raw()` around a template literal or a call, or
-an interpolation into an unquoted attribute. `frontend/test/eslintRules.test.js`
+an interpolation into an unquoted attribute. `frontend/test/eslintRules.test.ts`
 proves each of those rules still fires, in `.js` and `.ts`, and through each
 TypeScript cast (`as`, `!`, `satisfies`, `<T>`).
 
