@@ -19,6 +19,7 @@ import { pluginHost } from "../../core/pluginHost.ts";
 import { getTagsGraph, getTagCloud, getTagPage } from "../../api/pages.ts";
 import { getSettings, getUser } from "../../store.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
+import { markAtlasOpen, consumeAtlasReturn } from "../../utils/atlasReturn.ts";
 import { setPageTitle } from "../../utils/documentTitle.ts";
 import {
   html,
@@ -1203,12 +1204,10 @@ export default class AtlasPage extends Component<PageProps> {
       // this place reselected and the post chip highlighted (consumed in
       // PostContent.onClose → handed back via `atlasReturn`).
       if (key[0] === "p" && this._activeTag) {
-        try {
-          sessionStorage.setItem(
-            "atlasOpenContext",
-            JSON.stringify({ placeTagId: this._activeTag.id }),
-          );
-        } catch { /* ignore */ }
+        markAtlasOpen({
+          placeTagId: this._activeTag.id,
+          returnUrl: location.pathname + location.search,
+        });
       }
       navigate(href);
       return;
@@ -1236,13 +1235,7 @@ export default class AtlasPage extends Component<PageProps> {
    * post data there's no fallback — if the place is gone, we simply don't restore.
    */
   _restoreFromPost(): void {
-    let ctx: { postSlug?: string; placeTagId?: number } | null = null;
-    try {
-      const raw = sessionStorage.getItem("atlasReturn");
-      if (!raw) return;
-      sessionStorage.removeItem("atlasReturn");
-      ctx = JSON.parse(raw);
-    } catch { return; }
+    const ctx = consumeAtlasReturn();
     if (!ctx || !ctx.postSlug || ctx.placeTagId == null) return;
 
     this._selectPlaceById(ctx.placeTagId, { focusPostSlug: ctx.postSlug });
@@ -1460,12 +1453,10 @@ export default class AtlasPage extends Component<PageProps> {
   /** Open a post from the panel and leave the same return marker a cloud post chip leaves. */
   _openPanelPost(slug: string): void {
     if (this._activeTag) {
-      try {
-        sessionStorage.setItem(
-          "atlasOpenContext",
-          JSON.stringify({ placeTagId: this._activeTag.id }),
-        );
-      } catch { /* ignore */ }
+      markAtlasOpen({
+        placeTagId: this._activeTag.id,
+        returnUrl: location.pathname + location.search,
+      });
     }
     navigate(`/posts/${slug}`);
   }

@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { raw } from '../src/utils/helpers.ts';
 import { Pagination } from '../src/components/shared/Pagination.ts';
 import type { Post } from '../src/api/posts.ts';
-import type { GridPager as GridPagerClass } from '../src/core/gridPager.ts';
+import type { GridPager as GridPagerClass, GridPagerOptions } from '../src/core/gridPager.ts';
 import { must } from './helpers/dom.ts';
 import { memoryStorage, mock, nodeList } from './helpers/mock.ts';
 import { StubElement, asElement, asStub, callListener, fire } from './helpers/stubElement.ts';
@@ -120,7 +120,7 @@ before(async () => {
 });
 
 /** A pager wired to stub elements, recording every navigation it requests. */
-function setup({ page = 2, pages = 4, posts = [] as Partial<Post>[] } = {}) {
+function setup({ page = 2, pages = 4, posts = [] as Partial<Post>[], extra = {} as Partial<GridPagerOptions> } = {}) {
   keyHandlers = {};
   dispatched = [];
   window.scrollY = 0;
@@ -143,6 +143,7 @@ function setup({ page = 2, pages = 4, posts = [] as Partial<Post>[] } = {}) {
     onZoomCommit: () => {},
     isAlive: () => true,
     emptyHtml: raw('<p class="empty-state">nothing</p>'),
+    ...extra,
   });
   return { pager, nav, fetched, pagination: { page, pages, total: pages * 10 } };
 }
@@ -369,6 +370,15 @@ describe('GridPager', () => {
     assert.equal(arrows[1].disabled, false);  // next
   });
 
+  test('edgeArrows: false leaves no chevrons in the body, and the keys still page', () => {
+    const { pager, nav } = setup({ page: 2, pages: 3, extra: { edgeArrows: false } });
+    pager.arm({ page: 2, pages: 3 });
+    assert.equal(body.children.filter((c) => c.className?.startsWith('page-nav-arrow')).length, 0);
+    keydown({ key: 'ArrowRight' });
+    keydown({ key: 'ArrowLeft' });
+    assert.deepEqual(nav, [3, 1]);
+  });
+
   test('disarm() removes the arrows and the listeners it added', () => {
     const { pager } = setup({ page: 2, pages: 3 });
     pager.arm({ page: 2, pages: 3 });
@@ -482,6 +492,19 @@ describe('GridPager', () => {
     swipe.commit('down');
     assert.deepEqual(flickDirs(), ['up', 'down']);
     assert.equal(dispatched[0].type, 'point:grid-swipe-vertical');
+  });
+
+  test('onVerticalSwipe takes the flick and no event is emitted', async () => {
+    const dirs: string[] = [];
+    const { pager } = setup({ page: 2, pages: 4, extra: { onVerticalSwipe: (d) => dirs.push(d) } });
+    pager.arm({ page: 2, pages: 4 });
+    await flush();
+
+    const swipe = swipeOpts(pager);
+    swipe.commit('up');
+    swipe.commit('down');
+    assert.deepEqual(dirs, ['up', 'down']);
+    assert.deepEqual(dispatched, []);
   });
 
   test('mid-document the same flick is only a scroll', async () => {

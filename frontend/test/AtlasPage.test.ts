@@ -586,15 +586,17 @@ describe('AtlasPage desktop side panel', () => {
       if (ev instanceof CustomEvent) navs.push(ev.detail.path);
       return true;
     };
+    globalThis.location = mock<Location>({ pathname: '/map', search: '?timeline=2020' });
     try {
       const { page, berlin } = withPanel(true);
       page._activeTag = berlin;
       page._openPanelPost('p10');
-      assert.deepEqual(JSON.parse(store.get('atlasOpenContext') ?? 'null'), { placeTagId: 1 });
+      assert.deepEqual(JSON.parse(store.get('atlasOpenContext') ?? 'null'), { placeTagId: 1, returnUrl: '/map?timeline=2020' });
       assert.deepEqual(navs, ['/posts/p10']);
     } finally {
       globalThis.window.dispatchEvent = prevDispatch;
       Reflect.deleteProperty(globalThis, 'sessionStorage');
+      Reflect.deleteProperty(globalThis, 'location');
     }
   });
 });

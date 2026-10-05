@@ -3,7 +3,7 @@
   "sessionId": "e9b79cbd-95c7-4547-8f03-c863a13934b9",
   "status": "running",
   "startedAt": "2026-10-05T21:31:31.392Z",
-  "updatedAt": "2026-10-05T21:31:55.702Z",
+  "updatedAt": "2026-10-05T21:46:03.198Z",
   "currentIteration": 0,
   "maxIterations": 0,
   "tasksCompleted": 0,
@@ -5450,8 +5450,6 @@
   "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
-  "activeTaskIds": [
-    "p-atlas-sheet-ft0b.1"
-  ],
+  "activeTaskIds": [],
   "subagentPanelVisible": false
 }

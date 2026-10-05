@@ -36,6 +36,7 @@ import {
   removeCanonical,
 } from "../../utils/helpers.ts";
 import { GridPager } from "../../core/gridPager.ts";
+import { clearAtlasOpen } from "../../utils/atlasReturn.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
 import { setPageTitle } from "../../utils/documentTitle.ts";
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from "../../utils/immersiveNav.ts";
@@ -342,6 +343,8 @@ export default class TagPage extends Component<PageProps> {
     setPagination(null);
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
     this._pager.disarm();
+    // A grid view means no post is open from the Atlas any more: drop its marker.
+    if (!this._isPostView()) clearAtlasOpen();
     const settings = getSettings() || {};
     const rootMenu = getNavTags() || [];
     const isCustomMenu = settings.nav_menu_mode === "custom";
@@ -633,6 +636,7 @@ export default class TagPage extends Component<PageProps> {
     // Non-grid pages (post, search) share the footer — don't leave a stale
     // paginator feed behind.
     setPagination(null);
+    clearAtlasOpen();
     this._pager.destroy();
     clearTimeout(this._resizeTimer);
     if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);
