@@ -279,6 +279,19 @@ export class AtlasPlaces {
     this._data = data;
     this._buildIndexes(data);
     await this._drawLayers(L);
+    this._restoreFromUrl();
+  }
+
+  /** A page load with `?place=slug` reselects that place. An unknown slug is ignored. */
+  _restoreFromUrl(): void {
+    const slug = ViewContext.current().place;
+    if (!slug || this._activeTag) return;
+    for (const [id, tag] of this._tagsById) {
+      if (tag.slug === slug) {
+        this._selectPlaceById(id, { pan: false });
+        return;
+      }
+    }
   }
 
   /** The hint and the legend; the legend toggles hide a node type. */

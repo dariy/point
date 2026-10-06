@@ -109,3 +109,13 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - The tag-page endpoint already takes `year_from`/`year_to`, so the AND needs no API change.
 ---
+
+## 2026-10-06 - p-atlas-layer-p2-rwea.8
+- Filters were already written to the URL (`?place=` and `?timeline=` by `ViewContext`, `?atlas=` and `?view=` by `atlasLayerState.ts`). Added the missing restore and the validation.
+- `AtlasPlaces._restoreFromUrl` reselects the place from `?place=` after the first draw (no pan). `ViewContext` accepts `?timeline=` only as `YYYY-YYYY` (1-4 digits, start <= end). `HomePage._load` and `_refreshPostContent` drop an unknown `?place=` with a replace update, and the home feed loads.
+- Files: `AtlasPlaces.ts`, `viewContext.ts`, `HomePage.ts`, `test/viewContext.test.ts`, `e2e/atlas-layer-url.test.ts`.
+- Checked: url e2e 8/8; js-test pass. Not checked by hand: the 820×1180 browser pass (e2e runs at 390×844).
+- **Learnings:**
+  - The tag page returns "tag not found" for a bad slug; the error shows only if `_load` does not catch it first.
+  - Full e2e flakes at random: gesture "free drag", gesture desktop handle, Trusted Types tags map. Each passes alone.
+---

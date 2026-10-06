@@ -81,7 +81,7 @@ export class ViewContext {
       if (parts.length === 2) {
         const start = parseInt(parts[0], 10);
         const end = parseInt(parts[1], 10);
-        if (!isNaN(start) && !isNaN(end)) {
+        if (/^\d{1,4}$/.test(parts[0]) && /^\d{1,4}$/.test(parts[1]) && start <= end) {
           this.years = [start, end];
         }
       }

@@ -183,6 +183,11 @@ export default class HomePage extends Component<PageProps> {
     try {
       data = await this._fetchFeed(vc);
     } catch (err) {
+      if (vc.place) {
+        // An unknown slug in the URL is dropped; the update loads the home feed.
+        ViewContext.update({ place: null }, { replace: true });
+        return;
+      }
       this.setState({ loading: false, data: null, error: (err as Error).message || 'Failed to load posts.' });
       return;
     }
@@ -644,6 +649,11 @@ export default class HomePage extends Component<PageProps> {
 
       this.setState({ loading: false, data, error: null, startIndex, forceImmersive });
     } catch (err) {
+      if (vc.place) {
+        // An unknown slug in the URL is dropped; the update loads the home feed.
+        ViewContext.update({ place: null }, { replace: true });
+        return;
+      }
       this.setState({ loading: false, data: null, error: (err as Error).message || 'Failed to load posts.' });
     }
   }
