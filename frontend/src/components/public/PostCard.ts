@@ -37,6 +37,8 @@ export interface PostCardProps {
    * that tag as the navigation context.
    */
   tagSlug?: string;
+  /** Open the post the host's way instead of navigating through ViewContext. */
+  onOpen?: (post: Post) => void;
 }
 
 export class PostCard extends Component<PostCardProps> {
@@ -186,6 +188,10 @@ export class PostCard extends Component<PostCardProps> {
 
     const go = () => {
       this._stopHoverVideo?.();
+      if (this.props.onOpen) {
+        this.props.onOpen(post);
+        return;
+      }
       if (tagSlug) {
         ViewContext.update({ postSlug: post.slug });
       } else {

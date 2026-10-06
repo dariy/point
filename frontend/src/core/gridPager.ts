@@ -64,6 +64,10 @@ export interface GridPagerOptions {
   emptyHtml?: RawHtml;
   /** offer pinch/slider zoom. Default true. */
   zoom?: boolean;
+  /** show the hover edge chevrons (the keys still page). Default true. */
+  edgeArrows?: boolean;
+  /** take a vertical flick instead of emitting point:grid-swipe-vertical */
+  onVerticalSwipe?: (dir: 'up' | 'down') => void;
 }
 
 /** The feed's paging state, as arm() last received it. */
@@ -125,6 +129,7 @@ export class GridPager {
     this._o = {
       emptyHtml: html`<p class="empty-state">No posts yet.</p>`,
       zoom: true,
+      edgeArrows: true,
       ...opts
     };
     this._pageGhosts = {
@@ -294,7 +299,10 @@ export class GridPager {
       onSwipeCommit: (dir: string) => {
         // Only horizontal swipes paginate; a vertical one is a page scroll, and
         // is forwarded for whatever page-level mode wants it (see below).
-        if (dir === 'up' || dir === 'down') return this._emitVerticalSwipe(dir);
+        if (dir === 'up' || dir === 'down') {
+          if (this._o.onVerticalSwipe) return this._o.onVerticalSwipe(dir);
+          return this._emitVerticalSwipe(dir);
+        }
         if (dir !== 'left' && dir !== 'right') return;
         if (this._pageNavPending) return;
         const d = dir === 'left' ? 'next' : 'prev';
@@ -383,6 +391,10 @@ export class GridPager {
       }
     };
     window.addEventListener('keydown', this._onKeyNav);
+    if (this._o.edgeArrows === false) {
+      this._navArrows = [];
+      return;
+    }
     const CHEVRON = (d: string) => html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
     const arrowSpecs: Array<[string, () => void, string, string]> = [
       ['prev', goPrev, 'Previous page', 'M15 18l-6-6 6-6'],

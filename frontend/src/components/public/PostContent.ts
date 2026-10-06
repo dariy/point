@@ -15,6 +15,7 @@ import { pluginHost } from "../../core/pluginHost.ts";
 import { getPostPageLocation } from "../../api/posts.ts";
 import type { Post, PostMediaRef, PostStub } from "../../api/posts.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
+import { takeAtlasReturn } from "../../utils/atlasReturn.ts";
 import { cachedPerPage } from "../../utils/gridFit.ts";
 import { mediaTypeFromPath, stripHtml, mediaFromHtml } from "../../utils/postMedia.ts";
 import { exifVisible, buildExifMap, metadataForSrc, attachExifToImage } from "../../utils/exif.ts";
@@ -177,14 +178,9 @@ export class PostContent extends Component<PostContentProps> {
           // place and highlights the post chip — instead of landing on the
           // post's page in the home feed. The Atlas leaves a context marker on
           // open; we hand it back as the return state keyed to the current post.
-          let atlasCtx = null;
-          try { atlasCtx = JSON.parse(sessionStorage.getItem("atlasOpenContext") || "null"); } catch { /* ignore */ }
-          if (atlasCtx) {
-            try {
-              sessionStorage.removeItem("atlasOpenContext");
-              sessionStorage.setItem("atlasReturn", JSON.stringify({ ...atlasCtx, postSlug: post.slug }));
-            } catch { /* ignore */ }
-            navigate("/tags");
+          const atlasUrl = takeAtlasReturn(post.slug);
+          if (atlasUrl) {
+            navigate(atlasUrl);
             return;
           }
           try {

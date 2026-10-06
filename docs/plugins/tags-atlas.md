@@ -11,13 +11,16 @@ it, and the rest are resized by their in-range count. Both the place layer and t
 place's cloud are year-scoped server-side, and the range rides in the URL as
 `?timeline=<from>-<to>`.
 
-The cloud shows only the most recent posts of a place. On a desktop window (64em and
-wider), a click on a place also opens a side panel. The panel shows the place name, its
-post count, and all its posts, page by page from `/api/pages/tags/<slug>`. "More posts"
-loads the next page. The list uses the timeline range, and with the "Hidden" legend
-toggle off it skips hidden, draft and scheduled posts. A click on a post opens it, and a
-close of the post returns to the place, as from a cloud chip. A click on empty map or on
-the close button closes the panel. Below 64em there is no panel, only the cloud.
+The cloud shows only the most recent posts of a place. A click on a place also opens a
+bottom sheet, at every width. The sheet shows one row of square post cards, the place
+name with its post count, and a compact paginator. The page size is the number of cards
+that fit in the row. A swipe, the arrow keys or the paginator go to the next page. The
+cards use the timeline range, and with the "Hidden" legend toggle off they skip hidden,
+draft and scheduled posts. A grip click, a swipe down or Esc collapses the sheet to a
+pill, and the pill opens it again on the same page. A click on empty map closes the
+sheet. A card or a cloud post chip opens the post inside the place's tag
+(`/tags/<place>?slug=<post>`), so previous/next stay in that place. A close of the post
+returns to `/map` with the place and the sheet page.
 
 `tags-atlas` and [`tags-map`](tags-map.md) are the two candidates for the `map-route`
 slot, which takes at most one: enabling one disables the other, and the enabled one owns

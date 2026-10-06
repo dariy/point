@@ -14,6 +14,7 @@ import { html, setHTML, setScriptJSON, raw, setCanonical, removeCanonical } from
 import { formatDate } from '../../utils/formatters.ts';
 import { setPageTitle } from '../../utils/documentTitle.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
+import { clearAtlasOpen } from '../../utils/atlasReturn.ts';
 import { enterImmersive, exitImmersive, decodeImmersiveHash, immersiveNavTargets } from '../../utils/immersiveNav.ts';
 import { isSlideshowRunning } from '../../plugins/slideshow/Slideshow.ts';
 import { X_SVG } from '../../utils/icons.ts';
@@ -56,9 +57,7 @@ export default class PostPage extends Component<PageProps> {
     // already consumed it) abandons any Atlas-return flow, so drop its marker.
     // Post→post navigation reuses this page via onRouteUpdate and never reaches
     // here, so the marker survives swiping between posts.
-    try {
-      sessionStorage.removeItem('atlasOpenContext');
-    } catch {/* ignore */}
+    clearAtlasOpen();
     super.beforeUnmount();
     document.querySelectorAll('meta[property^="og:"]').forEach(el => el.remove());
     document.getElementById('json-ld-blogposting')?.remove();

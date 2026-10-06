@@ -26,6 +26,8 @@ export interface PostGridProps {
   reversed?: boolean;
   /** Passed through to PostCard. */
   tagSlug?: string;
+  /** Passed through to PostCard. */
+  onOpen?: (post: Post) => void;
 }
 
 export class PostGrid extends Component<PostGridProps> {
@@ -89,11 +91,11 @@ export class PostGrid extends Component<PostGridProps> {
   }
 
   _cardProps(post: Post, isHero = false): PostCardProps {
-    const { showViewCount = false, tagSlug } = this.props;
+    const { showViewCount = false, tagSlug, onOpen } = this.props;
     // isHero is not decoration: the hero slot spans the whole row, so its card
     // paints an image several times the width of a regular one and has to ask
     // for a different rung (PostCard → gridFit).
-    return { post, showViewCount, tagSlug, isHero };
+    return { post, showViewCount, tagSlug, isHero, onOpen };
   }
 
   /**
