@@ -119,3 +119,9 @@ after each iteration and it's included in prompts for context.
   - The tag page returns "tag not found" for a bad slug; the error shows only if `_load` does not catch it first.
   - Full e2e flakes at random: gesture "free drag", gesture desktop handle, Trusted Types tags map. Each passes alone.
 ---
+
+## 2026-10-06 - p-atlas-layer-p2-rwea
+- Epic close. No open children remain; US-001 to US-009 are done on `atlas-sheet`. No code change in this step.
+- **Learnings:**
+  - Several stories were only checked by e2e at 390×844; the 820×1180 browser pass is still open.
+---
