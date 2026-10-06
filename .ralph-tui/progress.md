@@ -53,3 +53,9 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - At 390px the 2-card result missed 3 by about 1px of card height, so a small trim is enough.
 ---
+
+## 2026-10-06 - p-atlas-layer-1qus
+- Epic close-out. All nine children (US-001 to US-009) were already closed. No code changed in this step.
+- **Learnings:**
+  - 3 tests in `atlas-layer-map.test.ts` still fail (pre-existing). Follow up in a separate bead.
+---
