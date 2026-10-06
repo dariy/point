@@ -526,3 +526,205 @@
     margin: 10px 0 0;
     font-size: 0.82rem;
 }
+
+/* ===========================
+   Atlas sheet — the posts of one place (AtlasSheet.ts)
+   One row of square cards and a bar, at the bottom edge of .atlas-map.
+   The look copies the post-details sheet (immersive-sheet.css).
+   =========================== */
+.atlas-map {
+    --atlas-sheet-h: max(20dvh, 8.5rem);
+}
+
+.atlas-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 800; /* above the Leaflet panes and controls */
+    height: var(--atlas-sheet-h, max(20dvh, 8.5rem));
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    background: var(--surface-card, var(--bg-primary));
+    color: var(--text-primary);
+    border-top-left-radius: var(--border-radius-xl);
+    border-top-right-radius: var(--border-radius-xl);
+    box-shadow: 0 -8px 32px var(--color-black-alpha-30);
+    transform: translateY(calc(100% + 2rem));
+    visibility: hidden;
+    transition: transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1), visibility 0s linear 0.34s;
+    will-change: transform;
+}
+
+.atlas-sheet.is-open {
+    transform: translateY(0);
+    visibility: visible;
+    transition: transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1), visibility 0s;
+}
+
+[data-theme="dark"] .atlas-sheet {
+    background: var(--color-rgb-30-30-30-alpha-85, rgba(30, 30, 30, 0.92));
+    border: var(--border-width) solid var(--color-white-alpha-10);
+    border-bottom: none;
+}
+
+/* A tall hit area around the visual grip bar, so a finger can catch it. */
+.atlas-sheet__grip {
+    flex-shrink: 0;
+    width: 100%;
+    height: 1.1rem;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: grab;
+    touch-action: none;
+}
+
+.atlas-sheet__grip::before {
+    content: "";
+    display: block;
+    width: 2.5rem;
+    height: 0.3rem;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: var(--border-primary);
+}
+
+.atlas-sheet__main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0 var(--spacing-md) var(--spacing-xs);
+}
+
+.atlas-sheet__row {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.atlas-sheet__grid {
+    height: 100%;
+}
+
+.atlas-sheet__grid .loading-spinner {
+    margin: auto;
+}
+
+.atlas-sheet__bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    min-height: 2rem;
+    position: relative;
+}
+
+.atlas-sheet__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.atlas-sheet__pages {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* The collapsed state: a pill at the bottom centre opens the sheet again. */
+.atlas-sheet-pill {
+    position: absolute;
+    left: 50%;
+    bottom: var(--spacing-md);
+    transform: translateX(-50%);
+    z-index: 800;
+    max-width: calc(100% - 2 * var(--spacing-md));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: var(--spacing-xs) var(--spacing-md);
+    border: none;
+    border-radius: var(--border-radius-full, 999px);
+    background: var(--color-black-alpha-40);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: white;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
+.atlas-sheet-pill[hidden] {
+    display: none;
+}
+
+/* ── The cards ───────────────────────────────────────────────────────────── */
+/* One flex row. Flex, not grid, so the hero span, the orphan expansion and the
+   zoom template of post-grid.css have no effect. Three classes beat
+   `body.grid-zoom .posts-grid`. */
+.atlas-sheet .atlas-sheet__grid .posts-grid,
+.atlas-sheet .grid-preview-placeholder .posts-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: var(--atlas-sheet-gap, 8px);
+    height: 100%;
+    grid-template-columns: none;
+    grid-template-rows: none;
+}
+
+.atlas-sheet .atlas-sheet__grid .post-card-slot,
+.atlas-sheet .grid-preview-placeholder .post-card-slot {
+    flex: 0 0 auto;
+    height: 100%;
+    width: auto;
+    aspect-ratio: 1;
+    min-height: 0;
+    grid-column: auto !important;
+}
+
+.atlas-sheet .atlas-sheet__grid .post-card,
+.atlas-sheet .grid-preview-placeholder .post-card {
+    min-height: 0;
+    border-radius: var(--border-radius);
+}
+
+/* Only the title shows: no excerpt, no meta row, no tag strip. */
+.atlas-sheet .post-card-content > :not(.post-card-title) {
+    display: none;
+}
+
+.atlas-sheet .post-card-title {
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+.atlas-sheet .video-play-indicator svg {
+    width: 2rem;
+    height: 2rem;
+}
+
+/* The ghost of a neighbour page sits on the row, not on the page padding. */
+.atlas-sheet .grid-preview-placeholder {
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.atlas-sheet #atlas-grid-mount.grid-promoted {
+    transform: translateZ(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-sheet,
+    .atlas-sheet.is-open {
+        transition: none;
+    }
+}
