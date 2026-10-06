@@ -39,6 +39,8 @@ import { stepZoom, requestZoom, zoomCapacity, cardImageSizes } from '../utils/gr
 import { thumbSrcset } from '../utils/mediaUrl.ts';
 import { dropBrokenImages } from '../utils/helpers.ts';
 import { flipGrid } from '../utils/gridFlip.ts';
+import { pluginHost } from './pluginHost.ts';
+import { mountAtlasLayerHandle } from '../plugins/tags-atlas/atlasLayerHandle.ts';
 
 import type { Post } from '../api/posts.ts';
 import type { PostCardProps } from '../components/public/PostCard.ts';
@@ -124,6 +126,7 @@ export class GridPager {
   _onGestureChange: (e: Event) => void = () => {};
   _onGestureEnd: (e: Event) => void = () => {};
   _zoomWheelEl: HTMLElement | null = null;
+  _atlasHandle: HTMLElement | null = null;
 
   constructor(opts: GridPagerOptions) {
     this._o = {
@@ -162,6 +165,8 @@ export class GridPager {
     this._pagination.minPage = GridPager.minPage(this._pagination);
     this._setupGestures();
     this._setupPageControls();
+    const gm = this._o.gridMount();
+    if (gm && pluginHost.isEnabled('tags-atlas')) this._atlasHandle = mountAtlasLayerHandle(gm);
     if (this._o.zoom) this._setupZoomInputs();
     this._preloadAdjacentGrids();
     this._promoteGridAhead();
@@ -205,9 +210,13 @@ export class GridPager {
   /** Release every listener and ghost, leaving the pager reusable via arm(). */
   disarm() {
     this._teardown();
+    this._atlasHandle?.remove();
+    this._atlasHandle = null;
   }
   destroy() {
     this._teardown();
+    this._atlasHandle?.remove();
+    this._atlasHandle = null;
     this._committedGhost?.remove();
     this._committedGhost = null;
     if (this._o.zoom) {

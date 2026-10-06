@@ -1,0 +1,136 @@
+# Iteration 1 Log
+
+## Metadata
+
+- **Task ID**: p-atlas-layer-1qus.1
+- **Task Title**: US-001: Atlas layer state model and e2e harness
+- **Description**: As a developer, I want one state machine for the three layer states and a base e2e spec, so that all later stories use the same state source and tests.
+
+## Acceptance Criteria
+- [ ] A new module `fron...
+- **Status**: completed
+- **Task Completed**: Yes
+- **Promise Detected**: Yes
+- **Started At**: 2026-10-06T04:11:54.219Z
+- **Ended At**: 2026-10-06T04:25:10.426Z
+- **Duration**: 13m 16s
+- **Input Tokens**: 104
+- **Output Tokens**: 8560
+- **Total Tokens**: 8664
+- **Agent**: claude
+- **Model**: claude-sonnet-5-5
+- **Sandbox Mode**: auto
+- **Sandbox Network**: Enabled
+--- RAW OUTPUT ---
+[94m[Bash][0m $ cat /home/light/.claude/projects/-home-light-src-point/memory/reference_dev_db_admin_login.md
+
+[91m[Error: Exit code 1
+# Ralph Progress Log
+
+This file tracks progress across iterations. Agents update this file
+after each iteration and it's included in prompts for context.
+
+## Codebase Patterns (Study These First)
+
+*Add reusable patterns discovered during development here.*
+
+---
+
+frontend/src/plugins/tags-atlas:
+AtlasSheet.ts
+index.ts
+
+frontend/test:
+ApiKeysSection.test.ts
+AtlasPage.test.ts
+AtlasSheet.test.ts
+BackupsSection.test.ts
+BreadcrumbsMount.test.ts
+MapPage.test.ts
+MediaBrowser.test.ts
+MediaViewer.test.ts
+MenuPage.test.ts
+NavMenu.test.ts
+NotificationLogButton.test.ts
+OfflineDataSection.test.ts
+PasskeysSection.test.ts
+PluginsPage.test.ts
+PostEditPage.test.ts
+PostEditPageMount.test.ts
+PostsListPage.test.ts
+PublicHeaderBreadcrumb.test.ts
+PublicHeaderMount.test.ts
+RebuildThumbnailsSection.test.ts
+SetupPage.test.ts
+SiteCrumb.test.ts
+SyncQueueSection.test.ts
+TagEditorForm.test.ts
+TagListView.test.ts
+TagPickerDialog.test.ts
+TagTreeView.test.ts
+TagsInput.test.ts
+TagsManagerPage.test.ts
+TagsManagerPageLoad.test.ts
+TagsManagerPageSave.test.ts
+TagsManagerPageWiring.test.ts
+Timeline.test.ts
+VersionCheckSection.test.ts
+adminThumbnails.test.ts
+apiClientHeaders.test.ts
+atlasReturn.test.ts
+componentCleanup.test.ts
+componentMarkup.test.ts
+componentResources.test.ts
+componentUpdate.test.ts
+copyright.test.ts
+dialogKeydown.test.ts
+dialogs.test.ts
+distractionFree.test.ts
+ls: cannot access 'e2e': No such file or directory
+(eval):1: no matches found: dev.*login][0m
+[94m[Bash][0m $ sed -n 1,40p frontend/src/plugins/tags-atlas/index.ts
+Let me see how e2e tests are structured.
+[94m[Bash][0m $ grep -n "e2e" package.json scripts/check.sh
+[94m[Bash][0m $ grep -rn "tags-atlas" api --include=*.go | head
+[94m[Bash][0m $ grep -n "sheet" -i frontend/src/core/gridPager.ts | head
+[94m[Bash][0m $ grep -n "atlas" -i frontend/src/plugins/index.ts frontend/src/plugins/*.ts 2>/dev/null | head
+[94m[Bash][0m $ ls frontend/src/plugins | head -40
+[94m[Bash][0m $ grep -rn "plugins/\(tags\|admin\)\|/api/plugins\|PluginsPage" api/internal/api/*.go | grep -v _test ...
+I'm checking how `app.ts` boots, so I know where the atlas layer state can be set on `document.body`.
+[94m[Bash][0m $ grep -n "^async function\|^function\|bootstrap\|DOMContentLoaded" frontend/src/app.ts | head -30
+[94m[Bash][0m $ sed -n 131,175p frontend/src/app.ts
+Now write the module, test, wiring, and e2e.
+[94m[Bash][0m $ sed -n 60,120p frontend/e2e/smoke.test.ts
+[94m[Bash][0m $ EOF scripts/check.sh 2>&1 | tail -25
+[94m[Bash][0m $ grep -n "atlasLayerState" frontend/src/app.ts
+[94m[Bash][0m $ 
+[94m[Bash][0m $ tail -30 /tmp/claude-1000/-home-light-src-point/8879a69c-d349-4b9d-99a5-3f5ebbc7f119/tasks/ba0ubq9yh...
+[94m[Bash][0m $ pgrep -af "check.sh|run-e2e" | head
+All checks passed, and that run included the e2e lane. Next I close the bead, append the progress notes, and stop the stray wait loop.
+[94m[Bash][0m $ unit + e2e tests in frontend/test and frontend/e2e/atlas-layer.test.ts. Next: US-002 handle via Grid...
+
+[91m[Error: Exit code 144][0m
+The `pkill` killed its own shell, so the rest of that command never ran. I'm re-running the remaining steps.
+[94m[Bash][0m $ ls frontend/src/__rule_fixture* 2>/dev/null
+
+[91m[Error: Exit code 1
+
+---
+
+0
+(eval):1: no matches found: frontend/src/__rule_fixture*][0m
+[94m[Bash][0m $ unit + e2e tests in frontend/test and frontend/e2e/atlas-layer.test.ts. Next: US-002 handle via Grid...
+US-001 is done and `scripts/check.sh` passes all 13 steps, including the e2e lane. I closed bead p-atlas-layer-1qus.1.
+
+- **State module:** `frontend/src/plugins/tags-atlas/atlasLayerState.ts` exports the `AtlasLayerState` type and the pure `next`, `prev` and `cycle`. It also has helpers to read, write and clear `data-atlas-layer` on `document.body`.
+- **Boot wiring:** `frontend/src/app.ts` sets `data-atlas-layer="list"` on `<body>` at boot when `tags-atlas` is enabled.
+- **Unit tests:** `frontend/test/atlasLayerState.test.ts` covers every transition and the attribute round trip.
+- **E2E test:** `frontend/e2e/atlas-layer.test.ts` checks that `tags-atlas` is in `window.__PLUGINS__` and that the home page ends up in `list`.
+
+Two places differ from the PRD:
+- **E2E location:** the e2e file is `frontend/e2e/atlas-layer.test.ts`, not `e2e/atlas-layer.spec.ts`. `scripts/run-e2e.sh` only runs `frontend/e2e/*.test.ts`, so a file under `e2e/` would never run.
+- **Plugin enable:** the e2e test has no enable step. `tags-atlas` is on by default, so a fresh e2e database already has it enabled.
+
+I appended the notes to `.ralph-tui/progress.md`. I did not commit, as the workflow says.
+
+<promise>COMPLETE</promise>
