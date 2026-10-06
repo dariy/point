@@ -82,3 +82,13 @@ after each iteration and it's included in prompts for context.
   - Synthetic mouse moves have near-equal timestamps; test drags need distance or slow steps to avoid or force a flick.
   - A drag started before the first grid fit can still be cut off by the re-render.
 ---
+
+## 2026-10-06 - p-atlas-layer-p2-rwea.5
+- `atlasLayerMap.ts` already mounts `AtlasPlaces` (country shapes, geo-tag markers, tag-post graph) and calls `invalidateSize` on state change and through a ResizeObserver (covers drag). No app code change needed.
+- The 3 failing tests failed for a test-setup reason: `tags_visibility` defaults to `hidden`, so the anonymous `/api/pages/graph` returned 404. The test now sets `tags_visibility=all` with `PUT /api/settings` in `before`.
+- Files: `frontend/e2e/atlas-layer-map.test.ts`.
+- Checked: map test 6/6; full e2e 54/54 on rerun. Not checked by hand: playwright-cli at 820×1180 (the e2e runs at 390×844).
+- **Learnings:**
+  - A public graph 404 means `tags_visibility` is not `all`; check it first.
+  - `scripts/check.sh` e2e flakes on "handle not visible" in one run; it passes on rerun.
+---

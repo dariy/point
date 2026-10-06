@@ -33,6 +33,10 @@ describe('Atlas layer map', () => {
     if (!login.ok) throw new Error('Login failed: ' + login.status);
     cookie = ((login.headers.get('set-cookie') || '').match(/session=([^;]+)/) || [])[1] || '';
 
+    // The public graph is closed until tags_visibility is "all" (default "hidden").
+    const vis = await api('/api/settings', { tags_visibility: 'all' }, 'PUT');
+    if (!vis.ok) throw new Error('Settings failed: ' + vis.status);
+
     // A country (drawn as a shape), a city (a marker), and posts that carry them.
     for (const [name, lat, lng] of [['France', 46.6, 2.4], ['Mapton', 40.7, -74]] as const) {
       const res = await api('/api/tags', { name, slug: name.toLowerCase(), kind: 'place', latitude: lat, longitude: lng });
