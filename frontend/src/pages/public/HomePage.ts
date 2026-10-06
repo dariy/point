@@ -109,6 +109,10 @@ export default class HomePage extends Component<PageProps> {
       },
       isAlive: () => !this._unmounted,
       emptyHtml: html`<p class="empty-state">No posts yet.</p>`,
+      filterKey: () => {
+        const vc = ViewContext.current();
+        return JSON.stringify(['', vc.years, vc.query, vc.tag]);
+      },
     });
   }
 

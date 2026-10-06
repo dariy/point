@@ -108,6 +108,10 @@ export default class TagPage extends Component<PageProps> {
       },
       isAlive: () => !this._unmounted,
       emptyHtml: html`<p class="empty-state">No posts in this tag yet.</p>`,
+      filterKey: () => {
+        const vc = ViewContext.current();
+        return JSON.stringify([this.props.params?.slug, vc.years, vc.query, vc.tag]);
+      },
     });
   }
 

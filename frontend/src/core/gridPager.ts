@@ -41,7 +41,10 @@ import { dropBrokenImages } from '../utils/helpers.ts';
 import { flipGrid } from '../utils/gridFlip.ts';
 import { pluginHost } from './pluginHost.ts';
 import { mountAtlasLayerHandle } from '../plugins/tags-atlas/atlasLayerHandle.ts';
+import { mountAtlasLayerGesture } from '../plugins/tags-atlas/atlasLayerGesture.ts';
 import { mountAtlasLayerLayout } from '../plugins/tags-atlas/atlasLayerLayout.ts';
+import { mountAtlasLayerMap } from '../plugins/tags-atlas/atlasLayerMap.ts';
+import type { AtlasLayerMapController } from '../plugins/tags-atlas/atlasLayerMap.ts';
 
 import type { Post } from '../api/posts.ts';
 import type { PostCardProps } from '../components/public/PostCard.ts';
@@ -71,6 +74,8 @@ export interface GridPagerOptions {
   edgeArrows?: boolean;
   /** take a vertical flick instead of emitting point:grid-swipe-vertical */
   onVerticalSwipe?: (dir: 'up' | 'down') => void;
+  /** names the list's filter (not its page); the atlas map reloads when it changes */
+  filterKey?: () => string;
 }
 
 /** The feed's paging state, as arm() last received it. */
@@ -128,7 +133,9 @@ export class GridPager {
   _onGestureEnd: (e: Event) => void = () => {};
   _zoomWheelEl: HTMLElement | null = null;
   _atlasHandle: HTMLElement | null = null;
+  _atlasGesture: (() => void) | null = null;
   _atlasLayout: (() => void) | null = null;
+  _atlasMap: AtlasLayerMapController | null = null;
 
   constructor(opts: GridPagerOptions) {
     this._o = {
@@ -163,6 +170,8 @@ export class GridPager {
    */
   arm(pagination: GridPagination) {
     this._teardown(); // also releases the swipe lock a commit armed
+    this._atlasGesture?.();
+    this._atlasGesture = null;
     this._pagination = pagination || {};
     this._pagination.minPage = GridPager.minPage(this._pagination);
     this._setupGestures();
@@ -170,7 +179,18 @@ export class GridPager {
     const gm = this._o.gridMount();
     if (gm && pluginHost.isEnabled('tags-atlas')) {
       this._atlasHandle = mountAtlasLayerHandle(gm);
+      if (this._atlasHandle) this._atlasGesture = mountAtlasLayerGesture(this._atlasHandle, this._o.gridMount);
       this._atlasLayout ??= mountAtlasLayerLayout();
+      const container = document.querySelector<HTMLElement>('body > .atlas-layer-map');
+      if (container) {
+        this._atlasMap ??= mountAtlasLayerMap({
+          container,
+          fetchPosts: this._o.fetchPosts,
+          filterKey: this._o.filterKey,
+          isAlive: this._o.isAlive,
+        });
+        this._atlasMap.refresh(this._pagination);
+      }
     }
     if (this._o.zoom) this._setupZoomInputs();
     this._preloadAdjacentGrids();
@@ -215,17 +235,25 @@ export class GridPager {
   /** Release every listener and ghost, leaving the pager reusable via arm(). */
   disarm() {
     this._teardown();
+    this._atlasGesture?.();
+    this._atlasGesture = null;
     this._atlasHandle?.remove();
     this._atlasHandle = null;
     this._atlasLayout?.();
     this._atlasLayout = null;
+    this._atlasMap?.destroy();
+    this._atlasMap = null;
   }
   destroy() {
     this._teardown();
+    this._atlasGesture?.();
+    this._atlasGesture = null;
     this._atlasHandle?.remove();
     this._atlasHandle = null;
     this._atlasLayout?.();
     this._atlasLayout = null;
+    this._atlasMap?.destroy();
+    this._atlasMap = null;
     this._committedGhost?.remove();
     this._committedGhost = null;
     if (this._o.zoom) {

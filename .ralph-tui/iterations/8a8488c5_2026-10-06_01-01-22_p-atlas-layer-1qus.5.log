@@ -1,0 +1,64 @@
+# Iteration 5 Log
+
+## Metadata
+
+- **Task ID**: p-atlas-layer-1qus.5
+- **Task Title**: US-005: Map shows only the posts of the current list
+- **Description**: As a visitor, I want the map to show only the posts in the list I am on, so that the map and the list agree.
+
+## Acceptance Criteria
+- [ ] The map gets the same filter as the post list (home: all visi...
+- **Status**: completed
+- **Task Completed**: Yes
+- **Promise Detected**: Yes
+- **Started At**: 2026-10-06T05:01:22.285Z
+- **Ended At**: 2026-10-06T05:09:11.175Z
+- **Duration**: 7m 48s
+- **Input Tokens**: 124
+- **Output Tokens**: 15727
+- **Total Tokens**: 15851
+- **Agent**: claude
+- **Model**: claude-sonnet-5-5
+- **Sandbox Mode**: auto
+- **Sandbox Network**: Enabled
+--- RAW OUTPUT ---
+I'll start with the progress notes and the atlas code.
+[94m[Bash][0m $ wc -l frontend/src/plugins/tags-atlas/*.ts
+[94m[Bash][0m $ grep -n "^export\|^function\|^async function\|^class\|fetch\|/api\|L\.\|import" plugins/tags-atlas/i...
+[94m[Bash][0m $ grep -n "latitude\|longitude\|geo" api/posts.ts | head
+[94m[Bash][0m $ grep -n "export function\|export async" api/posts.ts
+[94m[Bash][0m $ grep -rn "latitude" ../../api/internal --include=*.go -l | head
+[94m[Bash][0m $ ls ../..
+Status: the map has to show the current list's posts. I'm now checking the pager's pagination shape and whether list responses carry post coordinates. Then I'll write a lazy map module.
+[94m[Bash][0m $ ls ../e2e
+[94m[Bash][0m $ grep -n "tags/\|PUT\|api.put" api/tags.ts | head
+[94m[Bash][0m $ sed -n 139,146p plugins/tags-atlas/index.ts
+[94m[Bash][0m $ grep -n "interface GridViewParams" -A14 utils/*.ts | head -24
+[94m[TaskStop][0m
+[94m[Bash][0m $ grep -rn "GridViewParams" utils/*.ts core/*.ts | head -3
+The edits applied. Next I'll give the three host pages a `filterKey`.
+[94m[Bash][0m $ grep -n "static current" -A25 utils/viewContext.ts | head -40
+[94m[Bash][0m $ cd .. && cat ../scripts/check.sh | head -30
+[94m[Bash][0m $ head -12 frontend/test/atlasLayerState.test.ts
+[94m[Bash][0m $ EOF cd .. && (scripts/check.sh --only js-typecheck,js-lint,js-test 2>&1 | tail -30)
+[94m[Bash][0m $ sed -i "s/replaceAll(' ', '-')/replace(\/ \/g, '-')/" frontend/e2e/atlas-layer-map.test.ts && (scrip...
+[94m[Bash][0m $ sed -n 215,240p frontend/e2e/trustedTypes.test.ts
+Status: my new map spec fails in one case, and the trustedTypes map test fails too. I'm reading the details now.
+[94m[Bash][0m $ sed -n 91,108p tmp/check/e2e.log | cut -c1-400
+[94m[Bash][0m $ sed -i "s#'\*\*/arcgisonline.com/\*\*'#/arcgisonline\\\\.com/#" frontend/e2e/atlas-layer-map.test.ts...
+[94m[Bash][0m $ map invalidates size on state change." && br sync --flush-only 2>&1 | tail -2
+US-005 is done and the bead is closed. `scripts/check.sh` passed for `js-typecheck`, `js-lint`, `js-test` and `e2e` (the last two on separate runs). I did not run the Go steps. I did not do the playwright-cli browser check or take screenshots. The e2e spec runs at 390×844, but I did not try 1440×900.
+
+- **New module:** `atlasLayerMap.ts` builds the map lazily. Until the page leaves `list`, nothing loads: no Leaflet, no data, no tiles. On the first change it reads the list's pages through the pager's own `fetchPosts`, so the filter matches the cards. It draws one marker per geotagged post. When the list changes, it adds and removes markers without rebuilding the map.
+- **Wiring:** `GridPager` mounts the map and re-checks it on each re-arm. A new `filterKey` option, passed by `HomePage`, `TagPage` and `SearchPage`, tells the pager whether a re-arm means a different list.
+- **Tests:** unit tests in `frontend/test/atlasLayerMap.test.ts` and a new e2e spec, `frontend/e2e/atlas-layer-map.test.ts`. The spec checks three things:
+  - A tag page in `list` makes no Leaflet or tile requests.
+  - `mapList` on that tag page shows exactly 2 markers, for the 2 geotagged posts, and tiles then load.
+  - The home map shows at least 3 markers.
+- **Profile pages:** there is no profile page in this tree, so that filter case has no code or test.
+- **Page limit:** the map reads at most 30 pages per list, at the device-fit `per_page`. A very large list would need its own endpoint.
+- **Flaky test:** the first full e2e run failed in `trustedTypes.test.ts` (a marker click was intercepted). It passed on rerun, and an earlier session logged other flaky failures in that file.
+
+I appended my notes to `.ralph-tui/progress.md`.
+
+<promise>COMPLETE</promise>

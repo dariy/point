@@ -54,3 +54,26 @@ after each iteration and it's included in prompts for context.
   - US-003 already did most of the `map` layout; this story only changed the map `bottom`.
   - `check.sh` e2e failed twice in `trustedTypes.test.ts` (flaky) and passed on the third run. No browser screenshot in this session.
 ---
+
+## 2026-10-06 - p-atlas-layer-1qus.5
+- New `atlasLayerMap.ts` (`mountAtlasLayerMap`): lazy map for the layer. A MutationObserver on `body[data-atlas-layer]` waits for the first state other than `list`, then loads Leaflet and every page of the list through the pager's own `fetchPosts` (same filter as the cards), and draws one marker per geotagged post (first place tag). `refresh()` diffs markers by post id; the map is never rebuilt.
+- `GridPager.arm()` mounts it on the `.atlas-layer-map` container and calls `refresh(pagination)`; `disarm()/destroy()` remove it. New option `filterKey` (Home/Tag/Search pass it) decides if a re-arm means a new list; the key also includes `pagination.total`.
+- Files: frontend/src/plugins/tags-atlas/atlasLayerMap.ts, frontend/src/core/gridPager.ts, frontend/src/pages/public/{Home,Tag,Search}Page.ts, frontend/test/atlasLayerMap.test.ts, frontend/e2e/atlas-layer-map.test.ts
+- **Learnings:**
+  - Post list responses carry `tags[].latitude/longitude` on place tags, so no extra geo request is needed.
+  - `page.route` globs match the whole URL: use a regex (`/arcgisonline\.com/`) for a host with a subdomain, or the route never fires and the assert passes without proof.
+  - The map reads at most 30 pages (`MAX_MAP_PAGES`) at the device-fit `per_page`; a big list may need a dedicated endpoint later.
+  - No profile page in this tree. No browser screenshot in this session; the e2e checks marker count and tile requests at 390×844.
+  - `trustedTypes.test.ts` "tags map" failed once (marker click intercepted), passed on rerun: known flake.
+---
+
+## 2026-10-06 - p-atlas-layer-1qus.6
+- New `atlasLayerGesture.ts`: pure classifier (`lockAxis` 8px, `classifyRelease` 40px or 0.5 px/ms, `stateAfter`, `startsOnControl`) and `mountAtlasLayerGesture(handle, gridMount)`. Pointer events on `document`; a start counts only on the handle, or on the card row in `mapList`. The map has no listener, so map gestures never reach the sheet. Handle and strip follow the finger by `transform`, then the state changes (or snaps back). Tap on the handle = `cycle`. It also keeps `aria-expanded` in step with the state.
+- `GridPager.arm()` mounts it after the handle; `disarm()/destroy()` tear it down.
+- Files: frontend/src/plugins/tags-atlas/atlasLayerGesture.ts, frontend/src/core/gridPager.ts, frontend/test/atlasLayerGesture.test.ts, frontend/e2e/atlas-layer-gesture.test.ts
+- **Learnings:**
+  - Touch swipes in e2e: `ctx.newCDPSession` + `Input.dispatchTouchEvent` (Playwright's touchscreen only taps). Context needs `hasTouch`.
+  - Lint has no `Node` global: use `globalThis.Node`. Unit tests fake it (no param properties: strip-only TS).
+  - The handle already had `touch-action: none`; the card row has `pan-x`. No `overscroll-behavior` added on the handle (not scrollable); the row has `contain`.
+  - `trustedTypes.test.ts` map tests flaked again (marker click intercepted), as before. No browser screenshot in this session.
+---

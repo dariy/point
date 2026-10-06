@@ -77,6 +77,10 @@ export default class SearchPage extends Component<PageProps> {
         });
       },
       isAlive: () => !this._unmounted,
+      filterKey: () => {
+        const vc = ViewContext.current();
+        return JSON.stringify(['', vc.years, vc.query, vc.tag]);
+      },
       emptyHtml: html`<p class="empty-state">No posts matched your search.</p>`
     });
   }
