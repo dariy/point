@@ -38,6 +38,37 @@ export function classifyRelease(dx: number, dy: number, elapsedMs: number): Rele
   return dy > 0 ? 'next' : 'prev';
 }
 
+/** Handle top edge (px from the viewport top) for each state while the layer is dragged. */
+export interface SnapPositions {
+  list: number;
+  mapList: number;
+  map: number;
+}
+
+/**
+ * The state a free drag ends in. `y` is the handle top at release, `velocity`
+ * the recent vertical speed in px/ms (down is positive). A flick at or above
+ * `FLING_VELOCITY` moves one state from `from` in the flick direction; a slower
+ * release goes to the nearest position.
+ */
+export function snapState(y: number, from: AtlasLayerState, velocity: number, positions: SnapPositions): AtlasLayerState {
+  if (Math.abs(velocity) >= FLING_VELOCITY) return velocity > 0 ? next(from) : prev(from);
+  let best: AtlasLayerState = 'list';
+  for (const state of ['list', 'mapList', 'map'] as const) {
+    if (Math.abs(positions[state] - y) < Math.abs(positions[best] - y)) best = state;
+  }
+  return best;
+}
+
+/** Speed (px/ms, down positive) over the samples of the last `SPEED_WINDOW_MS`. */
+export const SPEED_WINDOW_MS = 100;
+export function recentVelocity(samples: readonly { y: number; t: number }[]): number {
+  const last = samples[samples.length - 1];
+  if (!last) return 0;
+  const first = samples.find((s) => last.t - s.t <= SPEED_WINDOW_MS) ?? last;
+  return last.t === first.t ? 0 : (last.y - first.y) / (last.t - first.t);
+}
+
 /** The state a release leads to, from the current one. */
 export function stateAfter(state: AtlasLayerState, release: Release): AtlasLayerState {
   if (release === 'next') return next(state);
@@ -80,35 +111,64 @@ export function stateLabel(state: AtlasLayerState): string {
   return 'List';
 }
 
-/** Largest follow distance while dragging, so the sheet does not leave the screen. */
-const FOLLOW_MAX_PX = 120;
+/** Time (ms) the handle takes to slide to its snap position. */
+const SNAP_MS = 200;
+
+const px = (name: string): number => parseFloat(document.body.style.getPropertyValue(name)) || 0;
 
 /**
  * Wire swipe and tap on the handle and the card row. Returns a teardown.
- * While a drag runs the controls follow the finger by `transform`; on release
- * they snap to the state the classifier chose.
+ * A vertical drag moves the handle freely: `body[data-atlas-dragging]` shows the
+ * map above it and the card row below it, and `--atlas-layer-list-h` (the height
+ * under the map) follows the finger. On release the handle slides to the position
+ * `snapState` chose, and only then does the state change.
  */
 export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTMLElement | null): () => void {
-  let start: { id: number; x: number; y: number; t: number; onHandle: boolean } | null = null;
+  const body = document.body;
+  let start: { id: number; x: number; y: number; t: number; onHandle: boolean; handleY: number; from: AtlasLayerState } | null = null;
   let axis: Axis = null;
-  let followed: HTMLElement[] = [];
+  let samples: { y: number; t: number }[] = [];
+  let snapTimer: ReturnType<typeof setTimeout> | null = null;
+  let snapTo: AtlasLayerState | null = null;
 
-  const clearFollow = () => {
-    for (const el of followed) {
-      el.style.transform = '';
-      el.style.transition = '';
-    }
-    followed = [];
+  const bounds = () => {
+    const top = px('--atlas-layer-top');
+    const bottom = window.innerHeight - px('--atlas-layer-footer-h') - handle.offsetHeight;
+    return { top, bottom: Math.max(top, bottom) };
+  };
+  const positions = (): SnapPositions => {
+    const { top, bottom } = bounds();
+    const rowMin = parseFloat(getComputedStyle(body).getPropertyValue('--atlas-layer-row-min')) || 120;
+    const mapList = window.innerHeight - Math.max(window.innerHeight * 0.2, handle.offsetHeight + rowMin);
+    return { list: top, mapList: Math.min(Math.max(mapList, top), bottom), map: bottom };
+  };
+  const setHandleY = (y: number) => body.style.setProperty('--atlas-layer-list-h', `${window.innerHeight - y}px`);
+
+  const finishDrag = () => {
+    if (snapTimer !== null) clearTimeout(snapTimer);
+    snapTimer = null;
+    const target = snapTo;
+    snapTo = null;
+    if (target && target !== getAtlasLayerState()) setAtlasLayerState(target);
+    body.removeAttribute('data-atlas-dragging');
+    body.removeAttribute('data-atlas-snapping');
+    body.style.removeProperty('--atlas-layer-list-h');
   };
 
   const els = () => ({ handle, grid: gridMount(), map: document.querySelector('body > .atlas-layer-map') });
 
   const onDown = (e: PointerEvent) => {
-    if (start || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (start || snapTimer !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
     if (e.target instanceof globalThis.Element && e.target.closest('.atlas-layer-handle__btn')) return;
     if (!startsOnControl(e.target, els(), getAtlasLayerState())) return;
-    start = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, onHandle: handle.contains(e.target as Node) };
+    start = {
+      id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp,
+      onHandle: handle.contains(e.target as Node),
+      handleY: handle.getBoundingClientRect().top,
+      from: getAtlasLayerState(),
+    };
     axis = null;
+    samples = [];
     // A mouse leaves the 20px handle on the first move, before the axis locks.
     // Capture at once so the drag keeps its events.
     if (start.onHandle) {
@@ -118,38 +178,50 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
 
   const onMove = (e: PointerEvent) => {
     if (!start || e.pointerId !== start.id) return;
-    const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
     if (axis === null) {
-      axis = lockAxis(dx, dy);
+      axis = lockAxis(e.clientX - start.x, dy);
       if (axis === 'y') {
         try { (e.target as Element).setPointerCapture(e.pointerId); } catch { /* target gone */ }
-        const grid = gridMount();
-        followed = [handle, ...(grid && getAtlasLayerState() === 'mapList' ? [grid] : [])];
+        setHandleY(start.handleY);
+        body.setAttribute('data-atlas-dragging', '');
       }
     }
     if (axis !== 'y') return;
-    const follow = Math.max(-FOLLOW_MAX_PX, Math.min(FOLLOW_MAX_PX, dy));
-    for (const el of followed) {
-      el.style.transition = 'none';
-      el.style.transform = `translateY(${follow}px)`;
-    }
+    const { top, bottom } = bounds();
+    setHandleY(Math.min(bottom, Math.max(top, start.handleY + dy)));
+    samples.push({ y: e.clientY, t: e.timeStamp });
+    if (samples.length > 8) samples.shift();
   };
 
   const end = (e: PointerEvent, cancelled: boolean) => {
     if (!start || e.pointerId !== start.id) return;
-    const { x, y, t, onHandle } = start;
+    const { x, y, t, onHandle, handleY, from } = start;
     start = null;
     const wasAxis = axis;
     axis = null;
-    const release = cancelled && wasAxis !== 'y' ? 'none' : classifyRelease(e.clientX - x, e.clientY - y, e.timeStamp - t);
-    for (const el of followed) el.style.transition = 'transform 0.2s ease-out';
+    if (wasAxis === 'y') {
+      const pos = positions();
+      const { top, bottom } = bounds();
+      const releaseY = Math.min(bottom, Math.max(top, handleY + e.clientY - y));
+      const target = cancelled ? from : snapState(releaseY, from, recentVelocity(samples), pos);
+      snapTo = target;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        finishDrag();
+      } else {
+        body.setAttribute('data-atlas-snapping', '');
+        setHandleY(pos[target]);
+        snapTimer = setTimeout(finishDrag, SNAP_MS + 20);
+      }
+      return;
+    }
+    // No drag: a tap on the handle cycles the state.
+    if (cancelled || wasAxis === 'x') return;
+    const release = classifyRelease(e.clientX - x, e.clientY - y, e.timeStamp - t);
     const finish = release === 'tap' && !onHandle ? 'none' : release;
     const state = getAtlasLayerState();
-    const target = cancelled ? state : stateAfter(state, finish);
+    const target = stateAfter(state, finish);
     if (target !== state) setAtlasLayerState(target);
-    // Snap: the new layout takes over, so drop the offset.
-    requestAnimationFrame(clearFollow);
   };
   const onUp = (e: PointerEvent) => end(e, false);
   const onCancel = (e: PointerEvent) => end(e, true);
@@ -204,6 +276,6 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     handle.removeEventListener('wheel', onWheel);
     if (wheelBusy !== null) clearTimeout(wheelBusy);
     live.remove();
-    clearFollow();
+    finishDrag();
   };
 }

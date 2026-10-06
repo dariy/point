@@ -171,8 +171,6 @@ export class GridPager {
    */
   arm(pagination: GridPagination) {
     this._teardown(); // also releases the swipe lock a commit armed
-    this._atlasGesture?.();
-    this._atlasGesture = null;
     this._atlasMore?.();
     this._atlasMore = null;
     this._pagination = pagination || {};
@@ -181,8 +179,14 @@ export class GridPager {
     this._setupPageControls();
     const gm = this._o.gridMount();
     if (gm && pluginHost.isEnabled('tags-atlas')) {
-      this._atlasHandle = mountAtlasLayerHandle(gm);
-      if (this._atlasHandle) this._atlasGesture = mountAtlasLayerGesture(this._atlasHandle, this._o.gridMount);
+      // The handle outlives a re-arm, and so does its gesture: a re-fit that lands
+      // mid-drag must not cut the drag off.
+      const handle = mountAtlasLayerHandle(gm);
+      if (handle !== this._atlasHandle || !this._atlasGesture) {
+        this._atlasGesture?.();
+        this._atlasGesture = handle ? mountAtlasLayerGesture(handle, this._o.gridMount) : null;
+      }
+      this._atlasHandle = handle;
       this._atlasMore = this._loadMoreAtStripEnd(gm);
       this._atlasLayout ??= mountAtlasLayerLayout();
       const container = document.querySelector<HTMLElement>('body > .atlas-layer-map');
@@ -204,7 +208,7 @@ export class GridPager {
    */
   _loadMoreAtStripEnd(gm: HTMLElement): () => void {
     const onScroll = () => {
-      if (document.body.dataset.atlasLayer !== 'mapList') return;
+      if (document.body.dataset.atlasLayer !== 'mapList' || document.body.hasAttribute('data-atlas-dragging')) return;
       if (gm.scrollLeft + gm.clientWidth < gm.scrollWidth - 4) return;
       const { page = 1, pages = 1 } = this._pagination;
       if (page < pages) this._o.gotoPage(page + 1);

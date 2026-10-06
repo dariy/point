@@ -72,3 +72,13 @@ after each iteration and it's included in prompts for context.
   - The footer is in `#footer-mount`; hide its `.footer-center`/`.footer-right` to keep the copyright only.
   - Dev DB login still gives 401 on :8001; `E2E_PORT=<free> scripts/run-e2e.sh` (with a narrowed glob) works.
 ---
+
+## 2026-10-06 - p-atlas-layer-p2-rwea.4
+- Free drag on the handle. A vertical drag sets `body[data-atlas-dragging]` and `--atlas-layer-list-h` (height under the map); map, handle and card row follow it live. On release `snapState` (pure) picks the nearest of three handle positions; a flick (>= 0.5 px/ms over the last 100ms) moves one state. The handle slides there (`data-atlas-snapping`, 0.2s, none under reduced motion), then the state changes.
+- Files: `atlasLayerGesture.ts`, `css/public/atlas.css`, `css/public/footer.css` (minimized footer during drag), `core/gridPager.ts`, `utils/gridFit.ts`, `test/atlasLayerGesture.test.ts`, `e2e/atlas-layer-gesture.test.ts`.
+- Checked: check.sh --short passes; gesture e2e 10/10 at 390x844. Not checked by hand: 820x1180 browser pass.
+- **Learnings:**
+  - A drag resizes the chrome, which fired the chrome refit and `GridPager.arm()`, which tore down the gesture mid-drag. Fix: `watchChromeFit` waits while dragging; `arm()` keeps the gesture when the handle is the same.
+  - Synthetic mouse moves have near-equal timestamps; test drags need distance or slow steps to avoid or force a flick.
+  - A drag started before the first grid fit can still be cut off by the re-render.
+---

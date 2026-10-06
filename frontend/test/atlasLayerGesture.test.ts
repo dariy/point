@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyRelease, lockAxis, stateAfter, stateAfterKey, stateLabel, startsOnControl } from '../src/plugins/tags-atlas/atlasLayerGesture.ts';
+import { classifyRelease, recentVelocity, snapState, lockAxis, stateAfter, stateAfterKey, stateLabel, startsOnControl } from '../src/plugins/tags-atlas/atlasLayerGesture.ts';
 
 describe('lockAxis', () => {
   it('stays open under 8px', () => assert.equal(lockAxis(5, 7), null));
@@ -73,5 +73,41 @@ describe('stateAfterKey', () => {
     assert.equal(stateLabel('list'), 'List');
     assert.equal(stateLabel('mapList'), 'Map and list');
     assert.equal(stateLabel('map'), 'Map only');
+  });
+});
+
+describe('snapState', () => {
+  const pos = { list: 100, mapList: 600, map: 780 };
+  it('goes to the nearest position', () => {
+    assert.equal(snapState(150, 'list', 0, pos), 'list');
+    assert.equal(snapState(380, 'list', 0.1, pos), 'mapList');
+    assert.equal(snapState(300, 'mapList', 0, pos), 'list');
+    assert.equal(snapState(700, 'mapList', 0, pos), 'map');
+    assert.equal(snapState(691, 'mapList', 0, pos), 'map');
+    assert.equal(snapState(689, 'mapList', 0, pos), 'mapList');
+  });
+  it('a flick moves one state in its direction, whatever the distance', () => {
+    assert.equal(snapState(130, 'list', 0.8, pos), 'mapList');
+    assert.equal(snapState(590, 'mapList', 0.6, pos), 'map');
+    assert.equal(snapState(590, 'mapList', -0.6, pos), 'list');
+    assert.equal(snapState(780, 'map', 0.9, pos), 'map');
+    assert.equal(snapState(100, 'list', -0.9, pos), 'list');
+  });
+  it('a speed under the threshold does not flick', () => {
+    assert.equal(snapState(150, 'list', 0.49, pos), 'list');
+  });
+});
+
+describe('recentVelocity', () => {
+  it('is 0 without samples or time', () => {
+    assert.equal(recentVelocity([]), 0);
+    assert.equal(recentVelocity([{ y: 5, t: 10 }]), 0);
+  });
+  it('uses only samples inside the window', () => {
+    const samples = [{ y: 0, t: 0 }, { y: 200, t: 400 }, { y: 210, t: 450 }, { y: 230, t: 480 }];
+    assert.equal(recentVelocity(samples), (230 - 200) / 80);
+  });
+  it('is negative going up', () => {
+    assert.ok(recentVelocity([{ y: 100, t: 0 }, { y: 40, t: 50 }]) < 0);
   });
 });

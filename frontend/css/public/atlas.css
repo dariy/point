@@ -795,7 +795,7 @@ body[data-atlas-layer="map"] .atlas-layer-handle {
     bottom: var(--atlas-layer-footer-h, 0px);
 }
 
-body[data-atlas-layer="mapList"] #grid-mount {
+:is(body[data-atlas-layer="mapList"], body[data-atlas-dragging]) #grid-mount {
     position: fixed;
     left: 0;
     right: 0;
@@ -824,7 +824,7 @@ body[data-atlas-layer="mapList"] #pagination-mount {
 
 /* One flex row of square cards. Flex, not grid, so the zoom template and the
    hero span of post-grid.css have no effect. */
-body[data-atlas-layer="mapList"] #grid-mount .posts-grid {
+:is(body[data-atlas-layer="mapList"], body[data-atlas-dragging]) #grid-mount .posts-grid {
     display: flex;
     flex-wrap: nowrap;
     gap: var(--atlas-layer-gap, 8px);
@@ -833,7 +833,7 @@ body[data-atlas-layer="mapList"] #grid-mount .posts-grid {
     grid-template-rows: none;
 }
 
-body[data-atlas-layer="mapList"] #grid-mount .post-card-slot {
+:is(body[data-atlas-layer="mapList"], body[data-atlas-dragging]) #grid-mount .post-card-slot {
     flex: 0 0 auto;
     height: 100%;
     width: auto;
@@ -842,18 +842,66 @@ body[data-atlas-layer="mapList"] #grid-mount .post-card-slot {
     grid-column: auto !important;
 }
 
-body[data-atlas-layer="mapList"] #grid-mount .post-card {
+:is(body[data-atlas-layer="mapList"], body[data-atlas-dragging]) #grid-mount .post-card {
     min-height: 0;
     border-radius: var(--border-radius);
 }
 
-body[data-atlas-layer="mapList"] #grid-mount .post-card-content > :not(.post-card-title) {
+:is(body[data-atlas-layer="mapList"], body[data-atlas-dragging]) #grid-mount .post-card-content > :not(.post-card-title) {
     display: none;
 }
 
-body[data-atlas-layer="mapList"] #grid-mount .post-card-title {
+:is(body[data-atlas-layer="mapList"], body[data-atlas-dragging]) #grid-mount .post-card-title {
     font-size: var(--font-size-sm);
     margin: 0;
+}
+
+/* Free drag: the map, the handle and the card row share one height,
+   --atlas-layer-list-h, which the gesture sets. These rules follow the state
+   rules above and win on equal specificity, so a drag from any state looks alike. */
+body[data-atlas-dragging] {
+    overflow: hidden;
+}
+
+body[data-atlas-dragging] .atlas-layer-map {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    bottom: var(--atlas-layer-list-h);
+    transition: none;
+}
+
+body[data-atlas-dragging] .atlas-layer-handle {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 105;
+    background: var(--bg-primary);
+    border-top: var(--border-width) solid var(--border-primary);
+    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+}
+
+body[data-atlas-dragging] #grid-mount {
+    display: block;
+}
+
+body[data-atlas-dragging] #pagination-mount {
+    display: none;
+}
+
+/* After release the handle slides to its snap position. */
+body[data-atlas-snapping] .atlas-layer-map,
+body[data-atlas-snapping] .atlas-layer-handle,
+body[data-atlas-snapping] #grid-mount {
+    transition: bottom 0.2s ease-out, height 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body[data-atlas-snapping] .atlas-layer-map,
+    body[data-atlas-snapping] .atlas-layer-handle,
+    body[data-atlas-snapping] #grid-mount {
+        transition: none;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

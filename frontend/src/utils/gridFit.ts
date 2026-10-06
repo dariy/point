@@ -295,11 +295,20 @@ const CHROME_MOUNTS = ['#header-mount', '#timeline-mount', '#pagination-mount', 
 export function watchChromeFit(root: ParentNode, onSettle: () => void): () => void {
   if (!root || typeof ResizeObserver === 'undefined') return () => {};
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const settle = () => {
+    // A layer drag resizes the chrome on purpose, and a re-fit re-renders the
+    // grid under the finger. Wait for the release.
+    if (document.body.hasAttribute('data-atlas-dragging') || document.body.hasAttribute('data-atlas-snapping')) {
+      timer = setTimeout(settle, 120);
+      return;
+    }
+    onSettle();
+  };
   const ro = new ResizeObserver(() => {
     clearTimeout(timer);
     // Debounced: a slot that renders in two passes would otherwise re-fit twice,
     // and the second fit is the only one measuring anything real.
-    timer = setTimeout(onSettle, 120);
+    timer = setTimeout(settle, 120);
   });
   for (const sel of CHROME_MOUNTS) {
     const el = root.querySelector(sel);

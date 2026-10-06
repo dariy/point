@@ -129,6 +129,64 @@ describe('Atlas layer gestures', () => {
     await to('mapList');
   });
 
+  it('a free drag keeps map and list on screen and snaps to the nearest position on release', async () => {
+    await page.goto(BASE + '/tags/atlas-gesture');
+    await page.locator('.atlas-layer-handle').waitFor();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(800); // the first fit may re-render the grid; a drag must not start before it
+    const to = (v: string) => page.waitForFunction((x) => document.body.dataset.atlasLayer === x, v);
+    // Handle centre in each state: the snap positions.
+    const at: Record<string, number> = {};
+    for (const st of ['list', 'mapList', 'map']) {
+      await page.evaluate((x) => document.body.setAttribute('data-atlas-layer', x), st);
+      await to(st);
+      at[st] = (await center('.atlas-layer-handle')).y;
+    }
+    await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
+    await to('list');
+    assert.ok(at.list! < at.mapList! && at.mapList! < at.map!, JSON.stringify(at));
+
+    /** Slow drag of the handle to `y`; returns the boxes seen while the finger is still down. */
+    async function dragTo(y: number, stepMs = 40) {
+      const c = await center('.atlas-layer-handle');
+      const t = (type: 'touchStart' | 'touchMove' | 'touchEnd', py: number) =>
+        cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: c.x, y: py }] });
+      await t('touchStart', c.y);
+      for (let i = 1; i <= 8; i++) {
+        await t('touchMove', c.y + ((y - c.y) * i) / 8);
+        await page.waitForTimeout(stepMs);
+      }
+      await page.waitForTimeout(150);
+      const mid = {
+        dragging: await page.evaluate(() => document.body.hasAttribute('data-atlas-dragging')),
+        map: await page.locator('.atlas-layer-map').boundingBox(),
+        handle: await page.locator('.atlas-layer-handle').boundingBox(),
+        grid: await page.locator('#grid-mount').boundingBox(),
+      };
+      await t('touchEnd', y);
+      return mid;
+    }
+
+    // list -> a point between mapList and map, nearer mapList
+    let mid = await dragTo(at.mapList! + 20);
+    assert.ok(mid.dragging);
+    assert.ok(mid.map && mid.map.height > 100, 'map visible during the drag');
+    assert.ok(mid.grid && mid.grid.height > 20, 'list visible during the drag');
+    assert.ok(Math.abs(mid.handle!.y + mid.handle!.height / 2 - (at.mapList! + 20)) < 8, 'handle follows the finger');
+    await to('mapList');
+    await page.waitForFunction(() => !document.body.hasAttribute('data-atlas-dragging'));
+
+    await dragTo(at.map! - 15);
+    await to('map');
+    await dragTo(at.mapList! - 40);
+    await to('mapList');
+    await dragTo(at.list! + 30);
+    await to('list');
+    // A slow drag (no flick) to a point nearer map than mapList
+    await dragTo(at.mapList! + (at.map! - at.mapList!) * 0.7, 250);
+    await to('map');
+  });
+
   it('a swipe inside the map never changes the state', async () => {
     await page.goto(BASE + '/tags/atlas-gesture');
     await page.locator('.atlas-layer-handle').waitFor();
@@ -172,13 +230,13 @@ describe('Atlas layer gestures', () => {
       let b = await settledBox(dpage, '.atlas-layer-handle');
       await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
       await dpage.mouse.down();
-      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2 + 80, { steps: 6 });
+      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2 + 500, { steps: 6 });
       await dpage.mouse.up();
       await waitState('mapList');
       b = await settledBox(dpage, '.atlas-layer-handle');
       await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
       await dpage.mouse.down();
-      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2 - 80, { steps: 6 });
+      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2 - 500, { steps: 6 });
       await dpage.mouse.up();
       await waitState('list');
     });
