@@ -3,10 +3,10 @@
   "sessionId": "8a8488c5-a688-4a76-a57f-0982b26922b3",
   "status": "running",
   "startedAt": "2026-10-06T04:11:13.935Z",
-  "updatedAt": "2026-10-06T05:18:37.033Z",
-  "currentIteration": 6,
+  "updatedAt": "2026-10-06T06:12:27.401Z",
+  "currentIteration": 8,
   "maxIterations": 0,
-  "tasksCompleted": 6,
+  "tasksCompleted": 8,
   "isPaused": false,
   "agentPlugin": "claude",
   "model": "sonnet",
@@ -582,14 +582,14 @@
       {
         "id": "p-atlas-layer-1qus.7",
         "title": "US-007: Desktop mouse, wheel, and keyboard",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-atlas-layer-1qus.8",
         "title": "US-008: URL state, `/map` redirect, and return from a post",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-x52z",
@@ -5579,12 +5579,32 @@
       "durationMs": 558731,
       "startedAt": "2026-10-06T05:09:14.466Z",
       "endedAt": "2026-10-06T05:18:33.197Z"
+    },
+    {
+      "iteration": 7,
+      "status": "completed",
+      "taskId": "p-atlas-layer-1qus.7",
+      "taskTitle": "US-007: Desktop mouse, wheel, and keyboard",
+      "taskCompleted": true,
+      "durationMs": 1971568,
+      "startedAt": "2026-10-06T05:18:36.577Z",
+      "endedAt": "2026-10-06T05:51:28.145Z"
+    },
+    {
+      "iteration": 8,
+      "status": "completed",
+      "taskId": "p-atlas-layer-1qus.8",
+      "taskTitle": "US-008: URL state, `/map` redirect, and return from a post",
+      "taskCompleted": true,
+      "durationMs": 1251633,
+      "startedAt": "2026-10-06T05:51:32.253Z",
+      "endedAt": "2026-10-06T06:12:23.886Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [
-    "p-atlas-layer-1qus.7"
+    "p-atlas-layer-1qus.9"
   ],
   "subagentPanelVisible": false
 }

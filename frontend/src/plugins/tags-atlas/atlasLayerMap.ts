@@ -9,7 +9,7 @@
  */
 
 import { loadLeaflet, TILE_ATTR, TILE_DARK, TILE_LIGHT, TILE_MAX_NATIVE_ZOOM } from '../../utils/leaflet.ts';
-import { getAtlasLayerState } from './atlasLayerState.ts';
+import { getAtlasLayerState, replaceSearch, searchWithView, viewFromSearch } from './atlasLayerState.ts';
 
 import type { Post } from '../../api/posts.ts';
 import type { GridPagination } from '../../core/gridPager.ts';
@@ -104,7 +104,16 @@ export function mountAtlasLayerMap(
       maxBounds: [[-90, -180], [90, 180]],
       maxBoundsViscosity: 1.0,
       zoomAnimation: false,
-    }).setView([20, 0], 2);
+    });
+    // A reload or a return from a post brings the viewport back from the URL.
+    const view = viewFromSearch(location.search);
+    map.setView(view ? [view.lat, view.lng] : [20, 0], view ? view.zoom : 2);
+    fitted = !!view;
+    map.on('moveend', () => {
+      if (getAtlasLayerState(body) === 'list') return;
+      const c = map.getCenter();
+      replaceSearch(searchWithView(location.search, { lat: c.lat, lng: c.lng, zoom: map.getZoom() }));
+    });
     L.tileLayer(isDarkTheme() ? TILE_DARK : TILE_LIGHT, {
       attribution: TILE_ATTR,
       maxZoom: 18,

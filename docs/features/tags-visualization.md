@@ -32,13 +32,10 @@ and staying pinned to the place across pan and zoom. Chips follow a two-click mo
 the first focuses (lighting that chip's connections and dimming the rest), the second
 opens.
 
-**The bottom sheet.** A place click also slides up a sheet at the bottom edge of the map
-(`AtlasSheet`), at every width. It shows one row of square post cards from
-`/api/pages/tags/<slug>`, page by page, with the place name, the post count and a
-compact paginator. The legend and the Leaflet attribution move up with it. A card or a
-post chip opens the post inside the place's tag (`/tags/<place>?slug=<post>`), and a
-close of the post returns to `/map` with the place selected and the sheet on the same
-page.
+**The map layer.** The Atlas no longer has its own page. `/map` redirects to the home
+list in the `map` state, and every post list page carries a three-state map layer (see
+[Tags Atlas](../plugins/tags-atlas.md)). The place cloud and the `AtlasSheet` bottom
+sheet of the old page are gone.
 
 Two endpoints feed it, both year-scopable:
 

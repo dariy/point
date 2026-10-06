@@ -2,31 +2,57 @@
 
 **Type:** route · **Slot:** `map-route` (cardinality `0-1`) · **Routes:** `/map` · **Default:** enabled
 
-The default provider for the public `/map` route. Plots every geo-tag on a Leaflet map
-— country shapes where the name matches a boundary file, circle markers elsewhere — and
-reveals a place's posts and co-tags as a cloud of chips anchored to it on the map.
+With this plugin on, every post list page (home, tag, search) gets a map layer. The layer
+is collapsed by default. A grab handle at the top of the post list shows that a map is
+available.
 
-The timeline scopes the map: places with no posts in the selected year range drop off
-it, and the rest are resized by their in-range count. Both the place layer and the open
-place's cloud are year-scoped server-side, and the range rides in the URL as
-`?timeline=<from>-<to>`.
+## States
 
-The cloud shows only the most recent posts of a place. A click on a place also opens a
-bottom sheet, at every width. The sheet shows one row of square post cards, the place
-name with its post count, and a compact paginator. The page size is the number of cards
-that fit in the row. A swipe, the arrow keys or the paginator go to the next page. The
-cards use the timeline range, and with the "Hidden" legend toggle off they skip hidden,
-draft and scheduled posts. A grip click, a swipe down or Esc collapses the sheet to a
-pill, and the pill opens it again on the same page. A click on empty map closes the
-sheet. A card or a cloud post chip opens the post inside the place's tag
-(`/tags/<place>?slug=<post>`), so previous/next stay in that place. A close of the post
-returns to `/map` with the place and the sheet page.
+The page has three states. The state is on `<body>` as `data-atlas-layer`, and the CSS
+reads only that attribute.
+
+| State | `?atlas=` | What you see |
+|-------|-----------|--------------|
+| `list` | (absent) | The page as it is, plus the handle. The footer shows. |
+| `mapList` | `list-map` | The map comes down from behind the header. The post list is one row of cards over the footer position, about 20% of the viewport high. The footer is hidden. |
+| `map` | `map` | The map fills the space below the header. The post list is only the handle, at the bottom. The footer is hidden. |
+
+The map shows only the posts of the current list (same filter as the cards). It loads
+(Leaflet, post data, tiles) on the first change out of `list`. A page that stays in
+`list` makes no map request.
+
+## Gestures
+
+Only the handle and the card row take a gesture that changes the state. A gesture that
+starts inside the map goes to the map (pan, pinch, wheel zoom).
+
+- **Swipe or mouse drag** on the handle or the card row: down goes one state toward
+  `map`, up goes one state back. The threshold is 40px or 0.5 px/ms. A shorter drag
+  snaps back. A horizontal move scrolls the cards.
+- **Tap or click** on the handle: `list` → `mapList` → `map` → `list`.
+- **Wheel** over the handle: one step for each gesture.
+- **Keyboard** on the handle: Enter or Space cycles, ArrowDown goes forward, ArrowUp
+  goes back, Escape goes to `list`.
+
+## URL
+
+The state is in the query string. A state change uses `history.replaceState`, so a
+swipe does not add a history entry. The map viewport is in `?view=<lat>,<lng>,<zoom>`.
+A reload or a shared link opens the same state and viewport.
+
+When a post opens from `mapList` or `map`, a close of the post returns to the list URL,
+with the same state and viewport. A navigation to another list page starts in `list`.
+
+## `/map`
+
+`/map` redirects to the home list in the `map` state (`/?atlas=map`). Old query
+parameters stay on the URL. The redirect does not depend on the `tags_visibility`
+setting.
 
 `tags-atlas` and [`tags-map`](tags-map.md) are the two candidates for the `map-route`
 slot, which takes at most one: enabling one disables the other, and the enabled one owns
-`/map`. With neither enabled, the route disappears — the one difference from the
-`post-viewer` slot, which always keeps a claimant. [`tags-graph`](tags-graph.md) is not
+`/map`. With neither enabled, the route disappears. [`tags-graph`](tags-graph.md) is not
 a competitor: it sits in its own slot on `/tags` and can be enabled alongside a map.
 
-See [Tags Visualization](../features/tags-visualization.md) for the full comparison of
-the three providers.
+See [Tags Visualization](../features/tags-visualization.md) for the comparison of the
+three providers.

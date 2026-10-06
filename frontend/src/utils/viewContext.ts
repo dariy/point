@@ -1,6 +1,19 @@
 import { getRoute } from '../store.ts';
 import { navigate } from './helpers.ts';
 
+/** `url` plus the `atlas` and `view` parameters of the current location. */
+function carryAtlasParams(url: string): string {
+  const from = new URLSearchParams(window.location.search);
+  const [path = '', search = ''] = url.split('?');
+  const params = new URLSearchParams(search);
+  for (const key of ['atlas', 'view']) {
+    const value = from.get(key);
+    if (value !== null) params.set(key, value);
+  }
+  const out = params.toString();
+  return out ? `${path}?${out}` : path;
+}
+
 /**
  * ViewContext — unified filter and navigation state for the public site.
  *
@@ -114,8 +127,10 @@ export class ViewContext {
       next.page = 1;
     }
 
-    // Perform navigation
-    navigate(next.toUrl(), { replace });
+    // Perform navigation. The map layer's state and viewport ride on the URL
+    // through a page or fit change of the same list; a new filter starts in `list`.
+    const url = next.toUrl();
+    navigate(filtersChanged ? url : carryAtlasParams(url), { replace });
   }
 
   /** Serialize context back to a URL. */

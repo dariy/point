@@ -262,7 +262,10 @@ async function resolveVizModule(slot: string, candidates: string[]) {
       ? candidates[0]
       : candidates.find((id) => pluginHost.isEnabled(id)) || "";
 
-  if (!active || (visibility !== "all" && !isAdmin)) {
+  // The atlas is not a tag-data page any more: its `/map` is a redirect to the
+  // list layer, which `tags_visibility` does not gate.
+  const gated = active !== "tags-atlas" && visibility !== "all" && !isAdmin;
+  if (!active || gated) {
     return import("./pages/public/RedirectHome.ts");
   }
 

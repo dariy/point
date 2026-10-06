@@ -88,3 +88,24 @@ after each iteration and it's included in prompts for context.
   - E2E that measures the handle must wait until its box is stable (`settledBox`); the layout can still slide.
   - `check.sh` e2e failed in `trustedTypes.test.ts` on 3 of 4 runs (different cases each time); the atlas specs pass. No browser screenshot in this session.
 ---
+
+## 2026-10-06 - p-atlas-layer-1qus.8
+- State in the URL: `?atlas=list-map|map` (absent = `list`), by `history.replaceState`; viewport in `?view=lat,lng,zoom`. Pure helpers in `atlasLayerState.ts`; `atlasLayerLayout.ts` reads the URL on mount, rewrites it on a state change, and marks `atlasReturn` when a card or link in `#grid-mount` is clicked outside `list`. `atlasLayerMap.ts` restores and writes the viewport.
+- `/map`: `tags-atlas/index.ts` is now a small redirect page (`/?atlas=map`, old query kept). `app.ts` no longer gates it by `tags_visibility`. `AtlasPage` (1400 lines) and `AtlasPage.test.ts` removed; `AtlasSheet` stays (layout constants).
+- `atlasReturn.ts` reduced to one `returnUrl`; `PostContent` close goes to it.
+- `ViewContext.update` carries `atlas`/`view` through page/fit changes (not filter changes).
+- Docs: `docs/plugins/tags-atlas.md`, `docs/features/tags-visualization.md`. E2E: `frontend/e2e/atlas-layer-url.test.ts`.
+- **Learnings:**
+  - TagPage's per_page fit rewrites the URL through `ViewContext.update`; any new query param must be carried there, or it is lost.
+  - Cards are not anchors (JS click on `.post-card`); catch both `.post-card` and `a[href]`.
+  - Running check.sh lanes in parallel loads the machine: smoke e2e timed out twice there, passes alone and with `--only e2e`.
+  - `tags-map` still serves `/map` when it is the enabled map plugin. No browser screenshot in this session; the e2e checks state, redirect, reload and return.
+---
+
+## 2026-10-06 - p-atlas-layer-1qus.9
+- Header freeze: new `utils/headerFreeze.ts` (`isHeaderFrozen`, `onHeaderThaw`). `HeaderFold.relayout()` and the `setupHeaderCompact` check return early while `body[data-atlas-layer]` is `mapList`/`map`; each runs once when the state returns to `list`. No overlay code touched, so a state change cannot close a header overlay.
+- Files: frontend/src/utils/{headerFreeze,headerFold,headerCompact}.ts, frontend/test/headerFreeze.test.ts, frontend/e2e/atlas-layer-header.test.ts
+- **Learnings:**
+  - Both header controllers react to resize, not scroll; the freeze also covers resize and rotation while the map shows.
+  - `trustedTypes.test.ts` "tags map" flaked again (marker click intercepted); all atlas specs pass. No browser screenshot in this session.
+---

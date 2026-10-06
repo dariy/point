@@ -4,6 +4,7 @@
  * When the h1 title and .header-actions overlap on the same line, adds
  * class "compact" to .light-header so buttons collapse to icon-only mode.
  */
+import { isHeaderFrozen, onHeaderThaw } from './headerFreeze.ts';
 
 export function setupHeaderCompact(header: Element | null) {
   if (!header) return () => {};
@@ -12,6 +13,7 @@ export function setupHeaderCompact(header: Element | null) {
   if (!h1 || !actions) return () => {};
 
   const check = () => {
+    if (isHeaderFrozen()) return;
     // Measure without compact so we get natural sizes.
     header.classList.remove('compact');
 
@@ -45,6 +47,10 @@ export function setupHeaderCompact(header: Element | null) {
 
   const ro = new ResizeObserver(check);
   ro.observe(header);
+  const thaw = onHeaderThaw(check);
   check();
-  return () => ro.disconnect();
+  return () => {
+    ro.disconnect();
+    thaw();
+  };
 }

@@ -43,3 +43,53 @@ export function setAtlasLayerState(state: AtlasLayerState, body: HTMLElement = d
 export function clearAtlasLayerState(body: HTMLElement = document.body): void {
   body.removeAttribute('data-atlas-layer');
 }
+
+const URL_PARAM = 'atlas';
+const URL_VALUE: Readonly<Record<AtlasLayerState, string | null>> = { list: null, mapList: 'list-map', map: 'map' };
+
+/** The state a query string names (`?atlas=map`, `?atlas=list-map`). Anything else gives `list`. */
+export function stateFromSearch(search: string): AtlasLayerState {
+  const value = new URLSearchParams(search).get(URL_PARAM);
+  return ORDER.find((s) => URL_VALUE[s] === value) ?? 'list';
+}
+
+/** `search` with the `atlas` parameter set for `state` (removed for `list`). Other parameters stay. */
+export function searchWithState(search: string, state: AtlasLayerState): string {
+  const params = new URLSearchParams(search);
+  const value = URL_VALUE[state];
+  if (value) params.set(URL_PARAM, value);
+  else params.delete(URL_PARAM);
+  const out = params.toString();
+  return out ? `?${out}` : '';
+}
+
+/** A map viewport: centre and zoom. */
+export interface AtlasView {
+  lat: number;
+  lng: number;
+  zoom: number;
+}
+
+const VIEW_PARAM = 'view';
+
+/** The viewport in `?view=lat,lng,zoom`, or null when absent or malformed. */
+export function viewFromSearch(search: string): AtlasView | null {
+  const parts = (new URLSearchParams(search).get(VIEW_PARAM) ?? '').split(',');
+  if (parts.length !== 3) return null;
+  const [lat, lng, zoom] = parts.map(Number) as [number, number, number];
+  if (![lat, lng, zoom].every(Number.isFinite) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng, zoom };
+}
+
+/** `search` with the viewport set in `view`. Other parameters stay. */
+export function searchWithView(search: string, view: AtlasView): string {
+  const params = new URLSearchParams(search);
+  params.set(VIEW_PARAM, `${view.lat.toFixed(4)},${view.lng.toFixed(4)},${view.zoom}`);
+  return `?${params.toString()}`;
+}
+
+/** Replace the current history entry's query string. No new entry, no route render. */
+export function replaceSearch(search: string): void {
+  if (search === location.search) return;
+  history.replaceState(history.state, '', location.pathname + search + location.hash);
+}

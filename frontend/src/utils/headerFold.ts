@@ -36,11 +36,14 @@ interface FoldProvider {
   ops?: () => Array<() => void>;
 }
 
+import { isHeaderFrozen, onHeaderThaw } from './headerFreeze.ts';
+
 export class HeaderFold {
   _fits: () => boolean;
   _providers: FoldProvider[];
   _busy: boolean;
   _ro: ResizeObserver;
+  _thaw: () => void;
 
   /**
    * @param opts.observe - Element whose size changes trigger relayout.
@@ -52,6 +55,7 @@ export class HeaderFold {
     this._busy = false;
     this._ro = new ResizeObserver(() => this.relayout());
     if (observe) this._ro.observe(observe);
+    this._thaw = onHeaderThaw(() => this.relayout());
   }
 
   /**
@@ -77,6 +81,8 @@ export class HeaderFold {
   relayout() {
     // Folding must not re-trigger itself through the ResizeObserver.
     if (this._busy) return;
+    // The atlas map layer freezes the header; thawing runs relayout again.
+    if (isHeaderFrozen()) return;
     this._busy = true;
     try {
       for (const p of this._providers) p.reset?.();
@@ -94,6 +100,7 @@ export class HeaderFold {
 
   destroy() {
     this._ro.disconnect();
+    this._thaw();
     this._providers = [];
   }
 }
