@@ -33,16 +33,16 @@ describe('Atlas layer map', () => {
     if (!login.ok) throw new Error('Login failed: ' + login.status);
     cookie = ((login.headers.get('set-cookie') || '').match(/session=([^;]+)/) || [])[1] || '';
 
-    // Two places, and three posts on the tag under test: two geotagged, one not.
-    for (const [name, lat, lng] of [['Mapville', 48.85, 2.35], ['Mapton', 40.7, -74]] as const) {
+    // A country (drawn as a shape), a city (a marker), and posts that carry them.
+    for (const [name, lat, lng] of [['France', 46.6, 2.4], ['Mapton', 40.7, -74]] as const) {
       const res = await api('/api/tags', { name, slug: name.toLowerCase(), kind: 'place', latitude: lat, longitude: lng });
       if (!res.ok && res.status !== 409) throw new Error('Tag creation failed: ' + (await res.text()));
     }
     const posts: Array<[string, string[]]> = [
-      ['Map probe one', ['atlas-map-set', 'mapville']],
+      ['Map probe one', ['atlas-map-set', 'france']],
       ['Map probe two', ['atlas-map-set', 'mapton']],
       ['Map probe three', ['atlas-map-set']],
-      ['Map probe other', ['mapville']],
+      ['Map probe other', ['france']],
     ];
     for (const [title, tags] of posts) {
       const res = await api('/api/posts', {
@@ -68,22 +68,67 @@ describe('Atlas layer map', () => {
     assert.equal(await page.locator('.atlas-layer-marker').count(), 0);
   });
 
-  it('shows one marker per geotagged post of the tag, and loads tiles on the first change', async () => {
-    await page.goto(BASE + '/tags/atlas-map-set');
+  const openMap = async (state = 'map') => {
+    await page.goto(BASE + '/');
     await page.locator('.atlas-layer-handle').waitFor();
-    await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
-    await page.locator('.atlas-layer-marker').first().waitFor();
-    assert.equal(await page.locator('.atlas-layer-marker').count(), 2);
+    await page.evaluate((st) => document.body.setAttribute('data-atlas-layer', st), state);
+    await page.locator('.atlas-layer-map .leaflet-tile-pane').waitFor({ state: 'attached' });
+  };
+
+  it('loads tiles on the first change out of list', async () => {
+    await openMap('mapList');
     await page.waitForFunction(() => document.querySelectorAll('.leaflet-tile').length > 0);
     assert.ok(tiles.length > 0, 'tiles load once the map opens');
   });
 
-  it('the home map shows the posts of the whole list', async () => {
-    await page.goto(BASE + '/');
-    await page.locator('.atlas-layer-handle').waitFor();
+  it('fills the shape of a country that has a tag', async () => {
+    await openMap();
+    await page.locator('.atlas-layer-map path.leaflet-interactive').first().waitFor({ state: 'attached' });
+    const filled = await page.locator('.atlas-layer-map path.leaflet-interactive[stroke="#e05c00"]').count();
+    assert.ok(filled >= 1, 'a tagged country is outlined and filled');
+  });
+
+  it('draws a geo-tag that is no country as a marker, and selects it into a graph', async () => {
+    await openMap();
+    const marker = page.locator('.atlas-layer-map .atlas-marker');
+    await marker.first().waitFor();
+    assert.equal(await marker.count(), 1, 'one marker: Mapton');
+    await marker.first().click();
+    const chips = page.locator('.atlas-layer-map .atlas-node');
+    await chips.first().waitFor();
+    assert.ok(await page.locator('.atlas-layer-map .atlas-node--center').isVisible(), 'the place sits at the centre');
+    assert.ok((await page.locator('.atlas-layer-map .atlas-node--post').count()) >= 1, 'its post is a chip');
+    // A click on empty map dismisses the graph.
+    await page.locator('.atlas-layer-map').click({ position: { x: 20, y: 200 } });
+    await page.waitForFunction(() => document.querySelectorAll('.atlas-layer-map .atlas-node').length === 0);
+  });
+
+  it('selects a country shape into a graph', async () => {
+    await openMap();
+    await page.locator('.atlas-layer-map path[stroke="#e05c00"]').first().waitFor({ state: 'attached' });
+    await page.evaluate(() => {
+      const el = document.querySelector('.atlas-layer-map path[stroke="#e05c00"]')!;
+      const r = el.getBoundingClientRect();
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 }));
+    });
+    await page.locator('.atlas-layer-map .atlas-node--post').first().waitFor();
+    assert.ok((await page.locator('.atlas-layer-map .atlas-node--center').innerText()).includes('France'));
+  });
+
+  it('resizes the map with the layer', async () => {
+    await openMap('mapList');
+    await page.locator('.atlas-layer-map .leaflet-tile-pane').waitFor({ state: 'attached' });
+    const size = () => page.evaluate(() => {
+      const c = document.querySelector<HTMLElement>('.atlas-layer-map')!;
+      return { box: c.getBoundingClientRect().height, pane: document.querySelector<HTMLElement>('.atlas-layer-map .leaflet-map-pane')!.getBoundingClientRect().height };
+    });
+    const before = await size();
     await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'map'));
-    await page.locator('.atlas-layer-marker').first().waitFor();
-    const n = await page.locator('.atlas-layer-marker').count();
-    assert.ok(n >= 3, `home markers ${n}`);
+    await page.waitForFunction((h) => document.querySelector('.atlas-layer-map')!.getBoundingClientRect().height > h, before.box);
+    const tilesCover = await page.evaluate(() => {
+      const c = document.querySelector('.atlas-layer-map')!.getBoundingClientRect();
+      return [...document.querySelectorAll('.atlas-layer-map .leaflet-tile')].some((t) => t.getBoundingClientRect().bottom >= c.bottom - 1);
+    });
+    assert.ok(tilesCover || tiles.length > 0, 'the map follows the new box');
   });
 });

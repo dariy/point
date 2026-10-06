@@ -10,102 +10,31 @@ after each iteration and it's included in prompts for context.
 ---
 
 
-## 2026-10-06 - p-atlas-layer-1qus.1
-- Added `atlasLayerState.ts`: `AtlasLayerState`, pure `next`/`prev`/`cycle`, plus body-attribute get/set/clear helpers.
-- `app.ts` sets `data-atlas-layer="list"` on `<body>` at boot when `tags-atlas` is enabled.
-- Unit tests in `frontend/test/atlasLayerState.test.ts`. E2E in `frontend/e2e/atlas-layer.test.ts`.
-- Files: frontend/src/plugins/tags-atlas/atlasLayerState.ts, frontend/src/app.ts, frontend/test/atlasLayerState.test.ts, frontend/e2e/atlas-layer.test.ts
+## 2026-10-06 - p-atlas-layer-p2-rwea.1
+- Atlas map now starts below header and timeline. `atlasLayerLayout.ts` publishes `--atlas-layer-top` (header bottom + `#timeline-mount` height) and re-measures on DOM change and resize. `atlas.css`: map `top` uses it; `#timeline-mount` is sticky under the header (z 109) in every atlas state.
+- Files: `frontend/src/plugins/tags-atlas/atlasLayerLayout.ts`, `frontend/css/public/atlas.css`, `frontend/e2e/atlas-layer-header.test.ts`, rebuilt CSS bundles.
 - **Learnings:**
-  - E2E files live in `frontend/e2e/*.test.ts` (node --test glob), not `e2e/*.spec.ts` as the PRD says. Later stories add `atlas-*.test.ts` there.
-  - `tags-atlas` is `DefaultEnabled: true`, so a fresh e2e DB has it on; no enable step is needed.
-  - The e2e server is a fresh DB per run; each file calls `/api/setup` and accepts 409.
+  - The timeline fills `#timeline-mount` after layout mounts, so a MutationObserver on `#app` is needed to find it.
+  - Dev/throwaway seed data gives no timeline pills (`/api/timeline` 404), so the e2e test injects a `.timeline-container` into the real mount.
+  - `insertAdjacentHTML` fails in page context (TrustedHTML); use createElement.
+  - Dev DB login fails (401); use a throwaway instance (`/tmp/pv2`, port 8146) per memory notes.
 ---
 
-## 2026-10-06 - p-atlas-layer-1qus.2
-- Added `atlasLayerHandle.ts` (`mountAtlasLayerHandle`): a `.atlas-layer-handle` div (role=button, aria-label, aria-expanded, tabindex 0, 20px) inserted before `#grid-mount`.
-- `GridPager.arm()` mounts it when `pluginHost.isEnabled('tags-atlas')`; `disarm()`/`destroy()` remove it. No page-specific code.
-- CSS in `frontend/css/public/atlas.css`. E2E: handle on home/tag/search, absent when plugin off.
-- Files: frontend/src/plugins/tags-atlas/atlasLayerHandle.ts, frontend/src/core/gridPager.ts, frontend/css/public/atlas.css, frontend/e2e/atlas-layer.test.ts
+## 2026-10-06 - p-atlas-layer-p2-rwea.3
+- Handle now holds buttons. mapList: "Maximize map" and "Maximize list". list and map: one "Restore map and list". `atlasLayerHandle.ts` re-renders them on `data-atlas-layer` change. Gesture `onDown` ignores presses on `.atlas-layer-handle__btn`.
+- Files: `atlasLayerHandle.ts`, `atlasLayerGesture.ts`, `css/public/atlas.css` (+ bundles), `e2e/atlas-layer-gesture.test.ts`.
 - **Learnings:**
-  - Trusted Types is enforced: build DOM with createElement, never `innerHTML` (trustedTypes e2e catches it).
-  - GridPager unit tests run without a DOM `document.querySelectorAll`; keep a ref to the node and remove it, do not query.
-  - Disabling a plugin: a reused browser context still showed the old manifest; use a fresh context in the "off" e2e.
-  - No profile page exists in this tree (routes: /, /tags/:slug, /search); the AC "profile" has nothing to cover.
-  - Handle has no click/gesture yet; US-006/007 add them. Browser screenshot check was not done in this session.
+  - Handle is 20px, so the 44px buttons are absolutely positioned and overflow it with no fill.
+  - Use `globalThis.Element` in TS; oxlint flags bare `Element` (no-undef).
+  - Full e2e flaked on atlas-layer.test.ts "handle not visible" in two runs; passes alone and on rerun.
 ---
 
-## 2026-10-06 - p-atlas-layer-1qus.3
-- `mapList` layout, all in CSS keyed on `body[data-atlas-layer]`: `.atlas-layer-map` (fixed, z 100, under `#header-mount` z 110, slides from `translateY(-100%)`), `#grid-mount` becomes a fixed one-row strip at the bottom (height `max(20dvh, handle + 120px)`), handle sits on top of the strip, `#footer-mount` is `display:none` in `mapList`/`map`. `map` also hides the grid (US-004 will refine).
-- New `atlasLayerLayout.ts` (`mountAtlasLayerLayout`): makes the empty map container on `body`, publishes `--atlas-layer-header-h`, `--atlas-layer-gap` (SHEET_GAP_PX), `--atlas-layer-aspect` (CARD_ASPECT). `GridPager.arm()` mounts it; `disarm()/destroy()` clean up and reset the state to `list`.
-- Files: frontend/src/plugins/tags-atlas/atlasLayerLayout.ts, frontend/src/core/gridPager.ts, frontend/css/public/{atlas,footer}.css, frontend/e2e/atlas-layer.test.ts
+## 2026-10-06 - p-atlas-layer-p2-rwea.9
+- Bug cause: in map+list the grid is a fixed bottom strip. The home fit (`computePerPage`) measured it as one row and wrote `per_page=1` to the URL, which also stuck in list-only. Fix: each state fits its own per_page on the same collection. `computePerPage` has a strip branch (`stripPerPage`: two screens of square cards from the strip height). `watchAtlasLayer` re-fits on a state change (HomePage and TagPage), through the existing `refitPage` path. `map` skips the fit. `GridPager._loadMoreAtStripEnd` loads the next page at the strip end.
+- Files: `utils/gridFit.ts`, `pages/public/HomePage.ts`, `pages/public/TagPage.ts`, `core/gridPager.ts`, `e2e/atlas-layer-list.test.ts`.
+- Checked: 390×844 list 1 → map+list 6; 820×1180 list 2 → map+list 8; first post same after list → map+list → list. js-lint, js-typecheck, js-test pass. Full e2e: 50/53 pass.
 - **Learnings:**
-  - The map container is empty; the real map loads in US-005. `fitColumns` is not used: the row is CSS flex, card size = row height, so no per-page column count exists yet.
-  - The page size of the grid is not changed in `mapList`; the row scrolls with the cards of the current page.
-  - The e2e must wait for the slide to end (`transform === 'none'`) before it measures the map.
-  - `check.sh` e2e had one flaky "code editor survives an undo" failure (passes on rerun and on baseline reruns).
-  - Handle `aria-expanded` does not follow the state yet; US-006/007 wire it. No browser screenshot in this session; the e2e measures the geometry at 390×844.
----
-
-## 2026-10-06 - p-atlas-layer-1qus.4
-- `map` state: the map container now runs from the header bottom to the viewport bottom (`bottom: 0`); the 20px handle floats over it at the very bottom (z 105). Grid and pagination stay hidden, so no card shows; footer hidden since US-003.
-- E2E: new case in `frontend/e2e/atlas-layer.test.ts` (map top = header bottom, map bottom = 844, handle ≤ 32px at the bottom, no card visible, footer hidden).
-- Files: frontend/css/public/atlas.css, frontend/e2e/atlas-layer.test.ts
-- **Learnings:**
-  - US-003 already did most of the `map` layout; this story only changed the map `bottom`.
-  - `check.sh` e2e failed twice in `trustedTypes.test.ts` (flaky) and passed on the third run. No browser screenshot in this session.
----
-
-## 2026-10-06 - p-atlas-layer-1qus.5
-- New `atlasLayerMap.ts` (`mountAtlasLayerMap`): lazy map for the layer. A MutationObserver on `body[data-atlas-layer]` waits for the first state other than `list`, then loads Leaflet and every page of the list through the pager's own `fetchPosts` (same filter as the cards), and draws one marker per geotagged post (first place tag). `refresh()` diffs markers by post id; the map is never rebuilt.
-- `GridPager.arm()` mounts it on the `.atlas-layer-map` container and calls `refresh(pagination)`; `disarm()/destroy()` remove it. New option `filterKey` (Home/Tag/Search pass it) decides if a re-arm means a new list; the key also includes `pagination.total`.
-- Files: frontend/src/plugins/tags-atlas/atlasLayerMap.ts, frontend/src/core/gridPager.ts, frontend/src/pages/public/{Home,Tag,Search}Page.ts, frontend/test/atlasLayerMap.test.ts, frontend/e2e/atlas-layer-map.test.ts
-- **Learnings:**
-  - Post list responses carry `tags[].latitude/longitude` on place tags, so no extra geo request is needed.
-  - `page.route` globs match the whole URL: use a regex (`/arcgisonline\.com/`) for a host with a subdomain, or the route never fires and the assert passes without proof.
-  - The map reads at most 30 pages (`MAX_MAP_PAGES`) at the device-fit `per_page`; a big list may need a dedicated endpoint later.
-  - No profile page in this tree. No browser screenshot in this session; the e2e checks marker count and tile requests at 390×844.
-  - `trustedTypes.test.ts` "tags map" failed once (marker click intercepted), passed on rerun: known flake.
----
-
-## 2026-10-06 - p-atlas-layer-1qus.6
-- New `atlasLayerGesture.ts`: pure classifier (`lockAxis` 8px, `classifyRelease` 40px or 0.5 px/ms, `stateAfter`, `startsOnControl`) and `mountAtlasLayerGesture(handle, gridMount)`. Pointer events on `document`; a start counts only on the handle, or on the card row in `mapList`. The map has no listener, so map gestures never reach the sheet. Handle and strip follow the finger by `transform`, then the state changes (or snaps back). Tap on the handle = `cycle`. It also keeps `aria-expanded` in step with the state.
-- `GridPager.arm()` mounts it after the handle; `disarm()/destroy()` tear it down.
-- Files: frontend/src/plugins/tags-atlas/atlasLayerGesture.ts, frontend/src/core/gridPager.ts, frontend/test/atlasLayerGesture.test.ts, frontend/e2e/atlas-layer-gesture.test.ts
-- **Learnings:**
-  - Touch swipes in e2e: `ctx.newCDPSession` + `Input.dispatchTouchEvent` (Playwright's touchscreen only taps). Context needs `hasTouch`.
-  - Lint has no `Node` global: use `globalThis.Node`. Unit tests fake it (no param properties: strip-only TS).
-  - The handle already had `touch-action: none`; the card row has `pan-x`. No `overscroll-behavior` added on the handle (not scrollable); the row has `contain`.
-  - `trustedTypes.test.ts` map tests flaked again (marker click intercepted), as before. No browser screenshot in this session.
----
-
-## 2026-10-06 - p-atlas-layer-1qus.7
-- Desktop input on the handle, all in `atlasLayerGesture.ts`: wheel (one step per gesture, 250ms quiet-time debounce, `passive:false` + preventDefault so the page does not scroll), keys (`stateAfterKey`: Enter/Space cycle, ArrowDown next, ArrowUp prev, Escape list), and a visually hidden `aria-live` span (`stateLabel`) inside the handle. Mouse drag already worked through the pointer events from US-006.
-- Wheel listener sits on the handle only: the map and the card row have none, so they zoom and scroll as before.
-- Files: frontend/src/plugins/tags-atlas/{atlasLayerGesture,atlasLayerHandle}.ts, frontend/css/public/atlas.css, frontend/test/atlasLayerGesture.test.ts, frontend/e2e/atlas-layer-gesture.test.ts
-- **Learnings:**
-  - A mouse leaves the 20px handle on its first move, before the 8px axis lock sets pointer capture, so the move target changed and the browser sent `pointercancel`. Capture now starts on pointerdown when the target is in the handle.
-  - `GridPager.arm()` runs more than once per page; the old handle was replaced each time, which dropped keyboard focus. `mountAtlasLayerHandle` now reuses its handle.
-  - E2E that measures the handle must wait until its box is stable (`settledBox`); the layout can still slide.
-  - `check.sh` e2e failed in `trustedTypes.test.ts` on 3 of 4 runs (different cases each time); the atlas specs pass. No browser screenshot in this session.
----
-
-## 2026-10-06 - p-atlas-layer-1qus.8
-- State in the URL: `?atlas=list-map|map` (absent = `list`), by `history.replaceState`; viewport in `?view=lat,lng,zoom`. Pure helpers in `atlasLayerState.ts`; `atlasLayerLayout.ts` reads the URL on mount, rewrites it on a state change, and marks `atlasReturn` when a card or link in `#grid-mount` is clicked outside `list`. `atlasLayerMap.ts` restores and writes the viewport.
-- `/map`: `tags-atlas/index.ts` is now a small redirect page (`/?atlas=map`, old query kept). `app.ts` no longer gates it by `tags_visibility`. `AtlasPage` (1400 lines) and `AtlasPage.test.ts` removed; `AtlasSheet` stays (layout constants).
-- `atlasReturn.ts` reduced to one `returnUrl`; `PostContent` close goes to it.
-- `ViewContext.update` carries `atlas`/`view` through page/fit changes (not filter changes).
-- Docs: `docs/plugins/tags-atlas.md`, `docs/features/tags-visualization.md`. E2E: `frontend/e2e/atlas-layer-url.test.ts`.
-- **Learnings:**
-  - TagPage's per_page fit rewrites the URL through `ViewContext.update`; any new query param must be carried there, or it is lost.
-  - Cards are not anchors (JS click on `.post-card`); catch both `.post-card` and `a[href]`.
-  - Running check.sh lanes in parallel loads the machine: smoke e2e timed out twice there, passes alone and with `--only e2e`.
-  - `tags-map` still serves `/map` when it is the enabled map plugin. No browser screenshot in this session; the e2e checks state, redirect, reload and return.
----
-
-## 2026-10-06 - p-atlas-layer-1qus.9
-- Header freeze: new `utils/headerFreeze.ts` (`isHeaderFrozen`, `onHeaderThaw`). `HeaderFold.relayout()` and the `setupHeaderCompact` check return early while `body[data-atlas-layer]` is `mapList`/`map`; each runs once when the state returns to `list`. No overlay code touched, so a state change cannot close a header overlay.
-- Files: frontend/src/utils/{headerFreeze,headerFold,headerCompact}.ts, frontend/test/headerFreeze.test.ts, frontend/e2e/atlas-layer-header.test.ts
-- **Learnings:**
-  - Both header controllers react to resize, not scroll; the freeze also covers resize and rotation while the map shows.
-  - `trustedTypes.test.ts` "tags map" flaked again (marker click intercepted); all atlas specs pass. No browser screenshot in this session.
+  - 3 tests in `atlas-layer-map.test.ts` (country shape, marker, country select) fail with and without this change. They were failing before.
+  - First-post identity is page-aligned (`refitPage`), exact on page 1. No offset API exists.
+  - `scripts/run-e2e.sh` hardcodes the test glob; copy it to run one file.
 ---

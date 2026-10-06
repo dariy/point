@@ -1,17 +1,16 @@
 configVersion = "2.1"
+defaultAgent = "claude"
 maxIterations = 0
 agent = "claude"
+model = "sonnet"
 tracker = "beads-rust-bv"
 autoCommit = true
-defaultAgent = "claude"
-model = "sonnet"
+subagentTracingDetail = "off"
 
 [agentOptions]
 [trackerOptions]
-
 [rateLimitHandling]
 enabled = true
 maxRetries = 5
 baseBackoffMs = 10000
 recoverPrimaryBetweenIterations = true
-

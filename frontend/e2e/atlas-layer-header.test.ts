@@ -82,4 +82,30 @@ describe('Atlas layer header', () => {
     await page.waitForTimeout(300);
     assert.equal(await page.locator('#probe-overlay').count(), 1);
   });
+
+  it('the map container starts at or below the timeline in every state', async () => {
+    await page.goto(BASE + '/tags/atlas-header?atlas=list-map');
+    await page.locator('.atlas-layer-handle').waitFor();
+    // The seed data has no timeline pills, so the plugin renders nothing. Stand in for it in the real mount.
+    await page.evaluate(() => {
+      const mount = document.querySelector('#timeline-mount');
+      if (!mount || mount.querySelector('.timeline-container')) return;
+      const el = document.createElement('div');
+      el.className = 'timeline-container';
+      el.style.height = '64px';
+      mount.append(el);
+    });
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('#timeline-mount .timeline-container').count(), 1);
+    for (const state of ['list', 'mapList', 'map']) {
+      await page.evaluate((v) => document.body.setAttribute('data-atlas-layer', v), state);
+      await page.waitForTimeout(350);
+      const tl = (await page.locator('#timeline-mount').boundingBox())!;
+      const hd = (await headerBox())!;
+      assert.ok(Math.abs(tl.y - (hd.y + hd.height)) <= 1, `timeline sticks under header in ${state}`);
+      if (state === 'list') continue;
+      const map = (await page.locator('.atlas-layer-map').boundingBox())!;
+      assert.ok(map.y >= tl.y + tl.height - 1, `map below timeline in ${state}`);
+    }
+  });
 });

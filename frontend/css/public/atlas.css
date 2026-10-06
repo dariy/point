@@ -657,6 +657,40 @@
     touch-action: none;
 }
 
+.atlas-layer-handle {
+    position: relative;
+}
+
+/* 44px touch target; the handle is 20px, so the button overflows it and has no fill. */
+.atlas-layer-handle__btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.atlas-layer-handle__btn:hover,
+.atlas-layer-handle__btn:focus-visible {
+    opacity: 1;
+}
+
+.atlas-layer-handle__btn--start {
+    left: 8px;
+}
+
+.atlas-layer-handle__btn--end {
+    right: 8px;
+}
+
 .atlas-layer-handle__live {
     position: absolute;
     width: 1px;
@@ -691,7 +725,7 @@ body {
     position: fixed;
     left: 0;
     right: 0;
-    top: var(--atlas-layer-header-h, 0);
+    top: var(--atlas-layer-top, var(--atlas-layer-header-h, 0));
     bottom: 0;
     z-index: 100;
     background: var(--bg-secondary, var(--bg-primary));
@@ -721,6 +755,13 @@ body[data-atlas-layer="map"] .atlas-layer-map {
 body[data-atlas-layer="mapList"],
 body[data-atlas-layer="map"] {
     overflow: hidden;
+}
+
+/* The timeline sticks under the header in every state, so the map starts below both. */
+body[data-atlas-layer] #timeline-mount {
+    position: sticky;
+    top: var(--atlas-layer-header-h, 0);
+    z-index: 109;
 }
 
 /* The handle and the card row become one strip fixed at the bottom. */

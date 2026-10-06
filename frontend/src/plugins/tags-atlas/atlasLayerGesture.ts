@@ -105,6 +105,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
 
   const onDown = (e: PointerEvent) => {
     if (start || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (e.target instanceof globalThis.Element && e.target.closest('.atlas-layer-handle__btn')) return;
     if (!startsOnControl(e.target, els(), getAtlasLayerState())) return;
     start = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, onHandle: handle.contains(e.target as Node) };
     axis = null;

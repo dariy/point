@@ -7,6 +7,7 @@
  * custom properties on `body`:
  *
  *   --atlas-layer-header-h   bottom edge of the header, in px
+ *   --atlas-layer-top        bottom edge of the header and the timeline (when shown), in px
  *   --atlas-layer-gap        gap between two cards (SHEET_GAP_PX)
  *   --atlas-layer-aspect     card width over card height (CARD_ASPECT)
  *
@@ -51,24 +52,39 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
   document.addEventListener('click', onCardClick, true);
 
   const header = document.getElementById('header-mount');
+  let timeline: HTMLElement | null = null;
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => measure()) : null;
+  // The timeline plugin fills its mount after this module runs, so find it again on every measure.
   const measure = () => {
-    const bottom = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
-    body.style.setProperty('--atlas-layer-header-h', `${bottom}px`);
+    const headerBottom = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
+    const tl = document.getElementById('timeline-mount');
+    if (tl !== timeline) {
+      if (timeline) ro?.unobserve(timeline);
+      timeline = tl;
+      if (tl) ro?.observe(tl);
+    }
+    // The timeline sticks right under the header, so its height adds to the header edge.
+    const tlHeight = tl ? Math.round(tl.getBoundingClientRect().height) : 0;
+    body.style.setProperty('--atlas-layer-header-h', `${headerBottom}px`);
+    body.style.setProperty('--atlas-layer-top', `${headerBottom + tlHeight}px`);
   };
   measure();
-  const ro = typeof ResizeObserver === 'function' && header ? new ResizeObserver(measure) : null;
   if (header) ro?.observe(header);
+  const domObserver = new MutationObserver(measure);
+  domObserver.observe(document.getElementById('app') ?? body, { childList: true, subtree: true });
   window.addEventListener('resize', measure);
 
   return () => {
     mo.disconnect();
     document.removeEventListener('click', onCardClick, true);
     ro?.disconnect();
+    domObserver.disconnect();
     window.removeEventListener('resize', measure);
     map.remove();
     // Leaving the list page must not leave the footer hidden on the next page.
     if (body.hasAttribute('data-atlas-layer')) setAtlasLayerState('list', body);
     body.style.removeProperty('--atlas-layer-header-h');
+    body.style.removeProperty('--atlas-layer-top');
     body.style.removeProperty('--atlas-layer-gap');
     body.style.removeProperty('--atlas-layer-aspect');
   };

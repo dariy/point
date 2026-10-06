@@ -1,19 +1,19 @@
 {
   "version": 1,
-  "sessionId": "8a8488c5-a688-4a76-a57f-0982b26922b3",
+  "sessionId": "ef3476c1-bada-46af-88fb-928f7907e9d5",
   "status": "running",
-  "startedAt": "2026-10-06T04:11:13.935Z",
-  "updatedAt": "2026-10-06T06:18:03.933Z",
-  "currentIteration": 8,
+  "startedAt": "2026-10-06T13:30:06.878Z",
+  "updatedAt": "2026-10-06T15:43:49.206Z",
+  "currentIteration": 3,
   "maxIterations": 0,
-  "tasksCompleted": 8,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "model": "sonnet",
   "trackerState": {
     "plugin": "beads-rust-bv",
     "executionScopes": [],
-    "totalTasks": 917,
+    "totalTasks": 927,
     "tasks": [
       {
         "id": "p-0b98.1",
@@ -124,14 +124,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-carousel-off-develop-hvt6",
-        "title": "chore(carousel): move Carousel Studio off develop onto the carousel-studio branch",
+        "id": "p-0b98.5",
+        "title": "Timeline: range readout chip + reset (filter mode)",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-0b98.5",
-        "title": "Timeline: range readout chip + reset (filter mode)",
+        "id": "p-carousel-off-develop-hvt6",
+        "title": "chore(carousel): move Carousel Studio off develop onto the carousel-studio branch",
         "status": "completed",
         "completedInSession": false
       },
@@ -142,14 +142,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-hosting-ready-vyok",
-        "title": "epic(hosting): managed-hosting readiness — setup claim token, backups on by default, real 404s (review 2026-09-28)",
+        "id": "p-0b98.7",
+        "title": "Timeline: honest collapsed state + one-time gesture hint",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-0b98.7",
-        "title": "Timeline: honest collapsed state + one-time gesture hint",
+        "id": "p-hosting-ready-vyok",
+        "title": "epic(hosting): managed-hosting readiness — setup claim token, backups on by default, real 404s (review 2026-09-28)",
         "status": "completed",
         "completedInSession": false
       },
@@ -172,14 +172,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-media-trust-dh9o",
-        "title": "epic(media): photographer-grade media and trust fixes (review 2026-09-28)",
+        "id": "p-0b98.11",
+        "title": "Timeline: momentum + extra zoom gestures",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-0b98.11",
-        "title": "Timeline: momentum + extra zoom gestures",
+        "id": "p-media-trust-dh9o",
+        "title": "epic(media): photographer-grade media and trust fixes (review 2026-09-28)",
         "status": "completed",
         "completedInSession": false
       },
@@ -208,14 +208,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-overlay-scroll-lock-leak-adlj",
-        "title": "admin: overlays leak their body scroll lock when a re-render unmounts them",
+        "id": "p-0b98.16",
+        "title": "Timeline: aria-live announcements for range changes",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-0b98.16",
-        "title": "Timeline: aria-live announcements for range changes",
+        "id": "p-overlay-scroll-lock-leak-adlj",
+        "title": "admin: overlays leak their body scroll lock when a re-render unmounts them",
         "status": "completed",
         "completedInSession": false
       },
@@ -286,6 +286,12 @@
         "completedInSession": false
       },
       {
+        "id": "p-3cfv.10",
+        "title": "ts strict: other plugins + pages/public (149 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
         "id": "p-thumb-ladder-ph12",
         "title": "epic: responsive thumbnail ladder + honest cache-busting",
         "status": "completed",
@@ -294,12 +300,6 @@
       {
         "id": "p-24ky",
         "title": "Editor's Delete action calls a method that does not exist",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-3cfv.10",
-        "title": "ts strict: other plugins + pages/public (149 errors)",
         "status": "completed",
         "completedInSession": false
       },
@@ -322,6 +322,12 @@
         "completedInSession": false
       },
       {
+        "id": "p-8ri2.3",
+        "title": "Public navigation: a tags icon button and a map icon button, independently gated",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
         "id": "p-agent-native-zjl3",
         "title": "epic: make the repo agent-native — vision + first quarter",
         "status": "completed",
@@ -334,14 +340,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-8ri2.3",
-        "title": "Public navigation: a tags icon button and a map icon button, independently gated",
+        "id": "p-8ri2.4",
+        "title": "Admin Plugins page: split the tags wireframe into a /tags panel and a /map panel",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-8ri2.4",
-        "title": "Admin Plugins page: split the tags wireframe into a /tags panel and a /map panel",
+        "id": "p-8ri2.5",
+        "title": "Docs: document the two slots — /tags for the graph, /map for the maps",
         "status": "completed",
         "completedInSession": false
       },
@@ -424,14 +430,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-8ri2.5",
-        "title": "Docs: document the two slots — /tags for the graph, /map for the maps",
+        "id": "p-agent-native-zjl3.1",
+        "title": "chore: commit agent instructions and truthful dev-loop onboarding",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-agent-native-zjl3.1",
-        "title": "chore: commit agent instructions and truthful dev-loop onboarding",
+        "id": "p-agent-native-zjl3.2",
+        "title": "ci: verify every documented command actually runs",
         "status": "completed",
         "completedInSession": false
       },
@@ -450,12 +456,6 @@
       {
         "id": "p-dwmv",
         "title": "Optimize SQLite read performance (PRAGMAs and sqlc queries)",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-agent-native-zjl3.2",
-        "title": "ci: verify every documented command actually runs",
         "status": "completed",
         "completedInSession": false
       },
@@ -547,49 +547,55 @@
         "id": "p-atlas-layer-1qus.1",
         "title": "US-001: Atlas layer state model and e2e harness",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-atlas-layer-1qus.2",
         "title": "US-002: Collapsed handle on all post list pages",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-atlas-layer-1qus.3",
         "title": "US-003: Map + list state layout",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-atlas-layer-1qus.4",
         "title": "US-004: Map-only state layout",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-atlas-layer-1qus.5",
         "title": "US-005: Map shows only the posts of the current list",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-atlas-layer-1qus.6",
         "title": "US-006: Swipe and tap gestures with map-first priority",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-atlas-layer-1qus.7",
         "title": "US-007: Desktop mouse, wheel, and keyboard",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-atlas-layer-1qus.8",
         "title": "US-008: URL state, `/map` redirect, and return from a post",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.9",
+        "title": "US-009: Header interaction",
+        "status": "completed",
+        "completedInSession": false
       },
       {
         "id": "p-x52z",
@@ -598,9 +604,69 @@
         "completedInSession": false
       },
       {
-        "id": "p-atlas-layer-1qus.9",
-        "title": "US-009: Header interaction",
+        "id": "p-atlas-layer-p2-rwea.1",
+        "title": "US-001: Atlas layer below the timeline",
         "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.2",
+        "title": "US-002: Minimized footer in the map-only state",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.3",
+        "title": "US-003: Two maximize buttons on the handle",
+        "status": "completed",
+        "completedInSession": true
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.4",
+        "title": "US-004: Free drag with snap to three positions",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.5",
+        "title": "US-005: Restore the map behavior from before the redesign",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.6",
+        "title": "US-006: Geo-tag selection filters the post list",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.7",
+        "title": "US-007: Timeline filter combined with the geo-tag filter (AND)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.8",
+        "title": "US-008: Filters in URL query parameters",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.9",
+        "title": "US-009: Fix the map+list list (same collection, adaptive page size, same first post)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-8ca7",
+        "title": "Address security scan #43: path traversal in serveSimplifiedMedia",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-uf59",
+        "title": "Fix GitHub code scanning security alerts",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -636,66 +702,6 @@
       {
         "id": "p-carousel-compose-3khd.3",
         "title": "feat(api): carousels keyed by (post_id, block_key)",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-compose-3khd.4",
-        "title": "feat(carousel): the studio addresses one block among several",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-compose-3khd.5",
-        "title": "feat(carousel): the studio adopts a plain carousel, and never deletes its photos",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-8ca7",
-        "title": "Address security scan #43: path traversal in serveSimplifiedMedia",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-uf59",
-        "title": "Fix GitHub code scanning security alerts",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-compose-3khd.6",
-        "title": "refactor(editor): visual editor reorder moves to pointer events (and gains touch)",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-compose-3khd.7",
-        "title": "feat(pointerReorder): cross-container support — per-container axis, direct-child candidates",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-compose-3khd.8",
-        "title": "feat(editor): slides reorder inside the carousel card's strip",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-compose-3khd.9",
-        "title": "feat(editor): drag a photo into a carousel and a slide back out",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s2-c3y5.2",
-        "title": "feat(carousel): document — toDeckDocument + updateSlideFraming",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s2-c3y5.3",
-        "title": "feat(carousel): deck-mode geometry — deckSlideRects + deckSlideFitCSS",
         "status": "completed",
         "completedInSession": false
       },
@@ -970,6 +976,60 @@
         "completedInSession": false
       },
       {
+        "id": "p-carousel-compose-3khd.4",
+        "title": "feat(carousel): the studio addresses one block among several",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.5",
+        "title": "feat(carousel): the studio adopts a plain carousel, and never deletes its photos",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.6",
+        "title": "refactor(editor): visual editor reorder moves to pointer events (and gains touch)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.7",
+        "title": "feat(pointerReorder): cross-container support — per-container axis, direct-child candidates",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.8",
+        "title": "feat(editor): slides reorder inside the carousel card's strip",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.9",
+        "title": "feat(editor): drag a photo into a carousel and a slide back out",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.2",
+        "title": "feat(carousel): document — toDeckDocument + updateSlideFraming",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.3",
+        "title": "feat(carousel): deck-mode geometry — deckSlideRects + deckSlideFitCSS",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea",
+        "title": "epic(atlas): redesign part 2 — timeline, footer, handle, map filter, list pagination",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
         "id": "p-carousel-s2-c3y5.4",
         "title": "feat(carousel): renderCarousel facade + renderDeck with fetch dedup",
         "status": "completed",
@@ -1044,7 +1104,7 @@
       {
         "id": "p-atlas-sheet-ft0b",
         "title": "epic(atlas): show the place's posts in a bottom sheet",
-        "status": "open",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -5523,86 +5583,36 @@
     {
       "iteration": 1,
       "status": "completed",
-      "taskId": "p-atlas-layer-1qus.1",
-      "taskTitle": "US-001: Atlas layer state model and e2e harness",
-      "taskCompleted": true,
-      "durationMs": 796207,
-      "startedAt": "2026-10-06T04:11:54.219Z",
-      "endedAt": "2026-10-06T04:25:10.426Z"
+      "taskId": "p-atlas-layer-p2-rwea.1",
+      "taskTitle": "US-001: Atlas layer below the timeline",
+      "taskCompleted": false,
+      "durationMs": 320900,
+      "startedAt": "2026-10-06T13:30:25.889Z",
+      "endedAt": "2026-10-06T13:35:46.789Z"
     },
     {
       "iteration": 2,
       "status": "completed",
-      "taskId": "p-atlas-layer-1qus.2",
-      "taskTitle": "US-002: Collapsed handle on all post list pages",
+      "taskId": "p-atlas-layer-p2-rwea.3",
+      "taskTitle": "US-003: Two maximize buttons on the handle",
       "taskCompleted": true,
-      "durationMs": 775487,
-      "startedAt": "2026-10-06T04:25:14.522Z",
-      "endedAt": "2026-10-06T04:38:10.009Z"
+      "durationMs": 785995,
+      "startedAt": "2026-10-06T13:35:49.744Z",
+      "endedAt": "2026-10-06T13:48:55.739Z"
     },
     {
       "iteration": 3,
       "status": "completed",
-      "taskId": "p-atlas-layer-1qus.3",
-      "taskTitle": "US-003: Map + list state layout",
-      "taskCompleted": true,
-      "durationMs": 726560,
-      "startedAt": "2026-10-06T04:38:13.626Z",
-      "endedAt": "2026-10-06T04:50:20.186Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "p-atlas-layer-1qus.4",
-      "taskTitle": "US-004: Map-only state layout",
-      "taskCompleted": true,
-      "durationMs": 654909,
-      "startedAt": "2026-10-06T04:50:23.822Z",
-      "endedAt": "2026-10-06T05:01:18.731Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "p-atlas-layer-1qus.5",
-      "taskTitle": "US-005: Map shows only the posts of the current list",
-      "taskCompleted": true,
-      "durationMs": 468890,
-      "startedAt": "2026-10-06T05:01:22.285Z",
-      "endedAt": "2026-10-06T05:09:11.175Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "p-atlas-layer-1qus.6",
-      "taskTitle": "US-006: Swipe and tap gestures with map-first priority",
-      "taskCompleted": true,
-      "durationMs": 558731,
-      "startedAt": "2026-10-06T05:09:14.466Z",
-      "endedAt": "2026-10-06T05:18:33.197Z"
-    },
-    {
-      "iteration": 7,
-      "status": "completed",
-      "taskId": "p-atlas-layer-1qus.7",
-      "taskTitle": "US-007: Desktop mouse, wheel, and keyboard",
-      "taskCompleted": true,
-      "durationMs": 1971568,
-      "startedAt": "2026-10-06T05:18:36.577Z",
-      "endedAt": "2026-10-06T05:51:28.145Z"
-    },
-    {
-      "iteration": 8,
-      "status": "completed",
-      "taskId": "p-atlas-layer-1qus.8",
-      "taskTitle": "US-008: URL state, `/map` redirect, and return from a post",
-      "taskCompleted": true,
-      "durationMs": 1251633,
-      "startedAt": "2026-10-06T05:51:32.253Z",
-      "endedAt": "2026-10-06T06:12:23.886Z"
+      "taskId": "p-atlas-layer-p2-rwea.5",
+      "taskTitle": "US-005: Restore the map behavior from before the redesign",
+      "taskCompleted": false,
+      "durationMs": 257327,
+      "startedAt": "2026-10-06T13:48:58.866Z",
+      "endedAt": "2026-10-06T13:53:16.193Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [],
-  "subagentPanelVisible": false
+  "subagentPanelVisible": true
 }

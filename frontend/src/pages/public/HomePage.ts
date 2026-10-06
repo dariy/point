@@ -27,7 +27,7 @@ import { html, isShortViewport, normalizeSettings } from '../../utils/helpers.ts
 import { GridPager } from '../../core/gridPager.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.ts';
-import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, watchAtlasLayer, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
 
 import type { PageProps } from '../../router.ts';
 import type { Post } from '../../api/posts.ts';
@@ -78,6 +78,7 @@ export default class HomePage extends Component<PageProps> {
   _resizeTimer: ReturnType<typeof setTimeout> | undefined;
   _resizeHandler: (() => void) | undefined;
   _unwatchChrome: (() => void) | null | undefined;
+  _unwatchAtlas: (() => void) | null | undefined;
   _canShowTimeline = false;
   _headerChild: Component | undefined;
   _footerChild: Component | undefined;
@@ -244,6 +245,8 @@ export default class HomePage extends Component<PageProps> {
     if (this._unmounted) return;
     const grid = this.$('.posts-grid');
     if (!grid) return; // static/immersive home has no grid to fill
+    // `map` hides the list; the next state change fits it again.
+    if (document.body.dataset.atlasLayer === 'map') return;
     applyZoomVar(); // reclamp the zoom column count to the current viewport
     const vc = ViewContext.current();
     // An explicit per_page in the URL is reproduced as-is on load; only an
@@ -568,6 +571,8 @@ export default class HomePage extends Component<PageProps> {
     if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
     this._unwatchChrome?.();
     this._unwatchChrome = null;
+    this._unwatchAtlas?.();
+    this._unwatchAtlas = null;
   }
 
   mount() {
@@ -576,6 +581,10 @@ export default class HomePage extends Component<PageProps> {
     applyZoomVar(); // reflect a sticky zoom before the first grid paints
     if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
     this._resizeHandler = () => this._onResize();
+    this._unwatchAtlas = watchAtlasLayer(() => {
+      this._fitLatch.reset();
+      this._reconcilePerPage({ fromResize: true });
+    });
     window.addEventListener('resize', this._resizeHandler);
     super.mount();
     this._load();

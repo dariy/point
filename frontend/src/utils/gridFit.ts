@@ -467,6 +467,13 @@ function columnsForWidth(width: number, colW: number, gap: number) {
  */
 export function computePerPage(minPerPage: number, gridEl: HTMLElement | null = null): number {
   const floor = Math.max(1, minPerPage || 1);
+  if (gridEl?.isConnected && document.body.dataset.atlasLayer === 'mapList') {
+    const strip = stripPerPage(gridEl);
+    if (strip) {
+      _cache = strip;
+      return strip;
+    }
+  }
   // The `grid-zoom` body class (set by applyZoomVar) is the single source of
   // truth for "zoom is active on this view". Only pages that opt in (home, tag)
   // add it, so other grids that share computePerPage (e.g. search) ignore zoom.
@@ -568,6 +575,46 @@ export function computePerPage(minPerPage: number, gridEl: HTMLElement | null = 
   const value = Math.min(MAX_PER_PAGE, cols * rows);
   _cache = value;
   return value;
+}
+
+/**
+ * per_page for the atlas map+list strip: one row of square cards as tall as the
+ * strip. It holds two screens of cards so the strip scrolls; the pager loads the
+ * next page at its end. It depends on the strip's size only, never on the
+ * count, so it cannot chase its own chrome. Returns 0 when the strip has no size.
+ */
+function stripPerPage(gridEl: HTMLElement): number {
+  const cs = window.getComputedStyle(gridEl);
+  const side = gridEl.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+  const width = gridEl.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+  if (side <= 0 || width <= 0) return 0;
+  const gap = parseFloat(cs.columnGap) || 0;
+  const visible = Math.ceil((width + gap) / (side + gap));
+  return Math.min(MAX_PER_PAGE, Math.max(2, visible * 2));
+}
+
+/**
+ * Call `onChange` after the atlas layer changes state and its layout settles.
+ * Each state has its own list area, so each state fits its own per_page.
+ *
+ * @returns teardown.
+ */
+export function watchAtlasLayer(onChange: () => void): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let last = document.body.dataset.atlasLayer;
+  const mo = new MutationObserver(() => {
+    const now = document.body.dataset.atlasLayer;
+    if (now === last) return;
+    last = now;
+    clearTimeout(timer);
+    // After the 0.28s slide: the strip is at its final size by then.
+    timer = setTimeout(onChange, 320);
+  });
+  mo.observe(document.body, { attributes: true, attributeFilter: ['data-atlas-layer'] });
+  return () => {
+    clearTimeout(timer);
+    mo.disconnect();
+  };
 }
 
 /**

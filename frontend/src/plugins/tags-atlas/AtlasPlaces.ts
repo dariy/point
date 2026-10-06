@@ -1,0 +1,1125 @@
+/**
+ * AtlasPlaces — the places on the layer's map, as the Atlas page drew them.
+ *
+ * Geo-tags that name a country, a Canadian province or a US state fill that
+ * shape. Every other geo-tag is a circle marker sized by its post count. A
+ * click on a place opens its tag-post graph: a cloud of chips for its posts and
+ * co-tags, fanned out on the map and wired back to the place. The code comes
+ * from the Atlas page on `develop` (before the bottom sheet) without behaviour
+ * changes. The page chrome, the timeline and the side panel stay out; the host
+ * (atlasLayerMap) owns the Leaflet map, and this module draws on it.
+ *
+ * Data: GET /api/pages/graph?posts=0 for the places, and
+ * GET /api/pages/graph/tag/{id} for one place's cloud.
+ */
+
+import { getTagsGraph, getTagCloud } from "../../api/pages.ts";
+import { getUser } from "../../store.ts";
+import { ViewContext } from "../../utils/viewContext.ts";
+import { html, navigate, raw, safeUrl } from "../../utils/helpers.ts";
+import { tagKind } from "../../utils/tagLinks.ts";
+import { LOCK_SVG } from "../../utils/icons.ts";
+import { isRevelioOn } from "../../utils/revelio.ts";
+import {
+  COUNTRIES_GEOJSON,
+  CA_PROVINCES_GEOJSON,
+  US_STATES_GEOJSON,
+} from "../../utils/leaflet.ts";
+
+import type { LeafletRef } from "../../utils/leaflet.ts";
+
+
+/** A geo-tag node from GET /api/pages/graph, with the owner-only marks. */
+export type AtlasTag = Awaited<ReturnType<typeof getTagsGraph>>["tags"][number] & ConcealMarks;
+/** An atlas tag that has a place on the map. */
+type GeoTag = AtlasTag & { latitude: number; longitude: number };
+
+/** A place's cloud payload: GET /api/pages/graph/tag/{id}. */
+export type CloudData = Awaited<ReturnType<typeof getTagCloud>>;
+
+/** The owner-only fields the backend sends only when the viewer may see hidden items. */
+export interface ConcealMarks {
+  is_hidden?: boolean;
+  status?: string;
+}
+
+
+interface Offset {
+  dx: number;
+  dy: number;
+}
+
+/** How to reselect a place without a click: where it is and how to light it. */
+interface PlaceActivator {
+  latLng: LeafletRef;
+  setActive: (on: boolean) => void;
+  key: string;
+}
+
+/** One satellite chip, before it is placed on the map. */
+interface CloudNode {
+  key: string;
+  kind: string;
+  label: string;
+  href: string;
+  max: number;
+  concealed: boolean;
+  title: string;
+  thumb?: string | null;
+}
+
+/** One connector line between two cloud chips. */
+interface CloudEdge {
+  a: string;
+  b: string;
+  line: LeafletRef;
+  baseOpacity: number;
+}
+
+/** The open on-map cloud. */
+interface Cloud {
+  anchorLatLng: LeafletRef;
+  nodePos: Map<string, Offset>;
+  sats: Array<{ key: string; marker: LeafletRef }>;
+  edges: CloudEdge[];
+  cloudNeighbors: Map<string, Set<string>>;
+  centerKey: string;
+  centerMarker: LeafletRef;
+  focusKey: string | null;
+}
+
+/** Options for a place selection. */
+interface SelectOptions {
+  /** false keeps the map still (a restore, not a user selection) */
+  pan?: boolean;
+  /** focus this post's chip once the cloud is built */
+  focusPostSlug?: string;
+}
+
+/** The fields that hold a cached boundary file. */
+type GeojsonCacheKey = "_geojson" | "_caProvinces" | "_usStates";
+
+
+/** Marker radius in px for a geo-tag, scaled by post count. */
+function markerRadius(postCount: number): number {
+  return Math.min(30, Math.max(12, 10 + Math.sqrt(postCount || 1) * 2));
+}
+
+/** Stable fill colour for a country shape, derived from its name (HSL). */
+function getCountryColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return `hsl(${Math.abs(hash % 360)}, 60%, 48%)`;
+}
+
+function isDarkTheme(): boolean {
+  const t = document.documentElement.dataset.theme;
+  return (
+    t === "dark" ||
+    (t === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+  );
+}
+
+function truncate(s: string, n: number): string {
+  s = s || "";
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+/**
+ * Owner-only marking: everything on this map that a guest would not get.
+ *
+ * The backend sends `is_hidden` on a tag node (and a non-public `status` on a
+ * post node) only when the viewer may see hidden items — i.e. never with
+ * revelio off — so these are undefined for a guest and the marking disappears
+ * along with the nodes themselves. Without it, concealing drops a handful of
+ * markers out of hundreds and the map looks unchanged.
+ */
+export function isConcealed(node: ConcealMarks): boolean {
+  return !!node.is_hidden || (!!node.status && node.status !== "published");
+}
+
+/** Tooltip naming why a node is owner-only: "(hidden)", "(draft)", "(scheduled)". */
+export function concealedTitle(node: ConcealMarks, name: string): string {
+  if (!isConcealed(node)) return name;
+  return `${name} (${node.status || "hidden"})`;
+}
+
+
+
+/**
+ * Place `count` chips on concentric rings around the origin (pixel space).
+ * Inner rings fill first; arc spacing keeps pills from colliding.
+ */
+function ringLayout(
+  count: number,
+  { startR = 66, ringGap = 46, minArc = 92 }: { startR?: number; ringGap?: number; minArc?: number } = {},
+): Offset[] {
+  const out: Offset[] = [];
+  let i = 0;
+  let ring = 0;
+  while (i < count) {
+    const radius = startR + ring * ringGap;
+    const cap = Math.max(1, Math.floor((2 * Math.PI * radius) / minArc));
+    const n = Math.min(cap, count - i);
+    const offset = (ring % 2) * 0.5; // stagger alternate rings
+    for (let k = 0; k < n; k++) {
+      const ang = ((k + offset) / n) * Math.PI * 2 - Math.PI / 2;
+      out.push({ dx: Math.cos(ang) * radius, dy: Math.sin(ang) * radius });
+    }
+    i += n;
+    ring++;
+  }
+  return out;
+}
+
+export interface AtlasPlacesOptions {
+  L: LeafletRef;
+  map: LeafletRef;
+  /** the map container; the hint and the legend go inside it */
+  root: HTMLElement;
+  /** false once the host unmounted */
+  isAlive: () => boolean;
+}
+
+export class AtlasPlaces {
+  _L: LeafletRef;
+  _map: LeafletRef;
+  _root: HTMLElement;
+  _isAlive: () => boolean;
+  _countryLayer: LeafletRef = null;
+  _markerLayer: LeafletRef = null;
+  _cloudMarkers: LeafletRef = null;
+  _cloudLines: LeafletRef = null;
+  _geojson: unknown = null;
+  _caProvinces: unknown = null;
+  _usStates: unknown = null;
+  _activeTag: AtlasTag | null = null;
+  _activeAnchor: LeafletRef | null = null;
+  _activeSetActive: ((on: boolean) => void) | null = null;
+  _activeKey: string | null = null;
+  _cloud: Cloud | null = null;
+  _cloudData: CloudData | null = null;
+  _cloudReq = 0;
+  _cloudCache: Map<string, CloudData> = new Map();
+  _placeActivators: Map<number, PlaceActivator> = new Map();
+  _hiddenTypes: Set<string> = new Set();
+  _reposition: () => void;
+  _drawSeq = 0;
+  _didFitBounds = false;
+  _tagsById: Map<number, AtlasTag> = new Map();
+  _data: { tags?: AtlasTag[] } | null = null;
+  _hint: HTMLElement | null = null;
+  _legend: HTMLElement | null = null;
+  _unmounted = false;
+
+  constructor({ L, map, root, isAlive }: AtlasPlacesOptions) {
+    this._L = L;
+    this._map = map;
+    this._root = root;
+    this._isAlive = isAlive;
+    this._reposition = () => this._repositionCloud();
+  }
+
+  get _dead(): boolean {
+    return this._unmounted || !this._isAlive();
+  }
+
+  /** Query inside the map container. */
+  $(sel: string): HTMLElement | null {
+    return this._root.querySelector<HTMLElement>(sel);
+  }
+
+  /** Build the layers and the overlays, then draw the places. */
+  async start(): Promise<void> {
+    const map = this._map;
+    const L = this._L;
+    this._countryLayer = L.layerGroup().addTo(map); // polygons (lowest)
+    this._cloudLines = L.layerGroup().addTo(map); // connectors, below markers
+    this._markerLayer = L.layerGroup().addTo(map);
+    this._cloudMarkers = L.layerGroup().addTo(map);
+
+    this._mountOverlays();
+
+    // A video post's chip asks for a poster frame that may not exist; when the
+    // request 404s, collapse the chip back to a plain label. `error` does not
+    // bubble, hence the capture-phase listener on the map pane.
+    this._root.addEventListener(
+      "error",
+      (e) => {
+        const img = e.target;
+        if (!(img instanceof HTMLImageElement)) return;
+        if (!img.classList.contains("atlas-node__thumb")) return;
+        img.closest(".atlas-node")?.classList.remove("atlas-node--has-thumb");
+        img.remove();
+      },
+      true,
+    );
+
+    // Keep the cloud pinned to its place as the zoom level changes.
+    map.on("zoomend viewreset", this._reposition);
+    // Clicking empty map dismisses the current cloud.
+    map.on("click", () => this._clearSelection());
+
+    let data;
+    try {
+      data = await getTagsGraph({ posts: 0, ...this._scopeParams() });
+    } catch {
+      return; // no places: the map stays a plain map
+    }
+    if (this._dead) return;
+    this._data = data;
+    this._buildIndexes(data);
+    await this._drawLayers(L);
+  }
+
+  /** The hint and the legend; the legend toggles hide a node type. */
+  _mountOverlays(): void {
+    const hint = document.createElement("div");
+    hint.className = "atlas-hint";
+    hint.id = "atlas-hint";
+    hint.textContent = "Click a place to reveal its tags & posts";
+    const legend = document.createElement("div");
+    legend.className = "atlas-legend";
+    legend.setAttribute("role", "group");
+    legend.setAttribute("aria-label", "Filter node types");
+    const kinds: Array<[string, string, string]> = [
+      ["geo", "geo", "Place"],
+      ["tag", "tag", "Tag"],
+      ["year", "year", "Year"],
+      ["post", "post", "Post"],
+    ];
+    if (this._canFilterHidden()) kinds.push(["concealed", "concealed", "Hidden"]);
+    for (const [type, dot, label] of kinds) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "atlas-toggle" + (type === "concealed" ? " atlas-toggle--hidden" : "");
+      btn.dataset.type = type;
+      btn.setAttribute("aria-pressed", "true");
+      if (type === "concealed") {
+        btn.title = "Hidden places and posts — switch off to see the map a guest gets";
+      }
+      const span = document.createElement("span");
+      span.className = "atlas-legend__dot atlas-legend__dot--" + dot;
+      btn.append(span, label);
+      legend.append(btn);
+    }
+    // Clicks on the overlays must not reach the map underneath.
+    this._L.DomEvent.disableClickPropagation(legend);
+    this._L.DomEvent.disableClickPropagation(hint);
+    this._root.append(hint, legend);
+    this._hint = hint;
+    this._legend = legend;
+    this._wireToggles();
+  }
+
+  /** Query params carrying the active timeline scope, if any. */
+  _scopeParams(): { year_from?: number; year_to?: number } {
+    const vc = ViewContext.current();
+    return vc.years ? { year_from: vc.years[0], year_to: vc.years[1] } : {};
+  }
+
+  /**
+   * Rebuild the place layer from `_data`, keeping the current selection if that
+   * place survived. Everything the old layer owned is dropped first, so no
+   * handler is left holding a layer that has been removed from the map.
+   */
+  async _redrawPlaces(): Promise<void> {
+    const keepTagId = this._activeTag?.id ?? null;
+    this._activeSetActive = null;
+    this._clearSelection();
+    this._countryLayer?.clearLayers();
+    this._markerLayer?.clearLayers();
+    this._placeActivators.clear();
+    this._tagsById.clear();
+    if (this._data) this._buildIndexes(this._data);
+    await this._drawLayers(this._L);
+    if (this._dead) return;
+    if (keepTagId != null && this._placeActivators.has(keepTagId)) {
+      this._selectPlaceById(keepTagId, { pan: false });
+    }
+  }
+
+  /** Remove the layers and the overlays. */
+  destroy(): void {
+    this._unmounted = true;
+    this._map.off("zoomend viewreset", this._reposition);
+    this._hint?.remove();
+    this._legend?.remove();
+    this._hint = this._legend = null;
+  }
+
+
+  /**
+   * Whether to offer the "Hidden" legend filter: only to a viewer the backend
+   * will actually mark hidden nodes for. A guest — and the owner with revelio
+   * off — receives a payload with nothing hidden in it, where the toggle would
+   * be a control that does nothing.
+   */
+  _canFilterHidden(): boolean {
+    return !!getUser() && isRevelioOn();
+  }
+
+  /** Legend toggles hide/show a node type (tag/year/post) like the /tags page. */
+  _wireToggles(): void {
+    this._root.querySelectorAll<HTMLElement>(".atlas-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const type = btn.dataset.type ?? "";
+        const turnOff = btn.getAttribute("aria-pressed") === "true";
+        btn.setAttribute("aria-pressed", String(!turnOff));
+        btn.classList.toggle("is-off", turnOff);
+        if (turnOff) this._hiddenTypes.add(type);
+        else this._hiddenTypes.delete(type);
+        // "Hidden" is the one filter that changes the map itself and not just
+        // the open cloud: a hidden place must lose its marker *and* stop
+        // matching its boundary shape, which is the whole point — the country
+        // falls back to an untagged outline, so the owner sees the map's real
+        // guest shape. That means a redraw of the place layer, not a chip
+        // refresh (the redraw re-opens the cloud on its way out).
+        if (type === "concealed" && this._map && this._data) {
+          this._redrawPlaces();
+        } else {
+          this._refreshCloud();
+        }
+      });
+    });
+  }
+
+  /** True when the legend's "Hidden" filter is off and this node is owner-only. */
+  _filteredOut(node: ConcealMarks): boolean {
+    return this._hiddenTypes.has("concealed") && isConcealed(node);
+  }
+
+  /** Index the tag (marker) nodes; the graph payload no longer carries posts. */
+  _buildIndexes(data: { tags?: AtlasTag[] }): void {
+    (data.tags || []).forEach((t) => this._tagsById.set(t.id, t));
+  }
+
+  /**
+   * Render geo-tags that name a region as GeoJSON polygon shapes (mirroring
+   * /map) and the remaining geo-tags as proportional circle markers. A geo-tag
+   * counts as a "shape" when its name matches a feature in one of the boundary
+   * files: countries.geojson (admin-0), plus canada-provinces / us-states
+   * (admin-1).
+   *
+   * Z-order is deliberate (insertion order into the shared overlay pane):
+   *   1. Unmatched subdivisions — beneath the country and non-interactive, so a
+   *      province/state with no tag never intercepts the click meant for its
+   *      country (the whole country is covered by its subdivisions).
+   *   2. Countries.
+   *   3. Matched subdivisions — above the country and clickable, so a tagged
+   *      province/state wins the click within its own borders.
+   */
+  async _drawLayers(L: LeafletRef): Promise<void> {
+    // A timeline change can start a redraw while the opening pass is still
+    // awaiting its boundary files. Both would then add to the same layers,
+    // leaving the map holding two scopes at once — so only the newest pass draws.
+    const seq = ++this._drawSeq;
+
+    // Dropping a filtered-out place here is what reshapes the map: it takes its
+    // marker with it and, because the boundary features match on this set, its
+    // country shape reverts to a plain untagged outline.
+    const geoTags = (this._data?.tags || []).filter(
+      (t: AtlasTag): t is GeoTag =>
+        typeof t.latitude === "number" &&
+        typeof t.longitude === "number" &&
+        !this._filteredOut(t),
+    );
+
+    // name (lowercased) → geo-tag, for matching against GeoJSON features.
+    const geoTagByName: Record<string, GeoTag> = {};
+    geoTags.forEach((t: GeoTag) => {
+      geoTagByName[t.name.toLowerCase()] = t;
+    });
+
+    // Fetch + cache the boundary files in parallel. Each is independent and
+    // non-fatal: a missing/failed file just drops that layer's shapes (geo-tags
+    // still fall back to circle markers below).
+    const fetchGeojson = async (cacheKey: GeojsonCacheKey, url: string) => {
+      if (this[cacheKey]) return; // already cached (a prior failure retries)
+      try {
+        const resp = await fetch(url);
+        this[cacheKey] = await resp.json();
+      } catch {
+        this[cacheKey] = null;
+      }
+    };
+    await Promise.all([
+      fetchGeojson("_geojson", COUNTRIES_GEOJSON),
+      fetchGeojson("_caProvinces", CA_PROVINCES_GEOJSON),
+      fetchGeojson("_usStates", US_STATES_GEOJSON),
+    ]);
+    if (this._dead || seq !== this._drawSeq) return;
+
+    const shapeTagIds: Set<number> = new Set();
+    const bounds: Array<[number, number]> = [];
+
+    // Draw one boundary FeatureCollection, matching each feature to a geo-tag by
+    // any of `nameProps` (lowercased). Matched features get the highlighted,
+    // clickable style; unmatched ones a faint outline. Added to _countryLayer.
+    //
+    // opts.only: null → all features; true → only matched; false → only
+    //   unmatched (used to split subdivisions across the country in z-order).
+    // opts.interactive: false → decorative path that never intercepts clicks.
+    const drawShapeLayer = (
+      geojson: unknown,
+      nameProps: string[],
+      opts: { only?: boolean | null; interactive?: boolean } = {},
+    ) => {
+      const { only = null, interactive = true } = opts;
+      const matchTag = (props: Record<string, unknown>): GeoTag | null => {
+        for (const key of nameProps) {
+          const v = props?.[key];
+          if (v && geoTagByName[String(v).toLowerCase()]) {
+            return geoTagByName[String(v).toLowerCase()];
+          }
+        }
+        return null;
+      };
+
+      const baseStyle = (feature: LeafletRef) => {
+        const props = feature.properties || {};
+        const fill = getCountryColor(props.name || "");
+        const tag = matchTag(props);
+        // A hidden place keeps its fill (so it still reads as tagged) but takes
+        // a dashed outline — the shape equivalent of the lock the rest of the
+        // site puts on owner-only items.
+        if (tag && isConcealed(tag)) {
+          return {
+            color: "#e05c00",
+            weight: 1.5,
+            opacity: 0.85,
+            dashArray: "5 4",
+            fillColor: fill,
+            fillOpacity: 0.22,
+          };
+        }
+        return tag
+          ? {
+              color: "#e05c00",
+              weight: 1.5,
+              opacity: 0.85,
+              dashArray: null,
+              fillColor: fill,
+              fillOpacity: 0.4,
+            }
+          : {
+              color: "#888",
+              weight: 0.5,
+              opacity: 0.3,
+              fillColor: fill,
+              fillOpacity: 0.08,
+            };
+      };
+
+      L.geoJSON(geojson, {
+        interactive,
+        filter:
+          only === null
+            ? undefined
+            : (feature: LeafletRef) => !!matchTag(feature.properties || {}) === only,
+        style: baseStyle,
+        onEachFeature: (feature: LeafletRef, layer: LeafletRef) => {
+          const tag = matchTag(feature.properties || {});
+          if (!tag) return;
+          shapeTagIds.add(tag.id);
+          bounds.push([tag.latitude, tag.longitude]);
+
+          const setActive = (on: boolean) =>
+            layer.setStyle(
+              on
+                ? { weight: 2.5, fillOpacity: 0.6, opacity: 1 }
+                : baseStyle(feature),
+            );
+
+          // Centroid anchor for programmatic reselection (a click uses e.latlng;
+          // returning from a post has no click point, so fall back to the tag's
+          // own coordinates).
+          this._placeActivators.set(tag.id, {
+            latLng: L.latLng(tag.latitude, tag.longitude),
+            setActive,
+            key: "c" + tag.id,
+          });
+
+          layer.on("click", (e: LeafletRef) => {
+            L.DomEvent.stop(e);
+            // Anchor the cloud where the user actually clicked: a polygon's
+            // bounding-box centre can sit far from the click (or outside the
+            // shape entirely) for sprawling or concave countries.
+            this._select(tag, e.latlng, setActive, "c" + tag.id);
+          });
+        },
+      }).addTo(this._countryLayer);
+    };
+
+    // NB: subdivisions deliberately exclude the `admin` property from matching —
+    // it is "Canada" / "United States of America" for every feature and would
+    // false-match a country tag, lighting up every province/state at once.
+    const SUBDIV_PROPS = ["name", "name_en"];
+    const subdivLayers = [this._caProvinces, this._usStates].filter(Boolean);
+
+    // 1) Untagged subdivisions beneath the country, non-interactive.
+    for (const gj of subdivLayers) {
+      drawShapeLayer(gj, SUBDIV_PROPS, { only: false, interactive: false });
+    }
+    // 2) Countries.
+    if (this._geojson) {
+      drawShapeLayer(this._geojson, [
+        "name",
+        "name_long",
+        "admin",
+        "brk_name",
+        "formal_en",
+      ]);
+    }
+    // 3) Tagged subdivisions above the country, clickable.
+    for (const gj of subdivLayers) {
+      drawShapeLayer(gj, SUBDIV_PROPS, { only: true });
+    }
+
+    // Circle markers for every geo-tag that isn't drawn as a country shape.
+    geoTags.forEach((tag: GeoTag) => {
+      if (shapeTagIds.has(tag.id)) return;
+      const r = markerRadius(tag.post_count);
+      const concealed = isConcealed(tag);
+      const icon = L.divIcon({
+        className: "atlas-marker",
+        html: `<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span>`,
+        iconSize: [r, r],
+        iconAnchor: [r / 2, r / 2],
+      });
+      const marker = L.marker([tag.latitude, tag.longitude], {
+        icon,
+        title: concealedTitle(tag, tag.name),
+      }).addTo(this._markerLayer);
+
+      const setActive = (on: boolean) =>
+        marker._icon?.classList.toggle("atlas-marker--active", on);
+
+      this._placeActivators.set(tag.id, {
+        latLng: marker.getLatLng(),
+        setActive,
+        key: "m" + tag.id,
+      });
+
+      marker.on("click", (e: LeafletRef) => {
+        L.DomEvent.stop(e); // don't let the map's click handler clear it
+        this._select(tag, marker.getLatLng(), setActive, "m" + tag.id);
+      });
+      bounds.push([tag.latitude, tag.longitude]);
+    });
+
+    // Fit to the places once, on the opening draw. A timeline redraw keeps the
+    // user's own pan and zoom — refitting on every handle drag would fling the
+    // map around while they are reading it.
+    if (bounds.length && !this._didFitBounds) {
+      this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+      this._didFitBounds = true;
+    }
+
+    this._updateHint(bounds.length);
+
+    // If we arrived here by closing a post that was opened from the Atlas,
+    // reselect its place and highlight the post chip.
+    this._restoreFromPost();
+  }
+
+  /**
+   * The idle hint doubles as the empty state: a timeline range can leave the map
+   * with no places at all, which otherwise reads as a failed load.
+   */
+  _updateHint(placeCount: number): void {
+    const hint = this.$("#atlas-hint");
+    if (!hint) return;
+    hint.textContent = placeCount
+      ? "Click a place to reveal its tags & posts"
+      : "No places in this timeline range";
+    hint.classList.toggle("atlas-hint--empty", !placeCount);
+    hint.classList.remove("is-hidden");
+  }
+
+  // ── Selection → on-map cloud ────────────────────────────────────────────────
+
+  /**
+   * Activate a place: highlight it, spawn its cloud. `setActive(bool)` toggles
+   * the source's own highlight (marker class or polygon style); `key` is a
+   * stable id identifying the place.
+   *
+   * The first click reveals the place's connections (its cloud, everything
+   * lit). Clicking the place again re-anchors its cloud to the new click point
+   * and redraws it as a fresh overview — handy for country shapes, where a
+   * second click elsewhere in the shape recentres the cloud there. The place
+   * itself never navigates; only its centre title chip opens the tag page
+   * (see the centre marker handler in _spawnCloud). Empty-map clicks dismiss.
+   */
+  _select(
+    tag: AtlasTag,
+    anchorLatLng: LeafletRef,
+    setActive: (on: boolean) => void,
+    key: string,
+    opts: SelectOptions = {},
+  ): Promise<void> | undefined {
+    if (this._activeKey === key) {
+      // Re-clicking the active place recentres its already-loaded cloud on the
+      // new click point (redraw from the new centre) instead of opening its tag
+      // page or re-fetching.
+      this._activeAnchor = anchorLatLng;
+      if (this._cloudData) {
+        this._clearCloud();
+        this._spawnCloud(tag, anchorLatLng, this._cloudData);
+      }
+      if (typeof this._map.panInside === "function") {
+        this._map.panInside(anchorLatLng, { padding: [220, 220] });
+      }
+      return;
+    }
+    this._clearCloud();
+    this._activeSetActive?.(false);
+
+    this._activeKey = key;
+    this._activeTag = tag;
+    this._activeAnchor = anchorLatLng;
+
+    setActive(true);
+    this._activeSetActive = setActive;
+
+    this.$("#atlas-hint")?.classList.add("is-hidden");
+
+    const spawned = this._loadAndSpawnCloud(tag, anchorLatLng, opts);
+
+    // Nudge the place into view if its cloud would spill off an edge. Skipped
+    // when the selection is being restored rather than made (`pan: false`, from
+    // a timeline redraw), where moving the map under the user is unwelcome.
+    if (opts.pan !== false && typeof this._map.panInside === "function") {
+      this._map.panInside(anchorLatLng, { padding: [220, 220] });
+    }
+    return spawned;
+  }
+
+  /**
+   * Fetch the place's cloud payload (10 recent posts + 10 popular co-tags,
+   * year-scoped to the active timeline range) and spawn it. Results are cached
+   * per place+year, and a monotonic request token drops the response if the user
+   * has since selected a different place. `opts.focusPostSlug` focuses a post
+   * chip once the cloud is built (used when returning from an opened post).
+   */
+  async _loadAndSpawnCloud(tag: AtlasTag, anchorLatLng: LeafletRef, opts: SelectOptions = {}): Promise<void> {
+    const vc = ViewContext.current();
+    const yearParams = vc.years ? { year_from: vc.years[0], year_to: vc.years[1] } : {};
+    const cacheKey = tag.id + "|" + (vc.years ? vc.years.join("-") : "");
+
+    const spawnFrom = (data: CloudData) => {
+      // Ignore a stale response: the user moved on to another place meanwhile.
+      if (this._dead || this._activeTag !== tag || this._activeKey == null) return;
+      this._cloudData = data;
+      this._clearCloud();
+      this._spawnCloud(tag, anchorLatLng, data);
+      if (opts.focusPostSlug) this._focusPostBySlug(opts.focusPostSlug);
+    };
+
+    const cached = this._cloudCache.get(cacheKey);
+    if (cached) {
+      spawnFrom(cached);
+      return;
+    }
+
+    const token = ++this._cloudReq;
+    try {
+      const data = await getTagCloud(tag.id, yearParams);
+      this._cloudCache.set(cacheKey, data);
+      if (token !== this._cloudReq) return; // superseded by a newer selection
+      spawnFrom(data);
+    } catch {
+      if (token === this._cloudReq && this._activeTag === tag) {
+        this._clearCloud();
+        this._cloudData = null;
+      }
+    }
+  }
+
+  /** Focus a post chip in the open cloud by its slug, if it's among the loaded posts. */
+  _focusPostBySlug(slug: string): void {
+    if (!this._cloud || !this._cloudData) return;
+    const post = (this._cloudData.posts || []).find((p) => p.slug === slug);
+    if (!post) return;
+    const key = "p" + post.id;
+    if (!this._cloud.nodePos.has(key)) return;
+    this._cloud.focusKey = key;
+    this._applyCloudFocus();
+    this._panToCloudNode(key);
+  }
+
+  /** Rebuild the active cloud in place (e.g. after a legend filter change). */
+  _refreshCloud(): void {
+    if (!this._activeTag || !this._activeAnchor || !this._cloudData) return;
+    this._clearCloud();
+    this._spawnCloud(this._activeTag, this._activeAnchor, this._cloudData);
+  }
+
+  /** Node-type bucket used for colouring + the legend filters. */
+  _kindOf(tag: { kind?: string; latitude?: number; longitude?: number }): string {
+    return tagKind(tag); // year / geo / tag — shared with the pills + tags graph
+  }
+
+  /**
+   * Build the on-map cloud from a place's fetched payload (`cloudData`): chips
+   * for its ≤10 popular co-tags and ≤10 recent posts, wired together with the
+   * membership + hierarchy edges that payload carries. The clicked tag sits at
+   * the centre (the marker / polygon itself); everything else fans out on rings
+   * around it. Legend-hidden node types are dropped.
+   */
+  _spawnCloud(tag: AtlasTag, anchorLatLng: LeafletRef, cloudData: CloudData | null): void {
+    const L = this._L;
+    if (!cloudData) return;
+    const hidden = this._hiddenTypes;
+    const centerKey = "t" + tag.id;
+
+    // Satellite tag chips (the popular co-tags; the centre is excluded by the
+    // backend). The "Place" toggle hides geo chips here (via _hiddenTypes) while
+    // leaving the map markers — and the selected place's own centre chip — untouched.
+    const tagSats: CloudNode[] = [];
+    (cloudData.tags || []).forEach((t: CloudData["tags"][number] & ConcealMarks) => {
+      if (t.id === tag.id) return;
+      const kind = this._kindOf(t);
+      if (hidden.has(kind) || this._filteredOut(t)) return;
+      tagSats.push({
+        key: "t" + t.id,
+        kind,
+        label: t.name,
+        href: `/tags/${t.slug}`,
+        max: 26,
+        concealed: isConcealed(t),
+        title: concealedTitle(t, t.name),
+      });
+    });
+
+    const postSats: CloudNode[] = [];
+    if (!hidden.has("post")) {
+      (cloudData.posts || []).forEach((p: CloudData["posts"][number] & ConcealMarks) => {
+        if (this._filteredOut(p)) return;
+        postSats.push({
+          key: "p" + p.id,
+          kind: "post",
+          label: p.title || p.slug,
+          href: `/posts/${p.slug}`,
+          max: 24,
+          concealed: isConcealed(p),
+          title: concealedTitle(p, p.title || p.slug),
+          // Media posts reveal a thumbnail when their place is selected. The
+          // server hands back a ?thumb=128 URL (atlasThumbURL), which for a
+          // video resolves to a square crop of its poster frame.
+          thumb: p.media_url || null,
+        });
+      });
+    }
+
+    // Order: places (inner, next to the centre) → other tags → posts (outer).
+    const places = tagSats.filter((n) => n.kind === "geo");
+    const otherTags = tagSats.filter((n) => n.kind !== "geo");
+    const ordered = [...places, ...otherTags, ...postSats];
+
+    const nodePos: Map<string, Offset> = new Map([[centerKey, { dx: 0, dy: 0 }]]);
+    const placed = ringLayout(ordered.length || 1);
+    ordered.forEach((n, i) => nodePos.set(n.key, placed[i]));
+
+    const anchorPt = this._map.latLngToContainerPoint(anchorLatLng);
+    const llOf = (pos: Offset) =>
+      this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy]));
+
+    // Edges first so they render beneath the chips. We also record adjacency so
+    // a chip click can light up its connections (see _expandCloudFocus).
+    const edges: CloudEdge[] = [];
+    const cloudNeighbors: Map<string, Set<string>> = new Map();
+    const link = (a: string, b: string) => {
+      let set = cloudNeighbors.get(a);
+      if (!set) cloudNeighbors.set(a, (set = new Set()));
+      set.add(b);
+    };
+    const addEdge = (a: string, b: string, kind: "hier" | "memb") => {
+      const posA = nodePos.get(a);
+      const posB = nodePos.get(b);
+      if (!posA || !posB) return;
+      link(a, b);
+      link(b, a);
+      const baseOpacity = kind === "hier" ? 0.65 : 0.45;
+      const style =
+        kind === "hier"
+          ? { color: "#1f9e8e", weight: 1.8, opacity: baseOpacity }
+          : { color: "#8a93a6", weight: 1.6, opacity: baseOpacity, dashArray: "3 4" };
+      const line = L.polyline([llOf(posA), llOf(posB)], {
+        ...style,
+        className: "atlas-link",
+        interactive: false,
+      });
+      this._cloudLines.addLayer(line);
+      edges.push({ a, b, line, baseOpacity });
+    };
+    (cloudData.hierarchyEdges || []).forEach((e) =>
+      addEdge("t" + e.parent, "t" + e.child, "hier"),
+    );
+    (cloudData.membershipEdges || []).forEach((e) =>
+      addEdge("p" + e.post, "t" + e.tag, "memb"),
+    );
+
+    const sats = ordered.map((node, i) => {
+      const ll = llOf(placed[i]);
+      // Media posts lead with a thumbnail tucked into the chip; the modifier
+      // class lets the CSS reshape the pill around it.
+      const thumbUrl = node.thumb && safeUrl(node.thumb);
+      const thumbHtml =
+        thumbUrl && thumbUrl !== "#"
+          ? html`<img class="atlas-node__thumb" src="${thumbUrl}" alt="" loading="lazy" decoding="async" />`
+          : "";
+      const thumbClass = thumbHtml ? " atlas-node--has-thumb" : "";
+      // Owner-only chips carry the site-wide lock plus a dashed ring, so a cloud
+      // read with revelio on shows which of its nodes a guest would not get.
+      const hiddenClass = node.concealed ? " atlas-node--hidden" : "";
+      const lockHtml = node.concealed ? raw(LOCK_SVG) : "";
+      const icon = L.divIcon({
+        className: "atlas-node-wrap",
+        // Leaflet tests for a primitive string, so the markup is unwrapped here.
+        html: String(html`<span class="atlas-node atlas-node--${node.kind}${thumbClass}${hiddenClass}" style="animation-delay:${i * 16}ms" title="${node.title || node.label}">${thumbHtml}${lockHtml}${truncate(node.label, node.max)}</span>`),
+        iconSize: [0, 0],
+      });
+      const marker = L.marker(ll, { icon, keyboard: false, riseOnHover: true });
+      marker.on("click", (e: LeafletRef) => {
+        L.DomEvent.stop(e);
+        this._focusCloudNode(node.key, node.href);
+      });
+      this._cloudMarkers.addLayer(marker);
+      return { key: node.key, marker };
+    });
+
+    // The selected place's title sits on its own dot at the centre, so the active
+    // node reads as a chip like the rest of the cloud instead of a bare marker.
+    // It's pinned to the anchor latlng, so it stays put across zoom without
+    // needing repositioning, and is the sole click target that opens the tag page.
+    const centerKind = this._kindOf(tag);
+    const centerConcealed = isConcealed(tag);
+    const centerIcon = L.divIcon({
+      className: "atlas-node-wrap",
+      html: String(html`<span class="atlas-node atlas-node--${centerKind} atlas-node--center${centerConcealed ? " atlas-node--hidden" : ""}" title="${concealedTitle(tag, tag.name)}">${centerConcealed ? raw(LOCK_SVG) : ""}${truncate(tag.name, 30)}</span>`),
+      iconSize: [0, 0],
+    });
+    const centerMarker = L.marker(anchorLatLng, {
+      icon: centerIcon,
+      keyboard: false,
+      riseOnHover: true,
+    });
+    // The centre title chip is the only way to open the place's tag page —
+    // clicking the place's shape/marker recentres the cloud instead. It follows
+    // the same two-click model as the satellite chips: the first click focuses
+    // it (lighting its connections), a second click on the focused centre opens
+    // the tag page.
+    centerMarker.on("click", (e: LeafletRef) => {
+      L.DomEvent.stop(e);
+      this._focusCloudNode(centerKey, `/tags/${tag.slug}`);
+    });
+    this._cloudMarkers.addLayer(centerMarker);
+
+    this._cloud = {
+      anchorLatLng,
+      nodePos,
+      sats,
+      edges,
+      cloudNeighbors,
+      centerKey,
+      centerMarker,
+      focusKey: null,
+    };
+
+    // Open the cloud as a full overview — every chip the place touches is lit.
+    // Dimming only kicks in once the user focuses a specific chip.
+    this._applyCloudFocus();
+  }
+
+  /**
+   * Chip click — two-click model matching the /tags graph: the first click on a
+   * chip highlights its connections (dimming the rest), a second click on the
+   * same chip opens it. Clicking a different chip moves the highlight.
+   */
+  _focusCloudNode(key: string, href: string): void {
+    if (!this._cloud) return;
+    if (this._cloud.focusKey === key) {
+      // Opening a post: leave a marker so closing it returns to the Atlas with
+      // this place reselected and the post chip highlighted (consumed in
+      // PostContent.onClose → handed back via `atlasReturn`).
+      if (key[0] === "p" && this._activeTag) {
+        try {
+          sessionStorage.setItem(
+            "atlasOpenContext",
+            JSON.stringify({ placeTagId: this._activeTag.id }),
+          );
+        } catch { /* ignore */ }
+      }
+      navigate(href);
+      return;
+    }
+    this._cloud.focusKey = key;
+    this._applyCloudFocus();
+  }
+
+  /**
+   * Activate a place by its tag id (programmatic equivalent of a map click).
+   * `opts` is forwarded to _select (e.g. focusPostSlug for post returns).
+   */
+  _selectPlaceById(tagId: number, opts: SelectOptions = {}): boolean {
+    const a = this._placeActivators.get(tagId);
+    const tag = this._tagsById.get(tagId);
+    if (!a || !tag) return false;
+    this._select(tag, a.latLng, a.setActive, a.key, opts);
+    return true;
+  }
+
+  /**
+   * Consume an `atlasReturn` handoff (left by closing a post opened here):
+   * reselect the place that was active when the post opened (carried as
+   * `placeTagId`) and focus the post's chip once its cloud loads. Without global
+   * post data there's no fallback — if the place is gone, we simply don't restore.
+   */
+  _restoreFromPost(): void {
+    let ctx: { postSlug?: string; placeTagId?: number } | null = null;
+    try {
+      const raw = sessionStorage.getItem("atlasReturn");
+      if (!raw) return;
+      sessionStorage.removeItem("atlasReturn");
+      ctx = JSON.parse(raw);
+    } catch { return; }
+    if (!ctx || !ctx.postSlug || ctx.placeTagId == null) return;
+
+    this._selectPlaceById(ctx.placeTagId, { focusPostSlug: ctx.postSlug });
+  }
+
+  /** Nudge the map so a cloud chip (or the anchor) sits comfortably in view. */
+  _panToCloudNode(key: string): void {
+    if (!this._cloud || typeof this._map.panInside !== "function") return;
+    const sat = this._cloud.sats.find((s) => s.key === key);
+    const ll = sat ? sat.marker.getLatLng() : this._cloud.anchorLatLng;
+    if (ll) this._map.panInside(ll, { padding: [120, 120] });
+  }
+
+  /**
+   * The highlighted set for a focused chip. A post lights its direct tags; a tag
+   * lights its neighbours and then a second hop through each adjacent post to the
+   * other tags sharing it (those get a distinct dashed ring) — the same "two
+   * joints through a shared post" reveal the /tags graph uses.
+   */
+  _expandCloudFocus(
+    nb: Map<string, Set<string>>,
+    seedKey: string,
+  ): { focus: Set<string>; related: Set<string> } {
+    const focus = new Set([seedKey]);
+    const related: Set<string> = new Set();
+    const seedIsTag = seedKey[0] === "t";
+    const neighbors = nb.get(seedKey);
+    if (neighbors) {
+      for (const n of neighbors) {
+        focus.add(n);
+        if (!seedIsTag || n[0] !== "p") continue;
+        const postNbrs = nb.get(n);
+        if (!postNbrs) continue;
+        for (const t of postNbrs) {
+          if (t === seedKey) continue;
+          focus.add(t);
+          related.add(t);
+        }
+      }
+    }
+    return { focus, related };
+  }
+
+  /**
+   * Apply the current cloud focus to chip + connector styling. The centre place
+   * is the cloud's subject, so with no satellite chip focused — the initial
+   * overview, or after returning focus to the centre — the whole cloud stays
+   * lit, showing everything the place touches. Dimming (and the dashed "related"
+   * ring) engages only once a satellite chip is focused, narrowing to that
+   * chip's direct + tag→post→tag connections.
+   */
+  _applyCloudFocus(): void {
+    if (!this._cloud) return;
+    const { sats, edges, focusKey, centerKey, centerMarker, cloudNeighbors } = this._cloud;
+    // Focusing the centre re-shows the full overview — every chip lit, exactly
+    // as the cloud first opened. The centre is the cloud's subject, so
+    // "selecting" it means lighting everything it touches rather than narrowing
+    // to a single chip's connections.
+    const data =
+      focusKey && focusKey !== centerKey
+        ? this._expandCloudFocus(cloudNeighbors, focusKey)
+        : null;
+    const focus = data && data.focus;
+    const related = data && data.related;
+
+    for (const s of sats) {
+      const el = s.marker._icon?.firstElementChild;
+      if (!el) continue;
+      const inFocus = !focus || focus.has(s.key);
+      el.classList.toggle("atlas-node--dim", !inFocus);
+      el.classList.toggle("atlas-node--sel", focusKey === s.key);
+      el.classList.toggle(
+        "atlas-node--related",
+        !!(related && related.has(s.key) && focusKey && focusKey !== s.key),
+      );
+    }
+
+    // The centre place is the cloud's subject. In the overview (no chip focused)
+    // it stays the bold, lit anchor; when it is itself focused it keeps that
+    // selected look. Once a *different* chip is focused the centre is no longer
+    // the active selection, but every cloud node is a connection of the place,
+    // so it must stay visible — it only sheds its filled accent for a plain
+    // outline (never dimmed) to show it's no longer selected.
+    const centerEl = centerMarker?._icon?.firstElementChild;
+    if (centerEl) {
+      centerEl.classList.toggle(
+        "atlas-node--center-blur",
+        !!focusKey && focusKey !== centerKey,
+      );
+    }
+
+    for (const e of edges) {
+      const lit = !focus || (focus.has(e.a) && focus.has(e.b));
+      e.line.setStyle({ opacity: lit ? e.baseOpacity : e.baseOpacity * 0.12 });
+    }
+  }
+
+  _repositionCloud(): void {
+    if (!this._cloud || !this._map) return;
+    const { anchorLatLng, nodePos, sats, edges } = this._cloud;
+    const anchorPt = this._map.latLngToContainerPoint(anchorLatLng);
+    // Pass the offset as an [x, y] array — Leaflet's Point.add() doesn't
+    // understand a {dx, dy} object and would yield NaN coordinates, flinging
+    // the whole cloud across the map on the first zoom.
+    const llOf = (key: string) => {
+      const pos = nodePos.get(key);
+      return pos ? this._map.containerPointToLatLng(anchorPt.add([pos.dx, pos.dy])) : null;
+    };
+    sats.forEach((s) => {
+      const ll = llOf(s.key);
+      if (ll) s.marker.setLatLng(ll);
+    });
+    edges.forEach((e) => {
+      const a = llOf(e.a);
+      const b = llOf(e.b);
+      if (a && b) e.line.setLatLngs([a, b]);
+    });
+  }
+
+  _clearCloud(): void {
+    this._cloudMarkers?.clearLayers();
+    this._cloudLines?.clearLayers();
+    this._cloud = null;
+  }
+
+  _clearSelection(): void {
+    this._clearCloud();
+    this._cloudData = null;
+    this._cloudReq++; // invalidate any in-flight cloud fetch for the cleared place
+    this._activeSetActive?.(false);
+    this._activeSetActive = null;
+    this._activeKey = null;
+    this._activeTag = null;
+    this._activeAnchor = null;
+    this.$("#atlas-hint")?.classList.remove("is-hidden");
+  }
+}
