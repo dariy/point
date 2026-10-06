@@ -26,6 +26,7 @@ import {
 import { html, isShortViewport, normalizeSettings } from '../../utils/helpers.ts';
 import { GridPager } from '../../core/gridPager.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
+import { listRequest } from '../../utils/listFilter.ts';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.ts';
 import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, watchAtlasLayer, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
 
@@ -226,9 +227,11 @@ export default class HomePage extends Component<PageProps> {
   /** The home feed, or the posts of the geo-tag picked on the atlas map. */
   _fetchFeed(vc: GridViewParams): ReturnType<typeof getHomePage> {
     const params = this._buildParams(vc);
-    if (!vc.place) return getHomePage(params);
+    // One shared filter state decides the request; the map and timeline only set it.
+    const req = listRequest({ place: vc.place, years: vc.years });
+    if (!req.place) return getHomePage(params);
     // The tag page carries the same posts and pagination; only the chrome differs.
-    return getTagPage(vc.place, params) as unknown as ReturnType<typeof getHomePage>;
+    return getTagPage(req.place, params) as unknown as ReturnType<typeof getHomePage>;
   }
 
   /** The removable chip that names the active geo-tag filter. */
@@ -257,9 +260,10 @@ export default class HomePage extends Component<PageProps> {
     const perPage = vc.perPage || cachedPerPage(this._minPerPage());
     this._loadedPerPage = perPage;
     const params: GridFetchParams = { page: vc.page, per_page: perPage };
-    if (vc.years) {
-      params.year_from = vc.years[0];
-      params.year_to = vc.years[1];
+    const { year_from, year_to } = listRequest({ place: vc.place, years: vc.years });
+    if (year_from !== undefined) {
+      params.year_from = year_from;
+      params.year_to = year_to;
     }
     if (vc.query) params.q = vc.query;
     if (vc.tag) params.tag = vc.tag;

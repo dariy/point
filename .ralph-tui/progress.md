@@ -101,3 +101,11 @@ after each iteration and it's included in prompts for context.
   - `GridPager.disarm()` destroyed the layout (the map container) and the map on every list refresh, so a selection died on any refit. `disarm()` now keeps both; `destroy()` releases them.
   - In `scripts/check.sh` the e2e step flakes on "handle not visible" or tile tests in a different place each run; the baseline without this change flakes too. Atlas e2e passes alone.
 ---
+
+## 2026-10-06 - p-atlas-layer-p2-rwea.7
+- New `utils/listFilter.ts`: one pure filter state (`place`, `years`) with `withPlace`, `withYears`, `isFiltered`, `listRequest`. `HomePage._fetchFeed` and `_buildParams` read the request from it, so geo-tag AND time range go in one call. `ViewContext.update` now keeps the `atlas` and `view` params when only `years` changes (before, a timeline change dropped the map state).
+- Files: `frontend/src/utils/listFilter.ts`, `frontend/test/listFilter.test.ts`, `pages/public/HomePage.ts`, `utils/viewContext.ts`.
+- Checked: `check.sh --short` passes (unit tests for each filter, both, clearing each). Not checked: e2e, playwright-cli at 390×844 and 820×1180.
+- **Learnings:**
+  - The tag-page endpoint already takes `year_from`/`year_to`, so the AND needs no API change.
+---

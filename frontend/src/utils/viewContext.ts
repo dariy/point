@@ -127,8 +127,8 @@ export class ViewContext {
     if ('place' in changes) next.place = changes.place ?? null;
 
     // Reset page to 1 if primary filters change, unless page was explicitly provided
-    const filtersChanged = ('tag' in changes || 'query' in changes || 'years' in changes);
-    if ((filtersChanged || 'place' in changes) && !('page' in changes)) {
+    const filtersChanged = ('tag' in changes || 'query' in changes);
+    if ((filtersChanged || 'place' in changes || 'years' in changes) && !('page' in changes)) {
       next.page = 1;
     }
 
