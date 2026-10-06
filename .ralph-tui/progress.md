@@ -59,3 +59,7 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - 3 tests in `atlas-layer-map.test.ts` still fail (pre-existing). Follow up in a separate bead.
 ---
+
+## 2026-10-06 - p-atlas-layer-p2-rwea.1 (verify pass)
+- Work already existed. Re-ran `scripts/check.sh`: all pass except 3 known `atlas-layer-map.test.ts` failures (pre-existing). Bead closed.
+---
