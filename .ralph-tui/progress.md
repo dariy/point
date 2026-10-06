@@ -10,13 +10,13 @@ after each iteration and it's included in prompts for context.
 ---
 
 
-## 2026-10-05 - p-atlas-sheet-ft0b.1
-- Added `edgeArrows` and `onVerticalSwipe` to GridPager, `onOpen` to PostCard and PostGrid.
-- New `utils/atlasReturn.ts` owns both sessionStorage keys. PostContent close now goes to `takeAtlasReturn(slug)` (`/map` fallback), not `/tags`.
-- Atlas writes `returnUrl` as `pathname + search`. TagPage and PostPage clear the open marker.
-- Files: core/gridPager.ts, components/public/{PostCard,PostGrid,PostContent}.ts, pages/public/{PostPage,TagPage}.ts, plugins/tags-atlas/index.ts, utils/atlasReturn.ts, tests (gridPager, postCardOpen, atlasReturn, AtlasPage).
+## 2026-10-06 - p-atlas-layer-1qus.1
+- Added `atlasLayerState.ts`: `AtlasLayerState`, pure `next`/`prev`/`cycle`, plus body-attribute get/set/clear helpers.
+- `app.ts` sets `data-atlas-layer="list"` on `<body>` at boot when `tags-atlas` is enabled.
+- Unit tests in `frontend/test/atlasLayerState.test.ts`. E2E in `frontend/e2e/atlas-layer.test.ts`.
+- Files: frontend/src/plugins/tags-atlas/atlasLayerState.ts, frontend/src/app.ts, frontend/test/atlasLayerState.test.ts, frontend/e2e/atlas-layer.test.ts
 - **Learnings:**
-  - `memoryStorage` is in `test/helpers/mock.ts`. Atlas tests that write `returnUrl` must stub `globalThis.location`.
-  - `edgeArrows: false` sets `_navArrows = []` so teardown still works.
-  - Not done: browser check on :8001; branch push and draft PR.
+  - E2E files live in `frontend/e2e/*.test.ts` (node --test glob), not `e2e/*.spec.ts` as the PRD says. Later stories add `atlas-*.test.ts` there.
+  - `tags-atlas` is `DefaultEnabled: true`, so a fresh e2e DB has it on; no enable step is needed.
+  - The e2e server is a fresh DB per run; each file calls `/api/setup` and accepts 409.
 ---

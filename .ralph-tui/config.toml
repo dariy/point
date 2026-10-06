@@ -8,3 +8,10 @@ model = "sonnet"
 
 [agentOptions]
 [trackerOptions]
+
+[rateLimitHandling]
+enabled = true
+maxRetries = 5
+baseBackoffMs = 10000
+recoverPrimaryBetweenIterations = true
+

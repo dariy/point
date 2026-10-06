@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "e9b79cbd-95c7-4547-8f03-c863a13934b9",
+  "sessionId": "8a8488c5-a688-4a76-a57f-0982b26922b3",
   "status": "running",
-  "startedAt": "2026-10-05T21:31:31.392Z",
-  "updatedAt": "2026-10-05T21:46:03.198Z",
+  "startedAt": "2026-10-06T04:11:13.935Z",
+  "updatedAt": "2026-10-06T04:25:10.794Z",
   "currentIteration": 0,
   "maxIterations": 0,
   "tasksCompleted": 0,
@@ -13,7 +13,7 @@
   "trackerState": {
     "plugin": "beads-rust-bv",
     "executionScopes": [],
-    "totalTasks": 905,
+    "totalTasks": 917,
     "tasks": [
       {
         "id": "p-0b98.1",
@@ -118,14 +118,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-carousel-off-develop-hvt6",
-        "title": "chore(carousel): move Carousel Studio off develop onto the carousel-studio branch",
+        "id": "p-0b98.4",
+        "title": "Timeline: touch target sizes",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-0b98.4",
-        "title": "Timeline: touch target sizes",
+        "id": "p-carousel-off-develop-hvt6",
+        "title": "chore(carousel): move Carousel Studio off develop onto the carousel-studio branch",
         "status": "completed",
         "completedInSession": false
       },
@@ -136,14 +136,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-hosting-ready-vyok",
-        "title": "epic(hosting): managed-hosting readiness — setup claim token, backups on by default, real 404s (review 2026-09-28)",
+        "id": "p-0b98.6",
+        "title": "Timeline: density histogram",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-0b98.6",
-        "title": "Timeline: density histogram",
+        "id": "p-hosting-ready-vyok",
+        "title": "epic(hosting): managed-hosting readiness — setup claim token, backups on by default, real 404s (review 2026-09-28)",
         "status": "completed",
         "completedInSession": false
       },
@@ -166,14 +166,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-media-trust-dh9o",
-        "title": "epic(media): photographer-grade media and trust fixes (review 2026-09-28)",
+        "id": "p-0b98.10",
+        "title": "Timeline: bottom sheet for mobile locations popover",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-0b98.10",
-        "title": "Timeline: bottom sheet for mobile locations popover",
+        "id": "p-media-trust-dh9o",
+        "title": "epic(media): photographer-grade media and trust fixes (review 2026-09-28)",
         "status": "completed",
         "completedInSession": false
       },
@@ -202,14 +202,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-overlay-scroll-lock-leak-adlj",
-        "title": "admin: overlays leak their body scroll lock when a re-render unmounts them",
+        "id": "p-0b98.15",
+        "title": "Timeline: consolidate range indicators into one inline centered chip",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-0b98.15",
-        "title": "Timeline: consolidate range indicators into one inline centered chip",
+        "id": "p-overlay-scroll-lock-leak-adlj",
+        "title": "admin: overlays leak their body scroll lock when a re-render unmounts them",
         "status": "completed",
         "completedInSession": false
       },
@@ -280,6 +280,12 @@
         "completedInSession": false
       },
       {
+        "id": "p-3cfv.9",
+        "title": "ts strict: plugins comments, nav-menu, timeline, public-header (179 errors)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
         "id": "p-thumb-ladder-ph12",
         "title": "epic: responsive thumbnail ladder + honest cache-busting",
         "status": "completed",
@@ -288,12 +294,6 @@
       {
         "id": "p-24ky",
         "title": "Editor's Delete action calls a method that does not exist",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-3cfv.9",
-        "title": "ts strict: plugins comments, nav-menu, timeline, public-header (179 errors)",
         "status": "completed",
         "completedInSession": false
       },
@@ -316,6 +316,12 @@
         "completedInSession": false
       },
       {
+        "id": "p-8ri2.2",
+        "title": "Frontend: add the /map route claimed by map-route; /tags resolves the graph only",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
         "id": "p-agent-native-zjl3",
         "title": "epic: make the repo agent-native — vision + first quarter",
         "status": "completed",
@@ -328,14 +334,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-8ri2.2",
-        "title": "Frontend: add the /map route claimed by map-route; /tags resolves the graph only",
+        "id": "p-8ri2.3",
+        "title": "Public navigation: a tags icon button and a map icon button, independently gated",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-8ri2.3",
-        "title": "Public navigation: a tags icon button and a map icon button, independently gated",
+        "id": "p-8ri2.4",
+        "title": "Admin Plugins page: split the tags wireframe into a /tags panel and a /map panel",
         "status": "completed",
         "completedInSession": false
       },
@@ -418,14 +424,14 @@
         "completedInSession": false
       },
       {
-        "id": "p-8ri2.4",
-        "title": "Admin Plugins page: split the tags wireframe into a /tags panel and a /map panel",
+        "id": "p-8ri2.5",
+        "title": "Docs: document the two slots — /tags for the graph, /map for the maps",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-8ri2.5",
-        "title": "Docs: document the two slots — /tags for the graph, /map for the maps",
+        "id": "p-agent-native-zjl3.1",
+        "title": "chore: commit agent instructions and truthful dev-loop onboarding",
         "status": "completed",
         "completedInSession": false
       },
@@ -444,12 +450,6 @@
       {
         "id": "p-dwmv",
         "title": "Optimize SQLite read performance (PRAGMAs and sqlc queries)",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-agent-native-zjl3.1",
-        "title": "chore: commit agent instructions and truthful dev-loop onboarding",
         "status": "completed",
         "completedInSession": false
       },
@@ -544,21 +544,81 @@
         "completedInSession": false
       },
       {
+        "id": "p-atlas-layer-1qus.1",
+        "title": "US-001: Atlas layer state model and e2e harness",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.2",
+        "title": "US-002: Collapsed handle on all post list pages",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.3",
+        "title": "US-003: Map + list state layout",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.4",
+        "title": "US-004: Map-only state layout",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.5",
+        "title": "US-005: Map shows only the posts of the current list",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.6",
+        "title": "US-006: Swipe and tap gestures with map-first priority",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.7",
+        "title": "US-007: Desktop mouse, wheel, and keyboard",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.8",
+        "title": "US-008: URL state, `/map` redirect, and return from a post",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z",
+        "title": "Public frontend UX overhaul",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus.9",
+        "title": "US-009: Header interaction",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
         "id": "p-atlas-sheet-ft0b.1",
         "title": "fix(atlas): return to /map from a post, plus sheet hooks in GridPager and PostCard",
-        "status": "open",
+        "status": "completed",
         "completedInSession": false
       },
       {
         "id": "p-atlas-sheet-ft0b.2",
         "title": "feat(atlas): AtlasSheet, a bottom sheet with one row of post cards",
-        "status": "open",
+        "status": "completed",
         "completedInSession": false
       },
       {
         "id": "p-atlas-sheet-ft0b.3",
         "title": "feat(atlas): replace the side panel with the bottom sheet",
-        "status": "open",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -586,14 +646,20 @@
         "completedInSession": false
       },
       {
-        "id": "p-x52z",
-        "title": "Public frontend UX overhaul",
+        "id": "p-carousel-compose-3khd.5",
+        "title": "feat(carousel): the studio adopts a plain carousel, and never deletes its photos",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-carousel-compose-3khd.5",
-        "title": "feat(carousel): the studio adopts a plain carousel, and never deletes its photos",
+        "id": "p-8ca7",
+        "title": "Address security scan #43: path traversal in serveSimplifiedMedia",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-uf59",
+        "title": "Fix GitHub code scanning security alerts",
         "status": "completed",
         "completedInSession": false
       },
@@ -630,66 +696,6 @@
       {
         "id": "p-carousel-s2-c3y5.3",
         "title": "feat(carousel): deck-mode geometry — deckSlideRects + deckSlideFitCSS",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s2-c3y5.4",
-        "title": "feat(carousel): renderCarousel facade + renderDeck with fetch dedup",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s2-c3y5.5",
-        "title": "feat(carousel): studio deck mode — doc as state, pan/zoom, CSS preview",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-8ca7",
-        "title": "Address security scan #43: path traversal in serveSimplifiedMedia",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-uf59",
-        "title": "Fix GitHub code scanning security alerts",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s2-c3y5.6",
-        "title": "feat(carousel): background fill — contain letterbox, gradient, per-slide picker",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s2-c3y5.7",
-        "title": "docs(carousel): graduate the S2 design into carousel-studio.md",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s3-ycna.1",
-        "title": "feat(carousel): layer schema — normalizeLayer, mutators, spanLayers in specHash",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s3-ycna.2",
-        "title": "feat(carousel): layer geometry — layerRect/layerCSS pair + spanLayerRect",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s3-ycna.3",
-        "title": "feat(carousel): paint text layers — theme font stack, wrap and auto-fit",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-carousel-s3-ycna.4",
-        "title": "feat(carousel): paint image, rect, counter and arrow layers",
         "status": "completed",
         "completedInSession": false
       },
@@ -961,6 +967,60 @@
         "id": "p-4ri",
         "title": "Tag ancestor flyout — global navTags cache + router fix + public page wiring",
         "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.4",
+        "title": "feat(carousel): renderCarousel facade + renderDeck with fetch dedup",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.5",
+        "title": "feat(carousel): studio deck mode — doc as state, pan/zoom, CSS preview",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.6",
+        "title": "feat(carousel): background fill — contain letterbox, gradient, per-slide picker",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s2-c3y5.7",
+        "title": "docs(carousel): graduate the S2 design into carousel-studio.md",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.1",
+        "title": "feat(carousel): layer schema — normalizeLayer, mutators, spanLayers in specHash",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.2",
+        "title": "feat(carousel): layer geometry — layerRect/layerCSS pair + spanLayerRect",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.3",
+        "title": "feat(carousel): paint text layers — theme font stack, wrap and auto-fit",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-s3-ycna.4",
+        "title": "feat(carousel): paint image, rect, counter and arrow layers",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-1qus",
+        "title": "epic(atlas): map layer on post list pages",
+        "status": "open",
         "completedInSession": false
       },
       {
@@ -4183,6 +4243,18 @@
         "id": "p-24m",
         "title": "Implement custom error response format for Go API",
         "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-xdaw",
+        "title": "fix(atlas): the sheet shows 2 cards on a 390px phone, not about 3",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-vfhf",
+        "title": "fix(atlas): the sheet paginator shows the old place's pages during a place change",
+        "status": "open",
         "completedInSession": false
       },
       {
