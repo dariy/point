@@ -16,9 +16,10 @@
 import { Component } from "../../components/Component.ts";
 
 import { pluginHost } from "../../core/pluginHost.ts";
-import { getTagsGraph, getTagCloud, getTagPage } from "../../api/pages.ts";
+import { getTagsGraph, getTagCloud } from "../../api/pages.ts";
 import { getSettings, getUser } from "../../store.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
+import { AtlasSheet } from "./AtlasSheet.ts";
 import { markAtlasOpen, consumeAtlasReturn } from "../../utils/atlasReturn.ts";
 import { setPageTitle } from "../../utils/documentTitle.ts";
 import {
@@ -27,7 +28,6 @@ import {
   raw,
   safeUrl,
   setCanonical,
-  setHTML,
   removeCanonical,
 } from "../../utils/helpers.ts";
 import { tagKind } from "../../utils/tagLinks.ts";
@@ -61,22 +61,6 @@ export type CloudData = Awaited<ReturnType<typeof getTagCloud>>;
 export interface ConcealMarks {
   is_hidden?: boolean;
   status?: string;
-}
-
-/** The side panel content that {@link panelHtml} renders. */
-export interface PanelView {
-  tag: { name: string };
-  posts: Post[];
-  page: number;
-  pages: number;
-  total: number | null;
-  loading: boolean;
-  error: string | null;
-}
-
-/** The open side panel: the selected place and the pages loaded so far. */
-interface AtlasPanel extends PanelView {
-  tag: AtlasTag;
 }
 
 /** A pixel offset from the cloud's anchor. */
@@ -130,6 +114,9 @@ interface SelectOptions {
   pan?: boolean;
   /** focus this post's chip once the cloud is built */
   focusPostSlug?: string;
+  /** the sheet page to show, counted in pages of `sheetPerPage` cards */
+  sheetPage?: number;
+  sheetPerPage?: number;
 }
 
 /** The fields that hold a cached boundary file. */
@@ -179,38 +166,6 @@ export function isConcealed(node: ConcealMarks): boolean {
 export function concealedTitle(node: ConcealMarks, name: string): string {
   if (!isConcealed(node)) return name;
   return `${name} (${node.status || "hidden"})`;
-}
-
-/** The width at which the side panel joins the cloud (as PostEditPage). */
-const DESKTOP_QUERY = "(min-width: 64em)";
-
-/**
- * Markup for the side panel's content: the place name, its post count, one row
- * per post that the active filters keep, and a "more" button while pages remain.
- *
- * @param panel
- * @param skip - true for a post the filters drop
- */
-export function panelHtml(panel: PanelView, skip: (post: Post) => boolean = () => false) {
-  const rows = panel.posts.filter((p) => !skip(p));
-  const count = panel.total == null ? "" : `${panel.total} post${panel.total === 1 ? "" : "s"}`;
-  return html`
-    <header class="atlas-panel__head">
-      <div>
-        <h2 class="atlas-panel__title">${panel.tag.name}</h2>
-        <p class="atlas-panel__count">${count}</p>
-      </div>
-      <button type="button" class="atlas-panel__close" data-action="close" aria-label="Close panel">×</button>
-    </header>
-    <ul class="atlas-panel__list">
-      ${rows.map((p) => html`<li><a class="atlas-panel__post${isConcealed(p) ? " is-concealed" : ""}" href="/posts/${p.slug}" data-slug="${p.slug}">
-        <span class="atlas-panel__post-title">${concealedTitle(p, p.title || p.slug)}</span>
-        ${p.published_at ? html`<span class="atlas-panel__post-date">${p.published_at.slice(0, 10)}</span>` : ""}
-      </a></li>`)}
-    </ul>
-    ${panel.error ? html`<p class="atlas-panel__error" role="alert">${panel.error}</p>` : ""}
-    ${panel.loading ? html`<p class="atlas-panel__loading" aria-busy="true">Loading…</p>`
-      : panel.page < panel.pages ? html`<button type="button" class="atlas-panel__more btn btn-secondary btn-sm" data-action="more">More posts</button>` : ""}`;
 }
 
 /**
@@ -265,8 +220,7 @@ export default class AtlasPage extends Component<PageProps> {
   _drawSeq: number;
   _didFitBounds: boolean;
   _timeline: TimelineHandle | null;
-  _panel: AtlasPanel | null;
-  _panelReq: number;
+  _sheet: AtlasSheet | null;
   _tagsById: Map<number, AtlasTag>;
 
   constructor(container: HTMLElement, props?: PageProps) {
@@ -300,9 +254,8 @@ export default class AtlasPage extends Component<PageProps> {
 
     this._timeline = null;
 
-    // Desktop side panel: every post of the selected place, page by page.
-    this._panel = null; // { tag, posts, page, pages, total, loading, error }
-    this._panelReq = 0; // monotonic token; a newer place or a close drops older pages
+    // The bottom sheet: every post of the selected place, one row per page.
+    this._sheet = null;
 
     // The only index needed up front: tag id -> tag node (markers + selection).
     // Posts and co-tags are no longer loaded globally — each place fetches its
@@ -346,7 +299,6 @@ export default class AtlasPage extends Component<PageProps> {
         <main class="site-main site-main--atlas">
           <div class="atlas-map">
             <div id="atlas-map-el"></div>
-            <aside class="atlas-panel" id="atlas-panel" aria-label="Posts of the place" hidden></aside>
             <div class="atlas-hint" id="atlas-hint">Click a place to reveal its tags &amp; posts</div>
             <div class="atlas-legend" role="group" aria-label="Filter node types">
               <button type="button" class="atlas-toggle" data-type="geo" aria-pressed="true"><span class="atlas-legend__dot atlas-legend__dot--geo"></span>Place</button>
@@ -356,6 +308,7 @@ export default class AtlasPage extends Component<PageProps> {
               ${this._canFilterHidden() ? html`<button type="button" class="atlas-toggle atlas-toggle--hidden" data-type="concealed" aria-pressed="true"
                         title="Hidden places and posts — switch off to see the map a guest gets"><span class="atlas-legend__dot atlas-legend__dot--concealed"></span>Hidden</button>` : ""}
             </div>
+            <div id="atlas-sheet-mount"></div>
           </div>
         </main>
         <div id="footer-mount"></div>
@@ -401,8 +354,18 @@ export default class AtlasPage extends Component<PageProps> {
     if (this.state.error || !this.state.data) return;
 
     this._wireToggles();
-    this._wirePanel();
+    this._mountSheet();
     this._initMap();
+  }
+
+  /** Mount the bottom sheet that shows the selected place's posts. */
+  _mountSheet(): void {
+    this._sheet = this.mountChild(AtlasSheet, "#atlas-sheet-mount", {
+      skip: (post) => this._filteredOut(post),
+      scope: () => this._scopeParams(),
+      onOpenPost: (post, page, perPage) => this._openPost(post.slug, page, perPage),
+      onToggle: (open) => this.$(".atlas-map")?.classList.toggle("has-sheet", open),
+    });
   }
 
   /**
@@ -464,7 +427,7 @@ export default class AtlasPage extends Component<PageProps> {
     if (this._unmounted || !this._map || token !== this._graphReq) return;
 
     this.state.data = data;
-    this._redrawPlaces();
+    this._redrawPlaces({ samePage: false });
   }
 
   /**
@@ -473,13 +436,16 @@ export default class AtlasPage extends Component<PageProps> {
    * markers, and the activators closing over them — is dropped first, so no
    * handler is left holding a layer that has been removed from the map.
    */
-  async _redrawPlaces(): Promise<void> {
+  async _redrawPlaces({ samePage = true }: { samePage?: boolean } = {}): Promise<void> {
     const keepTagId = this._activeTag?.id ?? null;
+    const sheetPage = samePage ? this._sheet?.page ?? 1 : 1;
+    const sheetPerPage = this._sheet?._perPage;
 
     // Drop the highlight callback before its layer goes: it closes over the old
     // marker/polygon, and styling one already removed from the map throws.
+    // The sheet stays up through the redraw; the reselect below refreshes it.
     this._activeSetActive = null;
-    this._clearSelection();
+    this._clearSelection({ keepSheet: true });
 
     this._countryLayer?.clearLayers();
     this._markerLayer?.clearLayers();
@@ -492,8 +458,11 @@ export default class AtlasPage extends Component<PageProps> {
     if (this._unmounted || !this._map) return;
 
     // Re-open the place the user was looking at, when the range still has it.
+    // A timeline change shows page 1; the "Hidden" toggle keeps the page.
     if (keepTagId != null && this._placeActivators.has(keepTagId)) {
-      this._selectPlaceById(keepTagId, { pan: false });
+      this._selectPlaceById(keepTagId, { pan: false, sheetPage, sheetPerPage });
+    } else {
+      this._sheet?.hide();
     }
   }
 
@@ -926,8 +895,10 @@ export default class AtlasPage extends Component<PageProps> {
         this._clearCloud();
         this._spawnCloud(tag, anchorLatLng, this._cloudData);
       }
+      // A collapsed sheet slides up again.
+      this._sheet?.expand();
       if (typeof this._map.panInside === "function") {
-        this._map.panInside(anchorLatLng, { padding: [220, 220] });
+        this._map.panInside(anchorLatLng, this._panPadding(220));
       }
       return;
     }
@@ -944,15 +915,25 @@ export default class AtlasPage extends Component<PageProps> {
     this.$("#atlas-hint")?.classList.add("is-hidden");
 
     const spawned = this._loadAndSpawnCloud(tag, anchorLatLng, opts);
-    this._openPanel(tag);
+    this._sheet?.show(
+      { id: tag.id, slug: tag.slug, name: tag.name },
+      { page: opts.sheetPage, perPage: opts.sheetPerPage },
+    );
 
     // Nudge the place into view if its cloud would spill off an edge. Skipped
     // when the selection is being restored rather than made (`pan: false`, from
     // a timeline redraw), where moving the map under the user is unwelcome.
     if (opts.pan !== false && typeof this._map.panInside === "function") {
-      this._map.panInside(anchorLatLng, { padding: [220, 220] });
+      this._map.panInside(anchorLatLng, this._panPadding(220));
     }
     return spawned;
+  }
+
+  /** panInside padding of `px` on every side, plus the open sheet's height at the bottom. */
+  _panPadding(px: number): { paddingTopLeft: [number, number]; paddingBottomRight: [number, number] } {
+    const sheetEl = this.$(".atlas-sheet") as HTMLElement | null;
+    const sheetH = this._sheet?.isOpen ? sheetEl?.offsetHeight || 0 : 0;
+    return { paddingTopLeft: [px, px], paddingBottomRight: [px, px + sheetH] };
   }
 
   /**
@@ -1060,7 +1041,7 @@ export default class AtlasPage extends Component<PageProps> {
           key: "p" + p.id,
           kind: "post",
           label: p.title || p.slug,
-          href: `/posts/${p.slug}`,
+          href: this._postHref(p.slug),
           max: 24,
           concealed: isConcealed(p),
           title: concealedTitle(p, p.title || p.slug),
@@ -1204,16 +1185,42 @@ export default class AtlasPage extends Component<PageProps> {
       // this place reselected and the post chip highlighted (consumed in
       // PostContent.onClose → handed back via `atlasReturn`).
       if (key[0] === "p" && this._activeTag) {
-        markAtlasOpen({
-          placeTagId: this._activeTag.id,
-          returnUrl: location.pathname + location.search,
-        });
+        this._markOpen(this._sheet?.page, this._sheet?._perPage);
       }
       navigate(href);
       return;
     }
     this._cloud.focusKey = key;
     this._applyCloudFocus();
+  }
+
+  /**
+   * A post inside the selected place's tag, so the viewer's previous/next stay
+   * in that place. The timeline range goes along when one is set.
+   */
+  _postHref(slug: string): string {
+    const params = new URLSearchParams({ slug });
+    const vc = ViewContext.current();
+    if (vc.years) params.set("timeline", `${vc.years[0]}-${vc.years[1]}`);
+    return `/tags/${encodeURIComponent(this._activeTag?.slug ?? "")}?${params}`;
+  }
+
+  /** Leave the return marker: the place, the sheet page and the Atlas URL. */
+  _markOpen(sheetPage?: number, sheetPerPage?: number): void {
+    if (!this._activeTag) return;
+    markAtlasOpen({
+      placeTagId: this._activeTag.id,
+      sheetPage,
+      sheetPerPage,
+      returnUrl: location.pathname + location.search,
+    });
+  }
+
+  /** Open a post from a sheet card. */
+  _openPost(slug: string, page: number, perPage: number): void {
+    if (!this._activeTag) return;
+    this._markOpen(page, perPage);
+    navigate(this._postHref(slug));
   }
 
   /**
@@ -1238,7 +1245,11 @@ export default class AtlasPage extends Component<PageProps> {
     const ctx = consumeAtlasReturn();
     if (!ctx || !ctx.postSlug || ctx.placeTagId == null) return;
 
-    this._selectPlaceById(ctx.placeTagId, { focusPostSlug: ctx.postSlug });
+    this._selectPlaceById(ctx.placeTagId, {
+      focusPostSlug: ctx.postSlug,
+      sheetPage: ctx.sheetPage,
+      sheetPerPage: ctx.sheetPerPage,
+    });
   }
 
   /** Nudge the map so a cloud chip (or the anchor) sits comfortably in view. */
@@ -1246,7 +1257,7 @@ export default class AtlasPage extends Component<PageProps> {
     if (!this._cloud || typeof this._map.panInside !== "function") return;
     const sat = this._cloud.sats.find((s) => s.key === key);
     const ll = sat ? sat.marker.getLatLng() : this._cloud.anchorLatLng;
-    if (ll) this._map.panInside(ll, { padding: [120, 120] });
+    if (ll) this._map.panInside(ll, this._panPadding(120));
   }
 
   /**
@@ -1361,7 +1372,8 @@ export default class AtlasPage extends Component<PageProps> {
     this._cloud = null;
   }
 
-  _clearSelection(): void {
+  /** Drop the selection. `keepSheet` leaves the sheet up for a redraw that reselects. */
+  _clearSelection({ keepSheet = false }: { keepSheet?: boolean } = {}): void {
     this._clearCloud();
     this._cloudData = null;
     this._cloudReq++; // invalidate any in-flight cloud fetch for the cleared place
@@ -1370,95 +1382,8 @@ export default class AtlasPage extends Component<PageProps> {
     this._activeKey = null;
     this._activeTag = null;
     this._activeAnchor = null;
-    this._closePanel();
+    if (!keepSheet) this._sheet?.hide();
     this.$("#atlas-hint")?.classList.remove("is-hidden");
-  }
-
-  // ── Desktop side panel ──────────────────────────────────────────────────────
-
-  _isDesktop(): boolean {
-    return !!window.matchMedia?.(DESKTOP_QUERY).matches;
-  }
-
-  /**
-   * Open the side panel on a place and load its first page. Only on a desktop
-   * window: below the breakpoint the cloud is the whole selection. The list is
-   * scoped to the timeline range at open time; a range change redraws the
-   * places, which reselects the place and so reopens the panel on the new range.
-   */
-  _openPanel(tag: AtlasTag): Promise<void> | undefined {
-    if (!this._isDesktop()) return;
-    this._panelReq++;
-    this._panel = { tag, posts: [], page: 0, pages: 1, total: null, loading: false, error: null };
-    this._renderPanel();
-    return this._loadPanelPage();
-  }
-
-  /** Fetch the next page of the open panel's place and append its posts. */
-  async _loadPanelPage(): Promise<void> {
-    const panel = this._panel;
-    if (!panel || panel.loading || panel.page >= panel.pages) return;
-    const token = this._panelReq;
-    panel.loading = true;
-    panel.error = null;
-    this._renderPanel();
-    let data;
-    try {
-      data = await getTagPage(panel.tag.slug, { page: panel.page + 1, ...this._scopeParams() });
-    } catch (err) {
-      if (token !== this._panelReq) return;
-      panel.loading = false;
-      panel.error = (err as Error | null)?.message || "Failed to load posts.";
-      this._renderPanel();
-      return;
-    }
-    if (this._unmounted || token !== this._panelReq) return; // closed or replaced meanwhile
-    const pg = data?.pagination || {};
-    panel.posts.push(...(data?.posts || []));
-    panel.page = pg.page || panel.page + 1;
-    panel.pages = pg.pages || panel.page;
-    panel.total = pg.total ?? panel.posts.length;
-    panel.loading = false;
-    this._renderPanel();
-  }
-
-  _closePanel(): void {
-    if (!this._panel) return;
-    this._panelReq++;
-    this._panel = null;
-    this._renderPanel();
-  }
-
-  _renderPanel(): void {
-    const el = this.$("#atlas-panel");
-    if (!el) return;
-    el.hidden = !this._panel;
-    setHTML(el, this._panel ? panelHtml(this._panel, (p) => this._filteredOut(p)) : html``);
-  }
-
-  /** One delegated listener: close, "more", and a post row (opens the post). */
-  _wirePanel(): void {
-    this.$("#atlas-panel")?.addEventListener("click", (e) => {
-      const target = e.target as HTMLElement;
-      const action = target.closest?.("[data-action]")?.getAttribute("data-action");
-      if (action === "close") return this._closePanel();
-      if (action === "more") return this._loadPanelPage();
-      const row = target.closest?.("[data-slug]");
-      if (!row) return;
-      e.preventDefault();
-      this._openPanelPost(row.getAttribute("data-slug")!);
-    });
-  }
-
-  /** Open a post from the panel and leave the same return marker a cloud post chip leaves. */
-  _openPanelPost(slug: string): void {
-    if (this._activeTag) {
-      markAtlasOpen({
-        placeTagId: this._activeTag.id,
-        returnUrl: location.pathname + location.search,
-      });
-    }
-    navigate(`/posts/${slug}`);
   }
 
   beforeUnmount(): void {
