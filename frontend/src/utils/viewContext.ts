@@ -35,6 +35,8 @@ export class ViewContext {
   perPage: number | null;
   /** Post slug */
   postSlug: string | null;
+  /** Geo-tag slug picked on the atlas map; filters the home list (?place=). */
+  place: string | null;
   /** Navigation trail (ancestor slug chain, `/`-joined)
    *  carried so the server can build breadcrumbs for the drilled branch. */
   navPath: string | null;
@@ -49,6 +51,7 @@ export class ViewContext {
       : 1;
     this.perPage = parseInt(query.per_page, 10) || null;
     this.postSlug = null;
+    this.place = query.place || null;
     this.navPath = query.path || null;
 
     // 1. Extract post slug: /posts/:slug
@@ -104,6 +107,7 @@ export class ViewContext {
       page: number;
       per_page: number;
       postSlug: string | null;
+      place: string | null;
     }>,
     { replace = false }: { replace?: boolean } = {},
   ) {
@@ -120,10 +124,11 @@ export class ViewContext {
     if ('page' in changes) next.page = changes.page ?? next.page;
     if ('per_page' in changes) next.perPage = changes.per_page ?? null;
     if ('postSlug' in changes) next.postSlug = changes.postSlug ?? null;
+    if ('place' in changes) next.place = changes.place ?? null;
 
     // Reset page to 1 if primary filters change, unless page was explicitly provided
     const filtersChanged = ('tag' in changes || 'query' in changes || 'years' in changes);
-    if (filtersChanged && !('page' in changes)) {
+    if ((filtersChanged || 'place' in changes) && !('page' in changes)) {
       next.page = 1;
     }
 
@@ -173,6 +178,9 @@ export class ViewContext {
         path = `/posts/${encodeURIComponent(this.postSlug)}`;
       }
     }
+
+    // The atlas place filter only narrows the home list.
+    if (this.place && path === '/') params.set('place', this.place);
 
     // Common filters
     if (this.years) {

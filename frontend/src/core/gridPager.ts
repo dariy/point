@@ -261,10 +261,9 @@ export class GridPager {
     this._atlasGesture = null;
     this._atlasHandle?.remove();
     this._atlasHandle = null;
-    this._atlasLayout?.();
-    this._atlasLayout = null;
-    this._atlasMap?.destroy();
-    this._atlasMap = null;
+    // The layout (and the map container it owns) and the map stay: a list
+    // refresh (a place filter, a page) must keep the map selection and view.
+    // Only destroy() removes them.
   }
   destroy() {
     this._teardown();

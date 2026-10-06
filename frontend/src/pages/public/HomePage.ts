@@ -13,7 +13,7 @@ import { Component } from '../../components/Component.ts';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.ts';
 
 import { Pagination } from '../../components/shared/Pagination.ts';
-import { getHomePage } from '../../api/pages.ts';
+import { getHomePage, getTagPage } from '../../api/pages.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
 import {
   getNavTags,
@@ -52,7 +52,7 @@ export interface TimelineRange {
 }
 
 /** The ViewContext fields that _buildParams reads. */
-export type GridViewParams = Pick<ViewContext, 'page' | 'perPage' | 'years' | 'query' | 'tag'>;
+export type GridViewParams = Pick<ViewContext, 'page' | 'perPage' | 'years' | 'query' | 'tag' | 'place'>;
 
 /** Query parameters that the grid pages send with a page fetch. */
 export interface GridFetchParams {
@@ -100,7 +100,7 @@ export default class HomePage extends Component<PageProps> {
       gridMount: () => this.$('#grid-mount'),
       gestureRoot: () => this.$('.site-main'),
       fetchPosts: async (page: number) => {
-        const data = await getHomePage(this._buildParams({ ...ViewContext.current(), page }));
+        const data = await this._fetchFeed({ ...ViewContext.current(), page });
         return data.posts || [];
       },
       gotoPage: (p: number) => ViewContext.update({ page: p }),
@@ -112,7 +112,7 @@ export default class HomePage extends Component<PageProps> {
       emptyHtml: html`<p class="empty-state">No posts yet.</p>`,
       filterKey: () => {
         const vc = ViewContext.current();
-        return JSON.stringify(['', vc.years, vc.query, vc.tag]);
+        return JSON.stringify(['', vc.years, vc.query, vc.tag, vc.place]);
       },
     });
   }
@@ -180,7 +180,7 @@ export default class HomePage extends Component<PageProps> {
 
     let data;
     try {
-      data = await getHomePage(this._buildParams(vc));
+      data = await this._fetchFeed(vc);
     } catch (err) {
       this.setState({ loading: false, data: null, error: (err as Error).message || 'Failed to load posts.' });
       return;
@@ -221,6 +221,34 @@ export default class HomePage extends Component<PageProps> {
 
   _minPerPage() {
     return (getSettings() || {}).posts_per_page || 10;
+  }
+
+  /** The home feed, or the posts of the geo-tag picked on the atlas map. */
+  _fetchFeed(vc: GridViewParams): ReturnType<typeof getHomePage> {
+    const params = this._buildParams(vc);
+    if (!vc.place) return getHomePage(params);
+    // The tag page carries the same posts and pagination; only the chrome differs.
+    return getTagPage(vc.place, params) as unknown as ReturnType<typeof getHomePage>;
+  }
+
+  /** The removable chip that names the active geo-tag filter. */
+  _syncPlaceChip() {
+    const mount = this.$('#atlas-filter-mount');
+    if (!mount) return;
+    const place = ViewContext.current().place;
+    mount.replaceChildren();
+    if (!place) return;
+    const name = (this.state.data as { tag?: { name?: string } } | null)?.tag?.name || place;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'atlas-filter-chip';
+    chip.setAttribute('aria-label', `Remove place filter: ${name}`);
+    chip.textContent = `${name} ×`;
+    chip.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('atlas-place-clear'));
+      ViewContext.update({ place: null });
+    });
+    mount.append(chip);
   }
 
   _buildParams(vc: GridViewParams) {
@@ -324,6 +352,7 @@ export default class HomePage extends Component<PageProps> {
         ${isStaticHomePage ? '' : html`<div id="timeline-mount"></div>`}
         <main class="site-main">
           <div class="main-container">
+            <div id="atlas-filter-mount"></div>
             <div id="grid-mount" class="${isStaticHomePage ? '' : 'grid-expand-mount'}"></div>
             ${isStaticHomePage ? '' : html`<div id="pagination-mount"></div>`}
           </div>
@@ -440,6 +469,7 @@ export default class HomePage extends Component<PageProps> {
     const { posts = [], pagination = {} } = this.state.data;
 
     this._postChildren = [];
+    this._syncPlaceChip();
 
     // A paginated swipe leaves an inline transform on the grid mount; clear it so
     // the refreshed grid isn't left offset.
@@ -598,7 +628,7 @@ export default class HomePage extends Component<PageProps> {
     this._refitRefresh = false;
 
     try {
-      const data = await getHomePage(this._buildParams(vc));
+      const data = await this._fetchFeed(vc);
       // Merge settings from page response into store.
       if (data.settings) mergeSettings(normalizeSettings(data.settings));
       // tag_cloud is page-independent and only sent on page 1; cache it so it

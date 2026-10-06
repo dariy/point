@@ -911,3 +911,29 @@ body[data-atlas-snapping] #grid-mount {
         transition: none;
     }
 }
+
+/* ── Active place filter chip ────────────────────────────────────────────────
+   In `list` it sits above the grid. With the map open it floats over the map's
+   top-right corner, so it never takes room from the card strip. */
+.atlas-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  margin: 0 0 0.5rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--accent, #e05c00);
+  border-radius: 999px;
+  background: var(--bg, #fff);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+body[data-atlas-layer="mapList"] .atlas-filter-chip,
+body[data-atlas-layer="map"] .atlas-filter-chip {
+  position: fixed;
+  top: calc(var(--atlas-layer-top, 0px) + 0.5rem);
+  right: 0.5rem;
+  margin: 0;
+  z-index: 1000;
+}

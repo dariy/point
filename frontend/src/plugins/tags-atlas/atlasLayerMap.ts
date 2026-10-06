@@ -9,6 +9,7 @@
  */
 
 import { loadLeaflet, TILE_ATTR, TILE_DARK, TILE_LIGHT, TILE_MAX_NATIVE_ZOOM } from '../../utils/leaflet.ts';
+import { ViewContext } from '../../utils/viewContext.ts';
 import { AtlasPlaces } from './AtlasPlaces.ts';
 import { getAtlasLayerState, replaceSearch, searchWithView, viewFromSearch } from './atlasLayerState.ts';
 
@@ -43,6 +44,9 @@ export function mountAtlasLayerMap(
   let ro: ResizeObserver | null = null;
 
   const onTheme = () => tiles?.setUrl(isDarkTheme() ? TILE_DARK : TILE_LIGHT);
+
+  // The list's filter chip was removed: drop the pick on the map too.
+  const onPlaceClear = () => places?._clearSelection();
 
   async function build() {
     if (map || loading) return;
@@ -79,8 +83,16 @@ export function mountAtlasLayerMap(
       bounds: [[-90, -180], [90, 180]],
     }).addTo(map);
     document.addEventListener('themechange', onTheme);
+    document.addEventListener('atlas-place-clear', onPlaceClear);
 
-    places = new AtlasPlaces({ L, map, root: opts.container, isAlive: opts.isAlive });
+    places = new AtlasPlaces({
+      L,
+      map,
+      root: opts.container,
+      isAlive: opts.isAlive,
+      // The picked geo-tag filters the post list (see HomePage._fetchFeed).
+      onSelect: (tag) => ViewContext.update({ place: tag?.slug ?? null }, { replace: true }),
+    });
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
     map.invalidateSize();
@@ -103,6 +115,7 @@ export function mountAtlasLayerMap(
       mo.disconnect();
       ro?.disconnect();
       document.removeEventListener('themechange', onTheme);
+      document.removeEventListener('atlas-place-clear', onPlaceClear);
       places?.destroy();
       map?.remove();
       map = null;

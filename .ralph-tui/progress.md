@@ -92,3 +92,12 @@ after each iteration and it's included in prompts for context.
   - A public graph 404 means `tags_visibility` is not `all`; check it first.
   - `scripts/check.sh` e2e flakes on "handle not visible" in one run; it passes on rerun.
 ---
+
+## 2026-10-06 - p-atlas-layer-p2-rwea.6
+- A geo-tag picked on the map sets `?place=<slug>` (`ViewContext.place`, home path only; page resets to 1; `atlas` and `view` params stay). `HomePage._fetchFeed` loads the list from the tag-page endpoint when `place` is set (the home endpoint has no tag filter). A removable chip (`#atlas-filter-mount`, `.atlas-filter-chip`) shows the filter; it floats over the map in mapList and map. A click on the chip or on empty map clears the filter and the map pick (`atlas-place-clear` event).
+- Files: `utils/viewContext.ts`, `pages/public/HomePage.ts`, `plugins/tags-atlas/{AtlasPlaces,atlasLayerMap}.ts`, `core/gridPager.ts`, `css/public/atlas.css`, `e2e/atlas-layer-map.test.ts` (3 new tests).
+- Checked: map e2e 9/9; atlas-layer e2e 37/37. Not checked by hand: playwright-cli at 820x1180. TagPage and SearchPage do not apply `place` (home only).
+- **Learnings:**
+  - `GridPager.disarm()` destroyed the layout (the map container) and the map on every list refresh, so a selection died on any refit. `disarm()` now keeps both; `destroy()` releases them.
+  - In `scripts/check.sh` the e2e step flakes on "handle not visible" or tile tests in a different place each run; the baseline without this change flakes too. Atlas e2e passes alone.
+---

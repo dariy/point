@@ -181,6 +181,8 @@ export interface AtlasPlacesOptions {
   root: HTMLElement;
   /** false once the host unmounted */
   isAlive: () => boolean;
+  /** Called when the visitor picks a place, or clears the pick by a click on the map. */
+  onSelect?: (tag: AtlasTag | null) => void;
 }
 
 export class AtlasPlaces {
@@ -188,6 +190,7 @@ export class AtlasPlaces {
   _map: LeafletRef;
   _root: HTMLElement;
   _isAlive: () => boolean;
+  _onSelect: ((tag: AtlasTag | null) => void) | undefined;
   _countryLayer: LeafletRef = null;
   _markerLayer: LeafletRef = null;
   _cloudMarkers: LeafletRef = null;
@@ -214,7 +217,8 @@ export class AtlasPlaces {
   _legend: HTMLElement | null = null;
   _unmounted = false;
 
-  constructor({ L, map, root, isAlive }: AtlasPlacesOptions) {
+  constructor({ L, map, root, isAlive, onSelect }: AtlasPlacesOptions) {
+    this._onSelect = onSelect;
     this._L = L;
     this._map = map;
     this._root = root;
@@ -260,7 +264,10 @@ export class AtlasPlaces {
     // Keep the cloud pinned to its place as the zoom level changes.
     map.on("zoomend viewreset", this._reposition);
     // Clicking empty map dismisses the current cloud.
-    map.on("click", () => this._clearSelection());
+    map.on("click", () => {
+      if (this._activeKey) this._onSelect?.(null);
+      this._clearSelection();
+    });
 
     let data;
     try {
@@ -683,6 +690,7 @@ export class AtlasPlaces {
 
     setActive(true);
     this._activeSetActive = setActive;
+    if (opts.pan !== false) this._onSelect?.(tag);
 
     this.$("#atlas-hint")?.classList.add("is-hidden");
 
