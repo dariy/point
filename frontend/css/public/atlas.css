@@ -704,8 +704,9 @@ body[data-atlas-layer="mapList"] .atlas-layer-map {
     bottom: var(--atlas-layer-list-h);
 }
 
+/* The map runs to the bottom of the viewport; the handle floats over it. */
 body[data-atlas-layer="map"] .atlas-layer-map {
-    bottom: var(--atlas-layer-handle-h, 20px);
+    bottom: 0;
 }
 
 body[data-atlas-layer="mapList"],

@@ -108,6 +108,26 @@ describe('Atlas layer', () => {
       await page.locator('#footer-mount .site-footer').waitFor({ state: 'visible' });
     });
 
+    it('map fills below the header, collapses the list to a handle and hides the footer', async () => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(BASE + '/tags/atlas-handle');
+      await page.locator('.atlas-layer-handle').waitFor();
+      await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'map'));
+      const map = page.locator('.atlas-layer-map');
+      await map.waitFor({ state: 'visible' });
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).transform === 'none');
+      const m = (await map.boundingBox())!;
+      const h = (await page.locator('#header-mount').boundingBox())!;
+      assert.ok(Math.abs(m.y - (h.y + h.height)) <= 1, `map top ${m.y} vs header bottom ${h.y + h.height}`);
+      assert.ok(Math.abs(m.y + m.height - 844) <= 1, `map bottom ${m.y + m.height}`);
+      const handle = (await page.locator('.atlas-layer-handle').boundingBox())!;
+      assert.ok(handle.height <= 32, `handle height ${handle.height}`);
+      assert.ok(Math.abs(handle.y + handle.height - 844) <= 1, 'handle sits at the very bottom');
+      assert.equal(await page.locator('#grid-mount .post-card').first().isVisible(), false, 'no card shows');
+      assert.equal(await page.locator('#footer-mount .site-footer').isVisible(), false);
+      await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
+    });
+
     it('there is no handle when the plugin is off', async () => {
       const off = await api('/api/plugins/tags-atlas', { enabled: false }, 'PATCH');
       assert.ok(off.ok, 'disabling failed: ' + off.status);

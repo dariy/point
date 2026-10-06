@@ -45,3 +45,12 @@ after each iteration and it's included in prompts for context.
   - `check.sh` e2e had one flaky "code editor survives an undo" failure (passes on rerun and on baseline reruns).
   - Handle `aria-expanded` does not follow the state yet; US-006/007 wire it. No browser screenshot in this session; the e2e measures the geometry at 390×844.
 ---
+
+## 2026-10-06 - p-atlas-layer-1qus.4
+- `map` state: the map container now runs from the header bottom to the viewport bottom (`bottom: 0`); the 20px handle floats over it at the very bottom (z 105). Grid and pagination stay hidden, so no card shows; footer hidden since US-003.
+- E2E: new case in `frontend/e2e/atlas-layer.test.ts` (map top = header bottom, map bottom = 844, handle ≤ 32px at the bottom, no card visible, footer hidden).
+- Files: frontend/css/public/atlas.css, frontend/e2e/atlas-layer.test.ts
+- **Learnings:**
+  - US-003 already did most of the `map` layout; this story only changed the map `bottom`.
+  - `check.sh` e2e failed twice in `trustedTypes.test.ts` (flaky) and passed on the third run. No browser screenshot in this session.
+---
