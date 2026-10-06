@@ -63,3 +63,12 @@ after each iteration and it's included in prompts for context.
 ## 2026-10-06 - p-atlas-layer-p2-rwea.1 (verify pass)
 - Work already existed. Re-ran `scripts/check.sh`: all pass except 3 known `atlas-layer-map.test.ts` failures (pre-existing). Bead closed.
 ---
+
+## 2026-10-06 - p-atlas-layer-p2-rwea.2
+- Map-only state now shows a minimized footer: copyright only, fixed under the handle, `padding-bottom: env(safe-area-inset-bottom)`. `atlasLayerLayout.ts` publishes `--atlas-layer-footer-h` (height of `#footer-mount`); map and handle `bottom` use it. With no footer plugin the mount is empty, so the value is 0px and the handle sits at the page bottom. mapList still hides the footer; list is unchanged.
+- Files: `css/public/footer.css`, `css/public/atlas.css`, `src/plugins/tags-atlas/atlasLayerLayout.ts`, `e2e/atlas-layer.test.ts`.
+- Checked: atlas-layer, -header, -gesture e2e pass (20/20) on a throwaway instance. check.sh: only the known atlas-layer-map.test.ts failure (country shape) remains. No manual 820×1180 screenshot; the e2e runs at 390×844.
+- **Learnings:**
+  - The footer is in `#footer-mount`; hide its `.footer-center`/`.footer-right` to keep the copyright only.
+  - Dev DB login still gives 401 on :8001; `E2E_PORT=<free> scripts/run-e2e.sh` (with a narrowed glob) works.
+---

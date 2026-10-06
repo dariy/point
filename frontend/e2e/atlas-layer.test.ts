@@ -108,7 +108,7 @@ describe('Atlas layer', () => {
       await page.locator('#footer-mount .site-footer').waitFor({ state: 'visible' });
     });
 
-    it('map fills below the header, collapses the list to a handle and hides the footer', async () => {
+    it('map fills below the header, collapses the list to a handle over a minimized footer', async () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(BASE + '/tags/atlas-handle');
       await page.locator('.atlas-layer-handle').waitFor();
@@ -119,12 +119,25 @@ describe('Atlas layer', () => {
       const m = (await map.boundingBox())!;
       const h = (await page.locator('#header-mount').boundingBox())!;
       assert.ok(Math.abs(m.y - (h.y + h.height)) <= 1, `map top ${m.y} vs header bottom ${h.y + h.height}`);
-      assert.ok(Math.abs(m.y + m.height - 844) <= 1, `map bottom ${m.y + m.height}`);
       const handle = (await page.locator('.atlas-layer-handle').boundingBox())!;
       assert.ok(handle.height <= 32, `handle height ${handle.height}`);
-      assert.ok(Math.abs(handle.y + handle.height - 844) <= 1, 'handle sits at the very bottom');
       assert.equal(await page.locator('#grid-mount .post-card').first().isVisible(), false, 'no card shows');
-      assert.equal(await page.locator('#footer-mount .site-footer').isVisible(), false);
+      // The minimized footer: copyright only, between the handle and the viewport bottom.
+      const footer = page.locator('#footer-mount .site-footer');
+      await footer.waitFor({ state: 'visible' });
+      const f = (await footer.boundingBox())!;
+      assert.ok(Math.abs(f.y + f.height - 844) <= 1, `footer bottom ${f.y + f.height}`);
+      assert.ok(Math.abs(handle.y + handle.height - f.y) <= 1, 'handle sits on the footer');
+      assert.ok(f.height <= 48, `footer height ${f.height}`);
+      assert.ok(Math.abs(m.y + m.height - f.y) <= 1, `map bottom ${m.y + m.height} vs footer top ${f.y}`);
+      assert.equal(await page.locator('.footer-copyright').isVisible(), true);
+      assert.equal(await page.locator('.footer-right').isVisible(), false);
+      assert.equal(await page.locator('.footer-center').isVisible(), false);
+      // Without the footer plugin the mount is empty: the handle sits at the page bottom.
+      await page.evaluate(() => document.querySelector('#footer-mount')!.replaceChildren());
+      await page.waitForFunction(() => getComputedStyle(document.body).getPropertyValue('--atlas-layer-footer-h').trim() === '0px');
+      const bare = (await page.locator('.atlas-layer-handle').boundingBox())!;
+      assert.ok(Math.abs(bare.y + bare.height - 844) <= 1, 'handle at the bottom with no footer');
       await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
     });
 

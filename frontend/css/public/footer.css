@@ -276,8 +276,37 @@ body.grid-zoomable .footer-zoom {
     }
 }
 
-/* The map layer covers the footer position: only the `list` state shows it. */
-body[data-atlas-layer="mapList"] #footer-mount,
-body[data-atlas-layer="map"] #footer-mount {
+/* The map layer covers the footer position: `list` shows the normal footer,
+   `mapList` hides it, and `map` shows a minimized one (copyright only) fixed
+   under the handle. With the footer plugin off the mount is empty and takes
+   no space. */
+body[data-atlas-layer="mapList"] #footer-mount {
     display: none;
+}
+
+body[data-atlas-layer="map"] #footer-mount {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 105;
+}
+
+body[data-atlas-layer="map"] .site-footer {
+    padding: var(--spacing-xs, 4px) 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+body[data-atlas-layer="map"] .site-footer .footer-center,
+body[data-atlas-layer="map"] .site-footer .footer-right {
+    display: none;
+}
+
+body[data-atlas-layer="map"] .site-footer .footer-content {
+    display: block;
+}
+
+body[data-atlas-layer="map"] .site-footer .footer-copyright {
+    margin: 0;
+    text-align: center;
 }

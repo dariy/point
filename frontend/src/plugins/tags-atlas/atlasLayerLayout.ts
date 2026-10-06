@@ -53,6 +53,7 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
 
   const header = document.getElementById('header-mount');
   let timeline: HTMLElement | null = null;
+  let footerMount: HTMLElement | null = null;
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => measure()) : null;
   // The timeline plugin fills its mount after this module runs, so find it again on every measure.
   const measure = () => {
@@ -65,6 +66,15 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
     }
     // The timeline sticks right under the header, so its height adds to the header edge.
     const tlHeight = tl ? Math.round(tl.getBoundingClientRect().height) : 0;
+    // In `map` the footer is a fixed strip under the handle. No footer plugin leaves the mount empty: 0px.
+    const fm = document.getElementById('footer-mount');
+    if (fm !== footerMount) {
+      if (footerMount) ro?.unobserve(footerMount);
+      footerMount = fm;
+      if (fm) ro?.observe(fm);
+    }
+    const footerHeight = fm ? Math.round(fm.getBoundingClientRect().height) : 0;
+    body.style.setProperty('--atlas-layer-footer-h', `${footerHeight}px`);
     body.style.setProperty('--atlas-layer-header-h', `${headerBottom}px`);
     body.style.setProperty('--atlas-layer-top', `${headerBottom + tlHeight}px`);
   };
@@ -85,6 +95,7 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
     if (body.hasAttribute('data-atlas-layer')) setAtlasLayerState('list', body);
     body.style.removeProperty('--atlas-layer-header-h');
     body.style.removeProperty('--atlas-layer-top');
+    body.style.removeProperty('--atlas-layer-footer-h');
     body.style.removeProperty('--atlas-layer-gap');
     body.style.removeProperty('--atlas-layer-aspect');
   };

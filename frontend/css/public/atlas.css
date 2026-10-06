@@ -761,7 +761,7 @@ body[data-atlas-layer="mapList"] .atlas-layer-map {
 
 /* The map runs to the bottom of the viewport; the handle floats over it. */
 body[data-atlas-layer="map"] .atlas-layer-map {
-    bottom: 0;
+    bottom: var(--atlas-layer-footer-h, 0px);
 }
 
 body[data-atlas-layer="mapList"],
@@ -792,7 +792,7 @@ body[data-atlas-layer="mapList"] .atlas-layer-handle {
 }
 
 body[data-atlas-layer="map"] .atlas-layer-handle {
-    bottom: 0;
+    bottom: var(--atlas-layer-footer-h, 0px);
 }
 
 body[data-atlas-layer="mapList"] #grid-mount {
