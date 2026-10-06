@@ -3,10 +3,10 @@
   "sessionId": "ef3476c1-bada-46af-88fb-928f7907e9d5",
   "status": "running",
   "startedAt": "2026-10-06T13:30:06.878Z",
-  "updatedAt": "2026-10-06T15:35:02.089Z",
-  "currentIteration": 3,
+  "updatedAt": "2026-10-06T15:44:40.654Z",
+  "currentIteration": 1,
   "maxIterations": 0,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "model": "sonnet",
@@ -654,8 +654,8 @@
       {
         "id": "p-atlas-layer-p2-rwea.9",
         "title": "US-009: Fix the map+list list (same collection, adaptive page size, same first post)",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-8ca7",
@@ -5609,12 +5609,22 @@
       "durationMs": 257327,
       "startedAt": "2026-10-06T13:48:58.866Z",
       "endedAt": "2026-10-06T13:53:16.193Z"
+    },
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "p-atlas-layer-p2-rwea.9",
+      "taskTitle": "US-009: Fix the map+list list (same collection, adaptive page size, same first post)",
+      "taskCompleted": true,
+      "durationMs": 527361,
+      "startedAt": "2026-10-06T15:35:01.596Z",
+      "endedAt": "2026-10-06T15:43:48.957Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [
-    "p-atlas-layer-p2-rwea.9"
+    "p-vfhf"
   ],
   "subagentPanelVisible": true
 }

@@ -38,3 +38,10 @@ after each iteration and it's included in prompts for context.
   - First-post identity is page-aligned (`refitPage`), exact on page 1. No offset API exists.
   - `scripts/run-e2e.sh` hardcodes the test glob; copy it to run one file.
 ---
+
+## 2026-10-06 - p-vfhf
+- `show` now resets the paginator to one page. `_goto` ignores requests while `_pagination` is null (no page loaded).
+- Files: frontend/src/plugins/tags-atlas/AtlasSheet.ts, frontend/test/AtlasSheet.test.ts
+- **Learnings:**
+  - `_pagination = null` alone does not change the mounted Pagination. Call `setProps` too.
+---

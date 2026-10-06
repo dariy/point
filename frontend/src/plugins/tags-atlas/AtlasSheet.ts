@@ -171,6 +171,8 @@ export class AtlasSheet extends Component<AtlasSheetProps> {
     this._place = place;
     this._total = 0;
     this._pagination = null;
+    // The old place's pages stay off until the new page loads.
+    this._paginator?.setProps({ page: 1, pages: 1, total: 0, compact: true, onPage: (p: number) => this._goto(p) });
     const fit = this._fit();
     this._setCols(fit);
     if (perPage && perPage !== fit) page = refitPage(page, perPage, fit);
@@ -269,7 +271,7 @@ export class AtlasSheet extends Component<AtlasSheetProps> {
   }
 
   _goto(page: number) {
-    if (!this._place || page === this._page) return;
+    if (!this._place || !this._pagination || page === this._page) return;
     this._page = page;
     void this._load(page, { fade: true });
   }
