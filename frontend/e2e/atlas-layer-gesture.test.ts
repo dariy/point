@@ -1,4 +1,4 @@
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type CDPSession, type Page } from 'playwright';
 import crypto from 'node:crypto';
@@ -30,8 +30,20 @@ describe('Atlas layer gestures', () => {
     await touch('touchEnd', x + dx, y + dy);
   }
 
+  /** Box of `sel` once two reads 120ms apart agree (the layout may still be sliding). */
+  const settledBox = async (p: Page, sel: string) => {
+    let prev = JSON.stringify(await p.locator(sel).boundingBox());
+    for (let i = 0; i < 25; i++) {
+      await p.waitForTimeout(120);
+      const cur = JSON.stringify(await p.locator(sel).boundingBox());
+      if (cur === prev) return JSON.parse(cur) as { x: number; y: number; width: number; height: number };
+      prev = cur;
+    }
+    throw new Error('box never settled: ' + sel);
+  };
+
   const center = async (sel: string) => {
-    const b = (await page.locator(sel).boundingBox())!;
+    const b = await settledBox(page, sel);
     return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
   };
 
@@ -108,5 +120,82 @@ describe('Atlas layer gestures', () => {
     await swipe(g.x + g.width - 20, g.y + g.height / 2, -150, 6);
     await page.waitForTimeout(300);
     assert.equal(await state(), 'mapList');
+  });
+
+  describe('desktop', () => {
+    let dpage: Page;
+    const dstate = () => dpage.evaluate(() => document.body.dataset.atlasLayer);
+    const waitState = (v: string) => dpage.waitForFunction((x) => document.body.dataset.atlasLayer === x, v);
+
+    before(async () => {
+      const ctx = await browser!.newContext({ viewport: { width: 1440, height: 900 } });
+      dpage = await ctx.newPage();
+    });
+
+    beforeEach(async () => {
+      await dpage.goto(BASE + '/tags/atlas-gesture');
+      await dpage.locator('.atlas-layer-handle').waitFor();
+    });
+
+    it('a mouse drag on the handle steps the state', async () => {
+      let b = await settledBox(dpage, '.atlas-layer-handle');
+      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await dpage.mouse.down();
+      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2 + 80, { steps: 6 });
+      await dpage.mouse.up();
+      await waitState('mapList');
+      b = await settledBox(dpage, '.atlas-layer-handle');
+      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await dpage.mouse.down();
+      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2 - 80, { steps: 6 });
+      await dpage.mouse.up();
+      await waitState('list');
+    });
+
+    it('the wheel over the handle steps once per gesture', async () => {
+      const b = await settledBox(dpage, '.atlas-layer-handle');
+      await dpage.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      for (let i = 0; i < 4; i++) await dpage.mouse.wheel(0, 40);
+      await waitState('mapList');
+      await dpage.waitForTimeout(400);
+      assert.equal(await dstate(), 'mapList');
+      const b2 = await settledBox(dpage, '.atlas-layer-handle');
+      await dpage.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
+      await dpage.mouse.wheel(0, -40);
+      await waitState('list');
+    });
+
+    it('the wheel over the map does not change the state', async () => {
+      await dpage.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
+      await dpage.waitForFunction(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).transform === 'none');
+      const m = await settledBox(dpage, '.atlas-layer-map');
+      await dpage.mouse.move(m.x + m.width / 2, m.y + m.height / 2);
+      await dpage.mouse.wheel(0, 120);
+      await dpage.waitForTimeout(400);
+      assert.equal(await dstate(), 'mapList');
+    });
+
+    it('the keyboard drives the handle', async () => {
+      const h = dpage.locator('.atlas-layer-handle');
+      await h.focus();
+      await dpage.keyboard.press('Enter');
+      await waitState('mapList');
+      await dpage.keyboard.press('ArrowDown');
+      await waitState('map');
+      await dpage.keyboard.press('ArrowUp');
+      await waitState('mapList');
+      await dpage.keyboard.press('Space');
+      await waitState('map');
+      await dpage.keyboard.press('Space');
+      await waitState('list');
+      await dpage.keyboard.press('ArrowDown');
+      await dpage.keyboard.press('Escape');
+      await waitState('list');
+      assert.equal(await h.getAttribute('aria-expanded'), 'false');
+      assert.equal(await h.locator('[aria-live]').textContent(), 'List');
+      await dpage.keyboard.press('ArrowDown');
+      await waitState('mapList');
+      assert.equal(await h.locator('[aria-live]').textContent(), 'Map and list');
+    });
   });
 });

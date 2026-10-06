@@ -77,3 +77,14 @@ after each iteration and it's included in prompts for context.
   - The handle already had `touch-action: none`; the card row has `pan-x`. No `overscroll-behavior` added on the handle (not scrollable); the row has `contain`.
   - `trustedTypes.test.ts` map tests flaked again (marker click intercepted), as before. No browser screenshot in this session.
 ---
+
+## 2026-10-06 - p-atlas-layer-1qus.7
+- Desktop input on the handle, all in `atlasLayerGesture.ts`: wheel (one step per gesture, 250ms quiet-time debounce, `passive:false` + preventDefault so the page does not scroll), keys (`stateAfterKey`: Enter/Space cycle, ArrowDown next, ArrowUp prev, Escape list), and a visually hidden `aria-live` span (`stateLabel`) inside the handle. Mouse drag already worked through the pointer events from US-006.
+- Wheel listener sits on the handle only: the map and the card row have none, so they zoom and scroll as before.
+- Files: frontend/src/plugins/tags-atlas/{atlasLayerGesture,atlasLayerHandle}.ts, frontend/css/public/atlas.css, frontend/test/atlasLayerGesture.test.ts, frontend/e2e/atlas-layer-gesture.test.ts
+- **Learnings:**
+  - A mouse leaves the 20px handle on its first move, before the 8px axis lock sets pointer capture, so the move target changed and the browser sent `pointercancel`. Capture now starts on pointerdown when the target is in the handle.
+  - `GridPager.arm()` runs more than once per page; the old handle was replaced each time, which dropped keyboard focus. `mountAtlasLayerHandle` now reuses its handle.
+  - E2E that measures the handle must wait until its box is stable (`settledBox`); the layout can still slide.
+  - `check.sh` e2e failed in `trustedTypes.test.ts` on 3 of 4 runs (different cases each time); the atlas specs pass. No browser screenshot in this session.
+---

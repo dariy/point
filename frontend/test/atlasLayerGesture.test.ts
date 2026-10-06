@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyRelease, lockAxis, stateAfter, startsOnControl } from '../src/plugins/tags-atlas/atlasLayerGesture.ts';
+import { classifyRelease, lockAxis, stateAfter, stateAfterKey, stateLabel, startsOnControl } from '../src/plugins/tags-atlas/atlasLayerGesture.ts';
 
 describe('lockAxis', () => {
   it('stays open under 8px', () => assert.equal(lockAxis(5, 7), null));
@@ -55,5 +55,23 @@ describe('startsOnControl', () => {
   it('the map never does', () => {
     const n = mk();
     assert.equal(startsOnControl(n.pin, n, 'mapList'), false);
+  });
+});
+
+describe('stateAfterKey', () => {
+  it('maps keys to states', () => {
+    assert.equal(stateAfterKey('list', 'Enter'), 'mapList');
+    assert.equal(stateAfterKey('map', ' '), 'list');
+    assert.equal(stateAfterKey('list', 'ArrowDown'), 'mapList');
+    assert.equal(stateAfterKey('map', 'ArrowDown'), 'map');
+    assert.equal(stateAfterKey('map', 'ArrowUp'), 'mapList');
+    assert.equal(stateAfterKey('list', 'ArrowUp'), 'list');
+    assert.equal(stateAfterKey('map', 'Escape'), 'list');
+    assert.equal(stateAfterKey('list', 'a'), null);
+  });
+  it('labels each state', () => {
+    assert.equal(stateLabel('list'), 'List');
+    assert.equal(stateLabel('mapList'), 'Map and list');
+    assert.equal(stateLabel('map'), 'Map only');
   });
 });

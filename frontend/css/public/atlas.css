@@ -657,6 +657,15 @@
     touch-action: none;
 }
 
+.atlas-layer-handle__live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .atlas-layer-handle__grip {
     width: 40px;
     height: 4px;

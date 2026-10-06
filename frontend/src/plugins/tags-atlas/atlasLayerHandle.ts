@@ -10,14 +10,14 @@ import { getAtlasLayerState } from './atlasLayerState.ts';
 const CLASS = 'atlas-layer-handle';
 
 /**
- * Put a handle directly before `gridMount`. Replaces a handle this call made
- * earlier, so repeated calls leave one. Returns the handle.
+ * Put a handle directly before `gridMount`. Reuses a handle this call made
+ * earlier, so repeated calls leave one and keep its focus. Returns the handle.
  */
 export function mountAtlasLayerHandle(gridMount: HTMLElement): HTMLElement | null {
   const parent = gridMount.parentElement;
   if (!parent) return null;
   const prior = gridMount.previousElementSibling;
-  if (prior?.classList.contains(CLASS)) prior.remove();
+  if (prior instanceof HTMLElement && prior.classList.contains(CLASS)) return prior;
 
   const handle = document.createElement('div');
   handle.className = CLASS;

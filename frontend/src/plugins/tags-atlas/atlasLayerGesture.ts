@@ -61,6 +61,25 @@ export function startsOnControl(
   return state === 'mapList' && !!els.grid?.contains(target);
 }
 
+/** Quiet time (ms) after the last wheel event before the next wheel gesture counts. */
+export const WHEEL_DEBOUNCE_MS = 250;
+
+/** State a key press on the handle leads to, or `null` when the key is not ours. */
+export function stateAfterKey(state: AtlasLayerState, key: string): AtlasLayerState | null {
+  if (key === 'Enter' || key === ' ') return cycle(state);
+  if (key === 'ArrowDown') return next(state);
+  if (key === 'ArrowUp') return prev(state);
+  if (key === 'Escape') return 'list';
+  return null;
+}
+
+/** Text for the live region that tells the current state. */
+export function stateLabel(state: AtlasLayerState): string {
+  if (state === 'mapList') return 'Map and list';
+  if (state === 'map') return 'Map only';
+  return 'List';
+}
+
 /** Largest follow distance while dragging, so the sheet does not leave the screen. */
 const FOLLOW_MAX_PX = 120;
 
@@ -89,6 +108,11 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     if (!startsOnControl(e.target, els(), getAtlasLayerState())) return;
     start = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, onHandle: handle.contains(e.target as Node) };
     axis = null;
+    // A mouse leaves the 20px handle on the first move, before the axis locks.
+    // Capture at once so the drag keeps its events.
+    if (start.onHandle) {
+      try { (e.target as Element).setPointerCapture(e.pointerId); } catch { /* target gone */ }
+    }
   };
 
   const onMove = (e: PointerEvent) => {
@@ -129,11 +153,42 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
   const onUp = (e: PointerEvent) => end(e, false);
   const onCancel = (e: PointerEvent) => end(e, true);
 
-  const syncExpanded = () => handle.setAttribute('aria-expanded', String(getAtlasLayerState() !== 'list'));
+  const live = document.createElement('span');
+  live.className = 'atlas-layer-handle__live';
+  live.setAttribute('aria-live', 'polite');
+  handle.append(live);
+  const syncExpanded = () => {
+    const state = getAtlasLayerState();
+    handle.setAttribute('aria-expanded', String(state !== 'list'));
+    live.textContent = stateLabel(state);
+  };
   syncExpanded();
   const observer = new MutationObserver(syncExpanded);
   observer.observe(document.body, { attributes: true, attributeFilter: ['data-atlas-layer'] });
 
+  const onKey = (e: KeyboardEvent) => {
+    if (e.target !== handle) return;
+    const target = stateAfterKey(getAtlasLayerState(), e.key);
+    if (target === null) return;
+    e.preventDefault();
+    setAtlasLayerState(target);
+  };
+
+  // One step per wheel gesture: the timer restarts on each event, so trackpad
+  // inertia after the first step does not step again.
+  let wheelBusy: ReturnType<typeof setTimeout> | null = null;
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const busy = wheelBusy !== null;
+    if (wheelBusy !== null) clearTimeout(wheelBusy);
+    wheelBusy = setTimeout(() => { wheelBusy = null; }, WHEEL_DEBOUNCE_MS);
+    if (busy || e.deltaY === 0) return;
+    const state = getAtlasLayerState();
+    setAtlasLayerState(e.deltaY > 0 ? next(state) : prev(state));
+  };
+
+  handle.addEventListener('keydown', onKey);
+  handle.addEventListener('wheel', onWheel, { passive: false });
   document.addEventListener('pointerdown', onDown);
   document.addEventListener('pointermove', onMove);
   document.addEventListener('pointerup', onUp);
@@ -144,6 +199,10 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     document.removeEventListener('pointerup', onUp);
     document.removeEventListener('pointercancel', onCancel);
     observer.disconnect();
+    handle.removeEventListener('keydown', onKey);
+    handle.removeEventListener('wheel', onWheel);
+    if (wheelBusy !== null) clearTimeout(wheelBusy);
+    live.remove();
     clearFollow();
   };
 }

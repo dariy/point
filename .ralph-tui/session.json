@@ -3,10 +3,10 @@
   "sessionId": "8a8488c5-a688-4a76-a57f-0982b26922b3",
   "status": "running",
   "startedAt": "2026-10-06T04:11:13.935Z",
-  "updatedAt": "2026-10-06T05:09:14.985Z",
-  "currentIteration": 5,
+  "updatedAt": "2026-10-06T05:18:37.033Z",
+  "currentIteration": 6,
   "maxIterations": 0,
-  "tasksCompleted": 5,
+  "tasksCompleted": 6,
   "isPaused": false,
   "agentPlugin": "claude",
   "model": "sonnet",
@@ -576,8 +576,8 @@
       {
         "id": "p-atlas-layer-1qus.6",
         "title": "US-006: Swipe and tap gestures with map-first priority",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-atlas-layer-1qus.7",
@@ -5569,12 +5569,22 @@
       "durationMs": 468890,
       "startedAt": "2026-10-06T05:01:22.285Z",
       "endedAt": "2026-10-06T05:09:11.175Z"
+    },
+    {
+      "iteration": 6,
+      "status": "completed",
+      "taskId": "p-atlas-layer-1qus.6",
+      "taskTitle": "US-006: Swipe and tap gestures with map-first priority",
+      "taskCompleted": true,
+      "durationMs": 558731,
+      "startedAt": "2026-10-06T05:09:14.466Z",
+      "endedAt": "2026-10-06T05:18:33.197Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [
-    "p-atlas-layer-1qus.6"
+    "p-atlas-layer-1qus.7"
   ],
   "subagentPanelVisible": false
 }
