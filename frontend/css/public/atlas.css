@@ -582,6 +582,18 @@
     display: none;
 }
 
+/* A phone is too narrow for the full grip and bar: the row would be 2 cards.
+   A slimmer grip and bar make the row shorter, so about 3 squares fit at 390px. */
+@media (max-width: 480px) {
+    .atlas-sheet__grip {
+        height: 0.9rem;
+    }
+
+    .atlas-sheet__bar {
+        min-height: 1.75rem;
+    }
+}
+
 /* ── The cards ───────────────────────────────────────────────────────────── */
 /* One flex row. Flex, not grid, so the hero span, the orphan expansion and the
    zoom template of post-grid.css have no effect. Three classes beat

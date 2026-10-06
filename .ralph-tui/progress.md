@@ -45,3 +45,11 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - `_pagination = null` alone does not change the mounted Pagination. Call `setProps` too.
 ---
+
+## 2026-10-06 - p-xdaw
+- Decision: slimmer grip (1.1rem -> 0.9rem) and bar (2rem -> 1.75rem) at max-width 480px. Row height goes from about 115px to about 108px; 3 squares need row height <= 114px at 358px row width.
+- Files: `frontend/css/public/atlas.css` (+ bundles).
+- Not checked: no 390x844 screenshot taken; the count comes from the arithmetic in `fitColumns`.
+- **Learnings:**
+  - At 390px the 2-card result missed 3 by about 1px of card height, so a small trim is enough.
+---
