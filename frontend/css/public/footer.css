@@ -275,3 +275,9 @@ body.grid-zoomable .footer-zoom {
         order: 3;
     }
 }
+
+/* The map layer covers the footer position: only the `list` state shows it. */
+body[data-atlas-layer="mapList"] #footer-mount,
+body[data-atlas-layer="map"] #footer-mount {
+    display: none;
+}

@@ -41,6 +41,7 @@ import { dropBrokenImages } from '../utils/helpers.ts';
 import { flipGrid } from '../utils/gridFlip.ts';
 import { pluginHost } from './pluginHost.ts';
 import { mountAtlasLayerHandle } from '../plugins/tags-atlas/atlasLayerHandle.ts';
+import { mountAtlasLayerLayout } from '../plugins/tags-atlas/atlasLayerLayout.ts';
 
 import type { Post } from '../api/posts.ts';
 import type { PostCardProps } from '../components/public/PostCard.ts';
@@ -127,6 +128,7 @@ export class GridPager {
   _onGestureEnd: (e: Event) => void = () => {};
   _zoomWheelEl: HTMLElement | null = null;
   _atlasHandle: HTMLElement | null = null;
+  _atlasLayout: (() => void) | null = null;
 
   constructor(opts: GridPagerOptions) {
     this._o = {
@@ -166,7 +168,10 @@ export class GridPager {
     this._setupGestures();
     this._setupPageControls();
     const gm = this._o.gridMount();
-    if (gm && pluginHost.isEnabled('tags-atlas')) this._atlasHandle = mountAtlasLayerHandle(gm);
+    if (gm && pluginHost.isEnabled('tags-atlas')) {
+      this._atlasHandle = mountAtlasLayerHandle(gm);
+      this._atlasLayout ??= mountAtlasLayerLayout();
+    }
     if (this._o.zoom) this._setupZoomInputs();
     this._preloadAdjacentGrids();
     this._promoteGridAhead();
@@ -212,11 +217,15 @@ export class GridPager {
     this._teardown();
     this._atlasHandle?.remove();
     this._atlasHandle = null;
+    this._atlasLayout?.();
+    this._atlasLayout = null;
   }
   destroy() {
     this._teardown();
     this._atlasHandle?.remove();
     this._atlasHandle = null;
+    this._atlasLayout?.();
+    this._atlasLayout = null;
     this._committedGhost?.remove();
     this._committedGhost = null;
     if (this._o.zoom) {

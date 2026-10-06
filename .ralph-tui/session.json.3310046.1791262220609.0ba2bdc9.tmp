@@ -3,10 +3,10 @@
   "sessionId": "8a8488c5-a688-4a76-a57f-0982b26922b3",
   "status": "running",
   "startedAt": "2026-10-06T04:11:13.935Z",
-  "updatedAt": "2026-10-06T04:38:10.289Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-10-06T04:50:20.583Z",
+  "currentIteration": 2,
   "maxIterations": 0,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "model": "sonnet",
@@ -552,8 +552,8 @@
       {
         "id": "p-atlas-layer-1qus.2",
         "title": "US-002: Collapsed handle on all post list pages",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-atlas-layer-1qus.3",
@@ -5529,6 +5529,16 @@
       "durationMs": 796207,
       "startedAt": "2026-10-06T04:11:54.219Z",
       "endedAt": "2026-10-06T04:25:10.426Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "p-atlas-layer-1qus.2",
+      "taskTitle": "US-002: Collapsed handle on all post list pages",
+      "taskCompleted": true,
+      "durationMs": 775487,
+      "startedAt": "2026-10-06T04:25:14.522Z",
+      "endedAt": "2026-10-06T04:38:10.009Z"
     }
   ],
   "skippedTaskIds": [],

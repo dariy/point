@@ -669,3 +669,134 @@
 .atlas-layer-handle:focus-visible .atlas-layer-handle__grip {
     opacity: 0.6;
 }
+
+/* ── Layer: map + list, map only ─────────────────────────────────────────── */
+/* body[data-atlas-layer] is the only input. The header (z 110) stays above the
+   map (z 100), so the map slides down from behind it. The card row and the
+   handle sit above the map, below the header. */
+body {
+    --atlas-layer-list-h: max(20dvh, calc(var(--atlas-layer-handle-h, 20px) + var(--atlas-layer-row-min, 120px)));
+}
+
+.atlas-layer-map {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--atlas-layer-header-h, 0);
+    bottom: 0;
+    z-index: 100;
+    background: var(--bg-secondary, var(--bg-primary));
+    transform: translateY(-100%);
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.28s ease, visibility 0s linear 0.28s;
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-map,
+body[data-atlas-layer="map"] .atlas-layer-map {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 0.28s ease;
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-map {
+    bottom: var(--atlas-layer-list-h);
+}
+
+body[data-atlas-layer="map"] .atlas-layer-map {
+    bottom: var(--atlas-layer-handle-h, 20px);
+}
+
+body[data-atlas-layer="mapList"],
+body[data-atlas-layer="map"] {
+    overflow: hidden;
+}
+
+/* The handle and the card row become one strip fixed at the bottom. */
+body[data-atlas-layer="mapList"] .atlas-layer-handle,
+body[data-atlas-layer="map"] .atlas-layer-handle {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 105;
+    background: var(--bg-primary);
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-handle {
+    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+}
+
+body[data-atlas-layer="map"] .atlas-layer-handle {
+    bottom: 0;
+}
+
+body[data-atlas-layer="mapList"] #grid-mount {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+    z-index: 105;
+    display: block;
+    background: var(--bg-primary);
+    padding: 0 var(--spacing-md) env(safe-area-inset-bottom, 0);
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x;
+    overscroll-behavior: contain;
+}
+
+/* In `map` no card shows: the handle is all that is left of the list. */
+body[data-atlas-layer="map"] #grid-mount,
+body[data-atlas-layer="map"] #pagination-mount {
+    display: none;
+}
+
+body[data-atlas-layer="mapList"] #pagination-mount {
+    display: none;
+}
+
+/* One flex row of square cards. Flex, not grid, so the zoom template and the
+   hero span of post-grid.css have no effect. */
+body[data-atlas-layer="mapList"] #grid-mount .posts-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--atlas-layer-gap, 8px);
+    height: 100%;
+    grid-template-columns: none;
+    grid-template-rows: none;
+}
+
+body[data-atlas-layer="mapList"] #grid-mount .post-card-slot {
+    flex: 0 0 auto;
+    height: 100%;
+    width: auto;
+    aspect-ratio: var(--atlas-layer-aspect, 1);
+    min-height: 0;
+    grid-column: auto !important;
+}
+
+body[data-atlas-layer="mapList"] #grid-mount .post-card {
+    min-height: 0;
+    border-radius: var(--border-radius);
+}
+
+body[data-atlas-layer="mapList"] #grid-mount .post-card-content > :not(.post-card-title) {
+    display: none;
+}
+
+body[data-atlas-layer="mapList"] #grid-mount .post-card-title {
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-layer-map,
+    body[data-atlas-layer="mapList"] .atlas-layer-map,
+    body[data-atlas-layer="map"] .atlas-layer-map {
+        transition: none;
+    }
+}
