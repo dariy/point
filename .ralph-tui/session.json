@@ -3,10 +3,10 @@
   "sessionId": "71233477-d675-4e95-9d38-02745c92cab0",
   "status": "running",
   "startedAt": "2026-10-07T01:03:45.083Z",
-  "updatedAt": "2026-10-07T01:04:02.821Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-10-07T01:16:39.295Z",
+  "currentIteration": 1,
   "maxIterations": 0,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "model": "sonnet",
@@ -546,8 +546,8 @@
       {
         "id": "p-atlas-header-line-f97s.1",
         "title": "US-001: One-line header layout",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "p-atlas-header-line-f97s.2",
@@ -5639,11 +5639,22 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "p-atlas-header-line-f97s.1",
+      "taskTitle": "US-001: One-line header layout",
+      "taskCompleted": true,
+      "durationMs": 751846,
+      "startedAt": "2026-10-07T01:04:02.267Z",
+      "endedAt": "2026-10-07T01:16:34.113Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [
-    "p-atlas-header-line-f97s.1"
+    "p-atlas-header-line-f97s.2"
   ],
   "subagentPanelVisible": false
 }

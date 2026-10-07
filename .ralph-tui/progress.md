@@ -22,3 +22,14 @@ after each iteration and it's included in prompts for context.
   - Header re-fill (graph breadcrumb update) remounts the timeline; the module-level view restore hides the blink.
   - The old histogram timeline is clipped to header height; US-002 replaces the content.
 ---
+
+## 2026-10-06 - p-atlas-header-line-f97s.2
+- Rewrote the timeline plugin as a pill strip. Collapsed: one "All years" pill. Expanded: one `aria-pressed` button per year (decade pills dropped), ascending, no arrows, inactive pills `opacity: .5` until hover/focus. The strip scrolls sideways (touch, wheel) and centres the active pill.
+- Same host interface kept: `onRangeChange({from,to,isFullExtent})`, `setScope`, `setCount`, `mount()` export. Added `expand()`, `collapse()`, `focusYear()` for US-003/US-004.
+- Interim: click on "All years" expands to the last focused year (else newest); no collapse control until US-003.
+- Files: plugins/timeline/index.ts, css/public/timeline.css, test/Timeline.test.ts (rewritten, 5 tests).
+- Checked in a browser at 1440px and 390px on :8001.
+- **Learnings:**
+  - A slot plugin must keep its `export function mount(el, ctx)`; without it the slot stays empty and nothing errors.
+  - `scripts/check.sh` e2e failures this run were only Atlas layer gesture/list tests, and the set changed between runs (flaky, as in US-001).
+---
