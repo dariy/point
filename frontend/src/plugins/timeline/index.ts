@@ -118,6 +118,24 @@ export function renderTimeline(years: number[], scope: YearSpan | null) {
   `;
 }
 
+/**
+ * The short form's spinner panel: the year before `year`, `year`, the year
+ * after, top to bottom, with a "…" mark on a side that hides more years.
+ */
+export function renderSpinner(years: number[], year: number) {
+  const win = yearWindow(years, year);
+  return html`
+    <div class="timeline-spinner" role="listbox" aria-label="Year">
+      ${win.moreBefore ? html`<span class="timeline-spinner-more" aria-hidden="true">…</span>` : ""}
+      ${win.shown.map((y) => {
+        const on = y === year;
+        return html`<button type="button" class="timeline-spinner-year${on ? " is-active" : ""}" data-action="spin" data-year="${y}" role="option" aria-selected="${on ? "true" : "false"}">${y}</button>`;
+      })}
+      ${win.moreAfter ? html`<span class="timeline-spinner-more" aria-hidden="true">…</span>` : ""}
+    </div>
+  `;
+}
+
 /** The year the next expansion focuses: the last one picked, else the newest. */
 let lastFocusedYear: number | null = null;
 
@@ -133,6 +151,16 @@ export class Timeline extends Component<TimelineProps> {
   _onClick = (e: Event) => this._handleClick(e as MouseEvent);
   _onKeydown = (e: Event) => {
     const key = (e as KeyboardEvent).key;
+    // The open spinner panel: Up/Down move, Enter confirms, Escape cancels.
+    if (this.state.panel) {
+      if (key === "ArrowUp" || key === "ArrowDown") this._previewStep(key === "ArrowUp" ? -1 : 1);
+      else if (key === "Enter") this._confirmPanel();
+      else if (key === "Escape") this._closePanel();
+      else return;
+      e.preventDefault();
+      this.$(".timeline-spinner-year.is-active, .timeline-pill-btn.is-active")?.focus();
+      return;
+    }
     // Escape on the focused timeline collapses it.
     if (key === "Escape" && this.state.scope) this.collapse();
     // Left and Right move the expanded strip one year.
@@ -147,7 +175,9 @@ export class Timeline extends Component<TimelineProps> {
   static SLIDE_STEP_PX = 40;
   /** Wheel delta that moves one year. */
   static WHEEL_STEP = 60;
-  _drag: { id: number, x: number, moved: boolean } | null = null;
+  /** A vertical drag this many px tall moves the spinner one year. */
+  static SPIN_STEP_PX = 32;
+  _drag: { id: number, x: number, y: number, moved: boolean, vertical: boolean } | null = null;
   _wheelAcc = 0;
   _wheelTimer: ReturnType<typeof setTimeout> | null = null;
   /** Wheel pause, in ms, that commits the previewed year. */
@@ -157,6 +187,15 @@ export class Timeline extends Component<TimelineProps> {
   _onDragMove = (e: PointerEvent) => {
     const d = this._drag;
     if (!d || e.pointerId !== d.id) return;
+    if (d.vertical) {
+      const dy = e.clientY - d.y;
+      if (Math.abs(dy) < Timeline.SPIN_STEP_PX) return;
+      d.moved = true;
+      // Drag down shows the earlier year, as the column follows the finger.
+      d.y = e.clientY;
+      this._previewStep(dy > 0 ? -1 : 1);
+      return;
+    }
     const dx = e.clientX - d.x;
     if (Math.abs(dx) < Timeline.SLIDE_STEP_PX) return;
     if (!d.moved) {
@@ -175,12 +214,17 @@ export class Timeline extends Component<TimelineProps> {
     this._slid = true;
     // A touch slide sends no click: clear the flag after the click would arrive.
     setTimeout(() => { this._slid = false; }, 0);
-    this._commitPreview();
+    // The spinner panel keeps the previewed year until a confirm.
+    if (!d.vertical) this._commitPreview();
+  };
+  /** A pointerdown outside the timeline closes the spinner panel without a change. */
+  _onOutsideDown = (e: Event) => {
+    if (!this.container.contains(e.target as Node)) this._closePanel();
   };
 
   constructor(container: HTMLElement, props: TimelineProps = {}) {
     super(container, props);
-    this.state = { years: [] as number[], scope: null as YearSpan | null, isLoading: true, preview: null as number | null };
+    this.state = { years: [] as number[], scope: null as YearSpan | null, isLoading: true, preview: null as number | null, panel: false };
   }
 
   mount(): void {
@@ -197,6 +241,40 @@ export class Timeline extends Component<TimelineProps> {
     if (this._wheelTimer) clearTimeout(this._wheelTimer);
     this._wheelTimer = null;
     this._endDrag();
+    document.removeEventListener("pointerdown", this._onOutsideDown, true);
+  }
+
+  /** The short form: the header fold shows only the active pill (fold 70). */
+  _isShort(): boolean {
+    return !!this.container.closest?.(".fold-timeline");
+  }
+
+  /** Open the spinner panel on the active year. */
+  _openPanel(): void {
+    if (!this.state.scope || this.state.panel) return;
+    this.setState({ panel: true, preview: null });
+    document.addEventListener("pointerdown", this._onOutsideDown, true);
+    this.$(".timeline-spinner-year.is-active")?.focus();
+  }
+
+  /** Close the spinner panel without a change (Escape, an outside tap). */
+  _closePanel(): void {
+    if (!this.state.panel) return;
+    document.removeEventListener("pointerdown", this._onOutsideDown, true);
+    this.setState({ panel: false, preview: null });
+  }
+
+  /** Close the spinner panel and report the previewed year: one focusYear call. */
+  _confirmPanel(): void {
+    const scope: YearSpan | null = this.state.scope;
+    if (!this.state.panel || !scope) return;
+    const year: number = this.state.preview ?? anchorYear(this.state.years, scope);
+    document.removeEventListener("pointerdown", this._onOutsideDown, true);
+    this.state.panel = false;
+    this.state.preview = null;
+    this.focusYear(year);
+    // focusYear does not re-render when the year did not change.
+    this._rerender();
   }
 
   _endDrag(): void {
@@ -256,8 +334,33 @@ export class Timeline extends Component<TimelineProps> {
       e.stopPropagation();
       return;
     }
+    const spin = (e.target as Element | null)?.closest?.<HTMLElement>(".timeline-spinner-year");
+    if (spin) {
+      // In the panel a tap acts at once: the active year confirms, a neighbour is previewed.
+      const y = parseInt(spin.dataset.year ?? "", 10);
+      const shown: number | null = this.state.preview ?? (this.state.scope ? anchorYear(this.state.years, this.state.scope) : null);
+      if (y === shown) this._confirmPanel();
+      else if (!Number.isNaN(y)) this.setState({ preview: y });
+      return;
+    }
     const btn = (e.target as Element | null)?.closest?.<HTMLElement>(".timeline-pill-btn");
     const year = parseInt(btn?.dataset.year ?? "", 10);
+    // Short form: a tap on the one pill opens the panel at once, another tap closes it.
+    if (btn && btn.dataset.action === "pick" && (this.state.panel || this._isShort())) {
+      const now = Date.now();
+      if (!this.state.panel) {
+        this._lastTap = now;
+        this._openPanel();
+      } else if (e.detail !== 0 && now - this._lastTap < Timeline.DOUBLE_TAP_MS) {
+        // A double tap still toggles: the first tap opened the panel.
+        this._lastTap = 0;
+        this._closePanel();
+        this.toggle();
+      } else {
+        this._closePanel();
+      }
+      return;
+    }
     // A tap on the empty strip counts toward a double tap but has no single-tap action.
     const single = () => {
       if (!btn) return;
@@ -324,13 +427,17 @@ export class Timeline extends Component<TimelineProps> {
 
   render() {
     if (this.state.isLoading) return html``;
-    const { years, scope, preview } = this.state;
-    return renderTimeline(years, scope && preview != null ? { from: preview, to: preview } : scope);
+    const { years, scope, preview, panel } = this.state;
+    const shown = scope && preview != null ? { from: preview, to: preview } : scope;
+    const strip = renderTimeline(years, shown);
+    if (!panel || !shown) return strip;
+    return html`${strip}${renderSpinner(years, shown.to)}`;
   }
 
   afterRender(): void {
     // The pills set the header slot's width: the header folds again.
     this.container.dispatchEvent(new CustomEvent("timeline:render", { bubbles: true }));
+    this._bindSpinner();
     const strip = this.$(".timeline-strip");
     if (!strip || !this.state.scope) return;
     strip.addEventListener("wheel", (e: WheelEvent) => {
@@ -354,14 +461,40 @@ export class Timeline extends Component<TimelineProps> {
     strip.addEventListener("pointerdown", (e: PointerEvent) => {
       if (this._drag || (e.pointerType === "mouse" && e.button !== 0)) return;
       e.stopPropagation();
-      this._drag = { id: e.pointerId, x: e.clientX, moved: false };
-      // The preview re-renders the strip, so the drag follows the pointer on
-      // window until the release, also outside the strip.
-      window.addEventListener("pointermove", this._onDragMove);
-      window.addEventListener("pointerup", this._onDragEnd);
-      window.addEventListener("pointercancel", this._onDragEnd);
+      // The short form's one pill opens the panel: no horizontal slide.
+      if (this.state.panel || this._isShort()) return;
+      this._startDrag(e, false);
     });
     this._scrollActiveIntoView();
+  }
+
+  /** Follow a drag on window until the release, also outside the strip or panel. */
+  _startDrag(e: PointerEvent, vertical: boolean): void {
+    this._drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, vertical };
+    // The preview re-renders the strip, so the drag follows the pointer on
+    // window until the release, also outside the strip or the panel.
+    window.addEventListener("pointermove", this._onDragMove);
+    window.addEventListener("pointerup", this._onDragEnd);
+    window.addEventListener("pointercancel", this._onDragEnd);
+  }
+
+  /** The spinner panel: a vertical drag, swipe or wheel moves the previewed year. */
+  _bindSpinner(): void {
+    const panel = this.$(".timeline-spinner");
+    if (!panel) return;
+    panel.addEventListener("wheel", (e: WheelEvent) => {
+      e.preventDefault();
+      this._wheelAcc += e.deltaY;
+      if (Math.abs(this._wheelAcc) < Timeline.WHEEL_STEP) return;
+      const dir = Math.sign(this._wheelAcc);
+      this._wheelAcc = 0;
+      this._previewStep(dir);
+    }, { passive: false });
+    panel.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (this._drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.stopPropagation();
+      this._startDrag(e, true);
+    });
   }
 
   /** Centre the active pill when the slot clips the strip. */

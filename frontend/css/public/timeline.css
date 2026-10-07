@@ -125,6 +125,63 @@
     color: var(--color-primary);
 }
 
+/* The short form's spinner panel (header fold 70): a column of the year
+   before, the active year and the year after, under the one pill. A vertical
+   drag, swipe or wheel moves the year; touch-action keeps the swipe here. */
+.timeline-spinner {
+    position: absolute;
+    top: calc(100% + var(--spacing-xs));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--tag-link-border-radius-alt1);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+    touch-action: none;
+    cursor: grab;
+}
+
+.timeline-spinner-more {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.timeline-spinner-year {
+    appearance: none;
+    min-width: 5em;
+    min-height: 44px;
+    padding: 0 var(--spacing-md);
+    background: none;
+    border: var(--border-width) solid transparent;
+    border-radius: var(--tag-link-border-radius-alt1);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    opacity: 0.6;
+    cursor: pointer;
+}
+
+.timeline-spinner-year.is-active {
+    opacity: 1;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+}
+
+.timeline-spinner-year:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .timeline-pill-btn {
         transition: none !important;
