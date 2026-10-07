@@ -9,6 +9,7 @@
  */
 
 import { loadLeaflet, TILE_ATTR, TILE_DARK, TILE_LIGHT, TILE_MAX_NATIVE_ZOOM } from '../../utils/leaflet.ts';
+import { navigate } from '../../utils/helpers.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { AtlasPlaces } from './AtlasPlaces.ts';
 import { getAtlasLayerState, replaceSearch, searchWithView, viewFromSearch } from './atlasLayerState.ts';
@@ -31,6 +32,17 @@ function isDarkTheme(): boolean {
   return t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 }
 
+/**
+ * Client-side move to a geo-tag's page, or home for `null`. The router keeps the
+ * view mode; the year range travels as `?timeline=`.
+ */
+function openPlace(slug: string | null): void {
+  const years = ViewContext.current().years;
+  const path = slug ? `/tags/${encodeURIComponent(slug)}` : '/';
+  if (location.pathname === path) return;
+  navigate(path + (years ? `?timeline=${years[0]}-${years[1]}` : ''));
+}
+
 /** Start the controller. It waits for the first state other than `list`. */
 export function mountAtlasLayerMap(
   opts: AtlasLayerMapOptions,
@@ -44,9 +56,6 @@ export function mountAtlasLayerMap(
   let ro: ResizeObserver | null = null;
 
   const onTheme = () => tiles?.setUrl(isDarkTheme() ? TILE_DARK : TILE_LIGHT);
-
-  // The list's filter chip was removed: drop the pick on the map too.
-  const onPlaceClear = () => places?._clearSelection();
 
   async function build() {
     if (map || loading) return;
@@ -83,15 +92,14 @@ export function mountAtlasLayerMap(
       bounds: [[-90, -180], [90, 180]],
     }).addTo(map);
     document.addEventListener('themechange', onTheme);
-    document.addEventListener('atlas-place-clear', onPlaceClear);
 
     places = new AtlasPlaces({
       L,
       map,
       root: opts.container,
       isAlive: opts.isAlive,
-      // The picked geo-tag filters the post list (see HomePage._fetchFeed).
-      onSelect: (tag) => ViewContext.update({ place: tag?.slug ?? null }, { replace: true }),
+      // The picked geo-tag opens as a tag page; clearing it goes home.
+      onSelect: (tag) => openPlace(tag?.slug ?? null),
     });
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
@@ -115,7 +123,6 @@ export function mountAtlasLayerMap(
       mo.disconnect();
       ro?.disconnect();
       document.removeEventListener('themechange', onTheme);
-      document.removeEventListener('atlas-place-clear', onPlaceClear);
       places?.destroy();
       map?.remove();
       map = null;

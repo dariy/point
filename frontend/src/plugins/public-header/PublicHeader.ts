@@ -188,10 +188,10 @@ export class PublicHeader extends Component<PublicHeaderProps> {
 
             <!-- Burger (shown when fold-nav active) -->
             <div class="nav-burger" id="nav-burger">
-              <button class="header-action-btn burger-toggle" type="button" aria-label="Menu" aria-expanded="false">
+              <button class="header-action-btn burger-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="burger-dropdown">
                 ${raw(MENU_SVG)}
               </button>
-              <div class="burger-dropdown">
+              <div class="burger-dropdown" id="burger-dropdown">
                 <form class="burger-search-form" action="/search" method="get" role="search">
                   ${raw(SEARCH_SVG)}
                   <input type="search" name="q" placeholder="${searchPlaceholder}" autocomplete="off">
@@ -418,7 +418,15 @@ export class PublicHeader extends Component<PublicHeaderProps> {
       });
       this._onDocument('click', e => {
         if (!navBurger.contains(e.target as Node)) this._closeBurger();
+        else if ((e.target as Element).closest?.('a[href]')) this._closeBurger();
       });
+      this._onDocument('keydown', e => {
+        if ((e as KeyboardEvent).key === 'Escape' && navBurger.classList.contains('is-open')) {
+          this._closeBurger();
+          (burgerBtn as HTMLElement | null)?.focus();
+        }
+      });
+      this._onDocument('popstate', () => this._closeBurger());
     }
 
     // Initial fold pass (HeaderFold's own ResizeObserver keeps it current).
@@ -459,7 +467,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
   }
 
   /**
-   * Register the header's own fold stages. Order slots 30 (nav links → More)
+   * Register the header's own fold stages. Order slot 30 (nav links → More)
    * belongs to the nav-menu plugin; see utils/headerFold.ts for the full map.
    */
   _registerCoreFolds() {
@@ -478,9 +486,9 @@ export class PublicHeader extends Component<PublicHeaderProps> {
       ops: () => [() => group.classList.add('fold-title')]
     });
 
-    // 20 — history: facet pairs, then ancestor tag pairs, left to right. The
+    // 35 — history (after nav links fold at 30): facet pairs, then ancestor tag pairs, left to right. The
     // blog-title (site) pair is spared here; it folds at 50.
-    fold.register(20, {
+    fold.register(35, {
       reset: () => {
         group.querySelectorAll('.crumb-pair.folded').forEach(p => {
           p.classList.remove('folded', 'show-ellipsis');
@@ -512,7 +520,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     });
 
     // 50 — brand: the blog-title crumb folds, leaving the logo as the brand.
-    // (Unfolding is covered by stage 20's reset, which unfolds every pair.)
+    // (Unfolding is covered by stage 35's reset, which unfolds every pair.)
     fold.register(50, {
       ops: () => {
         const sitePair = group.querySelector('#site-crumb-pair');

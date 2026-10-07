@@ -45,6 +45,16 @@ describe('Atlas layer URL state', () => {
       status: 'published', tags: ['atlas-url'],
     });
     if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + (await post.text()));
+    // Year tags exist before any page asks for the timeline.
+    for (const y of ['2025', '2026']) {
+      const tag = await api('/api/tags', { name: y, slug: y, kind: 'year' });
+      if (!tag.ok && tag.status !== 409) throw new Error('Tag creation failed: ' + (await tag.text()));
+      const post = await api('/api/posts', {
+        title: 'Year probe ' + y, slug: 'year-probe-' + y, content: 'Body.', excerpt: 'Card.',
+        status: 'published', published_at: y + '-06-01T12:00:00Z', tags: [y],
+      });
+      if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + (await post.text()));
+    }
   });
 
   beforeEach(async () => {
@@ -100,18 +110,13 @@ describe('Atlas layer URL state', () => {
 
   const cards = () => page.locator('#grid-mount .post-card').count();
 
-  it('a deep link with place and atlas restores the filter and the map selection', async () => {
+  it('an old place link opens the geo-tag page and keeps the view', async () => {
     await page.goto(BASE + '/?place=urlton&view=split');
+    await page.waitForFunction(() => location.pathname === '/tags/urlton');
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
-    await page.locator('.atlas-filter-chip').waitFor();
     await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length === 1);
-    await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
-    await page.waitForFunction(() => /[?&]place=urlton/.test(location.search) && /view=split/.test(location.search));
-    await page.reload();
-    await page.locator('.atlas-filter-chip').waitFor();
-    await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length === 1);
-    assert.equal(await cards(), 1);
     assert.match(await search(), /view=split/);
+    assert.ok(!/place=/.test(await search()));
   });
 
   it('a deep link with a timeline range keeps the range after a reload', async () => {
@@ -127,12 +132,11 @@ describe('Atlas layer URL state', () => {
   it('invalid filter values are ignored without an error', async () => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    for (const q of ['?place=no-such-place-xyz', '?timeline=abc-def', '?timeline=2020-2010', '?timeline=1-2-3', '?view=bogus&at=x,y,z']) {
+    for (const q of ['?timeline=abc-def', '?timeline=2020-2010', '?timeline=1-2-3', '?view=bogus&at=x,y,z']) {
       await page.goto(BASE + '/' + q);
       await page.locator('.atlas-layer-handle').waitFor();
       await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length > 0);
       assert.equal(await state(), 'list', q);
-      assert.equal(await page.locator('.atlas-filter-chip').count(), 0, q);
     }
     assert.deepEqual(errors, []);
   });
@@ -172,5 +176,41 @@ describe('Atlas layer URL state', () => {
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
     await page.goto(BASE + '/?view=bogus');
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
+  });
+
+  it('a year pill on a year tag page opens that year without a reload, and Back restores it', async () => {
+    await page.goto(BASE + '/tags/2025?view=list');
+    await page.locator('.timeline-pill-btn[data-year="2026"]').waitFor();
+    await page.evaluate(() => { (window as unknown as { __kept?: boolean }).__kept = true; });
+    await page.locator('.timeline-pill-btn[data-year="2026"]').click();
+    await page.waitForFunction(() => location.pathname === '/tags/2026');
+    await page.waitForFunction(() => document.querySelector('.timeline-pill-btn.is-active')?.textContent === '2026');
+    assert.match(await page.locator('#header-mount').innerText(), /2026/);
+    await page.waitForFunction(() => document.querySelector('#grid-mount .post-card')?.textContent?.includes('Year probe 2026'));
+    await page.goBack();
+    await page.waitForFunction(() => location.pathname === '/tags/2025');
+    await page.waitForFunction(() => document.querySelector('.timeline-pill-btn.is-active')?.textContent === '2025');
+    await page.waitForFunction(() => document.querySelector('#grid-mount .post-card')?.textContent?.includes('Year probe 2025'));
+    assert.equal(await page.evaluate(() => (window as unknown as { __kept?: boolean }).__kept), true);
+  });
+
+  it('a double click toggles the timeline; a year-tag page collapses to home', async () => {
+    await page.goto(BASE + '/?view=list');
+    const all = page.locator('.timeline-pill-btn[data-action="expand"]');
+    await all.waitFor();
+    await all.click();
+    await page.waitForTimeout(500);
+    assert.equal(await page.locator('.timeline-container.is-collapsed').count(), 1, 'one tap does not expand');
+    await all.dblclick();
+    await page.locator('.timeline-container.is-expanded').waitFor();
+    assert.equal(await page.locator('.timeline-pill-btn.is-active').count(), 1);
+    await page.locator('.timeline-container').dblclick();
+    await page.locator('.timeline-container.is-collapsed').waitFor();
+
+    await page.goto(BASE + '/tags/2025?view=list');
+    await page.locator('.timeline-pill-btn.is-active[data-year="2025"]').waitFor();
+    await page.locator('.timeline-pill-btn.is-active').dblclick();
+    await page.waitForFunction(() => location.pathname !== '/tags/2025');
+    await page.locator('.timeline-container.is-collapsed').waitFor();
   });
 });

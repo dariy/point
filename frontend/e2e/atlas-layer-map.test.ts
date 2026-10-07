@@ -137,48 +137,36 @@ describe('Atlas layer map', () => {
     assert.ok(tilesCover || tiles.length > 0, 'the map follows the new box');
   });
 
-  describe('place filter', () => {
+  describe('geo-tag selection', () => {
     const titles = () => page.evaluate(() =>
       [...document.querySelectorAll('#grid-mount .post-card-title')].map((e) => e.textContent?.trim() ?? ''));
 
-    // Not only the geo-tag's post: the grid can hold one card on a small screen.
-    const unfiltered = () => page.waitForFunction(() =>
-      [...document.querySelectorAll('#grid-mount .post-card-title')].some((e) => e.textContent?.trim() !== 'Map probe two'));
-
     const selectMapton = async () => {
       await openMap('mapList');
+      await page.evaluate(() => { (window as any).__noReload = true; });
       await page.locator('.atlas-layer-map .atlas-marker').first().click();
-      await page.waitForFunction(() => /[?&]place=mapton/.test(location.search));
+      await page.waitForFunction(() => location.pathname === '/tags/mapton');
       await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length === 1);
     };
 
-    it('lists only the posts with the selected geo-tag, in mapList and list', async () => {
+    it('opens the geo-tag page client-side and keeps the view mode', async () => {
       await selectMapton();
-      // The tag's own post list is the truth to compare with.
       const tagged = ((await (await fetch(BASE + '/api/pages/tags/mapton')).json()) as any).posts.map((p: any) => p.title);
       assert.ok(tagged.length >= 1);
-      assert.deepEqual((await titles()).sort(), [...tagged].sort(), 'mapList shows the tagged posts only');
-      assert.ok(!(await titles()).includes('Map probe one'));
-      await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
-      await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length >= 1);
-      assert.deepEqual((await titles()).sort(), [...tagged].sort(), 'list shows the tagged posts only');
-      assert.ok(await page.locator('.atlas-filter-chip').isVisible(), 'the filter shows as a chip');
+      assert.deepEqual((await titles()).sort(), [...tagged].sort());
+      assert.equal(await page.evaluate(() => (window as any).__noReload === true), true, 'no full page load');
+      assert.equal(await page.evaluate(() => document.body.dataset.atlasLayer), 'mapList');
+      assert.match(await page.evaluate(() => location.search), /view=split/);
+      assert.match((await page.locator('.site-breadcrumb').innerText()).toLowerCase(), /mapton/, 'breadcrumbs show the geo-tag');
     });
 
-    it('brings the whole collection back when the chip is removed', async () => {
-      await selectMapton();
-      await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
-      await page.locator('.atlas-filter-chip').click();
-      await unfiltered();
-      assert.equal(await page.locator('.atlas-filter-chip').count(), 0);
-      assert.ok(!/place=/.test(await page.evaluate(() => location.search)));
-    });
-
-    it('brings the whole collection back when the selection is cleared on the map', async () => {
+    it('goes back to the home page when the selection is cleared on the map', async () => {
       await selectMapton();
       await page.locator('.atlas-layer-map').click({ position: { x: 200, y: 450 } });
-      await unfiltered();
-      assert.equal(await page.locator('.atlas-filter-chip').count(), 0);
+      await page.waitForFunction(() => location.pathname === '/');
+      assert.equal(await page.evaluate(() => (window as any).__noReload === true), true, 'no full page load');
+      assert.equal(await page.evaluate(() => document.body.dataset.atlasLayer), 'mapList');
+      assert.equal(await page.locator('#atlas-filter-mount').count(), 0);
     });
   });
 });

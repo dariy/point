@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { yearsOf, renderTimeline } from '../src/plugins/timeline/index.ts';
+import { yearsOf, renderTimeline, yearOfTag } from '../src/plugins/timeline/index.ts';
 import type { TimelinePill } from '../src/api/timeline.ts';
 
 const pill = (year: number, is_decade = false): TimelinePill => ({
@@ -41,5 +41,17 @@ describe('renderTimeline', () => {
   test('every pill is a button', () => {
     const out = markup([2024, 2025], { from: 2024, to: 2024 });
     assert.strictEqual(out.match(/<button type="button"/g)?.length, 2);
+  });
+});
+
+describe('yearOfTag', () => {
+  test('a year tag gives its year', () => {
+    assert.strictEqual(yearOfTag({ kind: 'year', slug: '2026' }), 2026);
+  });
+
+  test('other kinds and bad slugs give null', () => {
+    assert.strictEqual(yearOfTag({ kind: 'tag', slug: '2026' }), null);
+    assert.strictEqual(yearOfTag({ kind: 'year', slug: 'abc' }), null);
+    assert.strictEqual(yearOfTag(null), null);
   });
 });

@@ -15,8 +15,8 @@
  *
  * Canonical order slots (leave gaps for future stages):
  *   10  subtitle / ornament        (PublicHeader)
- *   20  ancestor crumbs → "…"      (PublicHeader, over Breadcrumbs' DOM)
  *   30  nav links → More ▾         (nav-menu plugin)
+ *   35  ancestor crumbs → "…"      (PublicHeader, over Breadcrumbs' DOM)
  *   40  nav zone → burger          (PublicHeader)
  *   50  brand text → logo only     (PublicHeader, site crumb pair)
  *   60  current crumb → ellipsis   (PublicHeader)

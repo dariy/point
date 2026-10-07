@@ -28,9 +28,21 @@ export interface TimelineProps {
   initialRange?: YearSpan;
   /** A year to open on. Expands the timeline. */
   initialYear?: string;
+  /** Show `initialYear` without reporting it: the page already lists that year (a year tag). */
+  quiet?: boolean;
   /** The host's post count. Not shown. */
   total?: number;
   canShow?: boolean;
+}
+
+/**
+ * The year a tag stands for, else null. The server's rule: kind = 'year' and
+ * the year is the slug read as an integer (queries_posts.go, CAST(slug AS INTEGER)).
+ */
+export function yearOfTag(tag: { kind?: string, slug?: string } | null | undefined): number | null {
+  if (!tag || tag.kind !== "year") return null;
+  const y = parseInt(tag.slug ?? "", 10);
+  return Number.isNaN(y) ? null : y;
 }
 
 /** The years that have posts, ascending. Decade pills are not years. */
@@ -74,14 +86,14 @@ let lastFocusedYear: number | null = null;
  * there is no year filter.
  */
 export class Timeline extends Component<TimelineProps> {
-  actions = {
-    expand(this: Timeline) {
-      this.expand();
-    },
-    pick(this: Timeline, _e: Event, el: Element) {
-      const year = parseInt(el.getAttribute("data-year") ?? "", 10);
-      if (!Number.isNaN(year)) this.focusYear(year);
-    }
+  /** Two taps within this many ms make a double tap. */
+  static DOUBLE_TAP_MS = 300;
+  _lastTap = 0;
+  _tapTimer: ReturnType<typeof setTimeout> | null = null;
+  _onClick = (e: Event) => this._handleClick(e as MouseEvent);
+  _onKeydown = (e: Event) => {
+    // Escape on the focused timeline collapses it.
+    if ((e as KeyboardEvent).key === "Escape" && this.state.scope) this.collapse();
   };
 
   constructor(container: HTMLElement, props: TimelineProps = {}) {
@@ -90,7 +102,58 @@ export class Timeline extends Component<TimelineProps> {
   }
 
   mount(): void {
+    this.container.addEventListener("click", this._onClick);
+    this.container.addEventListener("keydown", this._onKeydown);
     this._fetchData();
+  }
+
+  beforeUnmount(): void {
+    this.container.removeEventListener("click", this._onClick);
+    this.container.removeEventListener("keydown", this._onKeydown);
+    if (this._tapTimer) clearTimeout(this._tapTimer);
+    this._tapTimer = null;
+  }
+
+  /**
+   * A keyboard click (detail 0) acts at once: Enter on "All years" expands.
+   * A pointer click waits for a second tap: two within DOUBLE_TAP_MS toggle the
+   * state and send no single-tap action; one tap picks its year when the wait ends.
+   */
+  _handleClick(e: MouseEvent): void {
+    const btn = (e.target as Element | null)?.closest?.<HTMLElement>(".timeline-pill-btn");
+    const year = parseInt(btn?.dataset.year ?? "", 10);
+    // A tap on the empty strip counts toward a double tap but has no single-tap action.
+    const single = () => {
+      if (!btn) return;
+      if (btn.dataset.action === "expand") this.expand();
+      else if (!Number.isNaN(year)) this.focusYear(year);
+    };
+    if (e.detail === 0) {
+      single();
+      return;
+    }
+    const now = Date.now();
+    if (this._tapTimer && now - this._lastTap < Timeline.DOUBLE_TAP_MS) {
+      clearTimeout(this._tapTimer);
+      this._tapTimer = null;
+      this._lastTap = 0;
+      this.toggle();
+      return;
+    }
+    this._lastTap = now;
+    if (this._tapTimer) clearTimeout(this._tapTimer);
+    // "All years" has no single-tap action: it only expands on a double tap or Enter.
+    this._tapTimer = setTimeout(() => {
+      this._tapTimer = null;
+      if (btn && btn.dataset.action !== "expand") single();
+    }, Timeline.DOUBLE_TAP_MS);
+  }
+
+  /** Collapsed ↔ expanded. */
+  toggle(): void {
+    if (this.state.isLoading) return;
+    if (this.state.scope) this.collapse();
+    else this.expand();
   }
 
   async _fetchData(): Promise<void> {
@@ -113,9 +176,8 @@ export class Timeline extends Component<TimelineProps> {
       // A range over every year filters nothing: show it collapsed.
       if (scope && scope.from <= years[0] && scope.to >= years[years.length - 1]) scope = null;
       this.state = { years, scope, isLoading: false };
-      this._bindActions();
       this._rerender();
-      if (scope && this.props.mode === "filter") this._emit(scope);
+      if (scope && this.props.mode === "filter" && !this.props.quiet) this._emit(scope);
     } catch (err) {
       if ((err as { status?: number }).status !== 404) {
         console.error("Timeline fetch failed:", err);

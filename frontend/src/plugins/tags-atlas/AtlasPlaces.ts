@@ -282,9 +282,10 @@ export class AtlasPlaces {
     this._restoreFromUrl();
   }
 
-  /** A page load with `?place=slug` reselects that place. An unknown slug is ignored. */
+  /** A load of `/tags/<slug>` reselects that place. A tag that is not on the map is ignored. */
   _restoreFromUrl(): void {
-    const slug = ViewContext.current().place;
+    const vc = ViewContext.current();
+    const slug = vc.path.startsWith('/tags/') ? vc.tag : null;
     if (!slug || this._activeTag) return;
     for (const [id, tag] of this._tagsById) {
       if (tag.slug === slug) {

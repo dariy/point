@@ -23,7 +23,7 @@ import {
   setPagination,
   setTagCloudCache,
 } from '../../store.ts';
-import { html, isShortViewport, normalizeSettings } from '../../utils/helpers.ts';
+import { html, isShortViewport, navigate, normalizeSettings } from '../../utils/helpers.ts';
 import { GridPager } from '../../core/gridPager.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { listRequest } from '../../utils/listFilter.ts';
@@ -239,26 +239,6 @@ export default class HomePage extends Component<PageProps> {
     return getTagPage(req.place, params) as unknown as ReturnType<typeof getHomePage>;
   }
 
-  /** The removable chip that names the active geo-tag filter. */
-  _syncPlaceChip() {
-    const mount = this.$('#atlas-filter-mount');
-    if (!mount) return;
-    const place = ViewContext.current().place;
-    mount.replaceChildren();
-    if (!place) return;
-    const name = (this.state.data as { tag?: { name?: string } } | null)?.tag?.name || place;
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'atlas-filter-chip';
-    chip.setAttribute('aria-label', `Remove place filter: ${name}`);
-    chip.textContent = `${name} ×`;
-    chip.addEventListener('click', () => {
-      document.dispatchEvent(new CustomEvent('atlas-place-clear'));
-      ViewContext.update({ place: null });
-    });
-    mount.append(chip);
-  }
-
   _buildParams(vc: GridViewParams) {
     // per_page is the device-fit value from the URL, or the cached estimate for
     // a fresh load that hasn't been reconciled against the real grid yet.
@@ -360,7 +340,6 @@ export default class HomePage extends Component<PageProps> {
         ${isStaticHomePage ? '' : html`<div id="tag-cloud-mount"></div>`}
         <main class="site-main">
           <div class="main-container">
-            <div id="atlas-filter-mount"></div>
             <div id="grid-mount" class="${isStaticHomePage ? '' : 'grid-expand-mount'}"></div>
             ${isStaticHomePage ? '' : html`<div id="pagination-mount"></div>`}
           </div>
@@ -462,8 +441,6 @@ export default class HomePage extends Component<PageProps> {
     const { posts = [], pagination = {} } = this.state.data;
 
     this._postChildren = [];
-    this._syncPlaceChip();
-
     // A paginated swipe leaves an inline transform on the grid mount; clear it so
     // the refreshed grid isn't left offset.
     this._pager.resetGridStyles();
@@ -631,6 +608,15 @@ export default class HomePage extends Component<PageProps> {
     // A full render rebuilds the grid anyway; don't leave the flag set for
     // whatever refresh comes next.
     this._refitRefresh = false;
+
+    // An old `/?place=slug` link opens the geo-tag's own page.
+    if (vc.place) {
+      const sp = new URLSearchParams(location.search);
+      sp.delete('place');
+      const search = sp.toString();
+      navigate(`/tags/${encodeURIComponent(vc.place)}${search ? '?' + search : ''}`, { replace: true });
+      return;
+    }
 
     try {
       const data = await this._fetchFeed(vc);
