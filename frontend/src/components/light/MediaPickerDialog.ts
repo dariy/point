@@ -58,7 +58,6 @@ export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
         </header>
         <div class="modal-body media-picker-body" id="mpd-browser-mount"></div>
         <footer class="modal-footer">
-          <button class="btn btn-secondary" id="mpd-library-btn" hidden>From Photo Library</button>
           <button class="btn btn-secondary" id="mpd-cancel-btn">Cancel</button>
           <button class="btn btn-primary" id="mpd-add-btn">Add selected</button>
         </footer>
@@ -69,11 +68,11 @@ export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
     this.$('#mpd-close-btn')?.addEventListener('click', () => this.close());
     this.$('#mpd-cancel-btn')?.addEventListener('click', () => this.close());
     this.$('#mpd-add-btn')?.addEventListener('click', () => this._handleAdd());
-    this.$('#mpd-library-btn')?.addEventListener('click', () => this._handleFromLibrary());
     // The library exists only when PHOTO_LIBRARY_PATH is a readable directory.
+    // The button is added then, not hidden: .btn sets display, which wins over
+    // the hidden attribute.
     getStats().then((s) => {
-      const btn = this.$('#mpd-library-btn');
-      if (btn && s.import_configured) btn.hidden = false;
+      if (s.import_configured) this._addLibraryButton();
     }).catch(() => {});
 
     // Upload sits on the header line, the way MediaPage carries it in the admin
@@ -86,6 +85,17 @@ export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
     this.container.addEventListener('click', (e) => {
       if (e.target === this.container) this.close();
     });
+  }
+
+  _addLibraryButton() {
+    const cancel = this.$('#mpd-cancel-btn');
+    if (!cancel || this.$('#mpd-library-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-secondary';
+    btn.id = 'mpd-library-btn';
+    btn.textContent = 'From Photo Library';
+    btn.addEventListener('click', () => this._handleFromLibrary());
+    cancel.before(btn);
   }
 
   open(onConfirmOverride?: (items: Media[]) => void) {
