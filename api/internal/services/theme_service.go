@@ -13,6 +13,9 @@ import (
 )
 
 type Theme struct {
+	// ID is the file name without .css, e.g. "dark-studio". It is the value
+	// that SetActiveTheme and ThemeCSS take; Name can be a display title.
+	ID string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	// PreviewColor is the theme's declared accent; the Preview* fields below are
@@ -183,6 +186,7 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 	}
 
 	theme := Theme{
+		ID:          name,
 		Name:        name,
 		Path:        path,
 		HasDarkMode: hasDark,
@@ -353,6 +357,36 @@ func (s *ThemeService) UpdateCustomCSS(ctx context.Context, css string) ([]strin
 	return warnings, nil
 }
 
+// ThemeCSS returns the CSS that theme.css would hold if the named theme were
+// active: the theme file plus the system custom CSS. The style picker uses it
+// to preview a preset without saving it.
+func (s *ThemeService) ThemeCSS(ctx context.Context, name string) ([]byte, error) {
+	normalizedName, err := s.normalizeAndValidateThemeName(name)
+	if err != nil {
+		return nil, err
+	}
+	theme, err := s.findTheme(normalizedName)
+	if err != nil {
+		return nil, err
+	}
+	return s.composeThemeCSS(ctx, theme)
+}
+
+func (s *ThemeService) composeThemeCSS(ctx context.Context, theme Theme) ([]byte, error) {
+	data, err := os.ReadFile(theme.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read source theme file: %w", err)
+	}
+
+	// Append system-wide custom CSS if configured
+	customCSS, _ := s.GetCustomCSS(ctx)
+	if customCSS != "" {
+		data = append(data, []byte("\n\n/* System Custom CSS */\n")...)
+		data = append(data, []byte(customCSS)...)
+	}
+	return data, nil
+}
+
 func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 	activeTheme, err := s.GetActiveTheme(ctx)
 	if err != nil {
@@ -366,16 +400,9 @@ func (s *ThemeService) SyncActiveTheme(ctx context.Context) error {
 		return fmt.Errorf("failed to create css directory: %w", err)
 	}
 
-	data, err := os.ReadFile(activeTheme.Path)
+	data, err := s.composeThemeCSS(ctx, activeTheme)
 	if err != nil {
-		return fmt.Errorf("failed to read source theme file: %w", err)
-	}
-
-	// Append system-wide custom CSS if configured
-	customCSS, _ := s.GetCustomCSS(ctx)
-	if customCSS != "" {
-		data = append(data, []byte("\n\n/* System Custom CSS */\n")...)
-		data = append(data, []byte(customCSS)...)
+		return err
 	}
 
 	// publicThemePath is a fixed location under the configured frontend dir.

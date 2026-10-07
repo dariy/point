@@ -47,6 +47,10 @@ export default class ThemesPage extends Component {
     if (error) return html`<p class="error-state" role="alert">${error}</p>`;
 
     return html`
+        <p class="themes-style-picker">
+          <a href="/style" class="btn btn-primary" id="open-style-picker">Choose a look</a>
+          <span class="form-hint">Preview the style presets on your own site.</span>
+        </p>
         <div class="themes-grid">
           ${themes.map((theme: Theme) => this._renderThemeCard(theme, activeTheme, saving))}
         </div>
@@ -77,7 +81,7 @@ export default class ThemesPage extends Component {
   }
 
   _renderThemeCard(theme: Theme, activeTheme: string, saving: boolean) {
-    const isActive = activeTheme === theme.name;
+    const isActive = activeTheme === theme.id;
     const swatch = [
       `--swatch-bg:${this._color(theme.preview_bg, "#f4f4f5")}`,
       `--swatch-surface:${this._color(theme.preview_surface, "#ffffff")}`,
@@ -105,7 +109,7 @@ export default class ThemesPage extends Component {
         </div>
         <div class="theme-card-action">
           <button class="btn btn-sm ${isActive ? "btn-secondary" : "btn-primary"} set-active-btn"
-                  data-name="${theme.name}" ${isActive || saving ? "disabled" : ""}>
+                  data-name="${theme.id}" ${isActive || saving ? "disabled" : ""}>
             ${isActive ? html`${raw(STAR_SVG)} Active` : "Set Active"}
           </button>
         </div>
@@ -164,7 +168,7 @@ export default class ThemesPage extends Component {
       this.setState({
         loading: false,
         themes,
-        activeTheme: activeTheme.name,
+        activeTheme: activeTheme.id,
         customCSS: customCSS.css || "",
         error: null,
       });

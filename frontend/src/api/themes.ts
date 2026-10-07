@@ -12,6 +12,8 @@ import { api } from './client.ts';
  * declare them as plain colour literals.
  */
 export interface Theme {
+  /** File name without .css: the value to send to setActiveTheme. */
+  id: string;
   name: string;
   description: string;
   /** The declared accent. */
@@ -21,6 +23,19 @@ export interface Theme {
   preview_text?: string;
   preview_border?: string;
   has_dark_mode: boolean;
+  /** Set when the theme is a style preset (services.ThemePreset). */
+  preset?: ThemePreset;
+}
+
+/** A style preset's picker metadata — services.ThemePreset. */
+export interface ThemePreset {
+  name: string;
+  description: string;
+  preview_image: string;
+  layout: string;
+  typography: string;
+  palette: string;
+  header: string;
 }
 
 /**
@@ -45,6 +60,14 @@ export function getActiveTheme(): Promise<Theme> {
  */
 export function setActiveTheme(name: string): Promise<Theme> {
   return api.put('/api/themes/active', { name });
+}
+
+/**
+ * Get a theme's CSS (plus the system custom CSS) without making it active.
+ * The style picker previews a preset with it.
+ */
+export function getThemeCss(name: string): Promise<string> {
+  return api.get(`/api/themes/${encodeURIComponent(name)}/css`);
 }
 
 /** Get the system-wide custom CSS. */

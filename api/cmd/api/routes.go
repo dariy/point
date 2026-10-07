@@ -230,6 +230,7 @@ func registerThemeRoutes(e *echo.Echo, h *api.ThemeHandler, svcs *AppServices) {
 	themesGroup.GET("", h.ListThemes, visibilityCache)
 	themesGroup.GET("/active", h.GetActiveTheme, visibilityCache)
 	themesGroup.PUT("/active", h.SetActiveTheme, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	themesGroup.GET("/:name/css", h.GetThemeCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	themesGroup.GET("/custom-css", h.GetCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "custom-css"))
 	themesGroup.PUT("/custom-css", h.UpdateCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "custom-css"))
 }

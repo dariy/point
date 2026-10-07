@@ -141,7 +141,7 @@ export default class FirstPostPage extends Component {
       </div>
       <div class="card-body">
         <div class="setup-submit-wrapper first-post-done-actions">
-          <a href="/light/themes" id="first-post-look" class="btn btn-primary setup-submit-btn">Choose a look</a>
+          <a href="/style" id="first-post-look" class="btn btn-primary setup-submit-btn">Choose a look</a>
           <a href="${url}" id="first-post-view" class="btn btn-text">View your post</a>
         </div>
       </div>

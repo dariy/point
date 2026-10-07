@@ -400,6 +400,12 @@ const routes: Route[] = [
   },
 
   {
+    // Outside /light on purpose: the preview is the public home page.
+    path: "/style",
+    load: () => import("./pages/light/StylePickerPage.ts"),
+    title: "Choose a look",
+  },
+  {
     path: "/light/themes",
     load: () => import("./pages/light/ThemesPage.ts"),
     title: "Themes · Light",

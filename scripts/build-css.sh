@@ -106,7 +106,8 @@ bundle "$CSS_DIR"/main.css \
     "$CSS_DIR"/public/timeline.css \
     "$CSS_DIR"/public/drop-zone.css \
     "$CSS_DIR"/public/responsive.css \
-    "$CSS_DIR"/public/exif.css
+    "$CSS_DIR"/public/exif.css \
+    "$CSS_DIR"/public/style-picker.css
 
 # Viewer bundle — media viewers shared by the public and admin sections
 # (immersive post viewer, sheet viewer, carousel, lightbox). Loaded via its own
