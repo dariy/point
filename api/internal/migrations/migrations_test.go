@@ -117,6 +117,55 @@ func TestRun_ReconcilesPostViewerSettings(t *testing.T) {
 	}
 }
 
+func TestRun_PinsCommentsForExistingInstalls(t *testing.T) {
+	const key = "plugin.comments.enabled"
+	cases := []struct {
+		name      string
+		hasUser   bool
+		stored    string // "" = key absent
+		want      string
+		wantFound bool
+	}{
+		{name: "existing install without key keeps comments on", hasUser: true, want: "true", wantFound: true},
+		{name: "existing install with comments on stays on", hasUser: true, stored: "true", want: "true", wantFound: true},
+		{name: "existing install with comments off stays off", hasUser: true, stored: "false", want: "false", wantFound: true},
+		{name: "fresh database is left to setup", hasUser: false, wantFound: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+			if err != nil {
+				t.Fatalf("NewRepository: %v", err)
+			}
+			defer func() { _ = repo.Close() }()
+			ctx := context.Background()
+			db := repo.DB()
+
+			if tc.hasUser {
+				if _, err := db.ExecContext(ctx,
+					`INSERT INTO users (username, email, display_name, password_hash) VALUES ('owner', 'o@example.com', 'Owner', 'x')`); err != nil {
+					t.Fatalf("seed user: %v", err)
+				}
+			}
+			if tc.stored != "" {
+				if _, err := db.ExecContext(ctx,
+					`INSERT INTO blog_settings (key, value, value_type, updated_at)
+					 VALUES (?, ?, 'boolean', CURRENT_TIMESTAMP)`, key, tc.stored); err != nil {
+					t.Fatalf("seed setting: %v", err)
+				}
+			}
+			if err := Run(ctx, repo); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			var v string
+			err = db.QueryRowContext(ctx, `SELECT value FROM blog_settings WHERE key = ?`, key).Scan(&v)
+			if found := err == nil; found != tc.wantFound || v != tc.want {
+				t.Errorf("%s = %q (found=%v), want %q (found=%v)", key, v, found, tc.want, tc.wantFound)
+			}
+		})
+	}
+}
+
 // Run is called on every boot, so it has to be safe to re-run.
 func TestRun_Idempotent(t *testing.T) {
 	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))

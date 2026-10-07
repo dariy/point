@@ -140,6 +140,8 @@ describe('Trusted Types', () => {
     // Third-party code served through this origin: it sets script.src from a
     // plain string, so the directives have to come off with the rest of
     // Point's CSP or the widget dies.
+    // Comments default to off; the proxy only answers while the plugin is on.
+    await api('/api/plugins/comments', { enabled: true }, 'PATCH');
     const res = await fetch(BASE + '/comments/web/embed.mjs');
     assert.doesNotMatch(res.headers.get('content-security-policy') || '', /trusted-types/);
     assert.equal(res.headers.get('content-security-policy-report-only'), null);

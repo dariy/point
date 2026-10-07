@@ -66,7 +66,11 @@ func TestCommentsProxy(t *testing.T) {
 		return rec.Code
 	}
 
-	// Enabled by default → proxied with /comments prefix stripped.
+	// Enabled → proxied with /comments prefix stripped. Comments default to
+	// off, so turn the plugin on first.
+	if err := svc.SetSetting(context.Background(), plugins.EnabledKey("comments"), "true", "boolean"); err != nil {
+		t.Fatal(err)
+	}
 	if code := call("/comments/web/embed.mjs", nil); code != http.StatusOK || hits != 1 {
 		t.Errorf("enabled plugin: want 200 and backend hit, got code=%d hits=%d", code, hits)
 	}
@@ -140,6 +144,9 @@ func TestCommentsProxy_StripsPointProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := svc.SetSetting(context.Background(), plugins.EnabledKey("comments"), "true", "boolean"); err != nil {
+		t.Fatal(err)
+	}
 	e := echo.New()
 	RegisterCommentsProxy(e, svc, target)
 
