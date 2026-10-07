@@ -582,6 +582,18 @@
     display: none;
 }
 
+/* A phone is too narrow for the full grip and bar: the row would be 2 cards.
+   A slimmer grip and bar make the row shorter, so about 3 squares fit at 390px. */
+@media (max-width: 480px) {
+    .atlas-sheet__grip {
+        height: 0.9rem;
+    }
+
+    .atlas-sheet__bar {
+        min-height: 1.75rem;
+    }
+}
+
 /* ── The cards ───────────────────────────────────────────────────────────── */
 /* One flex row. Flex, not grid, so the hero span, the orphan expansion and the
    zoom template of post-grid.css have no effect. Three classes beat
@@ -643,6 +655,282 @@
 @media (prefers-reduced-motion: reduce) {
     .atlas-sheet,
     .atlas-sheet.is-open {
+        transition: none;
+    }
+}
+
+/* Layer handle — the grab handle at the top of a post list. */
+.atlas-layer-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.atlas-layer-handle {
+    position: relative;
+}
+
+/* 44px touch target; the handle is 20px, so the button overflows it and has no fill. */
+.atlas-layer-handle__btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.atlas-layer-handle__btn:hover,
+.atlas-layer-handle__btn:focus-visible {
+    opacity: 1;
+}
+
+.atlas-layer-handle__btn--start {
+    left: 8px;
+}
+
+.atlas-layer-handle__btn--end {
+    right: 8px;
+}
+
+.atlas-layer-handle__live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.atlas-layer-handle__grip {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: currentColor;
+    opacity: 0.3;
+}
+
+.atlas-layer-handle:hover .atlas-layer-handle__grip,
+.atlas-layer-handle:focus-visible .atlas-layer-handle__grip {
+    opacity: 0.6;
+}
+
+/* ── Layer: map + list, map only ─────────────────────────────────────────── */
+/* body[data-atlas-layer] is the only input. The header (z 110) stays above the
+   map (z 100), so the map slides down from behind it. The card row and the
+   handle sit above the map, below the header. */
+body {
+    --atlas-layer-pager-h: 44px;
+    --atlas-layer-list-h: max(20dvh, calc(var(--atlas-layer-handle-h, 20px) + var(--atlas-layer-row-min, 120px) + var(--atlas-layer-pager-h)));
+}
+
+.atlas-layer-map {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--atlas-layer-top, var(--atlas-layer-header-h, 0));
+    bottom: 0;
+    z-index: 100;
+    background: var(--bg-secondary, var(--bg-primary));
+    transform: translateY(-100%);
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.28s ease, visibility 0s linear 0.28s;
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-map,
+body[data-atlas-layer="map"] .atlas-layer-map {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 0.28s ease;
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-map {
+    bottom: var(--atlas-layer-list-h);
+}
+
+/* The map runs to the bottom of the viewport; the handle floats over it. */
+body[data-atlas-layer="map"] .atlas-layer-map {
+    bottom: var(--atlas-layer-footer-h, 0px);
+}
+
+body[data-atlas-layer="mapList"],
+body[data-atlas-layer="map"] {
+    overflow: hidden;
+}
+
+/* The handle and the card row become one strip fixed at the bottom. */
+body[data-atlas-layer="mapList"] .atlas-layer-handle,
+body[data-atlas-layer="map"] .atlas-layer-handle {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 105;
+    background: var(--bg-primary);
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-handle {
+    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+}
+
+body[data-atlas-layer="map"] .atlas-layer-handle {
+    bottom: var(--atlas-layer-footer-h, 0px);
+}
+
+:is(body[data-atlas-layer="mapList"], body[data-atlas-dragging]) #grid-mount {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+    z-index: 105;
+    display: block;
+    background: var(--bg-primary);
+    padding: 0 var(--spacing-md);
+    box-sizing: border-box;
+    overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: contain;
+}
+
+/* The card row: one page of cards that fits the strip, with the paginator under
+   it, as in `list`. A drag shows the layout of the state it snaps to
+   (body[data-atlas-drag-target]), so the release changes nothing on screen. */
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount {
+    bottom: var(--atlas-layer-pager-h);
+    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px) - var(--atlas-layer-pager-h));
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #pagination-mount {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--atlas-layer-pager-h);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    z-index: 105;
+    background: var(--bg-primary);
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #pagination-mount .pagination {
+    margin: 0;
+}
+
+/* In `map` no card shows: the handle is all that is left of the list. */
+body[data-atlas-layer="map"] #grid-mount,
+body[data-atlas-layer="map"] #pagination-mount {
+    display: none;
+}
+
+/* One flex row of square cards. Flex, not grid, so the zoom template and the
+   hero span of post-grid.css have no effect. */
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .posts-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--atlas-layer-gap, 8px);
+    height: 100%;
+    grid-template-columns: none;
+    grid-template-rows: none;
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card-slot {
+    flex: 0 0 auto;
+    height: 100%;
+    width: auto;
+    aspect-ratio: var(--atlas-layer-aspect, 1);
+    min-height: 0;
+    grid-column: auto !important;
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card {
+    min-height: 0;
+    border-radius: var(--border-radius);
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card-content > :not(.post-card-title) {
+    display: none;
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card-title {
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+/* Free drag: the map, the handle and the card row share one height,
+   --atlas-layer-list-h, which the gesture sets. These rules follow the state
+   rules above and win on equal specificity, so a drag from any state looks alike. */
+body[data-atlas-dragging] {
+    overflow: hidden;
+}
+
+body[data-atlas-dragging] .atlas-layer-map {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    bottom: var(--atlas-layer-list-h);
+    transition: none;
+}
+
+body[data-atlas-dragging] .atlas-layer-handle {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 105;
+    background: var(--bg-primary);
+    border-top: var(--border-width) solid var(--border-primary);
+    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+}
+
+body[data-atlas-dragging] #grid-mount {
+    display: block;
+}
+
+body[data-atlas-drag-target="list"] #pagination-mount {
+    display: none;
+}
+
+/* After release the handle slides to its snap position. */
+body[data-atlas-snapping] .atlas-layer-map,
+body[data-atlas-snapping] .atlas-layer-handle,
+body[data-atlas-snapping] #grid-mount {
+    transition: bottom 0.2s ease-out, height 0.2s ease-out;
+}
+
+/* The frame the state changes after a drag: the layout is already in place, so
+   the state rules must not animate the map or the handle a second time. */
+body[data-atlas-settling] .atlas-layer-map,
+body[data-atlas-settling] .atlas-layer-handle,
+body[data-atlas-settling] #grid-mount {
+    transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body[data-atlas-snapping] .atlas-layer-map,
+    body[data-atlas-snapping] .atlas-layer-handle,
+    body[data-atlas-snapping] #grid-mount {
+        transition: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-layer-map,
+    body[data-atlas-layer="mapList"] .atlas-layer-map,
+    body[data-atlas-layer="map"] .atlas-layer-map {
         transition: none;
     }
 }

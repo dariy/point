@@ -41,6 +41,28 @@
     height: var(--header-height);
 }
 
+/* Zone: timeline — fills the gap between the context and the nav, and keeps
+   its content centred in it. It never shrinks below its pills, so the row
+   overflows and the fold controller folds the other zones first. Its own
+   fold (order 70, the last) keeps only the active pill. */
+.site-header-inner > .site-timeline {
+    flex: 1 1 0;
+    min-width: max-content;
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.site-timeline > .timeline-container {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.site-header-group.fold-timeline .timeline-container.is-expanded .timeline-pill-btn:not(.is-active) {
+    display: none;
+}
+
 /* Zone: nav — visible menu links (nav-menu plugin) */
 .site-header-inner > .site-nav {
     flex: 0 0 auto;
@@ -532,7 +554,9 @@
 
 /* Step 4: breadcrumb-current shows ellipsis and acts as popover trigger */
 .site-header-group.fold-current .site-breadcrumb {
+    flex: 0 1 auto;
     min-width: 0;
+    overflow: hidden;
 }
 
 .site-header-group.fold-current .breadcrumb-current {
@@ -601,6 +625,17 @@
     color: var(--text-tertiary);
 }
 
+/* Header buttons (map, tags, other viz icons), under the search field */
+.burger-buttons {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.burger-buttons:empty {
+    display: none;
+}
+
 .burger-actions {
     display: flex;
     align-items: center;
@@ -654,7 +689,7 @@
 /* On narrow screens the middle slot wraps to its own full-width row below the
    header (order:99 places it visually after the nav buttons). */
 @media (max-width: 720px) {
-    .site-header-inner {
+    .site-header-inner:has(> .site-nav-slot) {
         flex-wrap: wrap;
         height: auto;
         min-height: var(--header-height);

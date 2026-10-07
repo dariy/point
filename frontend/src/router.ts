@@ -31,6 +31,7 @@
 import { setRoute, setToast } from "./store.ts";
 import { setPageTitle } from "./utils/documentTitle.ts";
 import { subclassHooks, type Component } from "./components/Component.ts";
+import { carryStateToPath, getAtlasLayerState } from "./plugins/tags-atlas/atlasLayerState.ts";
 
 /**
  * What the router hands every page it mounts, and again to onRouteUpdate() on
@@ -119,6 +120,11 @@ class Router {
 
   /** Programmatically navigate to a path. */
   navigate(path: string, { replace = false }: { replace?: boolean } = {}) {
+    // A move between post list pages keeps the atlas layer's view mode (list,
+    // map and list, map only). The URL carries it; the next page reads it on mount.
+    if (document.body.hasAttribute("data-atlas-layer")) {
+      path = carryStateToPath(path, getAtlasLayerState());
+    }
     if (replace) {
       history.replaceState(null, "", path);
     } else {

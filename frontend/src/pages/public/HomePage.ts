@@ -13,7 +13,7 @@ import { Component } from '../../components/Component.ts';
 import { PostContent, shouldUseImmersive } from '../../components/public/PostContent.ts';
 
 import { Pagination } from '../../components/shared/Pagination.ts';
-import { getHomePage } from '../../api/pages.ts';
+import { getHomePage, getTagPage } from '../../api/pages.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
 import {
   getNavTags,
@@ -23,11 +23,12 @@ import {
   setPagination,
   setTagCloudCache,
 } from '../../store.ts';
-import { html, isShortViewport, normalizeSettings } from '../../utils/helpers.ts';
+import { html, isShortViewport, navigate, normalizeSettings } from '../../utils/helpers.ts';
 import { GridPager } from '../../core/gridPager.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
+import { listRequest } from '../../utils/listFilter.ts';
 import { enterImmersive, exitImmersive, decodeImmersiveHash } from '../../utils/immersiveNav.ts';
-import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
+import { computePerPage, cachedPerPage, applyZoomVar, watchChromeFit, watchAtlasLayer, createFitLatch, createResizeGate, refitPage } from '../../utils/gridFit.ts';
 
 import type { PageProps } from '../../router.ts';
 import type { Post } from '../../api/posts.ts';
@@ -52,7 +53,7 @@ export interface TimelineRange {
 }
 
 /** The ViewContext fields that _buildParams reads. */
-export type GridViewParams = Pick<ViewContext, 'page' | 'perPage' | 'years' | 'query' | 'tag'>;
+export type GridViewParams = Pick<ViewContext, 'page' | 'perPage' | 'years' | 'query' | 'tag' | 'place'>;
 
 /** Query parameters that the grid pages send with a page fetch. */
 export interface GridFetchParams {
@@ -78,6 +79,7 @@ export default class HomePage extends Component<PageProps> {
   _resizeTimer: ReturnType<typeof setTimeout> | undefined;
   _resizeHandler: (() => void) | undefined;
   _unwatchChrome: (() => void) | null | undefined;
+  _unwatchAtlas: (() => void) | null | undefined;
   _canShowTimeline = false;
   _headerChild: Component | undefined;
   _footerChild: Component | undefined;
@@ -99,7 +101,7 @@ export default class HomePage extends Component<PageProps> {
       gridMount: () => this.$('#grid-mount'),
       gestureRoot: () => this.$('.site-main'),
       fetchPosts: async (page: number) => {
-        const data = await getHomePage(this._buildParams({ ...ViewContext.current(), page }));
+        const data = await this._fetchFeed({ ...ViewContext.current(), page });
         return data.posts || [];
       },
       gotoPage: (p: number) => ViewContext.update({ page: p }),
@@ -109,6 +111,10 @@ export default class HomePage extends Component<PageProps> {
       },
       isAlive: () => !this._unmounted,
       emptyHtml: html`<p class="empty-state">No posts yet.</p>`,
+      filterKey: () => {
+        const vc = ViewContext.current();
+        return JSON.stringify(['', vc.years, vc.query, vc.tag, vc.place]);
+      },
     });
   }
 
@@ -175,8 +181,13 @@ export default class HomePage extends Component<PageProps> {
 
     let data;
     try {
-      data = await getHomePage(this._buildParams(vc));
+      data = await this._fetchFeed(vc);
     } catch (err) {
+      if (vc.place) {
+        // An unknown slug in the URL is dropped; the update loads the home feed.
+        ViewContext.update({ place: null }, { replace: true });
+        return;
+      }
       this.setState({ loading: false, data: null, error: (err as Error).message || 'Failed to load posts.' });
       return;
     }
@@ -218,15 +229,26 @@ export default class HomePage extends Component<PageProps> {
     return (getSettings() || {}).posts_per_page || 10;
   }
 
+  /** The home feed, or the posts of the geo-tag picked on the atlas map. */
+  _fetchFeed(vc: GridViewParams): ReturnType<typeof getHomePage> {
+    const params = this._buildParams(vc);
+    // One shared filter state decides the request; the map and timeline only set it.
+    const req = listRequest({ place: vc.place, years: vc.years });
+    if (!req.place) return getHomePage(params);
+    // The tag page carries the same posts and pagination; only the chrome differs.
+    return getTagPage(req.place, params) as unknown as ReturnType<typeof getHomePage>;
+  }
+
   _buildParams(vc: GridViewParams) {
     // per_page is the device-fit value from the URL, or the cached estimate for
     // a fresh load that hasn't been reconciled against the real grid yet.
     const perPage = vc.perPage || cachedPerPage(this._minPerPage());
     this._loadedPerPage = perPage;
     const params: GridFetchParams = { page: vc.page, per_page: perPage };
-    if (vc.years) {
-      params.year_from = vc.years[0];
-      params.year_to = vc.years[1];
+    const { year_from, year_to } = listRequest({ place: vc.place, years: vc.years });
+    if (year_from !== undefined) {
+      params.year_from = year_from;
+      params.year_to = year_to;
     }
     if (vc.query) params.q = vc.query;
     if (vc.tag) params.tag = vc.tag;
@@ -240,6 +262,8 @@ export default class HomePage extends Component<PageProps> {
     if (this._unmounted) return;
     const grid = this.$('.posts-grid');
     if (!grid) return; // static/immersive home has no grid to fill
+    // `map` hides the list; the next state change fits it again.
+    if (document.body.dataset.atlasLayer === 'map') return;
     applyZoomVar(); // reclamp the zoom column count to the current viewport
     const vc = ViewContext.current();
     // An explicit per_page in the URL is reproduced as-is on load; only an
@@ -314,7 +338,6 @@ export default class HomePage extends Component<PageProps> {
       <div class="site-wrapper">
         <div id="header-mount"></div>
         ${isStaticHomePage ? '' : html`<div id="tag-cloud-mount"></div>`}
-        ${isStaticHomePage ? '' : html`<div id="timeline-mount"></div>`}
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="${isStaticHomePage ? '' : 'grid-expand-mount'}"></div>
@@ -371,6 +394,8 @@ export default class HomePage extends Component<PageProps> {
       // remaining trace and has to come back. Evaluated at render, so a device
       // rotated mid-view keeps the previous answer until the next navigation.
       timelineVisible: this._canShowTimeline && !isShortViewport(),
+      timeline: this._canShowTimeline ? this._timelineContext(total) : null,
+      onTimeline: (handle: TimelineHandle) => { this._timeline = handle; },
       // Only the paginated grid view offers the distraction-free toggle.
       distractionToggle: !isStaticHomePage && !immersive,
     }).then(comps => {
@@ -405,23 +430,6 @@ export default class HomePage extends Component<PageProps> {
     const tagCloud = this.state.data.tag_cloud || getTagCloudCache() || [];
     pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
 
-    // timeline slot (decided above, before the header was told about it).
-    if (this._canShowTimeline) {
-      const vc = ViewContext.current();
-      pluginHost.fill('timeline', this.$('#timeline-mount'), {
-        mode: 'filter',
-        canShow: this._canShowTimeline,
-        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
-        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
-        total,
-      }).then(comps => {
-        if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0];
-          this._children.push(comps[0]);
-        }
-      });
-    }
-
     this._mountPostContent();
   }
 
@@ -433,7 +441,6 @@ export default class HomePage extends Component<PageProps> {
     const { posts = [], pagination = {} } = this.state.data;
 
     this._postChildren = [];
-
     // A paginated swipe leaves an inline transform on the grid mount; clear it so
     // the refreshed grid isn't left offset.
     this._pager.resetGridStyles();
@@ -545,6 +552,18 @@ export default class HomePage extends Component<PageProps> {
     this._pager.disarm();
   }
 
+  /** What the header hands the timeline slot it renders between the crumbs and the nav. */
+  _timelineContext(total: number) {
+    const vc = ViewContext.current();
+    return {
+      mode: 'filter',
+      canShow: this._canShowTimeline,
+      initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
+      onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
+      total,
+    };
+  }
+
   _onTimelineRangeChange({ from, to, isFullExtent }: TimelineRange) {
     const years = isFullExtent ? null : [from, to] as [number, number];
     const vc = ViewContext.current();
@@ -564,6 +583,8 @@ export default class HomePage extends Component<PageProps> {
     if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
     this._unwatchChrome?.();
     this._unwatchChrome = null;
+    this._unwatchAtlas?.();
+    this._unwatchAtlas = null;
   }
 
   mount() {
@@ -572,6 +593,10 @@ export default class HomePage extends Component<PageProps> {
     applyZoomVar(); // reflect a sticky zoom before the first grid paints
     if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
     this._resizeHandler = () => this._onResize();
+    this._unwatchAtlas = watchAtlasLayer(() => {
+      this._fitLatch.reset();
+      this._reconcilePerPage({ fromResize: true });
+    });
     window.addEventListener('resize', this._resizeHandler);
     super.mount();
     this._load();
@@ -584,8 +609,17 @@ export default class HomePage extends Component<PageProps> {
     // whatever refresh comes next.
     this._refitRefresh = false;
 
+    // An old `/?place=slug` link opens the geo-tag's own page.
+    if (vc.place) {
+      const sp = new URLSearchParams(location.search);
+      sp.delete('place');
+      const search = sp.toString();
+      navigate(`/tags/${encodeURIComponent(vc.place)}${search ? '?' + search : ''}`, { replace: true });
+      return;
+    }
+
     try {
-      const data = await getHomePage(this._buildParams(vc));
+      const data = await this._fetchFeed(vc);
       // Merge settings from page response into store.
       if (data.settings) mergeSettings(normalizeSettings(data.settings));
       // tag_cloud is page-independent and only sent on page 1; cache it so it
@@ -597,6 +631,11 @@ export default class HomePage extends Component<PageProps> {
 
       this.setState({ loading: false, data, error: null, startIndex, forceImmersive });
     } catch (err) {
+      if (vc.place) {
+        // An unknown slug in the URL is dropped; the update loads the home feed.
+        ViewContext.update({ place: null }, { replace: true });
+        return;
+      }
       this.setState({ loading: false, data: null, error: (err as Error).message || 'Failed to load posts.' });
     }
   }

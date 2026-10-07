@@ -1,35 +1,18 @@
 /**
- * The Atlas return marker: a post opened from the Atlas leaves a context behind,
- * and closing the post hands it back as a return state. This module owns both
- * sessionStorage keys; no other file reads or writes them.
+ * The Atlas return marker: a post opened from the map layer leaves the list URL
+ * behind (it carries the layer state and the map viewport), and closing the post
+ * hands that URL back. This module owns the sessionStorage key; no other file
+ * reads or writes it.
  */
 
 const OPEN_KEY = 'atlasOpenContext';
-const RETURN_KEY = 'atlasReturn';
 
-/** The Atlas state to restore when the post closes. */
+/** The URL of the list page to restore when the post closes. */
 export interface AtlasOpenContext {
-  placeTagId: number;
-  sheetPage?: number;
-  sheetPerPage?: number;
-  /** The Atlas URL to return to (`/map?timeline=…`). */
-  returnUrl?: string;
+  returnUrl: string;
 }
 
-/** The open context, keyed to the post that was opened. */
-export interface AtlasReturn extends AtlasOpenContext {
-  postSlug?: string;
-}
-
-function read<T>(key: string): T | null {
-  try {
-    return JSON.parse(sessionStorage.getItem(key) || 'null');
-  } catch {
-    return null;
-  }
-}
-
-/** Leave the marker before navigating from the Atlas to a post. */
+/** Leave the marker before navigating from the map layer to a post. */
 export function markAtlasOpen(ctx: AtlasOpenContext): void {
   try {
     sessionStorage.setItem(OPEN_KEY, JSON.stringify(ctx));
@@ -44,25 +27,15 @@ export function clearAtlasOpen(): void {
 }
 
 /**
- * Move the open context to the return key, keyed to `postSlug`. Returns the URL
- * to navigate to (`/map` when the context has none), or null when the post was
- * not opened from the Atlas.
+ * Read and remove the open marker. Returns the list URL to navigate to, or
+ * null when the post was not opened from the map layer.
  */
-export function takeAtlasReturn(postSlug: string): string | null {
-  const ctx = read<AtlasOpenContext>(OPEN_KEY);
-  if (!ctx) return null;
+export function takeAtlasReturn(): string | null {
   try {
+    const ctx = JSON.parse(sessionStorage.getItem(OPEN_KEY) || 'null') as AtlasOpenContext | null;
     sessionStorage.removeItem(OPEN_KEY);
-    sessionStorage.setItem(RETURN_KEY, JSON.stringify({ ...ctx, postSlug }));
-  } catch { /* ignore */ }
-  return ctx.returnUrl || '/map';
-}
-
-/** Read and remove the return state left by takeAtlasReturn. */
-export function consumeAtlasReturn(): AtlasReturn | null {
-  const ctx = read<AtlasReturn>(RETURN_KEY);
-  try {
-    sessionStorage.removeItem(RETURN_KEY);
-  } catch { /* ignore */ }
-  return ctx;
+    return ctx?.returnUrl || null;
+  } catch {
+    return null;
+  }
 }

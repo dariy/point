@@ -15,8 +15,8 @@ overflows (measured, never device-sniffed), ops apply one at a time until it
 fits:
 
 1. subtitle hidden (`fold-title`)
-2. ancestor crumbs fold left-to-right into "…" (existing crumb-pair folding)
-3. nav links fold right-to-left into "More ▾" (nav-menu plugin, order 30)
+2. nav links fold right-to-left into "More ▾" (nav-menu plugin, order 30)
+3. ancestor crumbs fold left-to-right into "…" (crumb-pair folding, order 35)
 4. the nav zone collapses into the burger (`fold-nav`)
 5. brand text folds — logo remains the home link (site crumb pair)
 6. current crumb ellipsizes; clicking it opens the full-path popover (`fold-current`)

@@ -85,7 +85,6 @@ export default class TagsPage extends Component<PageProps> {
     return html`
       <div class="site-wrapper site-wrapper--graph">
         <div id="header-mount"></div>
-        <div id="timeline-mount"></div>
         <main class="site-main site-main--graph">
           <div class="tag-graph">
             <canvas id="tag-graph-canvas" role="img" aria-label="Force-directed graph of tags and posts"></canvas>
@@ -130,20 +129,6 @@ export default class TagsPage extends Component<PageProps> {
     }
 
     this._canShowTimeline = pluginHost.hasSlot('timeline');
-    if (this._canShowTimeline) {
-      const vc = ViewContext.current();
-      pluginHost.fill('timeline', this.$('#timeline-mount'), {
-        mode: 'filter',
-        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
-        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
-        total: this.state.total,
-      }).then((comps) => {
-        if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0] as TimelineHandle;
-          this._children.push(comps[0]);
-        }
-      });
-    }
 
     if (this.state.error || !this.state.data) return;
 
@@ -259,6 +244,15 @@ export default class TagsPage extends Component<PageProps> {
       currentPath: '/tags',
       breadcrumb,
       slot: filterSlot,
+      timeline: this._canShowTimeline ? {
+        mode: 'filter',
+        initialRange: ViewContext.current().years
+          ? { from: ViewContext.current().years![0], to: ViewContext.current().years![1] }
+          : undefined,
+        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
+        total: this.state.total,
+      } : null,
+      onTimeline: (handle: TimelineHandle) => { this._timeline = handle; },
     }).then(comps => {
       if (comps[0] && !this._unmounted) {
         this._headerChild = comps[0];

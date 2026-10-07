@@ -82,6 +82,7 @@ export class NavMenu {
   navItemsEl: HTMLElement;
   burgerTagsEl: HTMLElement;
   burgerSitemapEl: HTMLElement;
+  burgerButtonsEl: HTMLElement | null;
   ctx: NavMenuCtx;
   fold: HeaderFold | null;
   _unsubscribeNav: Function | null;
@@ -96,16 +97,19 @@ export class NavMenu {
     navItemsEl,
     burgerTagsEl,
     burgerSitemapEl,
+    burgerButtonsEl = null,
     ctx
   }: {
     navItemsEl: HTMLElement;
     burgerTagsEl: HTMLElement;
     burgerSitemapEl: HTMLElement;
+    burgerButtonsEl?: HTMLElement | null;
     ctx: NavMenuCtx;
   }) {
     this.navItemsEl = navItemsEl;
     this.burgerTagsEl = burgerTagsEl;
     this.burgerSitemapEl = burgerSitemapEl;
+    this.burgerButtonsEl = burgerButtonsEl;
     this.ctx = ctx;
     this.fold = ctx.fold || null;
     this._unsubscribeNav = null;
@@ -229,7 +233,15 @@ export class NavMenu {
     this._wireInline();
     this._syncMore();
 
-    // Burger: the full menu, children indented.
+    // Burger: the header's viz buttons, under the search field.
+    if (this.burgerButtonsEl) {
+      setHTML(this.burgerButtonsEl, html`${vizButtons.map(b => html`<a href="${b.href}" class="header-action-btn${isActive(b.href) ? ' active' : ''}"
+                  aria-label="${b.label}" title="${b.label}">
+                 ${raw(b.icon)}
+               </a>`)}`);
+    }
+
+    // Burger: the full menu (the quick links), children indented.
     setHTML(this.burgerTagsEl, html`${items.length ? items.map(it => [
       html`<a href="${it.href || '#'}" class="burger-link burger-tag-link">${it.name}</a>`,
       ...it.children.filter(c => c.href).map(c => html`<a href="${c.href}" class="burger-link burger-sub-link">${c.name}</a>`)

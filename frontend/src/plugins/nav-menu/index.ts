@@ -16,6 +16,7 @@ export async function mount(navEl: HTMLElement, ctx: NavMenuCtx) {
     navItemsEl,
     burgerTagsEl,
     burgerSitemapEl,
+    burgerButtonsEl: navEl.querySelector<HTMLElement>('.burger-buttons'),
     ctx
   });
 

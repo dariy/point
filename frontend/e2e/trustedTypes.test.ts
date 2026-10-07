@@ -228,7 +228,9 @@ describe('Trusted Types', () => {
     assert.ok(markers.count > 0, 'no marker rendered');
     assert.ok(markers.html > 0, 'the divIcon markup was refused — marker is empty');
 
-    await page.click('.leaflet-marker-icon');
+    // Markers can overlap, so a pointer click may land on a neighbour's <span>.
+    // This test checks the popup sinks, not hit testing: click the marker itself.
+    await page.locator('.leaflet-marker-icon').first().dispatchEvent('click');
     await page.waitForTimeout(600);
     const popup = await page.evaluate(() => ({
       open: !!document.querySelector('.leaflet-popup'),

@@ -15,14 +15,15 @@
  *
  * Canonical order slots (leave gaps for future stages):
  *   10  subtitle / ornament        (PublicHeader)
- *   20  ancestor crumbs → "…"      (PublicHeader, over Breadcrumbs' DOM)
  *   30  nav links → More ▾         (nav-menu plugin)
+ *   35  ancestor crumbs → "…"      (PublicHeader, over Breadcrumbs' DOM)
  *   40  nav zone → burger          (PublicHeader)
  *   50  brand text → logo only     (PublicHeader, site crumb pair)
  *   60  current crumb → ellipsis   (PublicHeader)
+ *   70  timeline → active pill only (PublicHeader)
  *
- * Invariants encoded by that order: the current page's name is the last thing
- * to degrade, and every nav destination stays one tap away (inline → More →
+ * Invariants encoded by that order: the current page's name is the last crumb
+ * to degrade, the timeline's active year is the last thing to shrink, and every nav destination stays one tap away (inline → More →
  * burger).
  *
  * Layout is re-measured on container resize (ResizeObserver) and on any
@@ -36,11 +37,14 @@ interface FoldProvider {
   ops?: () => Array<() => void>;
 }
 
+import { isHeaderFrozen, onHeaderThaw } from './headerFreeze.ts';
+
 export class HeaderFold {
   _fits: () => boolean;
   _providers: FoldProvider[];
   _busy: boolean;
   _ro: ResizeObserver;
+  _thaw: () => void;
 
   /**
    * @param opts.observe - Element whose size changes trigger relayout.
@@ -52,6 +56,7 @@ export class HeaderFold {
     this._busy = false;
     this._ro = new ResizeObserver(() => this.relayout());
     if (observe) this._ro.observe(observe);
+    this._thaw = onHeaderThaw(() => this.relayout());
   }
 
   /**
@@ -77,9 +82,14 @@ export class HeaderFold {
   relayout() {
     // Folding must not re-trigger itself through the ResizeObserver.
     if (this._busy) return;
+    // The atlas map layer freezes the header: no unfold while frozen, and
+    // thawing runs relayout again. An overflowing row still folds — a page
+    // that loads in the map view is frozen before its first layout.
+    const frozen = isHeaderFrozen();
+    if (frozen && this._fits()) return;
     this._busy = true;
     try {
-      for (const p of this._providers) p.reset?.();
+      if (!frozen) for (const p of this._providers) p.reset?.();
       if (this._fits()) return;
       const ops = this._providers.flatMap((p) => (p.ops ? p.ops() : []));
       let i = 0;
@@ -94,6 +104,7 @@ export class HeaderFold {
 
   destroy() {
     this._ro.disconnect();
+    this._thaw();
     this._providers = [];
   }
 }

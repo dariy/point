@@ -21,6 +21,8 @@ import type { Tag } from '../../api/tags.ts';
 
 /** Rows the search typeahead shows per section. */
 const TYPEAHEAD_POSTS = 3;
+/** Overlap (px) the nav tolerates from the zone before it; see _navUncut. */
+const NAV_FIT_MARGIN = 1;
 const TYPEAHEAD_TAGS = 5;
 
 /**
@@ -69,6 +71,14 @@ export interface PublicHeaderProps {
    * No caller passes one today.
    */
   slot?: Slot;
+  /**
+   * Context for the `timeline` slot. When set, the header renders the timeline
+   * between the breadcrumbs and the nav and fills it itself, so the whole
+   * header is one row. Pages that show no timeline leave it unset.
+   */
+  timeline?: object | null;
+  /** Receives the timeline handle once the slot fill resolves. */
+  onTimeline?: ((handle: any) => void) | null;
 }
 
 /** A slot fill's mount handle, as plugins return it. */
@@ -157,6 +167,9 @@ export class PublicHeader extends Component<PublicHeaderProps> {
             ${editButtonHeader}
           </div>` : ''}
 
+          <!-- Zone: timeline — fills the gap between the context and the nav. -->
+          ${this.props.timeline ? html`<div class="site-timeline" id="timeline-mount"></div>` : ''}
+
           ${slot ? html`<div class="site-nav-slot">${raw(slot)}</div>` : ''}
 
           <!-- Zone: nav — visible menu links (filled by the nav-menu plugin);
@@ -177,14 +190,16 @@ export class PublicHeader extends Component<PublicHeaderProps> {
 
             <!-- Burger (shown when fold-nav active) -->
             <div class="nav-burger" id="nav-burger">
-              <button class="header-action-btn burger-toggle" type="button" aria-label="Menu" aria-expanded="false">
+              <button class="header-action-btn burger-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="burger-dropdown">
                 ${raw(MENU_SVG)}
               </button>
-              <div class="burger-dropdown">
+              <div class="burger-dropdown" id="burger-dropdown">
                 <form class="burger-search-form" action="/search" method="get" role="search">
                   ${raw(SEARCH_SVG)}
                   <input type="search" name="q" placeholder="${searchPlaceholder}" autocomplete="off">
                 </form>
+
+                <div class="burger-buttons"></div>
 
                 <div class="burger-tags-slot" id="burger-tags-slot"></div>
 
@@ -268,6 +283,15 @@ export class PublicHeader extends Component<PublicHeaderProps> {
         group: this._group
       }).then(comps => {
         this._keepSlotMounts(gen, comps);
+        this._fold?.relayout();
+      });
+    }
+    if (this.props.timeline && pluginHost.hasSlot('timeline')) {
+      // The pills arrive after a fetch and change width on each render.
+      this.$('.site-timeline')?.addEventListener('timeline:render', () => this._fold?.relayout());
+      pluginHost.fill('timeline', this.$('.site-timeline'), this.props.timeline).then(comps => {
+        this._keepSlotMounts(gen, comps);
+        if (gen === this._renderGen && !this._unmounted && comps[0]) this.props.onTimeline?.(comps[0]);
         this._fold?.relayout();
       });
     }
@@ -400,7 +424,15 @@ export class PublicHeader extends Component<PublicHeaderProps> {
       });
       this._onDocument('click', e => {
         if (!navBurger.contains(e.target as Node)) this._closeBurger();
+        else if ((e.target as Element).closest?.('a[href]')) this._closeBurger();
       });
+      this._onDocument('keydown', e => {
+        if ((e as KeyboardEvent).key === 'Escape' && navBurger.classList.contains('is-open')) {
+          this._closeBurger();
+          (burgerBtn as HTMLElement | null)?.focus();
+        }
+      });
+      this._onDocument('popstate', () => this._closeBurger());
     }
 
     // Initial fold pass (HeaderFold's own ResizeObserver keeps it current).
@@ -441,7 +473,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
   }
 
   /**
-   * Register the header's own fold stages. Order slots 30 (nav links → More)
+   * Register the header's own fold stages. Order slot 30 (nav links → More)
    * belongs to the nav-menu plugin; see utils/headerFold.ts for the full map.
    */
   _registerCoreFolds() {
@@ -460,9 +492,9 @@ export class PublicHeader extends Component<PublicHeaderProps> {
       ops: () => [() => group.classList.add('fold-title')]
     });
 
-    // 20 — history: facet pairs, then ancestor tag pairs, left to right. The
+    // 35 — history (after nav links fold at 30): facet pairs, then ancestor tag pairs, left to right. The
     // blog-title (site) pair is spared here; it folds at 50.
-    fold.register(20, {
+    fold.register(35, {
       reset: () => {
         group.querySelectorAll('.crumb-pair.folded').forEach(p => {
           p.classList.remove('folded', 'show-ellipsis');
@@ -494,7 +526,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     });
 
     // 50 — brand: the blog-title crumb folds, leaving the logo as the brand.
-    // (Unfolding is covered by stage 20's reset, which unfolds every pair.)
+    // (Unfolding is covered by stage 35's reset, which unfolds every pair.)
     fold.register(50, {
       ops: () => {
         const sitePair = group.querySelector('#site-crumb-pair');
@@ -509,6 +541,12 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     fold.register(60, {
       reset: () => group.classList.remove('fold-current'),
       ops: () => [() => group.classList.add('fold-current')]
+    });
+
+    // 70 — the timeline is the last to shrink: only its active pill stays.
+    fold.register(70, {
+      reset: () => group.classList.remove('fold-timeline'),
+      ops: () => [() => group.classList.add('fold-timeline')]
     });
   }
 
@@ -529,7 +567,28 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     const toolsRect = tools.getBoundingClientRect();
     const firstRect = first.getBoundingClientRect();
     if (toolsRect.top - firstRect.top > firstRect.height / 2) return false;
-    return toolsRect.right <= right + 1;
+    if (toolsRect.right > right + 1) return false;
+    return this._navUncut();
+  }
+
+  /**
+   * True when no nav link is cut: every item ends inside the nav, and the nav
+   * starts after the zone before it. A cut link folds the nav into the burger;
+   * empty space is better than a half-visible link.
+   */
+  _navUncut() {
+    const nav = this._inner?.querySelector<HTMLElement>('.site-nav');
+    if (!nav) return true;
+    const navRect = nav.getBoundingClientRect();
+    if (!navRect.width) return true;
+    if (nav.scrollWidth > nav.clientWidth + 1) return false;
+    for (const item of nav.querySelectorAll('.site-nav-items > *')) {
+      const r = item.getBoundingClientRect();
+      if (r.width && (r.left < navRect.left - 1 || r.right > navRect.right + 1)) return false;
+    }
+    let prev = nav.previousElementSibling;
+    while (prev && !prev.getBoundingClientRect().width) prev = prev.previousElementSibling;
+    return !prev || prev.getBoundingClientRect().right <= navRect.left + NAV_FIT_MARGIN;
   }
   _saveRecentSearch(q: string) {
     const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');

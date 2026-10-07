@@ -1,15 +1,7 @@
 import { Component } from "../../components/Component.ts";
-import { getTimeline, getTimelineLocations } from "../../api/timeline.ts";
+import { getTimeline } from "../../api/timeline.ts";
 import type { TimelinePill } from "../../api/timeline.ts";
-import { GestureController } from "../../core/gestures.ts";
-import { renderTagLink } from "../../utils/tagLinks.ts";
-import { html, setHTML } from "../../utils/helpers.ts";
-const EDGE_PAD = 48;
-
-// A range change navigates + remounts the Timeline, which would otherwise rebuild
-// from the persisted year range alone and reset zoom to the default. Stash the live
-// view here on emit so the next mount with the same range restores the exact zoom/pan.
-let restoreView: { from: number; to: number; zoom: number; panX: number } | null = null;
+import { html } from "../../utils/helpers.ts";
 
 /** A year range: the first and last year, inclusive. */
 interface YearSpan {
@@ -18,9 +10,8 @@ interface YearSpan {
 }
 
 /**
- * A year range the timeline reports in filter mode. `source` says what moved
- * it; `isFullExtent` is set when the range covers every year there is, which
- * the host reads as "no year filter".
+ * A year range the timeline reports in filter mode. `isFullExtent` is set when
+ * there is no year filter (the collapsed state), which the host reads as "all".
  */
 export interface TimelineRange extends YearSpan {
   source: string;
@@ -30,1519 +21,547 @@ export interface TimelineRange extends YearSpan {
 export interface TimelineProps {
   /** Context tag slug. */
   context?: string;
-  /**
-   * 'popover' (the default) opens a year's posts; 'filter' reports the range
-   * to onRangeChange instead.
-   */
   mode?: "popover" | "filter";
   /** Filter mode. */
   onRangeChange?: (range: TimelineRange) => void;
-  /** The range to open on. */
+  /** The range to open on. Expands the timeline. */
   initialRange?: YearSpan;
-  /** A year to centre on when there is no range. */
+  /** A year to open on. Expands the timeline. */
   initialYear?: string;
-  /** The host's post count, for the all-years cluster. */
+  /** Show `initialYear` without reporting it: the page already lists that year (a year tag). */
+  quiet?: boolean;
+  /** The host's post count. Not shown. */
   total?: number;
   canShow?: boolean;
 }
 
-/** Pills that sit too close to show apart, drawn as one cluster. */
-interface PillCluster {
-  pills: TimelinePill[];
-  minYear: number;
-  maxYear: number;
-  label?: string;
-  isAllYears?: boolean;
+/**
+ * The year a tag stands for, else null. The server's rule: kind = 'year' and
+ * the year is the slug read as an integer (queries_posts.go, CAST(slug AS INTEGER)).
+ */
+export function yearOfTag(tag: { kind?: string, slug?: string } | null | undefined): number | null {
+  if (!tag || tag.kind !== "year") return null;
+  const y = parseInt(tag.slug ?? "", 10);
+  return Number.isNaN(y) ? null : y;
 }
 
-/** The pills that show on their own and the clusters, after a collision pass. */
-interface Collision {
-  visible: TimelinePill[];
-  clusters: PillCluster[];
+/** The years that have posts, ascending. Decade pills are not years. */
+export function yearsOf(pills: TimelinePill[]): number[] {
+  const years = new Set<number>();
+  for (const p of pills) if (!p.is_decade) years.add(p.year);
+  return [...years].sort((a, b) => a - b);
 }
 
-/** The pill or cluster nearest the centre of the track. */
-type CenteredItem =
-  | (TimelinePill & { type: "pill"; isAllYears?: undefined })
-  | (PillCluster & { type: "cluster" });
-
-/** Where and how to draw one pill or cluster. */
-type PillInfo = { x: number; active: boolean; expanded: boolean } & (
-  | { type: "cluster"; data: PillCluster }
-  | { type: "pill"; data: TimelinePill }
-);
+/** The pills the expanded strip shows: the active year and its neighbours. */
+export interface YearWindow {
+  shown: number[];
+  /** Years before the first shown pill are hidden. */
+  moreBefore: boolean;
+  /** Years after the last shown pill are hidden. */
+  moreAfter: boolean;
+}
 
 /**
- * Timeline component — horizontal date-tag navigation control.
+ * The year the strip centres on: the last year of the scope, or the nearest
+ * year that has posts when the scope year has none.
+ */
+export function anchorYear(years: number[], scope: YearSpan): number {
+  if (years.includes(scope.to)) return scope.to;
+  return years.reduce((best, y) => (Math.abs(y - scope.to) < Math.abs(best - scope.to) ? y : best), years[0]);
+}
+
+/** A maximum of 3 pills: the year before `active`, `active`, the year after. */
+export function yearWindow(years: number[], active: number): YearWindow {
+  const i = years.indexOf(active);
+  if (i < 0) return { shown: [], moreBefore: false, moreAfter: false };
+  const lo = Math.max(0, i - 1);
+  const hi = Math.min(years.length - 1, i + 1);
+  return { shown: years.slice(lo, hi + 1), moreBefore: lo > 0, moreAfter: hi < years.length - 1 };
+}
+
+/** The year one step from `active` (-1 before, +1 after), else null at the edge. */
+export function stepYear(years: number[], active: number, dir: number): number | null {
+  const i = years.indexOf(active);
+  if (i < 0) return null;
+  const y = years[i + Math.sign(dir)];
+  return y === undefined ? null : y;
+}
+
+/**
+ * The timeline markup. Collapsed: one "All years" pill. Expanded: a maximum of
+ * 3 pills around the active year, with a flag on each side that hides more.
+ */
+export function renderTimeline(years: number[], scope: YearSpan | null) {
+  if (!scope) {
+    return html`
+      <div class="timeline-container is-collapsed" role="group" aria-label="Date timeline">
+        <div class="timeline-strip">
+          <button type="button" class="timeline-pill-btn is-active" data-action="expand" aria-pressed="true">All years</button>
+        </div>
+      </div>
+    `;
+  }
+  const win = yearWindow(years, anchorYear(years, scope));
+  const i = win.shown.indexOf(anchorYear(years, scope));
+  // has-prev / has-next: a neighbour pill is shown, for the header fold that hides it.
+  const flags = `${win.moreBefore ? " has-more-before" : ""}${win.moreAfter ? " has-more-after" : ""}`
+    + `${i > 0 ? " has-prev" : ""}${i < win.shown.length - 1 ? " has-next" : ""}`;
+  return html`
+    <div class="timeline-container is-expanded${flags}" role="group" aria-label="Date timeline">
+      <div class="timeline-strip" tabindex="-1">
+        ${win.shown.map((y) => {
+          const on = y >= scope.from && y <= scope.to;
+          return html`<button type="button" class="timeline-pill-btn${on ? " is-active" : ""}" data-action="pick" data-year="${y}" aria-pressed="${on ? "true" : "false"}">${y}</button>`;
+        })}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * The short form's spinner panel: the year before `year`, `year`, the year
+ * after, top to bottom, with a "…" mark on a side that hides more years.
+ */
+export function renderSpinner(years: number[], year: number) {
+  const win = yearWindow(years, year);
+  return html`
+    <div class="timeline-spinner" role="listbox" aria-label="Year">
+      ${win.moreBefore ? html`<span class="timeline-spinner-more" aria-hidden="true">…</span>` : ""}
+      ${win.shown.map((y) => {
+        const on = y === year;
+        return html`<button type="button" class="timeline-spinner-year${on ? " is-active" : ""}" data-action="spin" data-year="${y}" role="option" aria-selected="${on ? "true" : "false"}">${y}</button>`;
+      })}
+      ${win.moreAfter ? html`<span class="timeline-spinner-more" aria-hidden="true">…</span>` : ""}
+    </div>
+  `;
+}
+
+/** The year the next expansion focuses: the last one picked, else the newest. */
+let lastFocusedYear: number | null = null;
+
+/**
+ * Timeline component — a strip of year pills, collapsed to "All years" when
+ * there is no year filter.
  */
 export class Timeline extends Component<TimelineProps> {
-  _settled: boolean;
-  _lastCenteredYear: number | null;
-  _appliedScope: YearSpan | null;
-  _pendingScope: YearSpan | null | undefined;
-  _resizeObserver: ResizeObserver | undefined;
-  _gestureController: GestureController | undefined;
-  _popoverGesture: GestureController | null | undefined;
-  _isDragging = false;
-  _isPinching = false;
-  _ignoreNextClick = false;
-  _swipeDxBase = 0;
-  _swipeDyBase = 0;
-  _onMouseMove: ((e: MouseEvent) => void) | undefined;
-  _onMouseUp: (() => void) | undefined;
-  _emitTimer: ReturnType<typeof setTimeout> | undefined;
-  _triggerEl: HTMLElement | null | undefined;
-  _scrim: HTMLDivElement | null | undefined;
-  _popoverCloseHandler: ((e: MouseEvent) => void) | null | undefined;
-  _popoverScrollHandler: (() => void) | null | undefined;
-  _animRaf: number | null | undefined;
-  _lastCollision: Collision | undefined;
-  _getX: ((year: number) => number) | undefined;
-  _velocity = 0;
-  _lastPanTime = 0;
-  _canvas: HTMLCanvasElement | undefined;
+  /** Two taps within this many ms make a double tap. */
+  static DOUBLE_TAP_MS = 300;
+  _lastTap = 0;
+  _tapTimer: ReturnType<typeof setTimeout> | null = null;
+  _onClick = (e: Event) => this._handleClick(e as MouseEvent);
+  _onKeydown = (e: Event) => {
+    const key = (e as KeyboardEvent).key;
+    // The open spinner panel: Up/Down move, Enter confirms, Escape cancels.
+    if (this.state.panel) {
+      if (key === "ArrowUp" || key === "ArrowDown") this._previewStep(key === "ArrowUp" ? -1 : 1);
+      else if (key === "Enter") this._confirmPanel();
+      else if (key === "Escape") this._closePanel();
+      else return;
+      e.preventDefault();
+      this.$(".timeline-spinner-year.is-active, .timeline-pill-btn.is-active")?.focus();
+      return;
+    }
+    // Escape on the focused timeline collapses it.
+    if (key === "Escape" && this.state.scope) this.collapse();
+    // Left and Right move the expanded strip one year.
+    if ((key === "ArrowLeft" || key === "ArrowRight") && this.state.scope) {
+      e.preventDefault();
+      this.slide(key === "ArrowLeft" ? -1 : 1);
+      this.$(".timeline-pill-btn.is-active")?.focus();
+    }
+  };
+
+  /** A drag this many px wide moves one year. */
+  static SLIDE_STEP_PX = 40;
+  /** Wheel delta that moves one year. */
+  static WHEEL_STEP = 60;
+  /** A vertical drag this many px tall moves the spinner one year. */
+  static SPIN_STEP_PX = 32;
+  _drag: { id: number, x: number, y: number, moved: boolean, vertical: boolean } | null = null;
+  _wheelAcc = 0;
+  _wheelTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Wheel pause, in ms, that commits the previewed year. */
+  static WHEEL_COMMIT_MS = 250;
+  /** Set by a slide: the click that ends it is not a tap. */
+  _slid = false;
+  _onDragMove = (e: PointerEvent) => {
+    const d = this._drag;
+    if (!d || e.pointerId !== d.id) return;
+    if (d.vertical) {
+      const dy = e.clientY - d.y;
+      if (Math.abs(dy) < Timeline.SPIN_STEP_PX) return;
+      d.moved = true;
+      // Drag down shows the earlier year, as the column follows the finger.
+      d.y = e.clientY;
+      this._previewStep(dy > 0 ? -1 : 1);
+      return;
+    }
+    const dx = e.clientX - d.x;
+    if (Math.abs(dx) < Timeline.SLIDE_STEP_PX) return;
+    if (!d.moved) {
+      d.moved = true;
+      this._cancelTap();
+    }
+    // Drag right shows the earlier year, as content follows the finger.
+    d.x = e.clientX;
+    this._previewStep(dx > 0 ? -1 : 1);
+  };
+  _onDragEnd = (e: PointerEvent) => {
+    const d = this._drag;
+    if (!d || e.pointerId !== d.id) return;
+    this._endDrag();
+    if (!d.moved) return;
+    this._slid = true;
+    // A touch slide sends no click: clear the flag after the click would arrive.
+    setTimeout(() => { this._slid = false; }, 0);
+    // The spinner panel keeps the previewed year until a confirm.
+    if (!d.vertical) this._commitPreview();
+  };
+  /** A pointerdown outside the timeline closes the spinner panel without a change. */
+  _onOutsideDown = (e: Event) => {
+    if (!this.container.contains(e.target as Node)) this._closePanel();
+  };
 
   constructor(container: HTMLElement, props: TimelineProps = {}) {
     super(container, props);
-    this.state = {
-      pills: [],
-      extent: {
-        min: 0,
-        max: 0
-      },
-      zoom: 1,
-      panX: 0,
-      popover: null,
-      isLoading: true
-    };
-    this._settled = true;
-    this._lastCenteredYear = null;
-    // The scope (selected year range) the timeline currently reflects, so an
-    // external setScope() can tell whether it needs to move and so the range we
-    // just emitted doesn't bounce back as a redundant re-center.
-    this._appliedScope = null;
+    this.state = { years: [] as number[], scope: null as YearSpan | null, isLoading: true, preview: null as number | null, panel: false };
+  }
+
+  mount(): void {
+    this.container.addEventListener("click", this._onClick);
+    this.container.addEventListener("keydown", this._onKeydown);
+    this._fetchData();
+  }
+
+  beforeUnmount(): void {
+    this.container.removeEventListener("click", this._onClick);
+    this.container.removeEventListener("keydown", this._onKeydown);
+    if (this._tapTimer) clearTimeout(this._tapTimer);
+    this._tapTimer = null;
+    if (this._wheelTimer) clearTimeout(this._wheelTimer);
+    this._wheelTimer = null;
+    this._endDrag();
+    document.removeEventListener("pointerdown", this._onOutsideDown, true);
+  }
+
+  /** The short form: the header fold shows only the active pill (fold 70). */
+  _isShort(): boolean {
+    return !!this.container.closest?.(".fold-timeline");
+  }
+
+  /** Open the spinner panel on the active year. */
+  _openPanel(): void {
+    if (!this.state.scope || this.state.panel) return;
+    this.setState({ panel: true, preview: null });
+    document.addEventListener("pointerdown", this._onOutsideDown, true);
+    this.$(".timeline-spinner-year.is-active")?.focus();
+  }
+
+  /** Close the spinner panel without a change (Escape, an outside tap). */
+  _closePanel(): void {
+    if (!this.state.panel) return;
+    document.removeEventListener("pointerdown", this._onOutsideDown, true);
+    this.setState({ panel: false, preview: null });
+  }
+
+  /** Close the spinner panel and report the previewed year: one focusYear call. */
+  _confirmPanel(): void {
+    const scope: YearSpan | null = this.state.scope;
+    if (!this.state.panel || !scope) return;
+    const year: number = this.state.preview ?? anchorYear(this.state.years, scope);
+    document.removeEventListener("pointerdown", this._onOutsideDown, true);
+    this.state.panel = false;
+    this.state.preview = null;
+    this.focusYear(year);
+    // focusYear does not re-render when the year did not change.
+    this._rerender();
+  }
+
+  _endDrag(): void {
+    this._drag = null;
+    window.removeEventListener("pointermove", this._onDragMove);
+    window.removeEventListener("pointerup", this._onDragEnd);
+    window.removeEventListener("pointercancel", this._onDragEnd);
   }
 
   /**
-   * Overridden mount to handle async data fetching.
+   * Show the year one step from the shown one, without reporting it: the post
+   * list does not change until `_commitPreview`.
    */
-  mount(): void {
-    this._fetchData();
+  _previewStep(dir: number): void {
+    const scope: YearSpan | null = this.state.scope;
+    if (!scope) return;
+    const years: number[] = this.state.years;
+    const from: number = this.state.preview ?? anchorYear(years, scope);
+    const next = stepYear(years, from, dir);
+    if (next !== null && next !== this.state.preview) this.setState({ preview: next });
   }
+
+  /** Report the previewed year, if any (drag release, wheel pause). */
+  _commitPreview(): void {
+    const year: number | null = this.state.preview ?? null;
+    if (year === null) return;
+    this.state.preview = null;
+    this.focusYear(year);
+    // focusYear does not re-render when the year did not change.
+    this._rerender();
+  }
+
+  /** Move the active year one step (-1 before, +1 after). No move at the edge. */
+  slide(dir: number): void {
+    const scope: YearSpan | null = this.state.scope;
+    if (!scope) return;
+    const years: number[] = this.state.years;
+    const next = stepYear(years, anchorYear(years, scope), dir);
+    if (next !== null) this.focusYear(next);
+  }
+
+  /** A pending single tap is not a tap when a slide starts. */
+  _cancelTap(): void {
+    if (this._tapTimer) clearTimeout(this._tapTimer);
+    this._tapTimer = null;
+    this._lastTap = 0;
+  }
+
+  /**
+   * A keyboard click (detail 0) acts at once: Enter on "All years" expands.
+   * A pointer click waits for a second tap: two within DOUBLE_TAP_MS toggle the
+   * state and send no single-tap action; one tap picks its year when the wait ends.
+   */
+  _handleClick(e: MouseEvent): void {
+    if (this._slid) {
+      this._slid = false;
+      e.stopPropagation();
+      return;
+    }
+    const spin = (e.target as Element | null)?.closest?.<HTMLElement>(".timeline-spinner-year");
+    if (spin) {
+      // In the panel a tap acts at once: the active year confirms, a neighbour is previewed.
+      const y = parseInt(spin.dataset.year ?? "", 10);
+      const shown: number | null = this.state.preview ?? (this.state.scope ? anchorYear(this.state.years, this.state.scope) : null);
+      if (y === shown) this._confirmPanel();
+      else if (!Number.isNaN(y)) this.setState({ preview: y });
+      return;
+    }
+    const btn = (e.target as Element | null)?.closest?.<HTMLElement>(".timeline-pill-btn");
+    const year = parseInt(btn?.dataset.year ?? "", 10);
+    // Short form: a tap on the one pill opens the panel at once, another tap closes it.
+    if (btn && btn.dataset.action === "pick" && (this.state.panel || this._isShort())) {
+      const now = Date.now();
+      if (!this.state.panel) {
+        this._lastTap = now;
+        this._openPanel();
+      } else if (e.detail !== 0 && now - this._lastTap < Timeline.DOUBLE_TAP_MS) {
+        // A double tap still toggles: the first tap opened the panel.
+        this._lastTap = 0;
+        this._closePanel();
+        this.toggle();
+      } else {
+        this._closePanel();
+      }
+      return;
+    }
+    // A tap on the empty strip counts toward a double tap but has no single-tap action.
+    const single = () => {
+      if (!btn) return;
+      if (btn.dataset.action === "expand") this.expand();
+      else if (!Number.isNaN(year)) this.focusYear(year);
+    };
+    if (e.detail === 0) {
+      single();
+      return;
+    }
+    const now = Date.now();
+    if (this._tapTimer && now - this._lastTap < Timeline.DOUBLE_TAP_MS) {
+      clearTimeout(this._tapTimer);
+      this._tapTimer = null;
+      this._lastTap = 0;
+      this.toggle();
+      return;
+    }
+    this._lastTap = now;
+    if (this._tapTimer) clearTimeout(this._tapTimer);
+    // "All years" has no single-tap action: it only expands on a double tap or Enter.
+    this._tapTimer = setTimeout(() => {
+      this._tapTimer = null;
+      if (btn && btn.dataset.action !== "expand") single();
+    }, Timeline.DOUBLE_TAP_MS);
+  }
+
+  /** Collapsed ↔ expanded. */
+  toggle(): void {
+    if (this.state.isLoading) return;
+    if (this.state.scope) this.collapse();
+    else this.expand();
+  }
+
   async _fetchData(): Promise<void> {
     try {
-      const payload = await getTimeline({
-        context: this.props.context
-      });
+      const payload = await getTimeline({ context: this.props.context });
       if (this._unmounted) return;
-      if (!payload || !payload.pills || payload.pills.length === 0) {
+      const years = yearsOf(payload?.pills ?? []);
+      if (years.length === 0) {
         this.unmount();
         return;
       }
-      this.setState({
-        pills: payload.pills,
-        extent: payload.extent,
-        isLoading: false
-      });
-      if (this._unmounted) return;
-      const {
-        initialRange,
-        initialYear
-      } = this.props;
+      const { initialRange, initialYear } = this.props;
+      let scope: YearSpan | null = null;
       if (initialRange) {
-        const {
-          from,
-          to
-        } = initialRange;
-        if (from === payload.extent.min && to === payload.extent.max) {
-          this._initCollapsed();
-          // The persisted range covers everything; emit so the consumer drops
-          // the redundant filter (clears the URL + filter chips).
-          if (this.props.mode === "filter") this._emitRange();
-        } else if (restoreView && restoreView.from === from && restoreView.to === to) {
-          // Same range we just emitted: restore the pinch zoom/pan verbatim so a
-          // grouping of several years stays grouped instead of snapping to single-year zoom.
-          this.state.zoom = restoreView.zoom;
-          this.state.panX = restoreView.panX;
-          this._settled = true;
-          this._layout();
-          this._gestureController?.setZoomed(this.state.zoom > 1);
-          this._appliedScope = {
-            from,
-            to
-          };
-          if (this.props.mode === "filter") this._emitRange();
-        } else {
-          this._centerOnYear((from + to) / 2);
-          this._appliedScope = {
-            from,
-            to
-          };
-          if (this.props.mode === "filter") this._emitRange();
-        }
-      } else if (initialYear) {
-        const year = parseInt(initialYear, 10);
-        const pill = payload.pills.find((p) => p.year === year);
-        if (pill) {
-          this._centerOnYear(pill.year);
-          this._appliedScope = {
-            from: pill.year,
-            to: pill.is_decade ? pill.year + 9 : pill.year
-          };
-          if (this.props.mode === "filter") this._emitRange();
-        }
-      } else {
-        this._initCollapsed();
+        scope = initialRange;
+      } else if (initialYear && years.includes(parseInt(initialYear, 10))) {
+        const y = parseInt(initialYear, 10);
+        scope = { from: y, to: y };
       }
-
-      // A scope change requested before the data finished loading was stashed;
-      // apply it now that the pills exist.
-      if (this._pendingScope !== undefined) {
-        const pending = this._pendingScope;
-        this._pendingScope = undefined;
-        this.setScope(pending);
-      }
+      // A range over every year filters nothing: show it collapsed.
+      if (scope && scope.from <= years[0] && scope.to >= years[years.length - 1]) scope = null;
+      this.state = { years, scope, isLoading: false };
+      this._rerender();
+      if (scope && this.props.mode === "filter" && !this.props.quiet) this._emit(scope);
     } catch (err) {
       if ((err as { status?: number }).status !== 404) {
         console.error("Timeline fetch failed:", err);
       }
-      if (!this._unmounted) {
-        this.unmount();
-      }
+      if (!this._unmounted) this.unmount();
     }
   }
+
   render() {
-    if (this.state.isLoading || this.state.pills.length === 0) {
-      return html``;
-    }
-    return html`
-      <div class="timeline-container" role="region" aria-label="Date timeline">
-        <div class="timeline-track-wrapper">
-          <div class="timeline-track">
-            <div class="timeline-axis">
-              <div class="timeline-axis-ticks"></div>
-            </div>
-            <div id="histogram-mount" class="timeline-histogram"></div>
-            ${this.props.mode === "filter" ? html`<div class="timeline-center-indicator"></div>` : ""}
-            <div class="timeline-pills-mount"></div>
-          </div>
-          <button class="timeline-nav-btn prev" aria-label="Scroll left">‹</button>
-          <button class="timeline-nav-btn next" aria-label="Scroll right">›</button>
-        </div>
-        ${this.props.mode === "filter" ? html`<div class="sr-only" aria-live="polite" id="timeline-live-announcer"></div>` : ""}
-      </div>
-    `;
+    if (this.state.isLoading) return html``;
+    const { years, scope, preview, panel } = this.state;
+    const shown = scope && preview != null ? { from: preview, to: preview } : scope;
+    const strip = renderTimeline(years, shown);
+    if (!panel || !shown) return strip;
+    return html`${strip}${renderSpinner(years, shown.to)}`;
   }
+
   afterRender(): void {
-    if (this.state.isLoading || this.state.pills.length === 0) {
-      return;
-    }
-    this._resizeObserver = new ResizeObserver(() => this._relayout());
-    this._resizeObserver.observe(this.container);
-    this._wireGestures();
-    this._showGestureHint();
-
-    // Initial layout
-    this._layout();
-  }
-  _showGestureHint(): void {
-    if (localStorage.getItem("timelineHintShown")) return;
-    const hint = document.createElement("div");
-    hint.className = "timeline-gesture-hint";
-    hint.textContent = "Drag to explore · scroll or pinch to zoom";
-    this.container.appendChild(hint);
-    const hide = () => {
-      hint.classList.add("fade-out");
-      setTimeout(() => hint.remove(), 500);
-      localStorage.setItem("timelineHintShown", "true");
-      this.container.removeEventListener("mousedown", hide);
-      this.container.removeEventListener("touchstart", hide);
-    };
-    this.container.addEventListener("mousedown", hide, {
-      once: true
+    // The pills set the header slot's width: the header folds again.
+    this.container.dispatchEvent(new CustomEvent("timeline:render", { bubbles: true }));
+    this._bindSpinner();
+    const strip = this.$(".timeline-strip");
+    if (!strip || !this.state.scope) return;
+    strip.addEventListener("wheel", (e: WheelEvent) => {
+      // Either wheel axis previews the next year: one step per WHEEL_STEP of
+      // delta. The wheel has no release, so a short pause commits the year.
+      e.preventDefault();
+      this._wheelAcc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (Math.abs(this._wheelAcc) >= Timeline.WHEEL_STEP) {
+        const dir = Math.sign(this._wheelAcc);
+        this._wheelAcc = 0;
+        this._previewStep(dir);
+      }
+      if (this._wheelTimer) clearTimeout(this._wheelTimer);
+      this._wheelTimer = setTimeout(() => {
+        this._wheelTimer = null;
+        this._wheelAcc = 0;
+        this._commitPreview();
+      }, Timeline.WHEEL_COMMIT_MS);
+    }, { passive: false });
+    // The atlas layer listens on document: a slide that starts on the strip stays here.
+    strip.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (this._drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.stopPropagation();
+      // The short form's one pill opens the panel: no horizontal slide.
+      if (this.state.panel || this._isShort()) return;
+      this._startDrag(e, false);
     });
-    this.container.addEventListener("touchstart", hide, {
-      once: true
-    });
-    setTimeout(hide, 5000); // Auto-hide after 5s
-  }
-  beforeUnmount(): void {
-    this._resizeObserver?.disconnect();
-    this._gestureController?.destroy?.();
-    this._closePopover();
-    clearTimeout(this._emitTimer);
-    this._cancelAnimation();
-    if (this._onMouseMove) window.removeEventListener("mousemove", this._onMouseMove);
-    if (this._onMouseUp) window.removeEventListener("mouseup", this._onMouseUp);
+    this._scrollActiveIntoView();
   }
 
-  // ── Internal Helpers ──────────────────────────────────────────────────────
+  /** Follow a drag on window until the release, also outside the strip or panel. */
+  _startDrag(e: PointerEvent, vertical: boolean): void {
+    this._drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, vertical };
+    // The preview re-renders the strip, so the drag follows the pointer on
+    // window until the release, also outside the strip or the panel.
+    window.addEventListener("pointermove", this._onDragMove);
+    window.addEventListener("pointerup", this._onDragEnd);
+    window.addEventListener("pointercancel", this._onDragEnd);
+  }
 
-  _wireGestures(): void {
-    const trackWrapper = this.$(".timeline-track-wrapper");
-    if (!trackWrapper) return;
-    let touchDragged = false;
-    this._gestureController = new GestureController(trackWrapper, {
-      onPanMove: (dx: number, _dy: number) => {
-        touchDragged = true;
-        this._isDragging = true;
-        this._onPan(dx);
-      },
-      onPinchMove: (scale: number, cx: number) => {
-        // Suppress emit while pinching: a mid-gesture emit navigates + remounts the
-        // component, killing the in-flight pinch (see _debounceEmitRange). We settle
-        // once on release via onPinchEnd instead.
-        this._isPinching = true;
-        const rect = trackWrapper.getBoundingClientRect();
-        this._onZoom(scale, cx - rect.left);
-      },
-      onPinchEnd: () => {
-        if (!this._isPinching) return;
-        this._isPinching = false;
-        clearTimeout(this._emitTimer);
-        this._snapToCenterPill(() => {
-          if (this.props.mode === "filter") this._emitRange();
-        });
-      },
-      onTap: (x: number, y: number) => this._onTap(x, y),
-      onDoubleTap: (x: number, _y: number) => {
-        const rect = trackWrapper.getBoundingClientRect();
-        this._onZoom(2, x - rect.left);
-      },
-      onTwoFingerTap: (x: number, _y: number) => {
-        const rect = trackWrapper.getBoundingClientRect();
-        this._onZoom(0.5, x - rect.left);
-      },
-      onSwipeMove: (dx: number, dy: number) => {
-        // Vertical swipes scroll the page — leave the timeline untouched.
-        if (Math.abs(dy) > Math.abs(dx)) return;
-        touchDragged = true;
-        this._isDragging = true;
-        const dxDelta = dx - (this._swipeDxBase || 0);
-        this._swipeDxBase = dx;
-        this._swipeDyBase = dy;
-        this._onPan(dxDelta);
-      },
-      onSwipeCancel: () => {
-        this._swipeDxBase = 0;
-        this._swipeDyBase = 0;
-        if (touchDragged) {
-          this._ignoreNextClick = true;
-          setTimeout(() => {
-            this._ignoreNextClick = false;
-          }, 500);
-        }
-        const wasDragging = touchDragged;
-        touchDragged = false;
-        this._isDragging = false;
-        if (wasDragging) {
-          clearTimeout(this._emitTimer);
-          this._applyMomentum();
-        }
-      },
-      onSwipeCommit: (dir: string) => {
-        // Only horizontal commits pan the timeline; vertical = page scroll.
-        if (dir !== "left" && dir !== "right") return;
-        this._swipeDxBase = 0;
-        this._swipeDyBase = 0;
-        this._ignoreNextClick = true;
-        setTimeout(() => {
-          this._ignoreNextClick = false;
-        }, 500);
-        touchDragged = false;
-        this._isDragging = false;
-        clearTimeout(this._emitTimer);
-        this._applyMomentum();
-      }
+  /** The spinner panel: a vertical drag, swipe or wheel moves the previewed year. */
+  _bindSpinner(): void {
+    const panel = this.$(".timeline-spinner");
+    if (!panel) return;
+    panel.addEventListener("wheel", (e: WheelEvent) => {
+      e.preventDefault();
+      this._wheelAcc += e.deltaY;
+      if (Math.abs(this._wheelAcc) < Timeline.WHEEL_STEP) return;
+      const dir = Math.sign(this._wheelAcc);
+      this._wheelAcc = 0;
+      this._previewStep(dir);
+    }, { passive: false });
+    panel.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (this._drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+      e.stopPropagation();
+      this._startDrag(e, true);
     });
-    trackWrapper.addEventListener("wheel", e => {
-      if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-        // Shift + wheel or horizontal trackpad scroll = pan
-        e.preventDefault();
-        const panAmount = e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX;
-        this._onPan(-panAmount);
-        return;
-      }
+  }
 
-      // Vertical wheel over the timeline zooms it. We don't require Ctrl/Cmd:
-      // an OS-level magnifier (GNOME/macOS "zoom with Ctrl+scroll") grabs that
-      // chord before the browser, so plain-wheel is the only reliable trigger.
-      // Hovering the timeline captures the wheel; move off it to scroll the page.
-      if (e.deltaY !== 0) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? 1.1 : 1 / 1.1;
-        const rect = trackWrapper.getBoundingClientRect();
-        this._onZoom(delta, e.clientX - rect.left);
-      }
-    }, {
-      passive: false
-    });
+  /** Centre the active pill when the slot clips the strip. */
+  _scrollActiveIntoView(): void {
+    const strip = this.$(".timeline-strip");
+    const active = this.$(".timeline-pill-btn.is-active");
+    if (!strip || !active || strip.scrollWidth <= strip.clientWidth) return;
+    strip.scrollLeft = Math.max(0, active.offsetLeft - strip.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2);
+  }
 
-    // Mouse drag support
-    let isDragging = false;
-    let hasDragged = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let lastX = 0;
-    trackWrapper.addEventListener("mousedown", e => {
-      if ((e.target as HTMLElement).closest(".timeline-nav-btn")) return;
-      isDragging = true;
-      this._isDragging = true;
-      hasDragged = false;
-      dragStartX = e.clientX;
-      dragStartY = e.clientY;
-      lastX = e.clientX;
-      trackWrapper.classList.add("grabbing");
-    }, true);
-    this._onMouseMove = e => {
-      if (!isDragging) return;
-      const dx = e.clientX - lastX;
-      if (Math.abs(e.clientX - dragStartX) > 4 || Math.abs(e.clientY - dragStartY) > 4) {
-        hasDragged = true;
-      }
-      lastX = e.clientX;
-      this._onPan(dx);
-    };
-    this._onMouseUp = () => {
-      if (!isDragging) return;
-      isDragging = false;
-      this._isDragging = false;
-      trackWrapper.classList.remove("grabbing");
-      if (hasDragged) {
-        clearTimeout(this._emitTimer);
-        this._applyMomentum();
-      }
-    };
-    window.addEventListener("mousemove", this._onMouseMove);
-    window.addEventListener("mouseup", this._onMouseUp);
-    trackWrapper.addEventListener("dblclick", e => {
-      const rect = trackWrapper.getBoundingClientRect();
-      const factor = e.altKey ? 0.5 : 2;
-      this._onZoom(factor, e.clientX - rect.left);
-    });
-    trackWrapper.addEventListener("click", e => {
-      if (this._ignoreNextClick) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      if (hasDragged) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      const cluster = (e.target as HTMLElement).closest(".timeline-cluster") as HTMLElement | null;
-      if (cluster) {
-        this._expandCluster(cluster);
-        return;
-      }
-      const pill = (e.target as HTMLElement).closest(".timeline-pill-group") as HTMLElement | null;
-      if (pill) {
-        this._onPillClick(pill);
-      }
-    });
-    this.$(".timeline-nav-btn.prev")?.addEventListener("click", () => {
-      const track = this.$(".timeline-track");
-      if (track) this._onPan(track.clientWidth * 0.5);
-    });
-    this.$(".timeline-nav-btn.next")?.addEventListener("click", () => {
-      const track = this.$(".timeline-track");
-      if (track) this._onPan(-track.clientWidth * 0.5);
-    });
-    trackWrapper.addEventListener("keydown", e => {
-      if (e.key === "Escape") {
-        if (this.state.popover) {
-          this._closePopover();
-        } else {
-          this._initCollapsed();
-          if (this.props.mode === "filter") this._emitRange();
-        }
-      } else if (e.key === "+" || e.key === "=") {
-        e.preventDefault();
-        const rect = trackWrapper.getBoundingClientRect();
-        this._onZoom(1.5, rect.width / 2);
-      } else if (e.key === "-" || e.key === "_") {
-        e.preventDefault();
-        const rect = trackWrapper.getBoundingClientRect();
-        this._onZoom(1 / 1.5, rect.width / 2);
-      } else if (e.key === "Home") {
-        e.preventDefault();
-        this._centerOnYear(this.state.extent.min, true);
-      } else if (e.key === "End") {
-        e.preventDefault();
-        this._centerOnYear(this.state.extent.max, true);
-      } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-        const focusable = Array.from(this.$$(".timeline-pill-btn, .timeline-cluster-btn"));
-        const idx = focusable.indexOf(document.activeElement as HTMLElement);
-        if (idx !== -1) {
-          e.preventDefault();
-          const nextIdx = e.key === "ArrowRight" ? idx + 1 : idx - 1;
-          if (nextIdx >= 0 && nextIdx < focusable.length) {
-            const nextEl = focusable[nextIdx];
-            nextEl.focus();
-            this._ensureVisible(nextEl);
+  _emit(scope: YearSpan | null): void {
+    const years: number[] = this.state.years;
+    const from = scope ? scope.from : years[0];
+    const to = scope ? scope.to : years[years.length - 1];
+    this.props.onRangeChange?.({ from, to, source: "pill", isFullExtent: !scope });
+  }
 
-            // Announce focus to aria-live
-            const announcer = this.$("#timeline-live-announcer");
-            if (announcer) {
-              announcer.textContent = nextEl.getAttribute("aria-label");
-            }
-          }
-        }
-      }
-    });
+  /** Show every year, focused on the last one picked (else the newest). */
+  expand(): void {
+    const years: number[] = this.state.years;
+    if (this.state.isLoading || years.length === 0) return;
+    const year = lastFocusedYear !== null && years.includes(lastFocusedYear) ? lastFocusedYear : years[years.length - 1];
+    this.focusYear(year);
   }
-  _getYearAtX(x: number): number {
-    const {
-      extent,
-      zoom,
-      panX
-    } = this.state;
-    const track = this.$(".timeline-track");
-    if (!track) return extent.min;
-    const usableWidth = track.clientWidth - 2 * EDGE_PAD;
-    const progress = (x - EDGE_PAD - panX) / (usableWidth * zoom);
-    return extent.min + progress * (extent.max - extent.min);
-  }
-  _ensureVisible(el: HTMLElement): void {
-    const trackWrapper = this.$(".timeline-track-wrapper");
-    if (!trackWrapper) return;
-    const rect = el.getBoundingClientRect();
-    const trackRect = trackWrapper.getBoundingClientRect();
-    if (rect.left < trackRect.left + 40) {
-      this._onPan(trackRect.left - rect.left + 60);
-    } else if (rect.right > trackRect.right - 40) {
-      this._onPan(trackRect.right - rect.right - 60);
-    }
-  }
-  _onTap(x: number, y: number): void {
-    this._ignoreNextClick = true;
-    setTimeout(() => this._ignoreNextClick = false, 500);
-    const target = document.elementFromPoint(x, y);
-    const cluster = target?.closest(".timeline-cluster") as HTMLElement | null | undefined;
-    if (cluster) {
-      this._expandCluster(cluster);
-      return;
-    }
-    const pill = target?.closest(".timeline-pill-group") as HTMLElement | null | undefined;
-    if (pill) {
-      this._onPillClick(pill);
-      return;
-    }
-  }
-  _expandCluster(el: HTMLElement): void {
-    const minYear = parseInt(el.dataset.min ?? "", 10);
-    const maxYear = parseInt(el.dataset.max ?? "", 10);
-    if (this.props.mode === "filter") {
-      // Center on the cluster, then emit via _emitRange so the current zoom/pan is
-      // stashed in restoreView — otherwise the remount resets to single-year zoom.
-      this._centerOnYear((minYear + maxYear) / 2, true, () => this._emitRange());
-      return;
-    }
-    const clusterPills = this.state.pills.filter((p: TimelinePill) => p.year >= minYear && p.year <= maxYear);
-    if (clusterPills.length <= 4) {
-      this._openClusterPopover(el, clusterPills);
-    } else {
-      this._zoomToFit(minYear, maxYear, true);
-    }
-  }
-  _zoomToFit(minYear: number, maxYear: number, animate = false, onComplete: (() => void) | null = null): void {
-    const {
-      extent
-    } = this.state;
-    const track = this.$(".timeline-track");
-    if (!track) {
-      if (onComplete) onComplete();
-      return;
-    }
-    const trackWidth = track.clientWidth;
-    const usableWidth = trackWidth - 2 * EDGE_PAD;
-    const yearSpan = maxYear - minYear || 1;
-    const extentSpan = extent.max - extent.min || 1;
-    const targetZoom = 0.6 * extentSpan / yearSpan;
-    const midYear = (minYear + maxYear) / 2;
-    const progress = (midYear - extent.min) / extentSpan;
-    const targetPanX = trackWidth / 2 - EDGE_PAD - progress * usableWidth * targetZoom;
-    const clampedZoom = Math.max(0.001, targetZoom);
-    const maxPanX = trackWidth / 2 - EDGE_PAD;
-    const minPanX = maxPanX - usableWidth * clampedZoom;
-    const clampedPanX = Math.min(maxPanX, Math.max(minPanX, targetPanX));
-    if (animate) {
-      this._animateTo(clampedPanX, clampedZoom, 320, onComplete);
-    } else {
-      this.state.zoom = clampedZoom;
-      this.state.panX = clampedPanX;
-      this._layout();
-      if (onComplete) onComplete();
-    }
-    this._debounceEmitRange();
-  }
-  _onPillClick(el: HTMLElement): void {
-    const slug = el.dataset.slug;
-    const pill: TimelinePill | undefined = this.state.pills.find((p: TimelinePill) => p.slug === slug);
-    if (!pill) return;
-    if (this.props.mode === "filter") {
-      this._centerOnYear(pill.year, true, () => {
-        const from = pill.year;
-        const to = pill.is_decade ? from + 9 : from;
-        this.props.onRangeChange?.({
-          from,
-          to,
-          source: "center"
-        });
-      });
-    } else {
-      this._openPopover(el, pill);
-    }
-  }
-  async _openPopover(el: HTMLElement, pill: TimelinePill): Promise<void> {
-    this._closePopover();
-    this._triggerEl = el;
-    const isMobile = window.innerWidth < 640;
-    if (isMobile) {
-      this._scrim = document.createElement("div");
-      this._scrim.className = "timeline-scrim";
-      this._scrim.addEventListener("click", () => this._closePopover());
-      document.body.appendChild(this._scrim);
-    }
-    const popoverEl = document.createElement("div");
-    popoverEl.className = "timeline-popover loading";
-    popoverEl.setAttribute("role", "dialog");
-    popoverEl.setAttribute("aria-label", `Locations for ${pill.year}`);
-    if (isMobile) popoverEl.classList.add("bottom-sheet");
-    setHTML(popoverEl, html`<div class="timeline-popover-spinner"></div>`);
-    document.body.appendChild(popoverEl);
-    this.state.popover = popoverEl;
-    this._anchorPopover(el, popoverEl);
-    if (isMobile) {
-      this._popoverGesture = new GestureController(popoverEl, {
-        onSwipeCommit: (dir: string) => {
-          if (dir === "down") this._closePopover();
-        }
-      });
-    }
-    popoverEl.addEventListener("keydown", e => {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        const focusable = Array.from(popoverEl.querySelectorAll("a, button")) as HTMLElement[];
-        const idx = focusable.indexOf(document.activeElement as HTMLElement);
-        if (idx !== -1) {
-          e.preventDefault();
-          const nextIdx = e.key === "ArrowDown" ? idx + 1 : idx - 1;
-          if (nextIdx >= 0 && nextIdx < focusable.length) {
-            focusable[nextIdx].focus();
-          }
-        }
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        this._closePopover();
-      }
-    });
-    try {
-      const locations = await getTimelineLocations({
-        tag: pill.slug,
-        context: this.props.context,
-        limit: 10
-      });
-      if (this._unmounted || this.state.popover !== popoverEl) return;
-      popoverEl.classList.remove("loading");
-      const yearItem = html`
-        <li class="timeline-popover-year">
-          ${renderTagLink(pill)}
-          <span class="count">${pill.post_count}</span>
-        </li>
-      `;
-      if (locations.length === 0) {
-        setHTML(popoverEl, html`
-          <ul class="timeline-popover-list">${yearItem}</ul>
-          <p class="timeline-popover-empty" style="margin-top: 8px;">No locations recorded for this date.</p>
-        `);
-      } else {
-        const items = locations.map(loc => html`
-          <li>
-            ${renderTagLink(loc)}
-            <span class="count">${loc.post_count}</span>
-          </li>
-        `);
-        setHTML(popoverEl, html`<ul class="timeline-popover-list">${yearItem}${items}</ul>`);
-      }
-      this._anchorPopover(el, popoverEl);
 
-      // Focus the first item
-      (popoverEl.querySelector("a, button") as HTMLElement | null)?.focus();
-    } catch (err) {
-      if (this._unmounted || this.state.popover !== popoverEl) return;
-      console.error("Failed to load locations:", err);
-      setHTML(popoverEl, html`<p class="error">Failed to load locations.</p>`);
-    }
-    const closeHandler = (e: MouseEvent) => {
-      if (!popoverEl.contains(e.target as Node) && !el.contains(e.target as Node)) {
-        this._closePopover();
-      }
-    };
-    const scrollHandler = () => this._closePopover();
-    this._popoverCloseHandler = closeHandler;
-    this._popoverScrollHandler = scrollHandler;
-    setTimeout(() => {
-      if (!this._unmounted) {
-        document.addEventListener("click", closeHandler);
-        window.addEventListener("scroll", scrollHandler, {
-          passive: true
-        });
-      }
-    }, 0);
+  /** Make one year the active pill and report it. */
+  focusYear(year: number): void {
+    lastFocusedYear = year;
+    const scope = { from: year, to: year };
+    const cur: YearSpan | null = this.state.scope;
+    if (cur && cur.from === year && cur.to === year) return;
+    this.setState({ scope });
+    this._emit(scope);
   }
-  _openClusterPopover(el: HTMLElement, clusterPills: TimelinePill[]): void {
-    this._closePopover();
-    this._triggerEl = el;
-    const popoverEl = document.createElement("div");
-    popoverEl.className = "timeline-popover cluster-popover";
-    popoverEl.setAttribute("role", "dialog");
-    popoverEl.setAttribute("aria-label", "Select a year");
-    const items = clusterPills.map(p => html`
-      <li>
-        <button class="timeline-pill-btn sub-pill" data-slug="${p.slug}">${p.name}</button>
-      </li>
-    `);
-    setHTML(popoverEl, html`<ul class="timeline-popover-list">${items}</ul>`);
-    document.body.appendChild(popoverEl);
-    this.state.popover = popoverEl;
-    this._anchorPopover(el, popoverEl);
-    popoverEl.addEventListener("keydown", e => {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        const focusable = Array.from(popoverEl.querySelectorAll("button"));
-        const idx = focusable.indexOf(document.activeElement as HTMLButtonElement);
-        if (idx !== -1) {
-          e.preventDefault();
-          const nextIdx = e.key === "ArrowDown" ? idx + 1 : idx - 1;
-          if (nextIdx >= 0 && nextIdx < focusable.length) {
-            focusable[nextIdx].focus();
-          }
-        }
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        this._closePopover();
-      }
-    });
-    popoverEl.addEventListener("click", e => {
-      const btn = (e.target as HTMLElement).closest(".timeline-pill-btn") as HTMLElement | null;
-      if (btn) {
-        const slug = btn.dataset.slug;
-        const pill: TimelinePill | undefined = this.state.pills.find((p: TimelinePill) => p.slug === slug);
-        if (!pill) return;
-        if (this.props.mode === "filter") {
-          this._closePopover();
-          this._centerOnYear(pill.year, true, () => {
-            this._emitRange();
-          });
-        } else {
-          this._openPopover(el, pill);
-        }
-      }
-    });
-    const closeHandler = (e: MouseEvent) => {
-      if (!popoverEl.contains(e.target as Node) && !el.contains(e.target as Node)) {
-        this._closePopover();
-      }
-    };
-    const scrollHandler = () => this._closePopover();
-    this._popoverCloseHandler = closeHandler;
-    this._popoverScrollHandler = scrollHandler;
-    setTimeout(() => {
-      if (!this._unmounted) {
-        document.addEventListener("click", closeHandler);
-        window.addEventListener("scroll", scrollHandler, {
-          passive: true
-        });
-      }
-    }, 0);
 
-    // Focus the first item
-    popoverEl.querySelector("button")?.focus();
-  }
-  _closePopover(): void {
-    if (this.state.popover) {
-      this.state.popover.remove();
-      this.state.popover = null;
-    }
-    if (this._scrim) {
-      this._scrim.remove();
-      this._scrim = null;
-    }
-    this._popoverGesture?.destroy();
-    this._popoverGesture = null;
-    if (this._popoverCloseHandler) {
-      document.removeEventListener("click", this._popoverCloseHandler);
-      this._popoverCloseHandler = null;
-    }
-    if (this._popoverScrollHandler) {
-      window.removeEventListener("scroll", this._popoverScrollHandler);
-      this._popoverScrollHandler = null;
-    }
-    if (this._triggerEl) {
-      this._triggerEl.querySelector("button")?.focus();
-      this._triggerEl = null;
-    }
-  }
-  _anchorPopover(pillEl: HTMLElement, popoverEl: HTMLElement): void {
-    if (window.innerWidth < 640) return;
-    const rect = pillEl.getBoundingClientRect();
-    const popoverRect = popoverEl.getBoundingClientRect();
-    let top = rect.top - popoverRect.height - 12;
-    let left = rect.left + rect.width / 2 - popoverRect.width / 2;
-    if (top < 0) {
-      top = rect.bottom + 12;
-      popoverEl.classList.add("flipped");
-    } else {
-      popoverEl.classList.remove("flipped");
-    }
-    popoverEl.style.top = `${top + window.scrollY}px`;
-    popoverEl.style.left = `${Math.max(8, Math.min(window.innerWidth - popoverRect.width - 8, left))}px`;
-  }
-  _animateTo(targetPanX: number, targetZoom: number, duration: number, onComplete: (() => void) | null = null): void {
-    this._cancelAnimation();
-    const startPanX = this.state.panX;
-    const startZoom = this.state.zoom;
-    const startTime = performance.now();
-    const isZooming = Math.abs(targetZoom - startZoom) > 0.00001;
-    const mount = this.$(".timeline-pills-mount");
-    if (mount && isZooming) mount.classList.add("is-animating");
-    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
-    const step = (now: number) => {
-      if (this._unmounted) return;
-      const t = Math.min(1, (now - startTime) / duration);
-      const e = easeOut(t);
-      this.state.panX = startPanX + (targetPanX - startPanX) * e;
-      this.state.zoom = startZoom + (targetZoom - startZoom) * e;
-      this._layout();
-      if (t < 1) {
-        this._animRaf = requestAnimationFrame(step);
-      } else {
-        this._animRaf = null;
-        this._settled = true;
-        this._layout();
-        this._announceRange();
-        if (mount) mount.classList.remove("is-animating");
-        if (onComplete) onComplete();
-      }
-    };
-    this._animRaf = requestAnimationFrame(step);
-  }
-  _cancelAnimation(): void {
-    if (this._animRaf) {
-      cancelAnimationFrame(this._animRaf);
-      this._animRaf = null;
-    }
-  }
-  _initCollapsed(): void {
-    const track = this.$(".timeline-track");
-    if (!track) return;
-    // Zoom so close to 0 that all pills map to the same X and collapse into one cluster.
-    this.state.zoom = 0.0001;
-    this.state.panX = track.clientWidth / 2 - EDGE_PAD;
-    this._settled = true;
-    this._layout();
-    this._announceRange();
-  }
-  _centerOnYear(year: number, animate = false, onComplete: (() => void) | null = null): void {
-    const track = this.$(".timeline-track");
-    if (!track) {
-      if (onComplete) onComplete();
-      return;
-    }
-    const trackWidth = track.clientWidth;
-    const {
-      extent,
-      zoom
-    } = this.state;
-    const usableWidth = trackWidth - 2 * EDGE_PAD;
-    if (extent.max === extent.min || usableWidth === 0) {
-      if (onComplete) onComplete();
-      return;
-    }
-    const progress = (year - extent.min) / (extent.max - extent.min);
-    const currentX = EDGE_PAD + progress * usableWidth * zoom + this.state.panX;
-    const newPanX = this.state.panX + (trackWidth / 2 - currentX);
-    const maxPanX = trackWidth / 2 - EDGE_PAD;
-    const minPanX = maxPanX - usableWidth * zoom;
-    const clampedPanX = Math.max(minPanX, Math.min(maxPanX, newPanX));
-    if (animate) {
-      this._animateTo(clampedPanX, zoom, 320, onComplete);
-    } else {
-      this.state.panX = clampedPanX;
-      this._settled = true;
-      this._layout();
-      this._announceRange();
-      if (onComplete) onComplete();
-    }
-  }
-  _snapToCenterPill(onComplete: (() => void) | null = null): void {
-    const item = this._findCenteredItem();
-    if (!item) {
-      this._settled = true;
-      this._layout();
-      this._announceRange();
-      if (onComplete) onComplete();
-      return;
-    }
-    const year = item.type === "cluster" ? (item.minYear + item.maxYear) / 2 : item.year;
-    if (this._lastCenteredYear !== null && year !== this._lastCenteredYear) {
-      this._triggerHapticTick();
-    }
-    this._lastCenteredYear = year;
-    this._centerOnYear(year, true, onComplete);
-  }
-  _findCenteredItem(): CenteredItem | null {
-    if (!this._lastCollision || !this._getX) return null;
-    const track = this.$(".timeline-track");
-    if (!track) return null;
-    const centerX = track.clientWidth / 2;
-    const {
-      visible,
-      clusters
-    } = this._lastCollision;
-    const getX = this._getX;
-    let nearest: CenteredItem | null = null;
-    let nearestDist = Infinity;
-    for (const p of visible) {
-      const dist = Math.abs(getX(p.year) - centerX);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = {
-          ...p,
-          type: "pill" as const
-        };
-      }
-    }
-    for (const c of clusters) {
-      const dist = Math.abs(getX((c.minYear + c.maxYear) / 2) - centerX);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = {
-          ...c,
-          type: "cluster" as const
-        };
-      }
-    }
-    return nearest;
-  }
-  _debounceEmitRange(): void {
-    clearTimeout(this._emitTimer);
-
-    // While a drag is physically in progress we only move the timeline visually
-    // and commit the range once on release (see _applyMomentum). Emitting mid-drag
-    // navigates + re-renders the host page, which remounts this component and kills
-    // the in-flight gesture — so the drag would die the moment it crossed a year.
-    if (this._isDragging || this._isPinching) return;
-
-    // Wheel zoom has no explicit release event: settle 150ms after the last change.
-    // clearTimeout above means this only fires once movement pauses. (Touch pinch
-    // settles via onPinchEnd instead — see _isPinching guard above.)
-    this._emitTimer = setTimeout(() => {
-      if (this._isDragging || this._isPinching) return;
-      this._snapToCenterPill(() => {
-        if (this.props.mode === "filter" && !this._isDragging) {
-          this._emitRange();
-        }
-      });
-    }, 150);
-  }
-  _emitRange(): void {
-    if (!this.props.onRangeChange) return;
-    const item = this._findCenteredItem();
-    if (!item) return;
-    let from: number, to: number;
-    if (item.type === "cluster") {
-      from = item.minYear;
-      to = item.maxYear;
-    } else {
-      from = item.year;
-      to = item.is_decade ? from + 9 : from;
-    }
-    // A range spanning the whole extent isn't filtering anything — signal it so
-    // consumers clear the year filter instead of pinning a redundant full-range.
-    const isFullExtent = from === this.state.extent.min && to === this.state.extent.max;
-    // Capture the live view so the remount triggered by this change can restore it.
-    restoreView = {
-      from,
-      to,
-      zoom: this.state.zoom,
-      panX: this.state.panX
-    };
-    this._appliedScope = isFullExtent ? null : {
-      from,
-      to
-    };
-    this.props.onRangeChange({
-      from,
-      to,
-      source: "center",
-      isFullExtent
-    });
+  /** Show only "All years" and report that the year filter is gone. */
+  collapse(): void {
+    if (!this.state.scope) return;
+    this.setState({ scope: null });
+    this._emit(null);
   }
 
   /**
-   * Imperatively move the timeline to a year range without emitting a change.
-   * Used by the host page when the scope changes from outside the timeline
-   * (e.g. a "Clear all" chip or browser back/forward) so the control stays in
-   * sync without a full remount. A no-op when already at that scope — including
-   * the range the timeline itself just emitted.
-   *
-   * @param range - null clears the filter
+   * Move to a year range without reporting it, for a host whose scope changed
+   * from outside (back/forward, a cleared chip). null collapses.
    */
   setScope(range: YearSpan | null): void {
-    // Treat a full-extent range the same as "no filter".
+    const years: number[] = this.state.years;
     let next = range;
-    if (next && next.from === this.state.extent.min && next.to === this.state.extent.max) {
-      next = null;
+    if (next && years.length && next.from <= years[0] && next.to >= years[years.length - 1]) next = null;
+    if (this.state.isLoading) {
+      this.props.initialRange = next ?? undefined;
+      return;
     }
-    const cur = this._appliedScope;
+    const cur: YearSpan | null = this.state.scope;
     const same = !next && !cur || next && cur && next.from === cur.from && next.to === cur.to;
     if (same) return;
-    if (this.state.isLoading) {
-      // Data not ready yet — stash and apply once the pills load.
-      this._pendingScope = range;
-      return;
-    }
-    this._appliedScope = next;
-    this._closePopover();
-    if (!next) {
-      this._initCollapsed();
-    } else {
-      this._centerOnYear((next.from + next.to) / 2, true);
-    }
+    if (next && next.from === next.to) lastFocusedYear = next.from;
+    this.setState({ scope: next });
   }
+
+  /** The host's post count. The pills do not show it. */
   setCount(n: number): void {
     this.props.total = n;
-    const btn = this.$('.timeline-cluster.all-years .timeline-cluster-btn');
-    if (btn) {
-      const totalPosts = n > 0 ? n : this.state.pills.reduce((sum: number, p: TimelinePill) => sum + p.post_count, 0);
-      setHTML(btn, html`All years · ${totalPosts} post${totalPosts !== 1 ? 's' : ''}`);
-    }
-  }
-  _announceRange(): void {
-    if (this.props.mode !== "filter") return;
-    const announcer = this.$("#timeline-live-announcer");
-    if (!announcer) return;
-    const item = this._findCenteredItem();
-    if (!item) return;
-    let text = "";
-    if (item.type === "cluster") {
-      if (item.isAllYears) {
-        const totalPosts = this.state.pills.reduce((sum: number, p: TimelinePill) => sum + p.post_count, 0);
-        text = `Showing all years, ${totalPosts} post${totalPosts !== 1 ? "s" : ""}`;
-      } else {
-        const count = item.pills.reduce((sum, p) => sum + p.post_count, 0);
-        text = `Showing ${item.minYear} to ${item.maxYear}, ${count} post${count !== 1 ? "s" : ""}`;
-      }
-    } else {
-      const from = item.year;
-      const to = item.is_decade ? from + 9 : from;
-      const yearStr = from === to ? String(from) : `${from} to ${to}`;
-      text = `Showing ${yearStr}, ${item.post_count} post${item.post_count !== 1 ? "s" : ""}`;
-    }
-    if (announcer.textContent !== text) {
-      announcer.textContent = text;
-    }
-  }
-  _triggerHapticTick(): void {
-    if (typeof navigator !== "undefined" && navigator.vibrate) {
-      const prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (!prefersReducedMotion) {
-        navigator.vibrate(10);
-      }
-    }
-  }
-  _computeMaxZoom(): number {
-    const {
-      pills,
-      extent
-    } = this.state;
-    const track = this.$(".timeline-track");
-    if (!track || pills.length < 2) return 20;
-    const usableWidth = track.clientWidth - 2 * EDGE_PAD;
-    const yearSpan = extent.max - extent.min;
-    if (yearSpan === 0 || usableWidth === 0) return 1;
-    const sorted = pills.map((p: TimelinePill) => p.year).sort((a: number, b: number) => a - b);
-    let minYearGap = Infinity;
-    for (let i = 1; i < sorted.length; i++) {
-      minYearGap = Math.min(minYearGap, sorted[i] - sorted[i - 1]);
-    }
-    if (!isFinite(minYearGap) || minYearGap === 0) return 20;
-    const pillWidth = this._measurePillWidth("2024");
-    return pillWidth * 4 / 3 * yearSpan / (usableWidth * minYearGap);
-  }
-  _onZoom(scaleDelta: number, anchorX: number): void {
-    this._cancelAnimation();
-    this._settled = false;
-    const {
-      zoom,
-      panX
-    } = this.state;
-    const track = this.$(".timeline-track");
-    if (!track) return;
-    const trackWidth = track.clientWidth;
-    const MIN_ZOOM = 0.001;
-
-    // In collapsed state, first zoom-in jumps to fit-all; zoom-out is a no-op.
-    if (zoom < MIN_ZOOM) {
-      if (scaleDelta <= 1) return;
-      this._zoomToFit(this.state.extent.min, this.state.extent.max);
-      this._gestureController?.setZoomed(this.state.zoom > 1);
-      return;
-    }
-    const maxZoom = this._computeMaxZoom();
-    const rawZoom = zoom * scaleDelta;
-
-    // Zooming out past the minimum snaps back to the collapsed state.
-    if (rawZoom < MIN_ZOOM) {
-      this._initCollapsed();
-      this._gestureController?.setZoomed(false);
-      return;
-    }
-    const newZoom = Math.max(MIN_ZOOM, Math.min(maxZoom, rawZoom));
-    if (newZoom === zoom) return;
-    const usableWidth = trackWidth - 2 * EDGE_PAD;
-    const progressAtAnchor = (anchorX - EDGE_PAD - panX) / (usableWidth * zoom);
-    const newPanX = anchorX - EDGE_PAD - progressAtAnchor * usableWidth * newZoom;
-    this.state.zoom = newZoom;
-    const maxPanXz = trackWidth / 2 - EDGE_PAD;
-    this.state.panX = Math.min(maxPanXz, Math.max(maxPanXz - usableWidth * newZoom, newPanX));
-    this._layout();
-    this._gestureController?.setZoomed(newZoom > 1);
-    this._debounceEmitRange();
-  }
-  _onPan(dx: number, isMomentum = false): void {
-    if (!isMomentum) {
-      this._cancelAnimation();
-      const now = performance.now();
-      const dt = now - (this._lastPanTime || now);
-      if (dt > 0 && dt < 100) {
-        // px per frame (approx 16ms)
-        this._velocity = dx / dt * 16;
-      } else {
-        this._velocity = 0;
-      }
-      this._lastPanTime = now;
-    }
-    this._settled = false;
-    const {
-      panX,
-      zoom
-    } = this.state;
-    const track = this.$(".timeline-track");
-    if (!track) return;
-    const trackWidth = track.clientWidth;
-
-    // In collapsed state the pan range is ~0px; any real drag expands to fit-all instead.
-    if (zoom < 0.001) {
-      if (Math.abs(dx) > 1) {
-        this._zoomToFit(this.state.extent.min, this.state.extent.max);
-        this._gestureController?.setZoomed(this.state.zoom > 1);
-      }
-      return;
-    }
-    const usableWidth = trackWidth - 2 * EDGE_PAD;
-    const maxPanX = trackWidth / 2 - EDGE_PAD;
-    const minPanX = maxPanX - usableWidth * zoom;
-    this.state.panX = Math.max(minPanX, Math.min(maxPanX, panX + dx));
-    this._layout();
-    // Momentum settles with its own snap+emit; don't schedule a competing one.
-    if (!isMomentum) this._debounceEmitRange();
-  }
-  _applyMomentum(): void {
-    if (Math.abs(this._velocity || 0) < 1) {
-      this._velocity = 0;
-      this._snapToCenterPill(() => {
-        if (this.props.mode === "filter") this._emitRange();
-      });
-      return;
-    }
-    const friction = 0.94;
-    const step = () => {
-      if (this._unmounted || this._isDragging) return;
-      this._velocity *= friction;
-      this._onPan(this._velocity, true);
-      if (Math.abs(this._velocity) > 0.5) {
-        this._animRaf = requestAnimationFrame(step);
-      } else {
-        this._velocity = 0;
-        this._snapToCenterPill(() => {
-          if (this.props.mode === "filter") this._emitRange();
-        });
-      }
-    };
-    this._animRaf = requestAnimationFrame(step);
-  }
-
-  /**
-   * Relayout in response to a track resize (e.g. tablet rotation). panX is an
-   * absolute pixel offset, so a width change would otherwise leave the previously
-   * centered chip stranded off-center. Capture the centered year under the old
-   * geometry, then re-center on it so panX is recomputed for the new width.
-   */
-  _relayout(): void {
-    if (this._unmounted) return;
-    // Don't fight an in-flight gesture or animation; those drive panX themselves.
-    if (this._isDragging || this._isPinching || this._animRaf) {
-      this._layout();
-      return;
-    }
-    const item = this._findCenteredItem();
-    if (!item) {
-      // No prior layout to anchor to (initial observe), or collapsed with no
-      // pills resolved yet — collapsed panX still tracks width, so just relayout.
-      if (this.state.zoom < 0.01) {
-        this._initCollapsed();
-      } else {
-        this._layout();
-      }
-      return;
-    }
-    const year = item.type === "cluster" ? (item.minYear + item.maxYear) / 2 : item.year;
-    this._centerOnYear(year);
-  }
-  _layout(): void {
-    if (this._unmounted) return;
-    const {
-      pills,
-      extent,
-      zoom,
-      panX
-    } = this.state;
-    const track = this.$(".timeline-track");
-    if (!track) return;
-    const trackWidth = track.clientWidth;
-    if (trackWidth === 0) return;
-    const mount = this.$(".timeline-pills-mount");
-    if (!mount) return;
-    const usableWidth = trackWidth - 2 * EDGE_PAD;
-    const getX = (year: number) => {
-      if (extent.max === extent.min) return trackWidth / 2;
-      const progress = (year - extent.min) / (extent.max - extent.min);
-      return EDGE_PAD + progress * usableWidth * zoom + panX;
-    };
-    this._getX = getX;
-    const prevCollision = this._lastCollision;
-    const {
-      visible,
-      clusters
-    } = this._collide(pills, getX);
-    this._lastCollision = {
-      visible,
-      clusters
-    };
-
-    // Find the pill/cluster nearest to the center of the track
-    const centerX = trackWidth / 2;
-    let centeredKey: string | null = null;
-    let nearestDist = Infinity;
-    for (const p of visible) {
-      const dist = Math.abs(getX(p.year) - centerX);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        centeredKey = p.slug;
-      }
-    }
-    for (const c of clusters) {
-      const dist = Math.abs(getX((c.minYear + c.maxYear) / 2) - centerX);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        centeredKey = `cluster-${c.minYear}-${c.maxYear}`;
-      }
-    }
-    this._patchPillsMount(mount, visible, clusters, getX, centeredKey, prevCollision);
-    this._updateTicks(trackWidth, getX);
-    this._updateNavButtons(trackWidth, getX);
-    this._updateHistogram(trackWidth, getX);
-  }
-  _patchPillsMount(
-    mount: HTMLElement,
-    visible: TimelinePill[],
-    clusters: PillCluster[],
-    getX: (year: number) => number,
-    centeredKey: string | null,
-    prevCollision: Collision | undefined,
-  ): void {
-    const elKey = (el: HTMLElement) => el.dataset.slug ? `p:${el.dataset.slug}` : `c:${el.dataset.min}-${el.dataset.max}`;
-    const existing: Map<string, HTMLElement> = new Map();
-    for (const el of [...mount.children] as HTMLElement[]) existing.set(elKey(el), el);
-    const desired: Map<string, PillInfo> = new Map();
-    const isFullRange = this.state.zoom < 0.01;
-    for (const c of clusters) {
-      const active = centeredKey === `cluster-${c.minYear}-${c.maxYear}`;
-      desired.set(`c:${c.minYear}-${c.maxYear}`, {
-        x: getX((c.minYear + c.maxYear) / 2),
-        active,
-        expanded: active && this._settled && !isFullRange && this.props.mode === "filter",
-        type: "cluster",
-        data: c
-      });
-    }
-    for (const p of visible) {
-      const active = centeredKey === p.slug;
-      desired.set(`p:${p.slug}`, {
-        x: getX(p.year),
-        active,
-        expanded: active && this._settled && !isFullRange && this.props.mode === "filter",
-        type: "pill",
-        data: p
-      });
-    }
-    for (const [k, el] of existing) {
-      if (!desired.has(k)) el.remove();
-    }
-    for (const [k, info] of desired) {
-      const el = existing.get(k);
-      if (el) {
-        el.style.left = `${info.x}px`;
-        el.classList.toggle("active", info.active);
-        const wasExpanded = el.dataset.expanded === "true";
-        if (info.expanded !== wasExpanded) {
-          el.dataset.expanded = String(info.expanded);
-          el.classList.toggle("expanded", info.expanded);
-          setHTML(el, html``);
-          el.appendChild(this._makePillBtn(info));
-        }
-      } else {
-        const el = this._makePillEl(info);
-
-        // Start from parent cluster position if expanding during animation
-        let initialX = info.x;
-        if (prevCollision && mount.classList.contains("is-animating")) {
-          const year = info.type === "pill" ? info.data.year : (info.data.minYear + info.data.maxYear) / 2;
-          const parent = prevCollision.clusters.find(c => year >= c.minYear && year <= c.maxYear);
-          if (parent) {
-            const parentKey = `c:${parent.minYear}-${parent.maxYear}`;
-            const parentEl = existing.get(parentKey);
-            if (parentEl) initialX = parseFloat(parentEl.style.left);
-          }
-        }
-        el.style.left = `${initialX}px`;
-        el.classList.toggle("active", info.active);
-        mount.appendChild(el);
-      }
-    }
-  }
-  _makePillEl(info: PillInfo): HTMLDivElement {
-    const wrap = document.createElement("div");
-    wrap.dataset.expanded = String(info.expanded);
-    if (info.expanded) wrap.classList.add("expanded");
-    if (info.active) wrap.classList.add("active");
-    if (info.type === "cluster") {
-      const c = info.data;
-      wrap.className += " timeline-cluster" + (c.isAllYears ? " all-years" : "");
-      wrap.dataset.min = String(c.minYear);
-      wrap.dataset.max = String(c.maxYear);
-    } else {
-      wrap.className += " timeline-pill-group";
-      wrap.dataset.slug = info.data.slug;
-    }
-    wrap.appendChild(this._makePillBtn(info));
-    return wrap;
-  }
-  _makePillBtn(info: PillInfo): HTMLButtonElement {
-    const btn = document.createElement("button");
-    if (info.type === "cluster") {
-      const c = info.data;
-      let label = c.label || (c.minYear === c.maxYear ? String(c.minYear) : `${c.minYear}–${c.maxYear}`);
-      if (info.expanded) {
-        label = `${c.minYear} \u2013 ${c.maxYear}`;
-      }
-      btn.className = "timeline-cluster-btn";
-      btn.setAttribute("aria-label", `${c.minYear} to ${c.maxYear}, ${c.pills.length} dates.`);
-      btn.textContent = label;
-    } else {
-      const p = info.data;
-      let label = p.name;
-      if (info.expanded) {
-        const to = p.is_decade ? p.year + 9 : p.year;
-        const yearStr = p.year === to ? String(p.year) : `${p.year} \u2013 ${to}`;
-        label = yearStr;
-      }
-      btn.className = "timeline-pill-btn";
-      btn.setAttribute("aria-label", `${p.name}, ${p.post_count} posts.`);
-      btn.textContent = label;
-    }
-    return btn;
-  }
-  _collide(pills: TimelinePill[], getX: (year: number) => number): Collision {
-    if (this.state.zoom < 0.01) {
-      const total = this.props.total ?? 0;
-      const totalPosts = total > 0 ? total : pills.reduce((sum, p) => sum + p.post_count, 0);
-      return {
-        visible: [],
-        clusters: [{
-          pills,
-          minYear: this.state.extent.min,
-          maxYear: this.state.extent.max,
-          label: `All years · ${totalPosts} posts`,
-          isAllYears: true
-        }]
-      };
-    }
-    const minGap = 8;
-    const sorted = [...pills].sort((a, b) => a.year - b.year);
-    const result: Collision = {
-      visible: [],
-      clusters: []
-    };
-    let currentCluster: PillCluster | null = null;
-    let lastRight = -Infinity;
-    for (const p of sorted) {
-      const x = getX(p.year);
-      const width = this._measurePillWidth(p.name);
-      const left = x - width / 2;
-      const right = x + width / 2;
-      if (left < lastRight + minGap) {
-        if (!currentCluster) {
-          const lastPill = result.visible.pop();
-          currentCluster = lastPill ? {
-            pills: [lastPill, p],
-            minYear: lastPill.year,
-            maxYear: p.year
-          } : {
-            pills: [p],
-            minYear: p.year,
-            maxYear: p.year
-          };
-        } else {
-          currentCluster.pills.push(p);
-          currentCluster.maxYear = p.year;
-        }
-        const clusterLabel = currentCluster.minYear === currentCluster.maxYear ? String(currentCluster.minYear) : `${currentCluster.minYear}–${currentCluster.maxYear}`;
-        lastRight = getX((currentCluster.minYear + currentCluster.maxYear) / 2) + this._measurePillWidth(clusterLabel) / 2;
-      } else {
-        if (currentCluster) {
-          result.clusters.push(currentCluster);
-          currentCluster = null;
-        }
-        result.visible.push(p);
-        lastRight = right;
-      }
-    }
-    if (currentCluster) result.clusters.push(currentCluster);
-    return result;
-  }
-  _measurePillWidth(name: string): number {
-    if (!this._canvas) this._canvas = document.createElement("canvas");
-    const ctx = this._canvas.getContext("2d");
-    if (!ctx) return 24;
-    ctx.font = "14px system-ui, -apple-system, sans-serif";
-    const metrics = ctx.measureText(name);
-    return metrics.width + 24;
-  }
-  _updateTicks(trackWidth: number, getX: (year: number) => number): void {
-    const {
-      extent
-    } = this.state;
-    const ticksMount = this.$(".timeline-axis-ticks");
-    if (!ticksMount) return;
-    const startDecade = Math.floor(extent.min / 10) * 10;
-    const endDecade = Math.ceil(extent.max / 10) * 10;
-    const ticks = [];
-    for (let y = startDecade; y <= endDecade; y += 10) {
-      const x = getX(y);
-      if (x >= -50 && x <= trackWidth + 50) {
-        ticks.push(html`<div class="timeline-tick" style="left: ${x}px"></div>`);
-      }
-    }
-    setHTML(ticksMount, html`${ticks}`);
-  }
-  _updateNavButtons(trackWidth: number, getX: (year: number) => number): void {
-    const {
-      extent
-    } = this.state;
-    const prevBtn = this.$(".timeline-nav-btn.prev");
-    const nextBtn = this.$(".timeline-nav-btn.next");
-    if (!prevBtn || !nextBtn) return;
-    const minX = getX(extent.min);
-    const maxX = getX(extent.max);
-    prevBtn.classList.toggle("visible", minX < EDGE_PAD - 5);
-    nextBtn.classList.toggle("visible", maxX > trackWidth - EDGE_PAD + 5);
-  }
-  _updateHistogram(trackWidth: number, getX: (year: number) => number): void {
-    const mount = this.$("#histogram-mount");
-    if (!mount) return;
-    const track = this.$(".timeline-track");
-    const {
-      pills
-    } = this.state;
-    if (!pills.length) return;
-    const maxCount = Math.max(...pills.map((p: TimelinePill) => p.post_count), 1);
-    const {
-      zoom
-    } = this.state;
-    const collapsed = zoom < 0.01;
-    const trackRect = track?.getBoundingClientRect();
-
-    // Find active range from centered item.
-    // "All years" is the no-filter resting state — keep every bar subtle rather
-    // than tinting the whole histogram as if a range were selected.
-    const item = collapsed ? null : this._findCenteredItem();
-    let activeFrom = -Infinity,
-      activeTo = Infinity;
-    if (item && !item.isAllYears) {
-      if (item.type === "cluster") {
-        activeFrom = item.minYear;
-        activeTo = item.maxYear;
-      } else {
-        activeFrom = item.year;
-        activeTo = item.is_decade ? item.year + 9 : item.year;
-      }
-    }
-    const bar = (count: number, x: number, year: number) => {
-      if (x < -20 || x > trackWidth + 20) return "";
-      const height = Math.max(2, Math.round(count / maxCount * 14));
-      const cls = year >= activeFrom && year <= activeTo ? "is-active" : "";
-      return html`<div class="timeline-hist-bar ${cls}" style="left: ${x}px; height: ${height}px"></div>`;
-    };
-
-    // Each clustered pill (including the collapsed "All years" pill) folds several
-    // years onto roughly the same getX pixel, so a plain getX placement stacks the
-    // bars into one invisible column. Instead, draw each cluster's years as a mini
-    // density chart confined to that pill's own width — read the live geometry so
-    // every cluster's histogram tracks the pill sitting above it.
-    const {
-      visible,
-      clusters
-    }: Collision = this._lastCollision || {
-      visible: pills,
-      clusters: []
-    };
-    const bars: Array<ReturnType<typeof bar>> = [];
-    for (const c of clusters) {
-      const el = this.$(`.timeline-cluster[data-min="${c.minYear}"][data-max="${c.maxYear}"]`);
-      const rect = el?.getBoundingClientRect();
-      const sortedPills = [...c.pills].sort((a, b) => a.year - b.year);
-      const n = sortedPills.length;
-      let left: number, width: number;
-      if (rect && trackRect && rect.width > 0) {
-        left = rect.left - trackRect.left;
-        width = rect.width;
-      } else if (collapsed) {
-        // Pill not laid out yet — fall back to the full extent across the track.
-        left = EDGE_PAD;
-        width = trackWidth - 2 * EDGE_PAD;
-      } else {
-        const label = c.minYear === c.maxYear ? String(c.minYear) : `${c.minYear}–${c.maxYear}`;
-        width = this._measurePillWidth(label);
-        left = getX((c.minYear + c.maxYear) / 2) - width / 2;
-      }
-
-      // Spread the bars into n equal cells and center each bar in its cell, so a
-      // 2-bar cluster reads | * | * | instead of pinning the bars to the pill's
-      // edges. A single bar lands at the center, where it already belonged.
-      sortedPills.forEach((p, i) => {
-        const x = left + (i + 0.5) / n * width;
-        bars.push(bar(p.post_count, x, p.year));
-      });
-    }
-    for (const p of visible) {
-      bars.push(bar(p.post_count, getX(p.year), p.year));
-    }
-    setHTML(mount, html`${bars}`);
   }
 }
+
 export function mount(el: HTMLElement, ctx: TimelineProps): Timeline {
   const comp = new Timeline(el, ctx);
   comp.mount();

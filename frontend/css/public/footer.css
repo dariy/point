@@ -275,3 +275,43 @@ body.grid-zoomable .footer-zoom {
         order: 3;
     }
 }
+
+/* The map layer covers the footer position: `list` shows the normal footer,
+   `mapList` hides it, a drag shows the minimized one, and `map` shows a minimized one (copyright only) fixed
+   under the handle. With the footer plugin off the mount is empty and takes
+   no space. */
+body[data-atlas-layer="mapList"] #footer-mount {
+    display: none;
+}
+
+:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) #footer-mount {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 105;
+}
+
+/* A drag shows the minimized footer in every state, so the handle has a floor. */
+body[data-atlas-dragging] #footer-mount {
+    display: block;
+}
+
+:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer {
+    padding: var(--spacing-xs, 4px) 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer .footer-center,
+:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer .footer-right {
+    display: none;
+}
+
+body[data-atlas-layer="map"] .site-footer .footer-content {
+    display: block;
+}
+
+body[data-atlas-layer="map"] .site-footer .footer-copyright {
+    margin: 0;
+    text-align: center;
+}

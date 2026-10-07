@@ -174,11 +174,10 @@ export class PostContent extends Component<PostContentProps> {
             this.props.onExitImmersive();
             return;
           }
-          // A post opened from the Atlas returns there — closing reselects its
-          // place and highlights the post chip — instead of landing on the
-          // post's page in the home feed. The Atlas leaves a context marker on
-          // open; we hand it back as the return state keyed to the current post.
-          const atlasUrl = takeAtlasReturn(post.slug);
+          // A post opened from the map layer returns to the list URL, which
+          // carries the layer state and the map viewport, instead of landing on
+          // the post's page in the home feed.
+          const atlasUrl = takeAtlasReturn();
           if (atlasUrl) {
             navigate(atlasUrl);
             return;

@@ -1,6 +1,19 @@
 import { getRoute } from '../store.ts';
 import { navigate } from './helpers.ts';
 
+/** `url` plus the `atlas` and `view` parameters of the current location. */
+function carryAtlasParams(url: string): string {
+  const from = new URLSearchParams(window.location.search);
+  const [path = '', search = ''] = url.split('?');
+  const params = new URLSearchParams(search);
+  for (const key of ['atlas', 'view']) {
+    const value = from.get(key);
+    if (value !== null) params.set(key, value);
+  }
+  const out = params.toString();
+  return out ? `${path}?${out}` : path;
+}
+
 /**
  * ViewContext — unified filter and navigation state for the public site.
  *
@@ -22,6 +35,8 @@ export class ViewContext {
   perPage: number | null;
   /** Post slug */
   postSlug: string | null;
+  /** Geo-tag slug picked on the atlas map; filters the home list (?place=). */
+  place: string | null;
   /** Navigation trail (ancestor slug chain, `/`-joined)
    *  carried so the server can build breadcrumbs for the drilled branch. */
   navPath: string | null;
@@ -36,6 +51,7 @@ export class ViewContext {
       : 1;
     this.perPage = parseInt(query.per_page, 10) || null;
     this.postSlug = null;
+    this.place = query.place || null;
     this.navPath = query.path || null;
 
     // 1. Extract post slug: /posts/:slug
@@ -65,7 +81,7 @@ export class ViewContext {
       if (parts.length === 2) {
         const start = parseInt(parts[0], 10);
         const end = parseInt(parts[1], 10);
-        if (!isNaN(start) && !isNaN(end)) {
+        if (/^\d{1,4}$/.test(parts[0]) && /^\d{1,4}$/.test(parts[1]) && start <= end) {
           this.years = [start, end];
         }
       }
@@ -91,6 +107,7 @@ export class ViewContext {
       page: number;
       per_page: number;
       postSlug: string | null;
+      place: string | null;
     }>,
     { replace = false }: { replace?: boolean } = {},
   ) {
@@ -107,15 +124,18 @@ export class ViewContext {
     if ('page' in changes) next.page = changes.page ?? next.page;
     if ('per_page' in changes) next.perPage = changes.per_page ?? null;
     if ('postSlug' in changes) next.postSlug = changes.postSlug ?? null;
+    if ('place' in changes) next.place = changes.place ?? null;
 
     // Reset page to 1 if primary filters change, unless page was explicitly provided
-    const filtersChanged = ('tag' in changes || 'query' in changes || 'years' in changes);
-    if (filtersChanged && !('page' in changes)) {
+    const filtersChanged = ('tag' in changes || 'query' in changes);
+    if ((filtersChanged || 'place' in changes || 'years' in changes) && !('page' in changes)) {
       next.page = 1;
     }
 
-    // Perform navigation
-    navigate(next.toUrl(), { replace });
+    // Perform navigation. The map layer's state and viewport ride on the URL
+    // through a page or fit change of the same list; a new filter starts in `list`.
+    const url = next.toUrl();
+    navigate(filtersChanged ? url : carryAtlasParams(url), { replace });
   }
 
   /** Serialize context back to a URL. */
@@ -158,6 +178,9 @@ export class ViewContext {
         path = `/posts/${encodeURIComponent(this.postSlug)}`;
       }
     }
+
+    // The atlas place filter only narrows the home list.
+    if (this.place && path === '/') params.set('place', this.place);
 
     // Common filters
     if (this.years) {

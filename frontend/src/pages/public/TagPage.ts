@@ -21,6 +21,7 @@ import {
 import { Pagination } from "../../components/shared/Pagination.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
 import { getTagPage } from "../../api/pages.ts";
+import { yearOfTag } from "../../plugins/timeline/index.ts";
 import { getPostBySlug, getPostNavigation } from "../../api/posts.ts";
 import {
   getNavTags,
@@ -32,6 +33,7 @@ import {
 import {
   html,
   isShortViewport,
+  navigate,
   setCanonical,
   removeCanonical,
 } from "../../utils/helpers.ts";
@@ -45,6 +47,7 @@ import {
   cachedPerPage,
   applyZoomVar,
   watchChromeFit,
+  watchAtlasLayer,
   createFitLatch,
   createResizeGate,
   refitPage,
@@ -66,10 +69,13 @@ export default class TagPage extends Component<PageProps> {
   _resizeTimer: ReturnType<typeof setTimeout> | undefined;
   _resizeHandler: (() => void) | undefined;
   _unwatchChrome: (() => void) | null | undefined;
+  _unwatchAtlas: (() => void) | null | undefined;
   _postChildren: PostListHandle[] = [];
   _immersivePushed = false;
   _canShowTimeline = false;
   _timeline: TimelineHandle | undefined;
+  /** The tag the timeline scope was last set for. */
+  _scopeSlug: string | undefined;
 
   constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
@@ -108,6 +114,10 @@ export default class TagPage extends Component<PageProps> {
       },
       isAlive: () => !this._unmounted,
       emptyHtml: html`<p class="empty-state">No posts in this tag yet.</p>`,
+      filterKey: () => {
+        const vc = ViewContext.current();
+        return JSON.stringify([this.props.params?.slug, vc.years, vc.query, vc.tag]);
+      },
     });
   }
 
@@ -196,9 +206,12 @@ export default class TagPage extends Component<PageProps> {
     if (refit && this._applyRefit()) return;
     this._clearPostContent();
     await this._mountPostContent();
-    this._timeline?.setScope(
-      vc.years ? { from: vc.years[0], to: vc.years[1] } : null,
-    );
+    // A year tag sets the scope; any other tag keeps the timeline as it is.
+    const tagYear = yearOfTag(data.tag);
+    if (vc.years) this._timeline?.setScope({ from: vc.years[0], to: vc.years[1] });
+    else if (tagYear !== null) this._timeline?.setScope({ from: tagYear, to: tagYear });
+    else if (this._scopeSlug === slug) this._timeline?.setScope(null);
+    this._scopeSlug = slug;
     this._timeline?.setCount(this.state.data?.pagination?.total ?? this.state.data?.total ?? 0);
 
     const newGrid = this.$("#grid-mount");
@@ -245,6 +258,8 @@ export default class TagPage extends Component<PageProps> {
     if (this._unmounted || this._isPostView()) return;
     const grid = this.$(".posts-grid");
     if (!grid) return;
+    // `map` hides the list; the next state change fits it again.
+    if (document.body.dataset.atlasLayer === 'map') return;
     applyZoomVar(); // reclamp the zoom column count to the current viewport
     const vc = ViewContext.current();
     // An explicit per_page in the URL is reproduced as-is on load; only an
@@ -327,7 +342,6 @@ export default class TagPage extends Component<PageProps> {
     return html`
       <div class="site-wrapper tags-page">
         <div id="header-mount"></div>
-        <div id="timeline-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount"></div>
@@ -342,7 +356,11 @@ export default class TagPage extends Component<PageProps> {
     // the grid view has pages, so the post/loading/error views show none.
     setPagination(null);
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
-    this._pager.disarm();
+    // Post mode is the same page, so no unmount removes the atlas layout. A kept
+    // layout keeps body[data-atlas-layer], and CSS then puts the post in the list
+    // panel. Remove it here; the next grid view mounts it again from the URL.
+    if (this._isPostView()) this._pager.destroy();
+    else this._pager.disarm();
     // A grid view means no post is open from the Atlas any more: drop its marker.
     if (!this._isPostView()) clearAtlasOpen();
     const settings = getSettings() || {};
@@ -364,22 +382,6 @@ export default class TagPage extends Component<PageProps> {
       !this.state.loading &&
       !this.state.error;
     this._canShowTimeline = canShowTimeline;
-    if (canShowTimeline) {
-      const vc = ViewContext.current();
-      const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
-      pluginHost.fill("timeline", this.$("#timeline-mount"), {
-        mode: "filter",
-        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
-        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
-        total,
-      }).then((comps) => {
-        if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0];
-          this._children.push(comps[0]);
-        }
-      });
-    }
-
     // Build breadcrumb: ancestors are links, current tag is the non-linked tail.
     // Preserve any server-provided `href` — when a navigation `path` is active
     // each ancestor crumb carries its own truncated path so clicking up the
@@ -456,6 +458,8 @@ export default class TagPage extends Component<PageProps> {
         editUrl: post ? `/light/posts/${post.id}/edit` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
         timelineVisible: this._canShowTimeline && !isShortViewport(),
+        timeline: this._canShowTimeline ? this._timelineContext() : null,
+        onTimeline: (handle: TimelineHandle) => { this._timeline = handle; },
       }).then(comps => {
         if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
@@ -493,6 +497,8 @@ export default class TagPage extends Component<PageProps> {
         // Hidden timeline ⇒ the year crumb is the only thing left saying the
         // list is filtered — see the same call in HomePage.
         timelineVisible: this._canShowTimeline && !isShortViewport(),
+        timeline: this._canShowTimeline ? this._timelineContext() : null,
+        onTimeline: (handle: TimelineHandle) => { this._timeline = handle; },
         // Same distraction-free toggle the home grid offers.
         distractionToggle: true,
       }).then(comps => {
@@ -642,6 +648,8 @@ export default class TagPage extends Component<PageProps> {
     if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);
     this._unwatchChrome?.();
     this._unwatchChrome = null;
+    this._unwatchAtlas?.();
+    this._unwatchAtlas = null;
     removeCanonical();
   }
 
@@ -651,12 +659,47 @@ export default class TagPage extends Component<PageProps> {
     applyZoomVar(); // reflect a sticky zoom before the first grid paints
     if (!ViewContext.current().perPage) computePerPage(this._minPerPage(), null);
     this._resizeHandler = () => this._onResize();
+    this._unwatchAtlas = watchAtlasLayer(() => {
+      this._fitLatch.reset();
+      this._reconcilePerPage({ fromResize: true });
+    });
     window.addEventListener("resize", this._resizeHandler);
     super.mount();
     this._load();
   }
 
+  /** What the header hands the timeline slot it renders between the crumbs and the nav. */
+  _timelineContext() {
+    const vc = ViewContext.current();
+    const year = yearOfTag(this.state.data?.tag);
+    this._scopeSlug = this.props.params?.slug;
+    return {
+      mode: "filter",
+      initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
+      // A year tag opens the timeline on its year. The tag is the filter, so no range is reported.
+      initialYear: !vc.years && year !== null ? String(year) : undefined,
+      quiet: true,
+      onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
+      total: this.state.data?.pagination?.total || this.state.data?.total || 0,
+    };
+  }
+
+  /** The crumb one level above the current tag, else the home page. */
+  _parentHref(): string {
+    const slug = this.state.data?.tag?.slug;
+    const parent = (this.state.data?.breadcrumbs || []).filter((c: Crumb) => c.slug !== slug).pop();
+    return parent ? parent.href || `/tags/${parent.slug}` : "/";
+  }
+
   async _onTimelineRangeChange({ from, to, isFullExtent }: TimelineRange) {
+    // On a year tag page the year is the tag: a pill moves to that year's tag page.
+    const tagYear = yearOfTag(this.state.data?.tag);
+    if (tagYear !== null) {
+      if (!isFullExtent && from === to && from !== tagYear) navigate(`/tags/${from}`);
+      // Collapse: go to the parent tag (the crumb above the year), else home.
+      else if (isFullExtent) navigate(this._parentHref());
+      return;
+    }
     const years = isFullExtent ? null : [from, to] as [number, number];
     const vc = ViewContext.current();
     const same = years

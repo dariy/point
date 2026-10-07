@@ -74,4 +74,11 @@ describe('ViewContext.toUrl', () => {
     assert.strictEqual(url('/', { page: '1' }), '/');
     assert.strictEqual(url('/'), '/');
   });
+
+  test('a bad timeline range is ignored', () => {
+    assert.deepStrictEqual(new ViewContext('/', { timeline: '2019-2024' }).years, [2019, 2024]);
+    for (const bad of ['abc-def', '2024-2019', '1-2-3', '2019', '2019x-2020', '12345-20000']) {
+      assert.strictEqual(new ViewContext('/', { timeline: bad }).years, null, bad);
+    }
+  });
 });

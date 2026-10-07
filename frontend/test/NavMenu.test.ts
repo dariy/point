@@ -231,6 +231,24 @@ describe('NavMenu viz buttons', () => {
     assert.ok(!onTags[1].classList.contains('active'));
   });
 
+  test('the burger shows the same viz buttons as the header', () => {
+    pluginHost.init(['tags-graph', 'tags-atlas'].map((id) => mock<PluginManifestEntry>({ id, entry: `/assets/js/p/${id}.js` })));
+    store.set('settings', { tags_visibility: 'all', nav_menu_mode: 'none' });
+    const burgerButtonsEl = dom.document.createElement('div');
+    menu = new NavMenu({
+      navItemsEl,
+      burgerTagsEl: dom.document.createElement('div'),
+      burgerSitemapEl,
+      burgerButtonsEl,
+      ctx: { currentPath: '/map' },
+    });
+    menu.render();
+
+    const btns = [...burgerButtonsEl.querySelectorAll('.header-action-btn')];
+    assert.deepStrictEqual(btns.map((b) => b.getAttribute('href')), ['/tags', '/map']);
+    assert.ok(btns[1].classList.contains('active'));
+  });
+
   test('the burger sitemap lists one link per enabled viz', () => {
     renderWith(['tags-graph', 'tags-map']);
 

@@ -12,6 +12,7 @@
  *   5. Define all routes and start the router.
  */
 
+import { setAtlasLayerState } from "./plugins/tags-atlas/atlasLayerState.ts";
 import {
   getSettings,
   getUser,
@@ -50,6 +51,10 @@ initPointerMode();
 // (window.__PLUGINS__). Done at module load so the route table and shell slots
 // can consult it synchronously. Inert when no manifest is present.
 pluginHost.init();
+
+// The atlas layer's state is an attribute on <body>; CSS reads only that. Set
+// the default here, before first paint, when the plugin is on.
+if (pluginHost.isEnabled("tags-atlas")) setAtlasLayerState("list");
 
 // ── Login trigger ─────────────────────────────────────────────────────────
 //
@@ -257,7 +262,10 @@ async function resolveVizModule(slot: string, candidates: string[]) {
       ? candidates[0]
       : candidates.find((id) => pluginHost.isEnabled(id)) || "";
 
-  if (!active || (visibility !== "all" && !isAdmin)) {
+  // The atlas is not a tag-data page any more: its `/map` is a redirect to the
+  // list layer, which `tags_visibility` does not gate.
+  const gated = active !== "tags-atlas" && visibility !== "all" && !isAdmin;
+  if (!active || gated) {
     return import("./pages/public/RedirectHome.ts");
   }
 

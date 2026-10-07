@@ -127,6 +127,23 @@ describe('AtlasSheet', () => {
     assert.deepStrictEqual(toggles, [true]);
   });
 
+  test('a place change drops the old paginator until the new page loads', async () => {
+    await sheet.show(BERLIN);
+    let release!: () => void;
+    replies.paris = () => new Promise((r) => { release = () => r(pageOf('paris', 2)); });
+    const next = sheet.show(PARIS);
+    const before = calls.length;
+    sheet._goto(2); // the old "→" click
+    assert.strictEqual(sheet.page, 1);
+    assert.strictEqual(calls.length, before);
+    release();
+    await next;
+    await settle();
+    assert.strictEqual(sheet.place?.slug, 'paris');
+    assert.deepStrictEqual(slugs(), ['paris-1', 'paris-2']);
+    assert.ok(calls.every((u) => !u.includes('paris') || !u.includes('page=2')));
+  });
+
   test('collapse, expand and hide', async () => {
     await sheet.show(BERLIN);
     const pill = $('.atlas-sheet-pill');
