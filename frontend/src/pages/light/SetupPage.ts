@@ -122,9 +122,10 @@ export default class SetupPage extends Component {
         // against an unconfigured install (no settings, no user, no theme), and
         // setup has just changed all three. Reloading picks up the seeded
         // settings and the session the API issued — landing the owner straight
-        // in the admin instead of at the login screen. If the session could not
-        // be minted, the auth guard sends them to login from there.
-        window.location.assign('/light');
+        // in the app instead of at the login screen. If the session could not
+        // be minted, the auth guard sends them to login from there. The owner
+        // lands in the first-post flow (US-005).
+        window.location.assign('/light/first-post');
       } catch (err) {
         this.setState({
           loading: false,

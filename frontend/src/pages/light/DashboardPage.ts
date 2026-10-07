@@ -15,6 +15,7 @@ import { setToast } from '../../store.ts';
 import { html, navigate, raw } from '../../utils/helpers.ts';
 import { formatFileSize, formatDateShort } from '../../utils/formatters.ts';
 import { PLUS_SVG, MEDIA_SVG } from '../../utils/icons.ts';
+import { FIRST_POST_PATH, FIRST_POST_BANNER_DISMISSED } from './FirstPostPage.ts';
 
 export default class DashboardPage extends Component {
   constructor(container: HTMLElement, props = {}) {
@@ -23,13 +24,23 @@ export default class DashboardPage extends Component {
   }
 
   render() {
-    const { versionBanner } = this.state;
-    const banner = versionBanner
+    const { versionBanner, stats } = this.state;
+    // Until the first post exists, remind the owner of the first-post flow.
+    const firstPostBanner = stats && !stats.published_posts
+      && !localStorage.getItem(FIRST_POST_BANNER_DISMISSED)
+      ? html`<div class="version-update-banner first-post-banner" role="status">
+           <span>Your site has no posts yet.</span>
+           <a href="${FIRST_POST_PATH}" id="dashboard-first-post">Add your first photos</a>
+           <button class="version-update-dismiss" id="dashboard-first-post-dismiss" aria-label="Dismiss">&times;</button>
+         </div>`
+      : '';
+    const versionHtml = versionBanner
       ? html`<div class="version-update-banner" role="status">
            Point ${versionBanner} is available. Update with: <code>./update.sh</code>
            <button class="version-update-dismiss" id="dashboard-version-dismiss" aria-label="Dismiss">&times;</button>
          </div>`
       : '';
+    const banner = html`${firstPostBanner}${versionHtml}`;
 
     return adminLayoutTemplate({
       title: 'Dashboard',
@@ -200,6 +211,11 @@ export default class DashboardPage extends Component {
         localStorage.setItem(`version_dismissed_${versionBanner}`, '1');
         this.setState({ versionBanner: null });
       }
+    });
+
+    this.$('#dashboard-first-post-dismiss')?.addEventListener('click', () => {
+      localStorage.setItem(FIRST_POST_BANNER_DISMISSED, '1');
+      this.setState({});
     });
 
     // Compose strip interactions

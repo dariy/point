@@ -364,6 +364,11 @@ const routes: Route[] = [
     title: "Light",
   },
   {
+    path: "/light/first-post",
+    load: () => import("./pages/light/FirstPostPage.ts"),
+    title: "Your first post · Light",
+  },
+  {
     path: "/light/posts",
     load: () => import("./pages/light/PostsListPage.ts"),
     title: "Posts · Light",
