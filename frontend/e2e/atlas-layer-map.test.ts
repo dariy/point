@@ -166,7 +166,11 @@ describe('Atlas layer map', () => {
     it('goes back to the home page when the selection is cleared on the map', async () => {
       await selectMapton();
       await page.locator('.atlas-layer-map').click({ position: { x: 200, y: 450 } });
-      await page.waitForFunction(() => location.pathname === '/');
+      // The router pushes `/` and unmounts the tag page (the layer drops to
+      // `list`) before the home page mounts and reads the state from the URL.
+      // Wait for the home grid, not for the path alone.
+      await page.waitForFunction(() => location.pathname === '/'
+        && document.querySelectorAll('#grid-mount .post-card').length > 1);
       assert.equal(await page.evaluate(() => (window as any).__noReload === true), true, 'no full page load');
       assert.equal(await page.evaluate(() => document.body.dataset.atlasLayer), 'mapList');
       assert.equal(await page.locator('#atlas-filter-mount').count(), 0);
