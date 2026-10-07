@@ -82,11 +82,14 @@ export class HeaderFold {
   relayout() {
     // Folding must not re-trigger itself through the ResizeObserver.
     if (this._busy) return;
-    // The atlas map layer freezes the header; thawing runs relayout again.
-    if (isHeaderFrozen()) return;
+    // The atlas map layer freezes the header: no unfold while frozen, and
+    // thawing runs relayout again. An overflowing row still folds — a page
+    // that loads in the map view is frozen before its first layout.
+    const frozen = isHeaderFrozen();
+    if (frozen && this._fits()) return;
     this._busy = true;
     try {
-      for (const p of this._providers) p.reset?.();
+      if (!frozen) for (const p of this._providers) p.reset?.();
       if (this._fits()) return;
       const ops = this._providers.flatMap((p) => (p.ops ? p.ops() : []));
       let i = 0;
