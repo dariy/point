@@ -27,20 +27,35 @@
     }
 }
 
-/* The pills scroll sideways when they overflow; the scrollbar stays hidden. */
+/* The expanded strip shows a maximum of 3 pills; a drag, swipe or wheel moves
+   the year. A slot too narrow for 3 clips them around the centred active
+   pill. touch-action keeps a horizontal swipe for the strip. */
 .timeline-strip {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+    min-width: 0;
     max-width: 100%;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
+    overflow: hidden;
     padding: 2px 0;
+    outline: none;
 }
 
-.timeline-strip::-webkit-scrollbar {
-    display: none;
+.timeline-container.is-expanded .timeline-strip {
+    touch-action: pan-y;
+    cursor: grab;
+}
+
+/* A "…" mark on a side that hides more years. */
+.timeline-container.has-more-before::before,
+.timeline-container.has-more-after::after {
+    content: '…';
+    flex: 0 0 auto;
+    padding: 0 var(--spacing-xs);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    opacity: 0.7;
+    pointer-events: none;
 }
 
 .timeline-pill-btn {

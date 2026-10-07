@@ -52,9 +52,44 @@ export function yearsOf(pills: TimelinePill[]): number[] {
   return [...years].sort((a, b) => a - b);
 }
 
+/** The pills the expanded strip shows: the active year and its neighbours. */
+export interface YearWindow {
+  shown: number[];
+  /** Years before the first shown pill are hidden. */
+  moreBefore: boolean;
+  /** Years after the last shown pill are hidden. */
+  moreAfter: boolean;
+}
+
 /**
- * The timeline markup. Collapsed: one "All years" pill. Expanded: one pill per
- * year, the ones inside `scope` active. No arrow controls.
+ * The year the strip centres on: the last year of the scope, or the nearest
+ * year that has posts when the scope year has none.
+ */
+export function anchorYear(years: number[], scope: YearSpan): number {
+  if (years.includes(scope.to)) return scope.to;
+  return years.reduce((best, y) => (Math.abs(y - scope.to) < Math.abs(best - scope.to) ? y : best), years[0]);
+}
+
+/** A maximum of 3 pills: the year before `active`, `active`, the year after. */
+export function yearWindow(years: number[], active: number): YearWindow {
+  const i = years.indexOf(active);
+  if (i < 0) return { shown: [], moreBefore: false, moreAfter: false };
+  const lo = Math.max(0, i - 1);
+  const hi = Math.min(years.length - 1, i + 1);
+  return { shown: years.slice(lo, hi + 1), moreBefore: lo > 0, moreAfter: hi < years.length - 1 };
+}
+
+/** The year one step from `active` (-1 before, +1 after), else null at the edge. */
+export function stepYear(years: number[], active: number, dir: number): number | null {
+  const i = years.indexOf(active);
+  if (i < 0) return null;
+  const y = years[i + Math.sign(dir)];
+  return y === undefined ? null : y;
+}
+
+/**
+ * The timeline markup. Collapsed: one "All years" pill. Expanded: a maximum of
+ * 3 pills around the active year, with a flag on each side that hides more.
  */
 export function renderTimeline(years: number[], scope: YearSpan | null) {
   if (!scope) {
@@ -66,10 +101,12 @@ export function renderTimeline(years: number[], scope: YearSpan | null) {
       </div>
     `;
   }
+  const win = yearWindow(years, anchorYear(years, scope));
+  const flags = `${win.moreBefore ? " has-more-before" : ""}${win.moreAfter ? " has-more-after" : ""}`;
   return html`
-    <div class="timeline-container is-expanded" role="group" aria-label="Date timeline">
-      <div class="timeline-strip">
-        ${years.map((y) => {
+    <div class="timeline-container is-expanded${flags}" role="group" aria-label="Date timeline">
+      <div class="timeline-strip" tabindex="-1">
+        ${win.shown.map((y) => {
           const on = y >= scope.from && y <= scope.to;
           return html`<button type="button" class="timeline-pill-btn${on ? " is-active" : ""}" data-action="pick" data-year="${y}" aria-pressed="${on ? "true" : "false"}">${y}</button>`;
         })}
@@ -92,9 +129,26 @@ export class Timeline extends Component<TimelineProps> {
   _tapTimer: ReturnType<typeof setTimeout> | null = null;
   _onClick = (e: Event) => this._handleClick(e as MouseEvent);
   _onKeydown = (e: Event) => {
+    const key = (e as KeyboardEvent).key;
     // Escape on the focused timeline collapses it.
-    if ((e as KeyboardEvent).key === "Escape" && this.state.scope) this.collapse();
+    if (key === "Escape" && this.state.scope) this.collapse();
+    // Left and Right move the expanded strip one year.
+    if ((key === "ArrowLeft" || key === "ArrowRight") && this.state.scope) {
+      e.preventDefault();
+      this.slide(key === "ArrowLeft" ? -1 : 1);
+      this.$(".timeline-pill-btn.is-active")?.focus();
+    }
   };
+
+  /** A drag this many px wide moves one year. */
+  static SLIDE_STEP_PX = 40;
+  /** Wheel delta that moves one year. */
+  static WHEEL_STEP = 60;
+  _drag: { id: number, x: number, moved: boolean } | null = null;
+  _wheelAcc = 0;
+  _wheelTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Set by a slide: the click that ends it is not a tap. */
+  _slid = false;
 
   constructor(container: HTMLElement, props: TimelineProps = {}) {
     super(container, props);
@@ -112,6 +166,24 @@ export class Timeline extends Component<TimelineProps> {
     this.container.removeEventListener("keydown", this._onKeydown);
     if (this._tapTimer) clearTimeout(this._tapTimer);
     this._tapTimer = null;
+    if (this._wheelTimer) clearTimeout(this._wheelTimer);
+    this._wheelTimer = null;
+  }
+
+  /** Move the active year one step (-1 before, +1 after). No move at the edge. */
+  slide(dir: number): void {
+    const scope: YearSpan | null = this.state.scope;
+    if (!scope) return;
+    const years: number[] = this.state.years;
+    const next = stepYear(years, anchorYear(years, scope), dir);
+    if (next !== null) this.focusYear(next);
+  }
+
+  /** A pending single tap is not a tap when a slide starts. */
+  _cancelTap(): void {
+    if (this._tapTimer) clearTimeout(this._tapTimer);
+    this._tapTimer = null;
+    this._lastTap = 0;
   }
 
   /**
@@ -120,6 +192,11 @@ export class Timeline extends Component<TimelineProps> {
    * state and send no single-tap action; one tap picks its year when the wait ends.
    */
   _handleClick(e: MouseEvent): void {
+    if (this._slid) {
+      this._slid = false;
+      e.stopPropagation();
+      return;
+    }
     const btn = (e.target as Element | null)?.closest?.<HTMLElement>(".timeline-pill-btn");
     const year = parseInt(btn?.dataset.year ?? "", 10);
     // A tap on the empty strip counts toward a double tap but has no single-tap action.
@@ -193,23 +270,62 @@ export class Timeline extends Component<TimelineProps> {
 
   afterRender(): void {
     const strip = this.$(".timeline-strip");
-    if (!strip) return;
+    if (!strip || !this.state.scope) return;
     strip.addEventListener("wheel", (e: WheelEvent) => {
-      // A vertical wheel over an overflowing strip scrolls it sideways.
-      if (strip.scrollWidth <= strip.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      // Either wheel axis moves the year: one step per WHEEL_STEP of delta.
       e.preventDefault();
-      strip.scrollLeft += e.deltaY;
+      this._wheelAcc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (this._wheelTimer) clearTimeout(this._wheelTimer);
+      this._wheelTimer = setTimeout(() => { this._wheelAcc = 0; }, 200);
+      if (Math.abs(this._wheelAcc) >= Timeline.WHEEL_STEP) {
+        const dir = Math.sign(this._wheelAcc);
+        this._wheelAcc = 0;
+        this.slide(dir);
+      }
     }, { passive: false });
+    // The atlas layer listens on document: a slide on the strip stays here.
+    strip.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      e.stopPropagation();
+      this._drag = { id: e.pointerId, x: e.clientX, moved: false };
+    });
+    strip.addEventListener("pointermove", (e: PointerEvent) => {
+      const d = this._drag;
+      if (!d || e.pointerId !== d.id) return;
+      e.stopPropagation();
+      const dx = e.clientX - d.x;
+      if (Math.abs(dx) < Timeline.SLIDE_STEP_PX) return;
+      if (!d.moved) {
+        d.moved = true;
+        this._cancelTap();
+        try { strip.setPointerCapture(e.pointerId); } catch { /* pointer gone */ }
+      }
+      // Drag right shows the earlier year, as content follows the finger.
+      d.x = e.clientX;
+      this.slide(dx > 0 ? -1 : 1);
+    });
+    const end = (e: PointerEvent) => {
+      const d = this._drag;
+      if (!d || e.pointerId !== d.id) return;
+      e.stopPropagation();
+      this._drag = null;
+      if (d.moved) {
+        this._slid = true;
+        // A touch slide sends no click: clear the flag after the click would arrive.
+        setTimeout(() => { this._slid = false; }, 0);
+      }
+    };
+    strip.addEventListener("pointerup", end);
+    strip.addEventListener("pointercancel", end);
     this._scrollActiveIntoView();
   }
 
+  /** Centre the active pill when the slot clips the strip. */
   _scrollActiveIntoView(): void {
     const strip = this.$(".timeline-strip");
     const active = this.$(".timeline-pill-btn.is-active");
-    if (!strip || !active) return;
-    if (strip.scrollWidth <= strip.clientWidth) return;
-    const left = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
-    strip.scrollLeft = Math.max(0, left);
+    if (!strip || !active || strip.scrollWidth <= strip.clientWidth) return;
+    strip.scrollLeft = Math.max(0, active.offsetLeft - strip.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2);
   }
 
   _emit(scope: YearSpan | null): void {

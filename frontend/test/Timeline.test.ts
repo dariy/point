@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { yearsOf, renderTimeline, yearOfTag } from '../src/plugins/timeline/index.ts';
+import { yearsOf, renderTimeline, yearOfTag, yearWindow, stepYear, Timeline } from '../src/plugins/timeline/index.ts';
 import type { TimelinePill } from '../src/api/timeline.ts';
 
 const pill = (year: number, is_decade = false): TimelinePill => ({
@@ -22,6 +22,21 @@ describe('renderTimeline', () => {
     assert.strictEqual(out.match(/<button/g)?.length, 1);
     assert.match(out, />All years</);
     assert.doesNotMatch(out, /2025/);
+  });
+
+  test('expanded: a maximum of 3 pills around the active year', () => {
+    const out = markup([2020, 2021, 2022, 2023, 2024], { from: 2022, to: 2022 });
+    assert.strictEqual(out.match(/<button/g)?.length, 3);
+    assert.match(out, /data-year="2021"/);
+    assert.match(out, /data-year="2023"/);
+    assert.doesNotMatch(out, /data-year="2020"|data-year="2024"/);
+    assert.match(out, /has-more-before has-more-after/);
+  });
+
+  test('expanded: no indicator on the side with no hidden years', () => {
+    const first = markup([2020, 2021, 2022], { from: 2020, to: 2020 });
+    assert.doesNotMatch(first, /has-more-before/);
+    assert.match(first, /has-more-after/);
   });
 
   test('expanded: one pill per year, ascending, no arrows', () => {
@@ -53,5 +68,39 @@ describe('yearOfTag', () => {
     assert.strictEqual(yearOfTag({ kind: 'tag', slug: '2026' }), null);
     assert.strictEqual(yearOfTag({ kind: 'year', slug: 'abc' }), null);
     assert.strictEqual(yearOfTag(null), null);
+  });
+});
+
+describe('yearWindow', () => {
+  const years = [2020, 2021, 2022, 2023];
+  test('middle year: before, active, after; hidden on both sides when more', () => {
+    assert.deepStrictEqual(yearWindow(years, 2021), { shown: [2020, 2021, 2022], moreBefore: false, moreAfter: true });
+    assert.deepStrictEqual(yearWindow(years, 2022), { shown: [2021, 2022, 2023], moreBefore: true, moreAfter: false });
+  });
+  test('first year has no before pill; last year has no after pill', () => {
+    assert.deepStrictEqual(yearWindow(years, 2020), { shown: [2020, 2021], moreBefore: false, moreAfter: true });
+    assert.deepStrictEqual(yearWindow(years, 2023), { shown: [2022, 2023], moreBefore: true, moreAfter: false });
+  });
+  test('one year: one pill, no indicators', () => {
+    assert.deepStrictEqual(yearWindow([2024], 2024), { shown: [2024], moreBefore: false, moreAfter: false });
+  });
+});
+
+describe('stepYear / slide', () => {
+  test('adjacent year, null at the edges', () => {
+    assert.strictEqual(stepYear([2020, 2022, 2025], 2022, -1), 2020);
+    assert.strictEqual(stepYear([2020, 2022, 2025], 2022, 1), 2025);
+    assert.strictEqual(stepYear([2020, 2022], 2020, -1), null);
+    assert.strictEqual(stepYear([2020, 2022], 2022, 1), null);
+  });
+
+  test('a slide step calls focusYear with the adjacent year', () => {
+    const calls: number[] = [];
+    const host = { state: { years: [2020, 2021, 2022], scope: { from: 2021, to: 2021 } }, focusYear: (y: number) => calls.push(y) };
+    Timeline.prototype.slide.call(host, 1);
+    Timeline.prototype.slide.call(host, -1);
+    host.state.scope = { from: 2022, to: 2022 };
+    Timeline.prototype.slide.call(host, 1);
+    assert.deepStrictEqual(calls, [2022, 2020]);
   });
 });
