@@ -69,11 +69,10 @@ describe('Trusted Types', () => {
     });
 
   before(async () => {
-    // The smoke test may have run setup already — either outcome is fine, all
-    // this needs is a session and something published to look at.
-    await api('/api/setup', {
+    const setup = await api('/api/setup', {
       name: PW, blog_title: 'TT Blog', author_name: 'TT User', email: 'tt@example.com',
-    }).catch(() => {});
+    });
+    if (!setup.ok) throw new Error('Setup failed: ' + setup.status);
 
     const res = await api('/api/auth/login', { username: 'the_owner', name: PW });
     if (!res.ok) throw new Error('Login failed: ' + res.status);
@@ -88,9 +87,7 @@ describe('Trusted Types', () => {
       excerpt: 'Card text.',
       status: 'published',
     });
-    // 409: this file already ran against this server. The post is there, which
-    // is all the assertions below need.
-    if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + await post.text());
+    if (!post.ok) throw new Error('Post creation failed: ' + await post.text());
 
     // A geo-tagged tag, so the map has a divIcon marker to open a popup on.
     await api('/api/tags', { name: 'Paris', slug: 'tt-paris', kind: 'location', latitude: 48.8566, longitude: 2.3522 });

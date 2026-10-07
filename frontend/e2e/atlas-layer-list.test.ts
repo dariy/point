@@ -26,7 +26,7 @@ describe('Atlas layer list', () => {
     page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
     await page.addInitScript(() => localStorage.removeItem('atlasLayerState'));
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
-    if (!setup.ok && setup.status !== 409) throw new Error('Setup failed: ' + setup.status);
+    if (!setup.ok) throw new Error('Setup failed: ' + setup.status);
     const login = await api('/api/auth/login', { username: 'the_owner', name: PW });
     if (!login.ok) throw new Error('Login failed: ' + login.status);
     cookie = ((login.headers.get('set-cookie') || '').match(/session=([^;]+)/) || [])[1] || '';
@@ -35,7 +35,7 @@ describe('Atlas layer list', () => {
       const res = await api('/api/posts', {
         title, slug: `list-probe-${i}`, content: 'Body.', excerpt: 'Card.', status: 'published', tags: [],
       });
-      if (!res.ok && res.status !== 409) throw new Error('Post creation failed: ' + (await res.text()));
+      if (!res.ok) throw new Error('Post creation failed: ' + (await res.text()));
     }
   });
 

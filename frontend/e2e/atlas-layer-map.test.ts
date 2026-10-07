@@ -29,7 +29,7 @@ describe('Atlas layer map', () => {
     });
 
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
-    if (!setup.ok && setup.status !== 409) throw new Error('Setup failed: ' + setup.status);
+    if (!setup.ok) throw new Error('Setup failed: ' + setup.status);
     const login = await api('/api/auth/login', { username: 'the_owner', name: PW });
     if (!login.ok) throw new Error('Login failed: ' + login.status);
     cookie = ((login.headers.get('set-cookie') || '').match(/session=([^;]+)/) || [])[1] || '';
@@ -41,7 +41,7 @@ describe('Atlas layer map', () => {
     // A country (drawn as a shape), a city (a marker), and posts that carry them.
     for (const [name, lat, lng] of [['France', 46.6, 2.4], ['Mapton', 40.7, -74]] as const) {
       const res = await api('/api/tags', { name, slug: name.toLowerCase(), kind: 'place', latitude: lat, longitude: lng });
-      if (!res.ok && res.status !== 409) throw new Error('Tag creation failed: ' + (await res.text()));
+      if (!res.ok) throw new Error('Tag creation failed: ' + (await res.text()));
     }
     const posts: Array<[string, string[]]> = [
       ['Map probe one', ['atlas-map-set', 'france']],
@@ -53,7 +53,7 @@ describe('Atlas layer map', () => {
       const res = await api('/api/posts', {
         title, slug: title.toLowerCase().replace(/ /g, '-'), content: 'Body.', excerpt: 'Card.', status: 'published', tags,
       });
-      if (!res.ok && res.status !== 409) throw new Error('Post creation failed: ' + (await res.text()));
+      if (!res.ok) throw new Error('Post creation failed: ' + (await res.text()));
     }
   });
 

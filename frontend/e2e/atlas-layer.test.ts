@@ -20,8 +20,7 @@ describe('Atlas layer', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' }),
     });
-    // 409: another e2e file already created the owner.
-    if (!res.ok && res.status !== 409) throw new Error('Setup failed: ' + res.status);
+    if (!res.ok) throw new Error('Setup failed: ' + res.status);
   });
 
   after(async () => {
@@ -56,7 +55,7 @@ describe('Atlas layer', () => {
         title: 'Atlas handle probe', slug: 'atlas-handle-probe', content: 'Body.', excerpt: 'Card.',
         status: 'published', tags: ['atlas-handle'],
       });
-      if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + (await post.text()));
+      if (!post.ok) throw new Error('Post creation failed: ' + (await post.text()));
     });
 
     const paths: Array<[string, string]> = [

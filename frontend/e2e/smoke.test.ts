@@ -26,9 +26,7 @@ describe('Public Reading Path Smoke Test', () => {
         email: 'e2e@example.com'
       })
     });
-    // 409 means an owner already exists — another e2e file in this run got
-    // there first. That is the state this test needs, not a failure.
-    if (!res.ok && res.status !== 409) throw new Error('Setup failed: ' + res.status);
+    if (!res.ok) throw new Error('Setup failed: ' + res.status);
 
     res = await fetch(`${BASE}/api/auth/login`, {
       method: 'POST',
