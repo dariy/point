@@ -1035,9 +1035,10 @@ func TestSetupEcho_CSSSubdirectoriesStillServed(t *testing.T) {
 	if rec.Body.String() != string(theme) {
 		t.Errorf("common/theme.css served %q, want %q", rec.Body.String(), theme)
 	}
-	// It changes at runtime under a fixed URL, so it must never go immutable.
-	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
-		t.Errorf("common/theme.css Cache-Control = %q, want no-cache", cc)
+	// It changes at runtime under a fixed URL, and two changes can fall in
+	// the same Last-Modified second, so it must not be cached at all.
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("common/theme.css Cache-Control = %q, want no-store", cc)
 	}
 
 	// A subdirectory path must resolve within that subdirectory, not collapse
