@@ -30,28 +30,12 @@ describe('SetupPage', () => {
     setupTokenFrom = mod.setupTokenFrom;
   });
 
-  test('renders email field as type="text" with autocomplete="off"', () => {
+  test('renders only the account fields', () => {
     const container = mock<HTMLElement>({ querySelector: () => null });
     const page = new SetupPage(container);
     const html = String(page.render());
-    
-    assert.ok(html.includes('id="email"'), 'Email field should exist');
-    assert.ok(html.includes('type="text"'), 'Email field should be type="text" to avoid autofill crash');
-    assert.ok(html.includes('autocomplete="off"'), 'Autocomplete should be off for email');
-  });
-
-  test('helper text is outside the label', () => {
-    const container = mock<HTMLElement>({ querySelector: () => null });
-    const page = new SetupPage(container);
-    const html = String(page.render());
-    
-    // Check that the label for email does NOT contain the help text
-    const labelMatch = html.match(/<label[^>]*for="email"[^>]*>([\s\S]*?)<\/label>/);
-    assert.ok(labelMatch, 'Label for email should exist');
-    assert.ok(!labelMatch[1]?.includes('form-help'), 'Label should not contain helper text span');
-    
-    // Check that form-help exists in the HTML
-    assert.ok(html.includes('class="form-help"'), 'Helper text should exist');
+    const ids = [...html.matchAll(/<input[^>]*id="([^"]+)"/g)].map((m) => m[1]);
+    assert.deepStrictEqual(ids, ['username', 'password', 'confirm_password']);
   });
 
   test('password fields have form-input class', () => {
