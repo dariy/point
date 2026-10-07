@@ -43,7 +43,13 @@ cd ..
 
 export STORAGE_PATH=$(mktemp -d)
 export DATABASE_URL="sqlite:$STORAGE_PATH/point.db"
-export FRONTEND_DIR=frontend
+# Serve a private copy of the built frontend. build-js.sh starts with
+# `rm -rf frontend/js`, and `run.sh --watch` runs it whenever frontend/src
+# changes — which check.sh's js-test lane does (eslintRules.test.ts writes its
+# fixtures there). Served from the shared tree, the page then gets no app.js
+# and never boots, and a test fails on a handle that never appears.
+cp -a frontend "$STORAGE_PATH/frontend"
+export FRONTEND_DIR="$STORAGE_PATH/frontend"
 
 mkdir -p "$STORAGE_PATH/media/originals" "$STORAGE_PATH/media/thumbnails" "$STORAGE_PATH/media/variants" "$STORAGE_PATH/logs" "$STORAGE_PATH/themes"
 
