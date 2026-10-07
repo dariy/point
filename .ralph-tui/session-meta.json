@@ -1,15 +1,14 @@
 {
-  "id": "ef3476c1-bada-46af-88fb-928f7907e9d5",
-  "status": "interrupted",
-  "startedAt": "2026-10-06T13:29:45.264Z",
-  "updatedAt": "2026-10-06T17:47:24.351Z",
+  "id": "71233477-d675-4e95-9d38-02745c92cab0",
+  "status": "running",
+  "startedAt": "2026-10-07T01:03:11.580Z",
+  "updatedAt": "2026-10-07T01:03:11.580Z",
   "agentPlugin": "claude",
   "trackerPlugin": "beads-rust-bv",
   "executionScopes": [],
-  "currentIteration": 11,
+  "currentIteration": 0,
   "maxIterations": 0,
   "totalTasks": 0,
-  "tasksCompleted": 11,
-  "cwd": "/home/light/src/point",
-  "endedAt": "2026-10-06T15:33:26.373Z"
+  "tasksCompleted": 0,
+  "cwd": "/home/light/src/point"
 }

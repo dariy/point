@@ -7,7 +7,7 @@
  * custom properties on `body`:
  *
  *   --atlas-layer-header-h   bottom edge of the header, in px
- *   --atlas-layer-top        bottom edge of the header and the timeline (when shown), in px
+ *   --atlas-layer-top        bottom edge of the header (the timeline is part of it), in px
  *   --atlas-layer-gap        gap between two cards (SHEET_GAP_PX)
  *   --atlas-layer-aspect     card width over card height (CARD_ASPECT)
  *
@@ -52,20 +52,10 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
   document.addEventListener('click', onCardClick, true);
 
   const header = document.getElementById('header-mount');
-  let timeline: HTMLElement | null = null;
   let footerMount: HTMLElement | null = null;
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => measure()) : null;
-  // The timeline plugin fills its mount after this module runs, so find it again on every measure.
   const measure = () => {
     const headerBottom = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
-    const tl = document.getElementById('timeline-mount');
-    if (tl !== timeline) {
-      if (timeline) ro?.unobserve(timeline);
-      timeline = tl;
-      if (tl) ro?.observe(tl);
-    }
-    // The timeline sticks right under the header, so its height adds to the header edge.
-    const tlHeight = tl ? Math.round(tl.getBoundingClientRect().height) : 0;
     // In `map` the footer is a fixed strip under the handle. No footer plugin leaves the mount empty: 0px.
     const fm = document.getElementById('footer-mount');
     if (fm !== footerMount) {
@@ -76,7 +66,7 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
     const footerHeight = fm ? Math.round(fm.getBoundingClientRect().height) : 0;
     body.style.setProperty('--atlas-layer-footer-h', `${footerHeight}px`);
     body.style.setProperty('--atlas-layer-header-h', `${headerBottom}px`);
-    body.style.setProperty('--atlas-layer-top', `${headerBottom + tlHeight}px`);
+    body.style.setProperty('--atlas-layer-top', `${headerBottom}px`);
   };
   measure();
   if (header) ro?.observe(header);

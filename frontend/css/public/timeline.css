@@ -8,17 +8,14 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding-left: var(--spacing-md);
-    background: var(--surface-card);
-    border-bottom: 1px solid var(--border-subtle);
     user-select: none;
     overflow: hidden;
     touch-action: pan-y;
 }
 
 /* A phone turned sideways has ~390px of height to give a grid of photographs,
-   and the timeline asks for 64px of it plus the header — a sixth of the screen
-   spent on a control the whole viewport is too short to browse the results of.
+   and the timeline's slot in the header is a sixth of the screen spent on a
+   control the whole viewport is too short to browse the results of.
    Keyed on height rather than `(orientation: landscape)` because height is the
    thing that is actually scarce: a 1200×450 desktop window has the same problem
    and no orientation that describes it.
@@ -35,14 +32,14 @@
     position: relative;
     flex: 1 1 auto;
     min-width: 0;
-    height: 56px;
+    height: var(--header-height);
     cursor: grab;
 }
 
 /* Scoped to :not(.pointer-fine) — see utils/pointerMode.ts. */
 @media (pointer: coarse) {
     :where(html:not(.pointer-fine)) .timeline-track-wrapper {
-        height: 64px;
+        height: var(--header-height);
     }
 }
 
@@ -59,12 +56,12 @@
 
 .timeline-track-wrapper::before {
     left: 0;
-    background: linear-gradient(to right, var(--surface-card), transparent);
+    background: linear-gradient(to right, var(--header-bg), transparent);
 }
 
 .timeline-track-wrapper::after {
     right: 0;
-    background: linear-gradient(to left, var(--surface-card), transparent);
+    background: linear-gradient(to left, var(--header-bg), transparent);
 }
 
 .timeline-track-wrapper.grabbing {

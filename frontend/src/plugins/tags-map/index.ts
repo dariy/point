@@ -136,7 +136,6 @@ export default class MapPage extends Component<PageProps> {
       return html`
         <div class="site-wrapper site-wrapper--map">
           <div id="header-mount"></div>
-          <div id="timeline-mount"></div>
           <main class="site-main site-main--map" aria-busy="true">
             <div class="loading-spinner" aria-label="Loading map…"></div>
           </main>
@@ -148,7 +147,6 @@ export default class MapPage extends Component<PageProps> {
       return html`
         <div class="site-wrapper site-wrapper--map">
           <div id="header-mount"></div>
-          <div id="timeline-mount"></div>
           <main class="site-main site-main--map">
             <div class="map-fetch-error" role="alert">
               <p class="map-fetch-error__message">${error}</p>
@@ -162,7 +160,6 @@ export default class MapPage extends Component<PageProps> {
     return html`
       <div class="site-wrapper site-wrapper--map">
         <div id="header-mount"></div>
-        <div id="timeline-mount"></div>
         <main class="site-main site-main--map">
           <div class="map-container"><div id="map"></div></div>
         </main>
@@ -185,6 +182,12 @@ export default class MapPage extends Component<PageProps> {
       breadcrumb: this._buildBreadcrumb(),
       total: this.state.tags?.length || 0,
       timelineVisible: true,
+      timeline: canShowTimeline ? {
+        mode: "filter",
+        initialRange,
+        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
+      } : null,
+      onTimeline: (handle: TimelineHandle) => { this._timeline = handle; },
     }).then(comps => {
       if (comps[0] && !this._unmounted) {
         this._headerChild = comps[0];
@@ -194,19 +197,6 @@ export default class MapPage extends Component<PageProps> {
     pluginHost.fill("footer", this.$("#footer-mount"), { settings }).then(comps => {
       if (comps[0] && !this._unmounted) this._children.push(comps[0]);
     });
-
-    if (canShowTimeline) {
-      pluginHost.fill("timeline", this.$("#timeline-mount"), {
-        mode: "filter",
-        initialRange,
-        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
-      }).then((comps) => {
-        if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0] as TimelineHandle;
-          this._children.push(comps[0]);
-        }
-      });
-    }
 
     const retryBtn = this.$("#map-retry-btn");
     if (retryBtn) {

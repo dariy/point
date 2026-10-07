@@ -159,6 +159,8 @@ describe('Atlas layer gestures', () => {
       await page.waitForTimeout(150);
       const mid = {
         dragging: await page.evaluate(() => document.body.hasAttribute('data-atlas-dragging')),
+        target: await page.evaluate(() => document.body.dataset.atlasDragTarget),
+        strip: await page.evaluate(() => getComputedStyle(document.querySelector('#grid-mount .posts-grid')!).display === 'flex'),
         map: await page.locator('.atlas-layer-map').boundingBox(),
         handle: await page.locator('.atlas-layer-handle').boundingBox(),
         grid: await page.locator('#grid-mount').boundingBox(),
@@ -170,6 +172,8 @@ describe('Atlas layer gestures', () => {
     // list -> a point between mapList and map, nearer mapList
     let mid = await dragTo(at.mapList! + 20);
     assert.ok(mid.dragging);
+    assert.equal(mid.target, 'mapList', 'the drag shows the layout of the state it snaps to');
+    assert.ok(mid.strip, 'the cards take the map+list layout during the drag');
     assert.ok(mid.map && mid.map.height > 100, 'map visible during the drag');
     assert.ok(mid.grid && mid.grid.height > 20, 'list visible during the drag');
     assert.ok(Math.abs(mid.handle!.y + mid.handle!.height / 2 - (at.mapList! + 20)) < 8, 'handle follows the finger');
@@ -180,8 +184,12 @@ describe('Atlas layer gestures', () => {
     await to('map');
     await dragTo(at.mapList! - 40);
     await to('mapList');
-    await dragTo(at.list! + 30);
+    mid = await dragTo(at.list! + 30);
+    assert.equal(mid.target, 'list');
+    assert.ok(!mid.strip, 'the cards take the list layout during the drag');
     await to('list');
+    // After the release the map does not fold a second time.
+    assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).visibility), 'hidden');
     // A slow drag (no flick) to a point nearer map than mapList
     await dragTo(at.mapList! + (at.map! - at.mapList!) * 0.7, 250);
     await to('map');

@@ -136,7 +136,6 @@ export class GridPager {
   _atlasGesture: (() => void) | null = null;
   _atlasLayout: (() => void) | null = null;
   _atlasMap: AtlasLayerMapController | null = null;
-  _atlasMore: (() => void) | null = null;
 
   constructor(opts: GridPagerOptions) {
     this._o = {
@@ -171,8 +170,6 @@ export class GridPager {
    */
   arm(pagination: GridPagination) {
     this._teardown(); // also releases the swipe lock a commit armed
-    this._atlasMore?.();
-    this._atlasMore = null;
     this._pagination = pagination || {};
     this._pagination.minPage = GridPager.minPage(this._pagination);
     this._setupGestures();
@@ -187,7 +184,6 @@ export class GridPager {
         this._atlasGesture = handle ? mountAtlasLayerGesture(handle, this._o.gridMount) : null;
       }
       this._atlasHandle = handle;
-      this._atlasMore = this._loadMoreAtStripEnd(gm);
       this._atlasLayout ??= mountAtlasLayerLayout();
       const container = document.querySelector<HTMLElement>('body > .atlas-layer-map');
       if (container) {
@@ -200,21 +196,6 @@ export class GridPager {
     if (this._o.zoom) this._setupZoomInputs();
     this._preloadAdjacentGrids();
     this._promoteGridAhead();
-  }
-
-  /**
-   * In map+list the strip scrolls sideways. At its end, load the next page of
-   * the same collection; the pager re-arms on the new page.
-   */
-  _loadMoreAtStripEnd(gm: HTMLElement): () => void {
-    const onScroll = () => {
-      if (document.body.dataset.atlasLayer !== 'mapList' || document.body.hasAttribute('data-atlas-dragging')) return;
-      if (gm.scrollLeft + gm.clientWidth < gm.scrollWidth - 4) return;
-      const { page = 1, pages = 1 } = this._pagination;
-      if (page < pages) this._o.gotoPage(page + 1);
-    };
-    gm.addEventListener('scroll', onScroll, { passive: true });
-    return () => gm.removeEventListener('scroll', onScroll);
   }
 
   /** Clear the inline styles a swipe left on the mount, before the grid remounts. */
@@ -255,8 +236,6 @@ export class GridPager {
   /** Release every listener and ghost, leaving the pager reusable via arm(). */
   disarm() {
     this._teardown();
-    this._atlasMore?.();
-    this._atlasMore = null;
     this._atlasGesture?.();
     this._atlasGesture = null;
     this._atlasHandle?.remove();
@@ -267,8 +246,6 @@ export class GridPager {
   }
   destroy() {
     this._teardown();
-    this._atlasMore?.();
-    this._atlasMore = null;
     this._atlasGesture?.();
     this._atlasGesture = null;
     this._atlasHandle?.remove();

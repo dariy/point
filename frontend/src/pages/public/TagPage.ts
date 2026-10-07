@@ -335,7 +335,6 @@ export default class TagPage extends Component<PageProps> {
     return html`
       <div class="site-wrapper tags-page">
         <div id="header-mount"></div>
-        <div id="timeline-mount"></div>
         <main class="site-main">
           <div class="main-container">
             <div id="grid-mount" class="grid-expand-mount"></div>
@@ -372,22 +371,6 @@ export default class TagPage extends Component<PageProps> {
       !this.state.loading &&
       !this.state.error;
     this._canShowTimeline = canShowTimeline;
-    if (canShowTimeline) {
-      const vc = ViewContext.current();
-      const total = this.state.data?.pagination?.total || this.state.data?.total || 0;
-      pluginHost.fill("timeline", this.$("#timeline-mount"), {
-        mode: "filter",
-        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
-        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
-        total,
-      }).then((comps) => {
-        if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0];
-          this._children.push(comps[0]);
-        }
-      });
-    }
-
     // Build breadcrumb: ancestors are links, current tag is the non-linked tail.
     // Preserve any server-provided `href` — when a navigation `path` is active
     // each ancestor crumb carries its own truncated path so clicking up the
@@ -464,6 +447,8 @@ export default class TagPage extends Component<PageProps> {
         editUrl: post ? `/light/posts/${post.id}/edit` : null,
         total: this.state.data?.pagination?.total || this.state.data?.total || 0,
         timelineVisible: this._canShowTimeline && !isShortViewport(),
+        timeline: this._canShowTimeline ? this._timelineContext() : null,
+        onTimeline: (handle: TimelineHandle) => { this._timeline = handle; },
       }).then(comps => {
         if (comps[0] && !this._unmounted) this._children.push(comps[0]);
       });
@@ -501,6 +486,8 @@ export default class TagPage extends Component<PageProps> {
         // Hidden timeline ⇒ the year crumb is the only thing left saying the
         // list is filtered — see the same call in HomePage.
         timelineVisible: this._canShowTimeline && !isShortViewport(),
+        timeline: this._canShowTimeline ? this._timelineContext() : null,
+        onTimeline: (handle: TimelineHandle) => { this._timeline = handle; },
         // Same distraction-free toggle the home grid offers.
         distractionToggle: true,
       }).then(comps => {
@@ -668,6 +655,17 @@ export default class TagPage extends Component<PageProps> {
     window.addEventListener("resize", this._resizeHandler);
     super.mount();
     this._load();
+  }
+
+  /** What the header hands the timeline slot it renders between the crumbs and the nav. */
+  _timelineContext() {
+    const vc = ViewContext.current();
+    return {
+      mode: "filter",
+      initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
+      onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
+      total: this.state.data?.pagination?.total || this.state.data?.total || 0,
+    };
   }
 
   async _onTimelineRangeChange({ from, to, isFullExtent }: TimelineRange) {

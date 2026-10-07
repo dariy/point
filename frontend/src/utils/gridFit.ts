@@ -270,7 +270,7 @@ function belowGridReserve(gridEl: Element | null) {
 
 // The chrome bracketing the grid — everything computePerPage has to measure
 // around it, above (`top`) and below (`belowGridReserve`).
-const CHROME_MOUNTS = ['#header-mount', '#timeline-mount', '#pagination-mount', '#footer-mount'];
+const CHROME_MOUNTS = ['#header-mount', '#pagination-mount', '#footer-mount'];
 
 /**
  * Re-run a viewport fit whenever the chrome bracketing the grid changes height.
@@ -587,10 +587,10 @@ export function computePerPage(minPerPage: number, gridEl: HTMLElement | null = 
 }
 
 /**
- * per_page for the atlas map+list strip: one row of square cards as tall as the
- * strip. It holds two screens of cards so the strip scrolls; the pager loads the
- * next page at its end. It depends on the strip's size only, never on the
- * count, so it cannot chase its own chrome. Returns 0 when the strip has no size.
+ * per_page for the atlas map+list strip: the square cards, as tall as the strip,
+ * that fit its width. The paginator under the strip turns the pages, as in
+ * `list`. It depends on the strip's size only, never on the count, so it cannot
+ * chase its own chrome. Returns 0 when the strip has no size.
  */
 function stripPerPage(gridEl: HTMLElement): number {
   const cs = window.getComputedStyle(gridEl);
@@ -598,8 +598,8 @@ function stripPerPage(gridEl: HTMLElement): number {
   const width = gridEl.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
   if (side <= 0 || width <= 0) return 0;
   const gap = parseFloat(cs.columnGap) || 0;
-  const visible = Math.ceil((width + gap) / (side + gap));
-  return Math.min(MAX_PER_PAGE, Math.max(2, visible * 2));
+  const visible = Math.floor((width + gap) / (side + gap));
+  return Math.min(MAX_PER_PAGE, Math.max(1, visible));
 }
 
 /**

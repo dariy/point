@@ -100,9 +100,11 @@ describe('Atlas layer', () => {
       assert.ok(Math.abs(m.y - (h.y + h.height)) <= 1, `map top ${m.y} vs header bottom ${h.y + h.height}`);
       const g = (await page.locator('#grid-mount').boundingBox())!;
       const handle = (await page.locator('.atlas-layer-handle').boundingBox())!;
-      const list = g.height + handle.height;
+      const pager = (await page.locator('#pagination-mount').boundingBox())!;
+      const list = g.height + handle.height + pager.height;
       assert.ok(list >= 844 * 0.15 && list <= 844 * 0.25, `list height ${list}`);
-      assert.ok(Math.abs(g.y + g.height - 844) <= 1, 'list sits at the bottom');
+      assert.ok(Math.abs(g.y + g.height - pager.y) <= 1, 'the paginator sits under the cards');
+      assert.ok(Math.abs(pager.y + pager.height - 844) <= 1, 'list sits at the bottom');
       assert.ok(Math.abs(m.y + m.height - (handle.y)) <= 1, 'map ends where the list starts');
       await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
       await page.locator('#footer-mount .site-footer').waitFor({ state: 'visible' });

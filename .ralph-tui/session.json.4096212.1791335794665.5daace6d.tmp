@@ -1,19 +1,19 @@
 {
   "version": 1,
-  "sessionId": "ef3476c1-bada-46af-88fb-928f7907e9d5",
+  "sessionId": "71233477-d675-4e95-9d38-02745c92cab0",
   "status": "running",
-  "startedAt": "2026-10-06T13:30:06.878Z",
-  "updatedAt": "2026-10-06T17:48:07.912Z",
-  "currentIteration": 11,
+  "startedAt": "2026-10-07T01:03:45.083Z",
+  "updatedAt": "2026-10-07T01:16:34.640Z",
+  "currentIteration": 0,
   "maxIterations": 0,
-  "tasksCompleted": 12,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "model": "sonnet",
   "trackerState": {
     "plugin": "beads-rust-bv",
     "executionScopes": [],
-    "totalTasks": 927,
+    "totalTasks": 937,
     "tasks": [
       {
         "id": "p-0b98.1",
@@ -544,6 +544,66 @@
         "completedInSession": false
       },
       {
+        "id": "p-atlas-header-line-f97s.1",
+        "title": "US-001: One-line header layout",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s.2",
+        "title": "US-002: Timeline component with collapsed and expanded states",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s.3",
+        "title": "US-003: Double tap or double click toggles the timeline state",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s.4",
+        "title": "US-004: Single tap on a year pill moves the focus",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s.5",
+        "title": "US-005: Year-tag page opens the timeline in the expanded state",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s.6",
+        "title": "US-006: Client-side tag navigation that keeps the view mode",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s.7",
+        "title": "US-007: View mode saved in the URL and localStorage",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s.8",
+        "title": "US-008: Home-page map geo-tag selection opens the tag page",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s.9",
+        "title": "US-009: Responsive header collapse",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "p-x52z",
+        "title": "Public frontend UX overhaul",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
         "id": "p-atlas-layer-1qus.1",
         "title": "US-001: Atlas layer state model and e2e harness",
         "status": "completed",
@@ -598,66 +658,6 @@
         "completedInSession": false
       },
       {
-        "id": "p-x52z",
-        "title": "Public frontend UX overhaul",
-        "status": "completed",
-        "completedInSession": false
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.1",
-        "title": "US-001: Atlas layer below the timeline",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.2",
-        "title": "US-002: Minimized footer in the map-only state",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.3",
-        "title": "US-003: Two maximize buttons on the handle",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.4",
-        "title": "US-004: Free drag with snap to three positions",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.5",
-        "title": "US-005: Restore the map behavior from before the redesign",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.6",
-        "title": "US-006: Geo-tag selection filters the post list",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.7",
-        "title": "US-007: Timeline filter combined with the geo-tag filter (AND)",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.8",
-        "title": "US-008: Filters in URL query parameters",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "p-atlas-layer-p2-rwea.9",
-        "title": "US-009: Fix the map+list list (same collection, adaptive page size, same first post)",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
         "id": "p-8ca7",
         "title": "Address security scan #43: path traversal in serveSimplifiedMedia",
         "status": "completed",
@@ -670,38 +670,38 @@
         "completedInSession": false
       },
       {
-        "id": "p-atlas-sheet-ft0b.1",
-        "title": "fix(atlas): return to /map from a post, plus sheet hooks in GridPager and PostCard",
+        "id": "p-atlas-layer-p2-rwea.1",
+        "title": "US-001: Atlas layer below the timeline",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-atlas-sheet-ft0b.2",
-        "title": "feat(atlas): AtlasSheet, a bottom sheet with one row of post cards",
+        "id": "p-atlas-layer-p2-rwea.2",
+        "title": "US-002: Minimized footer in the map-only state",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-atlas-sheet-ft0b.3",
-        "title": "feat(atlas): replace the side panel with the bottom sheet",
+        "id": "p-atlas-layer-p2-rwea.3",
+        "title": "US-003: Two maximize buttons on the handle",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-carousel-compose-3khd.1",
-        "title": "feat(postNodes): carousel block keys and the pure node operations",
+        "id": "p-atlas-layer-p2-rwea.4",
+        "title": "US-004: Free drag with snap to three positions",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-carousel-compose-3khd.2",
-        "title": "feat(publish): Instagram export is every image in the post, in order",
+        "id": "p-atlas-layer-p2-rwea.5",
+        "title": "US-005: Restore the map behavior from before the redesign",
         "status": "completed",
         "completedInSession": false
       },
       {
-        "id": "p-carousel-compose-3khd.3",
-        "title": "feat(api): carousels keyed by (post_id, block_key)",
+        "id": "p-atlas-layer-p2-rwea.6",
+        "title": "US-006: Geo-tag selection filters the post list",
         "status": "completed",
         "completedInSession": false
       },
@@ -976,6 +976,66 @@
         "completedInSession": false
       },
       {
+        "id": "p-atlas-layer-p2-rwea.7",
+        "title": "US-007: Timeline filter combined with the geo-tag filter (AND)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.8",
+        "title": "US-008: Filters in URL query parameters",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-layer-p2-rwea.9",
+        "title": "US-009: Fix the map+list list (same collection, adaptive page size, same first post)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-sheet-ft0b.1",
+        "title": "fix(atlas): return to /map from a post, plus sheet hooks in GridPager and PostCard",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-sheet-ft0b.2",
+        "title": "feat(atlas): AtlasSheet, a bottom sheet with one row of post cards",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-sheet-ft0b.3",
+        "title": "feat(atlas): replace the side panel with the bottom sheet",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.1",
+        "title": "feat(postNodes): carousel block keys and the pure node operations",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.2",
+        "title": "feat(publish): Instagram export is every image in the post, in order",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-carousel-compose-3khd.3",
+        "title": "feat(api): carousels keyed by (post_id, block_key)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "p-atlas-header-line-f97s",
+        "title": "epic(atlas): header line — timeline, breadcrumbs, client-side tag navigation",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
         "id": "p-carousel-compose-3khd.4",
         "title": "feat(carousel): the studio addresses one block among several",
         "status": "completed",
@@ -1026,7 +1086,7 @@
       {
         "id": "p-atlas-layer-p2-rwea",
         "title": "epic(atlas): redesign part 2 — timeline, footer, handle, map filter, list pagination",
-        "status": "open",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -1081,7 +1141,7 @@
         "id": "p-atlas-layer-1qus",
         "title": "epic(atlas): map layer on post list pages",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-carousel-s3-ycna.5",
@@ -4309,13 +4369,13 @@
         "id": "p-xdaw",
         "title": "fix(atlas): the sheet shows 2 cards on a 390px phone, not about 3",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-vfhf",
         "title": "fix(atlas): the sheet paginator shows the old place's pages during a place change",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "p-1d51",
@@ -5579,150 +5639,9 @@
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.1",
-      "taskTitle": "US-001: Atlas layer below the timeline",
-      "taskCompleted": false,
-      "durationMs": 320900,
-      "startedAt": "2026-10-06T13:30:25.889Z",
-      "endedAt": "2026-10-06T13:35:46.789Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.3",
-      "taskTitle": "US-003: Two maximize buttons on the handle",
-      "taskCompleted": true,
-      "durationMs": 785995,
-      "startedAt": "2026-10-06T13:35:49.744Z",
-      "endedAt": "2026-10-06T13:48:55.739Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.5",
-      "taskTitle": "US-005: Restore the map behavior from before the redesign",
-      "taskCompleted": false,
-      "durationMs": 257327,
-      "startedAt": "2026-10-06T13:48:58.866Z",
-      "endedAt": "2026-10-06T13:53:16.193Z"
-    },
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.9",
-      "taskTitle": "US-009: Fix the map+list list (same collection, adaptive page size, same first post)",
-      "taskCompleted": true,
-      "durationMs": 527361,
-      "startedAt": "2026-10-06T15:35:01.596Z",
-      "endedAt": "2026-10-06T15:43:48.957Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "p-vfhf",
-      "taskTitle": "fix(atlas): the sheet paginator shows the old place's pages during a place change",
-      "taskCompleted": true,
-      "durationMs": 25774,
-      "startedAt": "2026-10-06T15:44:40.179Z",
-      "endedAt": "2026-10-06T15:45:05.953Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "p-xdaw",
-      "taskTitle": "fix(atlas): the sheet shows 2 cards on a 390px phone, not about 3",
-      "taskCompleted": true,
-      "durationMs": 20879,
-      "startedAt": "2026-10-06T15:46:04.060Z",
-      "endedAt": "2026-10-06T15:46:24.939Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "p-atlas-layer-1qus",
-      "taskTitle": "epic(atlas): map layer on post list pages",
-      "taskCompleted": true,
-      "durationMs": 14049,
-      "startedAt": "2026-10-06T15:47:20.837Z",
-      "endedAt": "2026-10-06T15:47:34.886Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.1",
-      "taskTitle": "US-001: Atlas layer below the timeline",
-      "taskCompleted": true,
-      "durationMs": 424524,
-      "startedAt": "2026-10-06T15:48:25.793Z",
-      "endedAt": "2026-10-06T15:55:30.317Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.2",
-      "taskTitle": "US-002: Minimized footer in the map-only state",
-      "taskCompleted": true,
-      "durationMs": 804620,
-      "startedAt": "2026-10-06T15:56:22.656Z",
-      "endedAt": "2026-10-06T16:09:47.276Z"
-    },
-    {
-      "iteration": 7,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.4",
-      "taskTitle": "US-004: Free drag with snap to three positions",
-      "taskCompleted": true,
-      "durationMs": 1579767,
-      "startedAt": "2026-10-06T16:10:50.054Z",
-      "endedAt": "2026-10-06T16:37:09.821Z"
-    },
-    {
-      "iteration": 8,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.5",
-      "taskTitle": "US-005: Restore the map behavior from before the redesign",
-      "taskCompleted": true,
-      "durationMs": 686212,
-      "startedAt": "2026-10-06T16:38:11.921Z",
-      "endedAt": "2026-10-06T16:49:38.133Z"
-    },
-    {
-      "iteration": 9,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.6",
-      "taskTitle": "US-006: Geo-tag selection filters the post list",
-      "taskCompleted": true,
-      "durationMs": 1399062,
-      "startedAt": "2026-10-06T16:50:42.529Z",
-      "endedAt": "2026-10-06T17:14:01.591Z"
-    },
-    {
-      "iteration": 10,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.7",
-      "taskTitle": "US-007: Timeline filter combined with the geo-tag filter (AND)",
-      "taskCompleted": true,
-      "durationMs": 158468,
-      "startedAt": "2026-10-06T17:15:01.113Z",
-      "endedAt": "2026-10-06T17:17:39.581Z"
-    },
-    {
-      "iteration": 11,
-      "status": "completed",
-      "taskId": "p-atlas-layer-p2-rwea.8",
-      "taskTitle": "US-008: Filters in URL query parameters",
-      "taskCompleted": true,
-      "durationMs": 1687678,
-      "startedAt": "2026-10-06T17:18:45.175Z",
-      "endedAt": "2026-10-06T17:46:52.853Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/home/light/src/point",
   "activeTaskIds": [],
-  "subagentPanelVisible": true
+  "subagentPanelVisible": false
 }

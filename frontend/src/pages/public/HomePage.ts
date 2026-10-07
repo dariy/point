@@ -358,7 +358,6 @@ export default class HomePage extends Component<PageProps> {
       <div class="site-wrapper">
         <div id="header-mount"></div>
         ${isStaticHomePage ? '' : html`<div id="tag-cloud-mount"></div>`}
-        ${isStaticHomePage ? '' : html`<div id="timeline-mount"></div>`}
         <main class="site-main">
           <div class="main-container">
             <div id="atlas-filter-mount"></div>
@@ -416,6 +415,8 @@ export default class HomePage extends Component<PageProps> {
       // remaining trace and has to come back. Evaluated at render, so a device
       // rotated mid-view keeps the previous answer until the next navigation.
       timelineVisible: this._canShowTimeline && !isShortViewport(),
+      timeline: this._canShowTimeline ? this._timelineContext(total) : null,
+      onTimeline: (handle: TimelineHandle) => { this._timeline = handle; },
       // Only the paginated grid view offers the distraction-free toggle.
       distractionToggle: !isStaticHomePage && !immersive,
     }).then(comps => {
@@ -449,23 +450,6 @@ export default class HomePage extends Component<PageProps> {
     // home-explore slot (tag cloud).
     const tagCloud = this.state.data.tag_cloud || getTagCloudCache() || [];
     pluginHost.fill('home-explore', this.$('#tag-cloud-mount'), { tags: tagCloud, settings });
-
-    // timeline slot (decided above, before the header was told about it).
-    if (this._canShowTimeline) {
-      const vc = ViewContext.current();
-      pluginHost.fill('timeline', this.$('#timeline-mount'), {
-        mode: 'filter',
-        canShow: this._canShowTimeline,
-        initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
-        onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
-        total,
-      }).then(comps => {
-        if (comps[0] && !this._unmounted) {
-          this._timeline = comps[0];
-          this._children.push(comps[0]);
-        }
-      });
-    }
 
     this._mountPostContent();
   }
@@ -589,6 +573,18 @@ export default class HomePage extends Component<PageProps> {
     }
     this._postChildren = [];
     this._pager.disarm();
+  }
+
+  /** What the header hands the timeline slot it renders between the crumbs and the nav. */
+  _timelineContext(total: number) {
+    const vc = ViewContext.current();
+    return {
+      mode: 'filter',
+      canShow: this._canShowTimeline,
+      initialRange: vc.years ? { from: vc.years[0], to: vc.years[1] } : undefined,
+      onRangeChange: (range: TimelineRange) => this._onTimelineRangeChange(range),
+      total,
+    };
   }
 
   _onTimelineRangeChange({ from, to, isFullExtent }: TimelineRange) {

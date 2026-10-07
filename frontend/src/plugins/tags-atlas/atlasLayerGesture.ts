@@ -138,21 +138,37 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
   };
   const positions = (): SnapPositions => {
     const { top, bottom } = bounds();
-    const rowMin = parseFloat(getComputedStyle(body).getPropertyValue('--atlas-layer-row-min')) || 120;
-    const mapList = window.innerHeight - Math.max(window.innerHeight * 0.2, handle.offsetHeight + rowMin);
+    const cs = getComputedStyle(body);
+    const rowMin = parseFloat(cs.getPropertyValue('--atlas-layer-row-min')) || 120;
+    const pager = parseFloat(cs.getPropertyValue('--atlas-layer-pager-h')) || 0;
+    const mapList = window.innerHeight - Math.max(window.innerHeight * 0.2, handle.offsetHeight + rowMin + pager);
     return { list: top, mapList: Math.min(Math.max(mapList, top), bottom), map: bottom };
   };
   const setHandleY = (y: number) => body.style.setProperty('--atlas-layer-list-h', `${window.innerHeight - y}px`);
+  // The cards take the layout of the state the handle would snap to now.
+  const setDragTarget = (state: AtlasLayerState) => {
+    if (body.dataset.atlasDragTarget !== state) body.dataset.atlasDragTarget = state;
+  };
+  let settleFrame = 0;
 
   const finishDrag = () => {
     if (snapTimer !== null) clearTimeout(snapTimer);
     snapTimer = null;
     const target = snapTo;
     snapTo = null;
+    if (!body.hasAttribute('data-atlas-dragging')) return;
+    // The drag left the layout where the new state puts it. Change the state with
+    // transitions off, so the map does not fold or slide a second time.
+    body.setAttribute('data-atlas-settling', '');
     if (target && target !== getAtlasLayerState()) setAtlasLayerState(target);
     body.removeAttribute('data-atlas-dragging');
     body.removeAttribute('data-atlas-snapping');
+    body.removeAttribute('data-atlas-drag-target');
     body.style.removeProperty('--atlas-layer-list-h');
+    cancelAnimationFrame(settleFrame);
+    settleFrame = requestAnimationFrame(() => {
+      settleFrame = requestAnimationFrame(() => body.removeAttribute('data-atlas-settling'));
+    });
   };
 
   const els = () => ({ handle, grid: gridMount(), map: document.querySelector('body > .atlas-layer-map') });
@@ -184,12 +200,15 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
       if (axis === 'y') {
         try { (e.target as Element).setPointerCapture(e.pointerId); } catch { /* target gone */ }
         setHandleY(start.handleY);
+        setDragTarget(start.from);
         body.setAttribute('data-atlas-dragging', '');
       }
     }
     if (axis !== 'y') return;
     const { top, bottom } = bounds();
-    setHandleY(Math.min(bottom, Math.max(top, start.handleY + dy)));
+    const y = Math.min(bottom, Math.max(top, start.handleY + dy));
+    setHandleY(y);
+    setDragTarget(snapState(y, start.from, 0, positions()));
     samples.push({ y: e.clientY, t: e.timeStamp });
     if (samples.length > 8) samples.shift();
   };
@@ -206,6 +225,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
       const releaseY = Math.min(bottom, Math.max(top, handleY + e.clientY - y));
       const target = cancelled ? from : snapState(releaseY, from, recentVelocity(samples), pos);
       snapTo = target;
+      setDragTarget(target);
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         finishDrag();
       } else {
@@ -277,5 +297,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     if (wheelBusy !== null) clearTimeout(wheelBusy);
     live.remove();
     finishDrag();
+    cancelAnimationFrame(settleFrame);
+    body.removeAttribute('data-atlas-settling');
   };
 }

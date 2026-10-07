@@ -41,6 +41,23 @@
     height: var(--header-height);
 }
 
+/* Zone: timeline — fills the gap between the context and the nav, and keeps
+   its content centred in it. Takes no width of its own (basis 0, min-width 0),
+   so it never pushes the fold controller's overflow check. */
+.site-header-inner > .site-timeline {
+    flex: 1 1 0;
+    min-width: 0;
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.site-timeline > .timeline-container {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 /* Zone: nav — visible menu links (nav-menu plugin) */
 .site-header-inner > .site-nav {
     flex: 0 0 auto;
@@ -658,6 +675,12 @@
         flex-wrap: wrap;
         height: auto;
         min-height: var(--header-height);
+    }
+
+    /* Own row until the responsive collapse (header fold) replaces this. */
+    .site-header-inner > .site-timeline {
+        order: 98;
+        flex: 1 1 100%;
     }
 
     .site-header-inner > .site-nav-slot {

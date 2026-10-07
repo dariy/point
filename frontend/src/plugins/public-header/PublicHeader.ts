@@ -69,6 +69,14 @@ export interface PublicHeaderProps {
    * No caller passes one today.
    */
   slot?: Slot;
+  /**
+   * Context for the `timeline` slot. When set, the header renders the timeline
+   * between the breadcrumbs and the nav and fills it itself, so the whole
+   * header is one row. Pages that show no timeline leave it unset.
+   */
+  timeline?: object | null;
+  /** Receives the timeline handle once the slot fill resolves. */
+  onTimeline?: ((handle: any) => void) | null;
 }
 
 /** A slot fill's mount handle, as plugins return it. */
@@ -156,6 +164,9 @@ export class PublicHeader extends Component<PublicHeaderProps> {
             ${shareButtonHtml}
             ${editButtonHeader}
           </div>` : ''}
+
+          <!-- Zone: timeline — fills the gap between the context and the nav. -->
+          ${this.props.timeline ? html`<div class="site-timeline" id="timeline-mount"></div>` : ''}
 
           ${slot ? html`<div class="site-nav-slot">${raw(slot)}</div>` : ''}
 
@@ -268,6 +279,13 @@ export class PublicHeader extends Component<PublicHeaderProps> {
         group: this._group
       }).then(comps => {
         this._keepSlotMounts(gen, comps);
+        this._fold?.relayout();
+      });
+    }
+    if (this.props.timeline && pluginHost.hasSlot('timeline')) {
+      pluginHost.fill('timeline', this.$('.site-timeline'), this.props.timeline).then(comps => {
+        this._keepSlotMounts(gen, comps);
+        if (gen === this._renderGen && !this._unmounted && comps[0]) this.props.onTimeline?.(comps[0]);
         this._fold?.relayout();
       });
     }

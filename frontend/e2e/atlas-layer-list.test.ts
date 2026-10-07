@@ -61,16 +61,20 @@ describe('Atlas layer list', () => {
     assert.equal((await titles())[0], firstBefore);
   });
 
-  it('map+list loads the next page of the same collection at the end of the strip', async () => {
+  it('map+list pages with the paginator, not a sideways scroll', async () => {
     await page.goto(BASE + '/?atlas=list-map');
     await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length > 1);
     const first = (await titles())[0];
     const pageOf = () => new URL(page.url()).searchParams.get('page');
     assert.ok(!pageOf() || pageOf() === '1');
-    await page.evaluate(() => {
+    // The first fetch uses the list page size; the re-fit trims it to the strip.
+    await page.waitForFunction(() => {
       const gm = document.querySelector('#grid-mount')!;
-      gm.scrollLeft = gm.scrollWidth;
-    });
+      return gm.scrollWidth <= gm.clientWidth + 1;
+    }, null, { timeout: 5000 });
+    const next = page.locator('#pagination-mount .page-next');
+    assert.ok(await next.isVisible(), 'the paginator shows under the strip');
+    await next.click();
     await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === '2');
     await page.waitForFunction((f) => document.querySelector('#grid-mount .post-card-title')?.textContent?.trim() !== f, first);
   });
