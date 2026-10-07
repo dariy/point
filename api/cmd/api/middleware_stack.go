@@ -238,6 +238,11 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 			switch {
 			case strings.HasPrefix(p, "/assets/js/chunks/"):
 				c.Response().Header().Set("Cache-Control", immutableCacheControl)
+			case p == "/assets/css/common/theme.css":
+				// The theme service rewrites this file at runtime. Revalidation
+				// goes by Last-Modified, which has one-second resolution, so
+				// two rewrites in the same second get a 304 and stale CSS.
+				c.Response().Header().Set("Cache-Control", "no-store")
 			case strings.HasPrefix(p, "/assets/css/"):
 				c.Response().Header().Set("Cache-Control", "no-cache")
 				// Only bundles sit directly in /assets/css; a hash anywhere
