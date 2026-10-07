@@ -21,13 +21,25 @@ describe('Atlas layer gestures', () => {
 
   const state = () => page.evaluate(() => document.body.dataset.atlasLayer);
 
+  /**
+   * Under load the map can still slide over the handle after the handle settles,
+   * and a touch then lands on the map. Wait until no transition runs.
+   */
+  const settled = () => page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
+
   /** One touch drag from (x, y) by (dx, dy), in steps. */
   async function swipe(x: number, y: number, dx: number, dy: number) {
-    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', px: number, py: number) =>
-      cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: px, y: py }] });
-    await touch('touchStart', x, y);
-    for (let i = 1; i <= 6; i++) await touch('touchMove', x + (dx * i) / 6, y + (dy * i) / 6);
-    await touch('touchEnd', x + dx, y + dy);
+    await settled();
+    // Explicit timestamps 10ms apart: a short swipe changes the state as a flick,
+    // and under load the real arrival times spread out until it is no flick.
+    const t0 = Date.now() / 1000;
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', px: number, py: number, i: number) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type, touchPoints: type === 'touchEnd' ? [] : [{ x: px, y: py }], timestamp: t0 + i * 0.01,
+      });
+    await touch('touchStart', x, y, 0);
+    for (let i = 1; i <= 6; i++) await touch('touchMove', x + (dx * i) / 6, y + (dy * i) / 6, i);
+    await touch('touchEnd', x + dx, y + dy, 7);
   }
 
   /** Box of `sel` once two reads 120ms apart agree (the layout may still be sliding). */
@@ -150,6 +162,7 @@ describe('Atlas layer gestures', () => {
     /** Slow drag of the handle to `y`; returns the boxes seen while the finger is still down. */
     async function dragTo(y: number, stepMs = 40) {
       const c = await center('.atlas-layer-handle');
+      await settled();
       const t = (type: 'touchStart' | 'touchMove' | 'touchEnd', py: number) =>
         cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: c.x, y: py }] });
       await t('touchStart', c.y);
