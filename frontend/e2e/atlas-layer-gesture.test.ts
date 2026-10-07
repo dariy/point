@@ -51,6 +51,7 @@ describe('Atlas layer gestures', () => {
     browser = await chromium.launch();
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     page = await ctx.newPage();
+    await page.addInitScript(() => localStorage.removeItem('atlasLayerState'));
     cdp = await ctx.newCDPSession(page);
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
     if (!setup.ok && setup.status !== 409) throw new Error('Setup failed: ' + setup.status);

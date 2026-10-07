@@ -33,3 +33,23 @@ after each iteration and it's included in prompts for context.
   - A slot plugin must keep its `export function mount(el, ctx)`; without it the slot stays empty and nothing errors.
   - `scripts/check.sh` e2e failures this run were only Atlas layer gesture/list tests, and the set changed between runs (flaky, as in US-001).
 ---
+
+## 2026-10-06 - p-atlas-header-line-f97s.6
+- The app already had an SPA router (click intercept, pushState, popstate, title). The gap: a move between list pages dropped the atlas view mode, because the next page reads it from `?atlas=`. `Router.navigate` now adds the current state to `/` and `/tags/<slug>` targets via `carryStateToPath` (atlasLayerState.ts). Post views and URLs that name a state stay unchanged. Back/Forward restore it, as `replaceSearch` keeps each entry's `atlas`.
+- Files: router.ts, plugins/tags-atlas/atlasLayerState.ts, test/atlasLayerState.test.ts, e2e/atlas-layer-url.test.ts (map-only tag link, no reload, Back).
+- Not done: fetch-failure fallback to a full page load (TagPage shows its error state instead); the map instance is rebuilt on each page.
+- **Learnings:**
+  - Do not run `pkill -f` with a pattern that matches the command line itself; it kills the shell.
+  - `check.sh --only e2e` shows 3 Atlas layer header failures also at baseline.
+---
+
+## 2026-10-06 - p-atlas-header-line-f97s.7
+- View mode is now `?view=list|split|map`. Each change writes it to `localStorage` (`atlasLayerState`) and to the URL (`replaceState`). On load: URL, then saved state, then `list`; an invalid `view` is ignored. Old `?atlas=list-map|map` links still open. `carryStateToPath` (US-006) now carries `view`.
+- The map viewport moved from `?view=lat,lng,zoom` to `?at=lat,lng,zoom` (the name clashed).
+- Files: atlasLayerState.ts, atlasLayerLayout.ts, test/atlasLayerState.test.ts, e2e/atlas-layer-*.test.ts, docs/plugins/tags-atlas.md.
+- Not done: playwright-cli check at 1440px/390px (the e2e URL tests cover load order at 390px).
+- **Learnings:**
+  - Saved state leaks between e2e tests that share a page: each atlas e2e file now removes `atlasLayerState` in an init script.
+  - `check.sh` js-test passes. e2e shows 1–2 Atlas gesture failures that differ on each run (swipe, wheel, keyboard); same flaky set as US-001/US-002.
+  - `check.sh | tail` hides the result until the end; write to a file instead.
+---

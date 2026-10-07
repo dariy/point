@@ -11,10 +11,10 @@ available.
 The page has three states. The state is on `<body>` as `data-atlas-layer`, and the CSS
 reads only that attribute.
 
-| State | `?atlas=` | What you see |
+| State | `?view=` | What you see |
 |-------|-----------|--------------|
-| `list` | (absent) | The page as it is, plus the handle. The footer shows. |
-| `mapList` | `list-map` | The map comes down from behind the header. The post list is one row of cards over the footer position, about 20% of the viewport high. The footer is hidden. |
+| `list` | `list` | The page as it is, plus the handle. The footer shows. |
+| `mapList` | `split` | The map comes down from behind the header. The post list is one row of cards over the footer position, about 20% of the viewport high. The footer is hidden. |
 | `map` | `map` | The map fills the space below the header. The post list is only the handle, at the bottom. The footer is hidden. |
 
 The map shows only the posts of the current list (same filter as the cards). It loads
@@ -37,15 +37,18 @@ starts inside the map goes to the map (pan, pinch, wheel zoom).
 ## URL
 
 The state is in the query string. A state change uses `history.replaceState`, so a
-swipe does not add a history entry. The map viewport is in `?view=<lat>,<lng>,<zoom>`.
+swipe does not add a history entry. The map viewport is in `?at=<lat>,<lng>,<zoom>`.
+Each change also saves the state in `localStorage` (`atlasLayerState`). On load, the `view`
+parameter wins, then the saved state, then `list`. An invalid `view` value is ignored. Old
+`?atlas=list-map|map` links still open their state.
 A reload or a shared link opens the same state and viewport.
 
 When a post opens from `mapList` or `map`, a close of the post returns to the list URL,
-with the same state and viewport. A navigation to another list page starts in `list`.
+with the same state and viewport. A tag link to another list page keeps the state.
 
 ## `/map`
 
-`/map` redirects to the home list in the `map` state (`/?atlas=map`). Old query
+`/map` redirects to the home list in the `map` state (`/?view=map`). Old query
 parameters stay on the URL. The redirect does not depend on the `tags_visibility`
 setting.
 

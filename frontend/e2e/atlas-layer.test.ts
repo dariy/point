@@ -13,6 +13,7 @@ describe('Atlas layer', () => {
   before(async () => {
     browser = await chromium.launch();
     page = await (await browser.newContext()).newPage();
+    await page.addInitScript(() => localStorage.removeItem('atlasLayerState'));
 
     const res = await fetch(`${BASE}/api/setup`, {
       method: 'POST',

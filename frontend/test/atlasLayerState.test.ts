@@ -3,7 +3,8 @@ import assert from 'node:assert';
 
 import {
   next, prev, cycle, getAtlasLayerState, setAtlasLayerState, clearAtlasLayerState,
-  stateFromSearch, searchWithState, viewFromSearch, searchWithView,
+  stateFromSearch, searchWithState, viewFromSearch, searchWithView, carryStateToPath,
+  initialState, readSavedState, saveState, stateFromSearchOrNull,
 } from '../src/plugins/tags-atlas/atlasLayerState.ts';
 
 function fakeBody() {
@@ -48,24 +49,60 @@ describe('atlasLayerState', () => {
 
   test('the URL names the state: absent or unknown is list', () => {
     assert.equal(stateFromSearch(''), 'list');
-    assert.equal(stateFromSearch('?atlas=map'), 'map');
-    assert.equal(stateFromSearch('?atlas=list-map'), 'mapList');
-    assert.equal(stateFromSearch('?atlas=bogus'), 'list');
+    assert.equal(stateFromSearch('?view=map'), 'map');
+    assert.equal(stateFromSearch('?view=split'), 'mapList');
+    assert.equal(stateFromSearch('?view=bogus'), 'list');
   });
 
   test('searchWithState sets and removes only the atlas parameter', () => {
-    assert.equal(searchWithState('', 'map'), '?atlas=map');
-    assert.equal(searchWithState('?timeline=2020-2021', 'mapList'), '?timeline=2020-2021&atlas=list-map');
-    assert.equal(searchWithState('?atlas=map&q=x', 'list'), '?q=x');
-    assert.equal(searchWithState('?atlas=map', 'list'), '');
+    assert.equal(searchWithState('', 'map'), '?view=map');
+    assert.equal(searchWithState('?timeline=2020-2021', 'mapList'), '?timeline=2020-2021&view=split');
+    assert.equal(searchWithState('?view=map&q=x', 'list'), '?view=list&q=x');
+    assert.equal(searchWithState('?view=map', 'list'), '?view=list');
   });
 
   test('the viewport round-trips through the query and bad values give null', () => {
-    const search = searchWithView('?atlas=map', { lat: 48.8566, lng: 2.3522, zoom: 6 });
+    const search = searchWithView('?view=map', { lat: 48.8566, lng: 2.3522, zoom: 6 });
     assert.deepEqual(viewFromSearch(search), { lat: 48.8566, lng: 2.3522, zoom: 6 });
     assert.equal(viewFromSearch(''), null);
-    assert.equal(viewFromSearch('?view=1,2'), null);
-    assert.equal(viewFromSearch('?view=a,b,c'), null);
-    assert.equal(viewFromSearch('?view=95,0,3'), null);
+    assert.equal(viewFromSearch('?at=1,2'), null);
+    assert.equal(viewFromSearch('?at=a,b,c'), null);
+    assert.equal(viewFromSearch('?at=95,0,3'), null);
+  });
+
+  test('carryStateToPath keeps the state on list pages only', () => {
+    assert.equal(carryStateToPath('/tags/city', 'map'), '/tags/city?view=map');
+    assert.equal(carryStateToPath('/tags/city?path=a/b', 'mapList'), '/tags/city?path=a%2Fb&view=split');
+    assert.equal(carryStateToPath('/', 'map'), '/?view=map');
+    assert.equal(carryStateToPath('/tags/city', 'list'), '/tags/city?view=list');
+    assert.equal(carryStateToPath('/tags/city?slug=post', 'map'), '/tags/city?slug=post');
+    assert.equal(carryStateToPath('/posts/x', 'map'), '/posts/x');
+    assert.equal(carryStateToPath('/tags/city?view=split', 'map'), '/tags/city?view=split');
+  });
+
+  test('initialState: the URL, then the saved state, then list', () => {
+    const store = (v: string | null) => ({ getItem: () => v });
+    assert.equal(initialState('?view=map', store('mapList')), 'map');
+    assert.equal(initialState('', store('mapList')), 'mapList');
+    assert.equal(initialState('?view=bogus', store('map')), 'map');
+    assert.equal(initialState('?view=bogus', store('bogus')), 'list');
+    assert.equal(initialState('', store(null)), 'list');
+    assert.equal(initialState('', null), 'list');
+  });
+
+  test('a legacy ?atlas= link still opens its state', () => {
+    assert.equal(stateFromSearchOrNull('?atlas=list-map'), 'mapList');
+    assert.equal(stateFromSearchOrNull('?view=list&atlas=map'), 'list');
+    assert.equal(stateFromSearchOrNull('?atlas=bogus'), null);
+  });
+
+  test('saveState and readSavedState round-trip and survive a blocked store', () => {
+    const mem = new Map<string, string>();
+    const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+    saveState('mapList', storage);
+    assert.equal(readSavedState(storage), 'mapList');
+    const blocked = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+    saveState('map', blocked);
+    assert.equal(readSavedState(blocked), null);
   });
 });

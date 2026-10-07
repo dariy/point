@@ -1,4 +1,4 @@
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
 import crypto from 'node:crypto';
@@ -47,6 +47,11 @@ describe('Atlas layer URL state', () => {
     if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + (await post.text()));
   });
 
+  beforeEach(async () => {
+    // The view mode is saved between loads: start each test with nothing saved.
+    if (page.url().startsWith('http')) await page.evaluate(() => localStorage.clear());
+  });
+
   after(async () => {
     await browser?.close();
   });
@@ -56,11 +61,11 @@ describe('Atlas layer URL state', () => {
     await page.locator('.atlas-layer-handle').waitFor();
     const before = await page.evaluate(() => history.length);
     await setState('mapList');
-    await page.waitForFunction(() => location.search.includes('atlas=list-map'));
+    await page.waitForFunction(() => location.search.includes('view=split'));
     await setState('map');
-    await page.waitForFunction(() => location.search.includes('atlas=map'));
+    await page.waitForFunction(() => location.search.includes('view=map'));
     await setState('list');
-    await page.waitForFunction(() => !location.search.includes('atlas'));
+    await page.waitForFunction(() => location.search.includes('view=list'));
     assert.equal(await page.evaluate(() => history.length), before);
   });
 
@@ -69,13 +74,13 @@ describe('Atlas layer URL state', () => {
     await page.waitForFunction(() => location.pathname === '/');
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
     const params = new URLSearchParams(await search());
-    assert.equal(params.get('atlas'), 'map');
+    assert.equal(params.get('view'), 'map');
     assert.equal(params.get('timeline'), '2019-2020');
   });
 
-  for (const [name, value] of [['mapList', 'list-map'], ['map', 'map']] as const) {
+  for (const [name, value] of [['mapList', 'split'], ['map', 'map']] as const) {
     it(`a reload keeps ${name}`, async () => {
-      await page.goto(BASE + `/tags/atlas-url?atlas=${value}`);
+      await page.goto(BASE + `/tags/atlas-url?view=${value}`);
       await page.waitForFunction((n) => document.body.dataset.atlasLayer === n, name);
       await page.reload();
       await page.waitForFunction((n) => document.body.dataset.atlasLayer === n, name);
@@ -84,45 +89,45 @@ describe('Atlas layer URL state', () => {
   }
 
   it('closing a post opened from mapList returns to the same state', async () => {
-    await page.goto(BASE + '/tags/atlas-url?atlas=list-map');
+    await page.goto(BASE + '/tags/atlas-url?view=split');
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
     await page.locator('#grid-mount .post-card').first().click();
     await page.waitForFunction(() => location.search.includes('slug=') || location.pathname.startsWith('/posts/'));
     await page.goBack();
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
-    assert.match(await search(), /atlas=list-map/);
+    assert.match(await search(), /view=split/);
   });
 
   const cards = () => page.locator('#grid-mount .post-card').count();
 
   it('a deep link with place and atlas restores the filter and the map selection', async () => {
-    await page.goto(BASE + '/?place=urlton&atlas=list-map');
+    await page.goto(BASE + '/?place=urlton&view=split');
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
     await page.locator('.atlas-filter-chip').waitFor();
     await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length === 1);
     await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
-    await page.waitForFunction(() => /[?&]place=urlton/.test(location.search) && /atlas=list-map/.test(location.search));
+    await page.waitForFunction(() => /[?&]place=urlton/.test(location.search) && /view=split/.test(location.search));
     await page.reload();
     await page.locator('.atlas-filter-chip').waitFor();
     await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length === 1);
     assert.equal(await cards(), 1);
-    assert.match(await search(), /atlas=list-map/);
+    assert.match(await search(), /view=split/);
   });
 
   it('a deep link with a timeline range keeps the range after a reload', async () => {
-    await page.goto(BASE + '/?timeline=2000-2100&atlas=map');
+    await page.goto(BASE + '/?timeline=2000-2100&view=map');
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
     await page.reload();
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
     const params = new URLSearchParams(await search());
     assert.equal(params.get('timeline'), '2000-2100');
-    assert.equal(params.get('atlas'), 'map');
+    assert.equal(params.get('view'), 'map');
   });
 
   it('invalid filter values are ignored without an error', async () => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    for (const q of ['?place=no-such-place-xyz', '?timeline=abc-def', '?timeline=2020-2010', '?timeline=1-2-3', '?atlas=bogus&view=x,y,z']) {
+    for (const q of ['?place=no-such-place-xyz', '?timeline=abc-def', '?timeline=2020-2010', '?timeline=1-2-3', '?view=bogus&at=x,y,z']) {
       await page.goto(BASE + '/' + q);
       await page.locator('.atlas-layer-handle').waitFor();
       await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length > 0);
@@ -130,5 +135,42 @@ describe('Atlas layer URL state', () => {
       assert.equal(await page.locator('.atlas-filter-chip').count(), 0, q);
     }
     assert.deepEqual(errors, []);
+  });
+
+  it('a tag link in map only keeps map only, without a reload', async () => {
+    await page.goto(BASE + '/?view=map');
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
+    await page.evaluate(() => { (window as unknown as { __kept: boolean }).__kept = true; });
+    // Same-page tag link: put one in the header, as a breadcrumb or quick link is.
+    await page.evaluate(() => {
+      const a = document.createElement('a');
+      a.id = 'e2e-tag-link';
+      a.href = '/tags/atlas-url';
+      a.textContent = 'atlas-url';
+      document.querySelector('#header-mount')!.append(a);
+    });
+    await page.locator('#e2e-tag-link').click({ force: true });
+    await page.waitForFunction(() => location.pathname === '/tags/atlas-url');
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
+    assert.match(await search(), /view=map/);
+    assert.equal(await page.evaluate(() => (window as unknown as { __kept?: boolean }).__kept), true);
+    assert.match(await page.locator('#header-mount').innerText(), /atlas-url/i);
+    await page.goBack();
+    await page.waitForFunction(() => location.pathname === '/');
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
+  });
+
+  it('the saved view mode opens when the URL names none; the URL wins; a bad value is ignored', async () => {
+    await page.goto(BASE + '/');
+    await page.locator('.atlas-layer-handle').waitFor();
+    await setState('map');
+    await page.waitForFunction(() => localStorage.getItem('atlasLayerState') === 'map');
+    await page.goto(BASE + '/');
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
+    assert.match(await search(), /view=map/);
+    await page.goto(BASE + '/?view=split');
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
+    await page.goto(BASE + '/?view=bogus');
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
   });
 });

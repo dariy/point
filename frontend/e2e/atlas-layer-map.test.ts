@@ -22,6 +22,7 @@ describe('Atlas layer map', () => {
   before(async () => {
     browser = await chromium.launch();
     page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+    await page.addInitScript(() => localStorage.removeItem('atlasLayerState'));
     await page.route(/arcgisonline\.com/, (route) => {
       tiles.push(route.request().url());
       return route.abort();

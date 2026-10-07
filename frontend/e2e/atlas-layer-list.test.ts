@@ -24,6 +24,7 @@ describe('Atlas layer list', () => {
   before(async () => {
     browser = await chromium.launch();
     page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+    await page.addInitScript(() => localStorage.removeItem('atlasLayerState'));
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
     if (!setup.ok && setup.status !== 409) throw new Error('Setup failed: ' + setup.status);
     const login = await api('/api/auth/login', { username: 'the_owner', name: PW });
@@ -62,7 +63,7 @@ describe('Atlas layer list', () => {
   });
 
   it('map+list pages with the paginator, not a sideways scroll', async () => {
-    await page.goto(BASE + '/?atlas=list-map');
+    await page.goto(BASE + '/?view=split');
     await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length > 1);
     const first = (await titles())[0];
     const pageOf = () => new URL(page.url()).searchParams.get('page');

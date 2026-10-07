@@ -11,14 +11,14 @@
  *   --atlas-layer-gap        gap between two cards (SHEET_GAP_PX)
  *   --atlas-layer-aspect     card width over card height (CARD_ASPECT)
  *
- * It also keeps the state in the URL (`?atlas=…`, by `history.replaceState`), reads
+ * It also keeps the state in the URL (`?view=…`, by `history.replaceState`), reads
  * it on mount, and leaves the list URL for the post page when a card opens a post.
  *
  * The map container starts empty. The map itself loads later, on the first
  * change out of `list`.
  */
 
-import { getAtlasLayerState, replaceSearch, searchWithState, setAtlasLayerState, stateFromSearch } from './atlasLayerState.ts';
+import { getAtlasLayerState, replaceSearch, searchWithState, saveState, setAtlasLayerState, initialState, stateFromSearchOrNull } from './atlasLayerState.ts';
 import { markAtlasOpen } from '../../utils/atlasReturn.ts';
 import { CARD_ASPECT, SHEET_GAP_PX } from './AtlasSheet.ts';
 
@@ -39,8 +39,15 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
 
   // The URL names the state on arrival. A state change after that rewrites the
   // query in place: one history entry, however many swipes.
-  setAtlasLayerState(stateFromSearch(location.search), body);
-  const mo = new MutationObserver(() => replaceSearch(searchWithState(location.search, getAtlasLayerState(body))));
+  // The URL wins, then the state saved by the last change, then `list`.
+  const first = initialState(location.search);
+  setAtlasLayerState(first, body);
+  if (first !== 'list' && !stateFromSearchOrNull(location.search)) replaceSearch(searchWithState(location.search, first));
+  const mo = new MutationObserver(() => {
+    const state = getAtlasLayerState(body);
+    saveState(state);
+    replaceSearch(searchWithState(location.search, state));
+  });
   mo.observe(body, { attributes: true, attributeFilter: ['data-atlas-layer'] });
 
   // A card or link that opens a page from `mapList` or `map` leaves the list URL, so closing the post returns to it.

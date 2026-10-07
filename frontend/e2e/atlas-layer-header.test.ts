@@ -33,6 +33,7 @@ describe('Atlas layer header', () => {
     browser = await chromium.launch();
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     page = await ctx.newPage();
+    await page.addInitScript(() => localStorage.removeItem('atlasLayerState'));
     cdp = await ctx.newCDPSession(page);
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
     if (!setup.ok && setup.status !== 409) throw new Error('Setup failed: ' + setup.status);
@@ -51,7 +52,7 @@ describe('Atlas layer header', () => {
   });
 
   it('the header does not move during a swipe in mapList', async () => {
-    await page.goto(BASE + '/tags/atlas-header?atlas=list-map');
+    await page.goto(BASE + '/tags/atlas-header?view=split');
     await page.locator('.atlas-layer-handle').waitFor();
     await page.waitForFunction(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).transform === 'none');
     const before = await headerBox();
@@ -84,7 +85,7 @@ describe('Atlas layer header', () => {
   });
 
   it('the timeline sits inside the header and the map starts below the header in every state', async () => {
-    await page.goto(BASE + '/tags/atlas-header?atlas=list-map');
+    await page.goto(BASE + '/tags/atlas-header?view=split');
     await page.locator('.atlas-layer-handle').waitFor();
     assert.equal(await page.locator('#header-mount #timeline-mount').count(), 1);
     assert.equal(await page.locator('#header-mount ~ #timeline-mount').count(), 0);

@@ -44,23 +44,66 @@ export function clearAtlasLayerState(body: HTMLElement = document.body): void {
   body.removeAttribute('data-atlas-layer');
 }
 
-const URL_PARAM = 'atlas';
-const URL_VALUE: Readonly<Record<AtlasLayerState, string | null>> = { list: null, mapList: 'list-map', map: 'map' };
+const URL_PARAM = 'view';
+const LEGACY_URL_PARAM = 'atlas';
+const STORAGE_KEY = 'atlasLayerState';
+const URL_VALUE: Readonly<Record<AtlasLayerState, string>> = { list: 'list', mapList: 'split', map: 'map' };
+const LEGACY_URL_VALUE: Readonly<Record<AtlasLayerState, string | null>> = { list: null, mapList: 'list-map', map: 'map' };
 
-/** The state a query string names (`?atlas=map`, `?atlas=list-map`). Anything else gives `list`. */
-export function stateFromSearch(search: string): AtlasLayerState {
-  const value = new URLSearchParams(search).get(URL_PARAM);
-  return ORDER.find((s) => URL_VALUE[s] === value) ?? 'list';
+/** The state a query string names (`?view=list|split|map`), or null when absent or invalid. */
+export function stateFromSearchOrNull(search: string): AtlasLayerState | null {
+  const params = new URLSearchParams(search);
+  const value = params.get(URL_PARAM);
+  const found = ORDER.find((s) => URL_VALUE[s] === value);
+  if (found) return found;
+  // Links made before `view` took the mode used `?atlas=list-map|map`.
+  const legacy = params.get(LEGACY_URL_PARAM);
+  return legacy ? (ORDER.find((s) => LEGACY_URL_VALUE[s] === legacy) ?? null) : null;
 }
 
-/** `search` with the `atlas` parameter set for `state` (removed for `list`). Other parameters stay. */
+/** The state a query string names. Absent or invalid gives `list`. */
+export function stateFromSearch(search: string): AtlasLayerState {
+  return stateFromSearchOrNull(search) ?? 'list';
+}
+
+/** The state saved by the last change, or null when none is saved or the value is invalid. */
+export function readSavedState(storage: Pick<Storage, 'getItem'> | null = safeStorage()): AtlasLayerState | null {
+  try {
+    const value = storage?.getItem(STORAGE_KEY);
+    return ORDER.find((s) => s === value) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Save the state for the next page load. A blocked store is ignored. */
+export function saveState(state: AtlasLayerState, storage: Pick<Storage, 'setItem'> | null = safeStorage()): void {
+  try {
+    storage?.setItem(STORAGE_KEY, state);
+  } catch {
+    /* private mode or full: the URL still holds the state */
+  }
+}
+
+function safeStorage(): Storage | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** The state on page load: the URL, then the saved state, then `list`. */
+export function initialState(search: string, storage?: Pick<Storage, 'getItem'> | null): AtlasLayerState {
+  return stateFromSearchOrNull(search) ?? readSavedState(storage) ?? 'list';
+}
+
+/** `search` with the `view` parameter set for `state`. Other parameters stay. */
 export function searchWithState(search: string, state: AtlasLayerState): string {
   const params = new URLSearchParams(search);
-  const value = URL_VALUE[state];
-  if (value) params.set(URL_PARAM, value);
-  else params.delete(URL_PARAM);
-  const out = params.toString();
-  return out ? `?${out}` : '';
+  params.delete(LEGACY_URL_PARAM);
+  params.set(URL_PARAM, URL_VALUE[state]);
+  return `?${params.toString()}`;
 }
 
 /** A map viewport: centre and zoom. */
@@ -70,9 +113,9 @@ export interface AtlasView {
   zoom: number;
 }
 
-const VIEW_PARAM = 'view';
+const VIEW_PARAM = 'at';
 
-/** The viewport in `?view=lat,lng,zoom`, or null when absent or malformed. */
+/** The viewport in `?at=lat,lng,zoom`, or null when absent or malformed. */
 export function viewFromSearch(search: string): AtlasView | null {
   const parts = (new URLSearchParams(search).get(VIEW_PARAM) ?? '').split(',');
   if (parts.length !== 3) return null;
@@ -81,7 +124,7 @@ export function viewFromSearch(search: string): AtlasView | null {
   return { lat, lng, zoom };
 }
 
-/** `search` with the viewport set in `view`. Other parameters stay. */
+/** `search` with the viewport set in `at`. Other parameters stay. */
 export function searchWithView(search: string, view: AtlasView): string {
   const params = new URLSearchParams(search);
   params.set(VIEW_PARAM, `${view.lat.toFixed(4)},${view.lng.toFixed(4)},${view.zoom}`);
@@ -92,4 +135,17 @@ export function searchWithView(search: string, view: AtlasView): string {
 export function replaceSearch(search: string): void {
   if (search === location.search) return;
   history.replaceState(history.state, '', location.pathname + search + location.hash);
+}
+
+/**
+ * `path` with the `view` parameter for `state`, when `path` is a post list page
+ * (`/` or `/tags/<slug>`, not a post inside a tag) that names no state of its own.
+ * Any other path returns `path` unchanged. This is how a tag link keeps the view
+ * mode: the next page reads the state from its URL on mount.
+ */
+export function carryStateToPath(path: string, state: AtlasLayerState): string {
+  const url = new URL(path, 'http://x');
+  const isList = url.pathname === '/' || /^\/tags\/[^/]+\/?$/.test(url.pathname);
+  if (!isList || url.searchParams.has('slug') || stateFromSearchOrNull(url.search)) return path;
+  return url.pathname + searchWithState(url.search, state) + url.hash;
 }
