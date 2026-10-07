@@ -21,6 +21,8 @@ import type { Tag } from '../../api/tags.ts';
 
 /** Rows the search typeahead shows per section. */
 const TYPEAHEAD_POSTS = 3;
+/** Overlap (px) the nav tolerates from the zone before it; see _navUncut. */
+const NAV_FIT_MARGIN = 1;
 const TYPEAHEAD_TAGS = 5;
 
 /**
@@ -196,6 +198,8 @@ export class PublicHeader extends Component<PublicHeaderProps> {
                   ${raw(SEARCH_SVG)}
                   <input type="search" name="q" placeholder="${searchPlaceholder}" autocomplete="off">
                 </form>
+
+                <div class="burger-buttons"></div>
 
                 <div class="burger-tags-slot" id="burger-tags-slot"></div>
 
@@ -563,7 +567,28 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     const toolsRect = tools.getBoundingClientRect();
     const firstRect = first.getBoundingClientRect();
     if (toolsRect.top - firstRect.top > firstRect.height / 2) return false;
-    return toolsRect.right <= right + 1;
+    if (toolsRect.right > right + 1) return false;
+    return this._navUncut();
+  }
+
+  /**
+   * True when no nav link is cut: every item ends inside the nav, and the nav
+   * starts after the zone before it. A cut link folds the nav into the burger;
+   * empty space is better than a half-visible link.
+   */
+  _navUncut() {
+    const nav = this._inner?.querySelector<HTMLElement>('.site-nav');
+    if (!nav) return true;
+    const navRect = nav.getBoundingClientRect();
+    if (!navRect.width) return true;
+    if (nav.scrollWidth > nav.clientWidth + 1) return false;
+    for (const item of nav.querySelectorAll('.site-nav-items > *')) {
+      const r = item.getBoundingClientRect();
+      if (r.width && (r.left < navRect.left - 1 || r.right > navRect.right + 1)) return false;
+    }
+    let prev = nav.previousElementSibling;
+    while (prev && !prev.getBoundingClientRect().width) prev = prev.previousElementSibling;
+    return !prev || prev.getBoundingClientRect().right <= navRect.left + NAV_FIT_MARGIN;
   }
   _saveRecentSearch(q: string) {
     const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');

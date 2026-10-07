@@ -625,6 +625,17 @@
     color: var(--text-tertiary);
 }
 
+/* Header buttons (map, tags, other viz icons), under the search field */
+.burger-buttons {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.burger-buttons:empty {
+    display: none;
+}
+
 .burger-actions {
     display: flex;
     align-items: center;
