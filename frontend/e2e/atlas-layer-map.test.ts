@@ -147,6 +147,9 @@ describe('Atlas layer map', () => {
       await page.locator('.atlas-layer-map .atlas-marker').first().click();
       await page.waitForFunction(() => location.pathname === '/tags/mapton');
       await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length === 1);
+      // A map click clears only an active selection; the tag page redraws the
+      // places first, so wait until the selection is back on the map.
+      await page.locator('.atlas-layer-map .atlas-node--center').waitFor();
     };
 
     it('opens the geo-tag page client-side and keeps the view mode', async () => {
