@@ -165,11 +165,6 @@ func main() {
 			slog.Warn("failed to sync gemini_api_key to secrets", "error", err)
 		}
 	}
-	if cfg.PhotoLibraryPath != "" {
-		if err := svcs.Settings.SetSecret(ctx, "photo_library_path", cfg.PhotoLibraryPath); err != nil {
-			slog.Warn("failed to sync photo_library_path to secrets", "error", err)
-		}
-	}
 
 	// Synchronize active theme with public theme.css for the frontend
 	if err := svcs.Theme.SyncActiveTheme(ctx); err != nil {

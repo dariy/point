@@ -447,7 +447,7 @@ func TestSystemHandler_GetPhotoLibraryContents_NotConfigured(t *testing.T) {
 
 	err := h.GetPhotoLibraryContents(c)
 	if err == nil {
-		t.Fatal("expected error when photo_library_path not configured")
+		t.Fatal("expected error when photo library not configured")
 	}
 	var he *echo.HTTPError
 	ok := errors.As(err, &he)
@@ -458,7 +458,6 @@ func TestSystemHandler_GetPhotoLibraryContents_NotConfigured(t *testing.T) {
 
 func TestSystemHandler_GetPhotoLibraryContents_Success(t *testing.T) {
 	h, _ := newSystemHandler(t)
-	ctx := context.Background()
 
 	// Create a temp library dir with a subdirectory, a supported image, and a hidden file.
 	libDir := t.TempDir()
@@ -468,10 +467,7 @@ func TestSystemHandler_GetPhotoLibraryContents_Success(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(libDir, "readme.txt"), []byte("not media"), 0644)
 
 	// Set the secret so the handler can find the library root.
-	settingsSvc := services.NewSettingsService(h.repo)
-	if err := settingsSvc.SetSecret(ctx, "photo_library_path", libDir); err != nil {
-		t.Fatalf("SetSecret: %v", err)
-	}
+	h.WithPhotoLibraryPath(libDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/api/system/photo-library?path=", nil)
@@ -522,10 +518,8 @@ func TestSystemHandler_GetPhotoLibraryFile_NotConfigured(t *testing.T) {
 
 func TestSystemHandler_GetPhotoLibraryFile_MissingPathParam(t *testing.T) {
 	h, _ := newSystemHandler(t)
-	ctx := context.Background()
 	libDir := t.TempDir()
-	settingsSvc := services.NewSettingsService(h.repo)
-	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+	h.WithPhotoLibraryPath(libDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/api/system/photo-library/file", nil)
@@ -545,10 +539,8 @@ func TestSystemHandler_GetPhotoLibraryFile_MissingPathParam(t *testing.T) {
 
 func TestSystemHandler_GetPhotoLibraryFile_UnsupportedExt(t *testing.T) {
 	h, _ := newSystemHandler(t)
-	ctx := context.Background()
 	libDir := t.TempDir()
-	settingsSvc := services.NewSettingsService(h.repo)
-	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+	h.WithPhotoLibraryPath(libDir)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/api/system/photo-library/file?path=readme.txt", nil)
@@ -583,7 +575,6 @@ func TestSystemHandler_ImportSelectedPhotos_NotConfigured(t *testing.T) {
 
 func TestSystemHandler_ImportSelectedPhotos_SkipsDuplicates(t *testing.T) {
 	h, _ := newSystemHandler(t)
-	ctx := context.Background()
 	libDir := t.TempDir()
 
 	// Create a real importable file
@@ -593,8 +584,7 @@ func TestSystemHandler_ImportSelectedPhotos_SkipsDuplicates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	settingsSvc := services.NewSettingsService(h.repo)
-	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+	h.WithPhotoLibraryPath(libDir)
 
 	e := echo.New()
 	body := `{"paths":["test.jpg"]}`
@@ -626,10 +616,8 @@ func TestSystemHandler_ImportSelectedPhotos_SkipsDuplicates(t *testing.T) {
 
 func TestSystemHandler_ImportSelectedPhotos_InvalidPath(t *testing.T) {
 	h, _ := newSystemHandler(t)
-	ctx := context.Background()
 	libDir := t.TempDir()
-	settingsSvc := services.NewSettingsService(h.repo)
-	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+	h.WithPhotoLibraryPath(libDir)
 
 	e := echo.New()
 	body := `{"paths":["../../etc/passwd"]}`
@@ -1081,7 +1069,6 @@ func TestSystemHandler_GetHealth_NoRegistry(t *testing.T) {
 // See point-media-worker-pool.
 func TestSystemHandler_ImportSelectedPhotos_ParallelBatch(t *testing.T) {
 	h, _ := newSystemHandler(t)
-	ctx := context.Background()
 	libDir := t.TempDir()
 
 	// Ten distinct images (distinct bytes → distinct checksums), plus a copy
@@ -1105,8 +1092,7 @@ func TestSystemHandler_ImportSelectedPhotos_ParallelBatch(t *testing.T) {
 	}
 	paths = append(paths, "copy-of-p0.jpg", "missing.jpg")
 
-	settingsSvc := services.NewSettingsService(h.repo)
-	_ = settingsSvc.SetSecret(ctx, "photo_library_path", libDir)
+	h.WithPhotoLibraryPath(libDir)
 
 	body, _ := json.Marshal(map[string][]string{"paths": paths})
 	e := echo.New()

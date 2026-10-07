@@ -27,6 +27,7 @@ type Repository interface {
 	// models.Querier.
 	DeleteSession(ctx context.Context, arg models.DeleteSessionParams) error
 	DeleteSecret(ctx context.Context, key string) error
+	GetOwnerUserID(ctx context.Context) (int64, error)
 	CreateWebAuthnCredential(ctx context.Context, userID int64, credID, pubKey, aaguid []byte, signCount uint32, backupEligible, backupState bool) (*WebAuthnCredential, error)
 	GetWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error)
 	GetWebAuthnCredentialByCredentialID(ctx context.Context, credID []byte) (*WebAuthnCredential, error)

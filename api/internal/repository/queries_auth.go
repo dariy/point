@@ -24,6 +24,14 @@ func (r *sqliteRepository) DeleteSession(ctx context.Context, arg models.DeleteS
 	return nil
 }
 
+// GetOwnerUserID returns the ID of the instance owner: the first user, the one
+// the setup wizard created. It returns 0 when no user exists yet.
+func (r *sqliteRepository) GetOwnerUserID(ctx context.Context) (int64, error) {
+	var id int64
+	err := r.db.QueryRowContext(ctx, `SELECT COALESCE(MIN(id), 0) FROM users`).Scan(&id)
+	return id, err
+}
+
 // DeleteSecret removes a secret by key (used to invalidate one-time tokens).
 func (r *sqliteRepository) DeleteSecret(ctx context.Context, key string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM blog_secrets WHERE key = ?`, key)

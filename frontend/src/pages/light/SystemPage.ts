@@ -23,6 +23,7 @@ import {
   getJobs,
   retryJob,
   clearFailedJobs,
+  getPhotoLibraryStatus,
 } from "../../api/system.ts";
 import type { Migration } from "../../api/system.ts";
 import { setToast } from "../../store.ts";
@@ -46,6 +47,8 @@ export default class SystemPage extends Component {
       auditingLinks: false,
       linkAudit: null, // { issues, scanned } after a scan
       health: null, // { tasks, degraded, uptime } from /api/system/health
+      // Owner-only and only when PHOTO_LIBRARY_PATH is a readable directory.
+      photoLibrary: null, // { configured, path }
     };
   }
 
@@ -57,7 +60,7 @@ export default class SystemPage extends Component {
   }
 
   _renderContent() {
-    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit, health, jobs } =
+    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit, health, jobs, photoLibrary } =
       this.state;
 
     if (loading)
@@ -91,6 +94,15 @@ export default class SystemPage extends Component {
         </section>
 
         ${diskSection}
+
+        ${photoLibrary ? html`
+        <section class="card" data-testid="photo-library-status">
+          <div class="card-header"><h2>Photo Library</h2></div>
+          <div class="card-body">
+            <p>Connected. Set by <code>PHOTO_LIBRARY_PATH</code> in the server environment.</p>
+            <p><code>${photoLibrary.path}</code></p>
+          </div>
+        </section>` : ""}
 
         ${healthSection}
         ${jobsSection}
@@ -378,11 +390,12 @@ export default class SystemPage extends Component {
     try {
       // Health is best-effort: an older server without the endpoint, or a
       // transient failure, must not blank the whole page.
-      const [migrations, diskInfo, health, jobs] = await Promise.all([
+      const [migrations, diskInfo, health, jobs, photoLibrary] = await Promise.all([
         getMigrations(),
         getDiskInfo(),
         getHealth().catch(() => null),
         getJobs().catch(() => null),
+        getPhotoLibraryStatus(),
       ]);
       this.setState({
         loading: false,
@@ -390,6 +403,7 @@ export default class SystemPage extends Component {
         diskInfo,
         health,
         jobs,
+        photoLibrary,
         error: null,
       });
     } catch (err) {

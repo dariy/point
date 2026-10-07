@@ -166,6 +166,31 @@ func TestRun_PinsCommentsForExistingInstalls(t *testing.T) {
 	}
 }
 
+// The photo library path is env-only now; a stale secret row must go.
+func TestRun_DropsPhotoLibraryPathSecret(t *testing.T) {
+	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+	db := repo.DB()
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO blog_secrets (key, value, updated_at) VALUES ('photo_library_path', '/old', CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatalf("seed secret: %v", err)
+	}
+	if err := Run(ctx, repo); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM blog_secrets WHERE key = 'photo_library_path'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("photo_library_path secret rows = %d, want 0", n)
+	}
+}
+
 // Run is called on every boot, so it has to be safe to re-run.
 func TestRun_Idempotent(t *testing.T) {
 	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))

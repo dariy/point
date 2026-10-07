@@ -464,6 +464,12 @@ var schema = []struct{ name, sql string }{
 			 SELECT 'plugin.comments.enabled', 'true', 'boolean', CURRENT_TIMESTAMP
 			  WHERE EXISTS (SELECT 1 FROM users)`,
 	},
+	{
+		// The photo library path now comes only from PHOTO_LIBRARY_PATH.
+		// A stale copy in blog_secrets must not keep the library on.
+		"drop_photo_library_path_secret",
+		`DELETE FROM blog_secrets WHERE key = 'photo_library_path'`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

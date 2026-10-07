@@ -16,6 +16,7 @@ import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts'
 import { MediaBrowser } from './MediaBrowser.ts';
 import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.ts';
 import { setToast } from '../../store.ts';
+import { getStats } from '../../api/system.ts';
 import { UPLOAD_SVG } from '../../utils/icons.ts';
 import { html, raw } from "../../utils/helpers.ts";
 import type { Media } from '../../api/media.ts';
@@ -57,7 +58,7 @@ export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
         </header>
         <div class="modal-body media-picker-body" id="mpd-browser-mount"></div>
         <footer class="modal-footer">
-          <button class="btn btn-secondary" id="mpd-library-btn">From Photo Library</button>
+          <button class="btn btn-secondary" id="mpd-library-btn" hidden>From Photo Library</button>
           <button class="btn btn-secondary" id="mpd-cancel-btn">Cancel</button>
           <button class="btn btn-primary" id="mpd-add-btn">Add selected</button>
         </footer>
@@ -69,6 +70,11 @@ export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
     this.$('#mpd-cancel-btn')?.addEventListener('click', () => this.close());
     this.$('#mpd-add-btn')?.addEventListener('click', () => this._handleAdd());
     this.$('#mpd-library-btn')?.addEventListener('click', () => this._handleFromLibrary());
+    // The library exists only when PHOTO_LIBRARY_PATH is a readable directory.
+    getStats().then((s) => {
+      const btn = this.$('#mpd-library-btn');
+      if (btn && s.import_configured) btn.hidden = false;
+    }).catch(() => {});
 
     // Upload sits on the header line, the way MediaPage carries it in the admin
     // header; the file input itself belongs to the browser mounted on open().
