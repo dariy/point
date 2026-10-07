@@ -42,11 +42,12 @@
 }
 
 /* Zone: timeline — fills the gap between the context and the nav, and keeps
-   its content centred in it. Basis 0, min-width one pill,
-   so it only pushes the fold controller's overflow check below one pill. */
+   its content centred in it. It never shrinks below its pills, so the row
+   overflows and the fold controller folds the other zones first. Its own
+   fold (order 70, the last) keeps only the active pill. */
 .site-header-inner > .site-timeline {
     flex: 1 1 0;
-    min-width: 6rem;
+    min-width: max-content;
     height: var(--header-height);
     display: flex;
     align-items: center;
@@ -56,6 +57,10 @@
 .site-timeline > .timeline-container {
     flex: 1 1 auto;
     min-width: 0;
+}
+
+.site-header-group.fold-timeline .timeline-container.is-expanded .timeline-pill-btn:not(.is-active) {
+    display: none;
 }
 
 /* Zone: nav — visible menu links (nav-menu plugin) */

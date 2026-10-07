@@ -37,6 +37,7 @@ describe('renderTimeline', () => {
     const first = markup([2020, 2021, 2022], { from: 2020, to: 2020 });
     assert.doesNotMatch(first, /has-more-before/);
     assert.match(first, /has-more-after/);
+    assert.match(first, /is-expanded has-more-after has-next"/);
   });
 
   test('expanded: one pill per year, ascending, no arrows', () => {
@@ -102,5 +103,38 @@ describe('stepYear / slide', () => {
     host.state.scope = { from: 2022, to: 2022 };
     Timeline.prototype.slide.call(host, 1);
     assert.deepStrictEqual(calls, [2022, 2020]);
+  });
+});
+
+describe('drag preview', () => {
+  const host = () => {
+    const calls: number[] = [];
+    const h = {
+      calls,
+      state: { years: [2020, 2021, 2022, 2023], scope: { from: 2023, to: 2023 }, preview: null as number | null },
+      setState(d: object) { Object.assign(h.state, d); },
+      focusYear: (y: number) => calls.push(y),
+      _rerender() {},
+    };
+    return h;
+  };
+
+  test('steps move the preview only; focusYear runs once on commit', () => {
+    const h = host();
+    Timeline.prototype._previewStep.call(h, -1);
+    Timeline.prototype._previewStep.call(h, -1);
+    assert.strictEqual(h.state.preview, 2021);
+    assert.deepStrictEqual(h.calls, []);
+    Timeline.prototype._commitPreview.call(h);
+    assert.deepStrictEqual(h.calls, [2021]);
+    assert.strictEqual(h.state.preview, null);
+  });
+
+  test('no preview: commit does nothing; the preview stops at the edge', () => {
+    const h = host();
+    Timeline.prototype._commitPreview.call(h);
+    Timeline.prototype._previewStep.call(h, 1);
+    assert.strictEqual(h.state.preview, null);
+    assert.deepStrictEqual(h.calls, []);
   });
 });

@@ -20,9 +20,10 @@
  *   40  nav zone → burger          (PublicHeader)
  *   50  brand text → logo only     (PublicHeader, site crumb pair)
  *   60  current crumb → ellipsis   (PublicHeader)
+ *   70  timeline → active pill only (PublicHeader)
  *
- * Invariants encoded by that order: the current page's name is the last thing
- * to degrade, and every nav destination stays one tap away (inline → More →
+ * Invariants encoded by that order: the current page's name is the last crumb
+ * to degrade, the timeline's active year is the last thing to shrink, and every nav destination stays one tap away (inline → More →
  * burger).
  *
  * Layout is re-measured on container resize (ResizeObserver) and on any

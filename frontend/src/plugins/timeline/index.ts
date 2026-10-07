@@ -102,7 +102,10 @@ export function renderTimeline(years: number[], scope: YearSpan | null) {
     `;
   }
   const win = yearWindow(years, anchorYear(years, scope));
-  const flags = `${win.moreBefore ? " has-more-before" : ""}${win.moreAfter ? " has-more-after" : ""}`;
+  const i = win.shown.indexOf(anchorYear(years, scope));
+  // has-prev / has-next: a neighbour pill is shown, for the header fold that hides it.
+  const flags = `${win.moreBefore ? " has-more-before" : ""}${win.moreAfter ? " has-more-after" : ""}`
+    + `${i > 0 ? " has-prev" : ""}${i < win.shown.length - 1 ? " has-next" : ""}`;
   return html`
     <div class="timeline-container is-expanded${flags}" role="group" aria-label="Date timeline">
       <div class="timeline-strip" tabindex="-1">
@@ -147,12 +150,37 @@ export class Timeline extends Component<TimelineProps> {
   _drag: { id: number, x: number, moved: boolean } | null = null;
   _wheelAcc = 0;
   _wheelTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Wheel pause, in ms, that commits the previewed year. */
+  static WHEEL_COMMIT_MS = 250;
   /** Set by a slide: the click that ends it is not a tap. */
   _slid = false;
+  _onDragMove = (e: PointerEvent) => {
+    const d = this._drag;
+    if (!d || e.pointerId !== d.id) return;
+    const dx = e.clientX - d.x;
+    if (Math.abs(dx) < Timeline.SLIDE_STEP_PX) return;
+    if (!d.moved) {
+      d.moved = true;
+      this._cancelTap();
+    }
+    // Drag right shows the earlier year, as content follows the finger.
+    d.x = e.clientX;
+    this._previewStep(dx > 0 ? -1 : 1);
+  };
+  _onDragEnd = (e: PointerEvent) => {
+    const d = this._drag;
+    if (!d || e.pointerId !== d.id) return;
+    this._endDrag();
+    if (!d.moved) return;
+    this._slid = true;
+    // A touch slide sends no click: clear the flag after the click would arrive.
+    setTimeout(() => { this._slid = false; }, 0);
+    this._commitPreview();
+  };
 
   constructor(container: HTMLElement, props: TimelineProps = {}) {
     super(container, props);
-    this.state = { years: [] as number[], scope: null as YearSpan | null, isLoading: true };
+    this.state = { years: [] as number[], scope: null as YearSpan | null, isLoading: true, preview: null as number | null };
   }
 
   mount(): void {
@@ -168,6 +196,37 @@ export class Timeline extends Component<TimelineProps> {
     this._tapTimer = null;
     if (this._wheelTimer) clearTimeout(this._wheelTimer);
     this._wheelTimer = null;
+    this._endDrag();
+  }
+
+  _endDrag(): void {
+    this._drag = null;
+    window.removeEventListener("pointermove", this._onDragMove);
+    window.removeEventListener("pointerup", this._onDragEnd);
+    window.removeEventListener("pointercancel", this._onDragEnd);
+  }
+
+  /**
+   * Show the year one step from the shown one, without reporting it: the post
+   * list does not change until `_commitPreview`.
+   */
+  _previewStep(dir: number): void {
+    const scope: YearSpan | null = this.state.scope;
+    if (!scope) return;
+    const years: number[] = this.state.years;
+    const from: number = this.state.preview ?? anchorYear(years, scope);
+    const next = stepYear(years, from, dir);
+    if (next !== null && next !== this.state.preview) this.setState({ preview: next });
+  }
+
+  /** Report the previewed year, if any (drag release, wheel pause). */
+  _commitPreview(): void {
+    const year: number | null = this.state.preview ?? null;
+    if (year === null) return;
+    this.state.preview = null;
+    this.focusYear(year);
+    // focusYear does not re-render when the year did not change.
+    this._rerender();
   }
 
   /** Move the active year one step (-1 before, +1 after). No move at the edge. */
@@ -265,58 +324,43 @@ export class Timeline extends Component<TimelineProps> {
 
   render() {
     if (this.state.isLoading) return html``;
-    return renderTimeline(this.state.years, this.state.scope);
+    const { years, scope, preview } = this.state;
+    return renderTimeline(years, scope && preview != null ? { from: preview, to: preview } : scope);
   }
 
   afterRender(): void {
+    // The pills set the header slot's width: the header folds again.
+    this.container.dispatchEvent(new CustomEvent("timeline:render", { bubbles: true }));
     const strip = this.$(".timeline-strip");
     if (!strip || !this.state.scope) return;
     strip.addEventListener("wheel", (e: WheelEvent) => {
-      // Either wheel axis moves the year: one step per WHEEL_STEP of delta.
+      // Either wheel axis previews the next year: one step per WHEEL_STEP of
+      // delta. The wheel has no release, so a short pause commits the year.
       e.preventDefault();
       this._wheelAcc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      if (this._wheelTimer) clearTimeout(this._wheelTimer);
-      this._wheelTimer = setTimeout(() => { this._wheelAcc = 0; }, 200);
       if (Math.abs(this._wheelAcc) >= Timeline.WHEEL_STEP) {
         const dir = Math.sign(this._wheelAcc);
         this._wheelAcc = 0;
-        this.slide(dir);
+        this._previewStep(dir);
       }
+      if (this._wheelTimer) clearTimeout(this._wheelTimer);
+      this._wheelTimer = setTimeout(() => {
+        this._wheelTimer = null;
+        this._wheelAcc = 0;
+        this._commitPreview();
+      }, Timeline.WHEEL_COMMIT_MS);
     }, { passive: false });
-    // The atlas layer listens on document: a slide on the strip stays here.
+    // The atlas layer listens on document: a slide that starts on the strip stays here.
     strip.addEventListener("pointerdown", (e: PointerEvent) => {
-      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (this._drag || (e.pointerType === "mouse" && e.button !== 0)) return;
       e.stopPropagation();
       this._drag = { id: e.pointerId, x: e.clientX, moved: false };
+      // The preview re-renders the strip, so the drag follows the pointer on
+      // window until the release, also outside the strip.
+      window.addEventListener("pointermove", this._onDragMove);
+      window.addEventListener("pointerup", this._onDragEnd);
+      window.addEventListener("pointercancel", this._onDragEnd);
     });
-    strip.addEventListener("pointermove", (e: PointerEvent) => {
-      const d = this._drag;
-      if (!d || e.pointerId !== d.id) return;
-      e.stopPropagation();
-      const dx = e.clientX - d.x;
-      if (Math.abs(dx) < Timeline.SLIDE_STEP_PX) return;
-      if (!d.moved) {
-        d.moved = true;
-        this._cancelTap();
-        try { strip.setPointerCapture(e.pointerId); } catch { /* pointer gone */ }
-      }
-      // Drag right shows the earlier year, as content follows the finger.
-      d.x = e.clientX;
-      this.slide(dx > 0 ? -1 : 1);
-    });
-    const end = (e: PointerEvent) => {
-      const d = this._drag;
-      if (!d || e.pointerId !== d.id) return;
-      e.stopPropagation();
-      this._drag = null;
-      if (d.moved) {
-        this._slid = true;
-        // A touch slide sends no click: clear the flag after the click would arrive.
-        setTimeout(() => { this._slid = false; }, 0);
-      }
-    };
-    strip.addEventListener("pointerup", end);
-    strip.addEventListener("pointercancel", end);
     this._scrollActiveIntoView();
   }
 

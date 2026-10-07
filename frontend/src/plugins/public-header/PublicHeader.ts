@@ -283,6 +283,8 @@ export class PublicHeader extends Component<PublicHeaderProps> {
       });
     }
     if (this.props.timeline && pluginHost.hasSlot('timeline')) {
+      // The pills arrive after a fetch and change width on each render.
+      this.$('.site-timeline')?.addEventListener('timeline:render', () => this._fold?.relayout());
       pluginHost.fill('timeline', this.$('.site-timeline'), this.props.timeline).then(comps => {
         this._keepSlotMounts(gen, comps);
         if (gen === this._renderGen && !this._unmounted && comps[0]) this.props.onTimeline?.(comps[0]);
@@ -535,6 +537,12 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     fold.register(60, {
       reset: () => group.classList.remove('fold-current'),
       ops: () => [() => group.classList.add('fold-current')]
+    });
+
+    // 70 — the timeline is the last to shrink: only its active pill stays.
+    fold.register(70, {
+      reset: () => group.classList.remove('fold-timeline'),
+      ops: () => [() => group.classList.add('fold-timeline')]
     });
   }
 

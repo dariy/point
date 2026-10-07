@@ -46,9 +46,12 @@
     cursor: grab;
 }
 
-/* A "…" mark on a side that hides more years. */
+/* A "…" mark on a side that hides more years. When the header fold shows
+   only the active pill (header.css), a hidden neighbour gets the mark too. */
 .timeline-container.has-more-before::before,
-.timeline-container.has-more-after::after {
+.timeline-container.has-more-after::after,
+.site-header-group.fold-timeline .timeline-container.has-prev::before,
+.site-header-group.fold-timeline .timeline-container.has-next::after {
     content: '…';
     flex: 0 0 auto;
     padding: 0 var(--spacing-xs);
