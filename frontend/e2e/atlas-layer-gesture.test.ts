@@ -228,6 +228,8 @@ describe('Atlas layer gestures', () => {
     before(async () => {
       const ctx = await browser!.newContext({ viewport: { width: 1440, height: 900 } });
       dpage = await ctx.newPage();
+      // Each test starts in `list`: a state that an earlier test sets is saved (US-007) and would load next.
+      await dpage.addInitScript(() => localStorage.removeItem('atlasLayerState'));
     });
 
     beforeEach(async () => {
