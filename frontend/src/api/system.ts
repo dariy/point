@@ -17,7 +17,7 @@ export interface SystemStats {
   /** Absent when no quota is configured. */
   storage_quota_mb?: number;
   uptime_seconds: number;
-  /** A photo library path is set. */
+  /** PHOTO_LIBRARY_PATH is set and names a readable directory. */
   import_configured: boolean;
 }
 
@@ -258,6 +258,19 @@ export function getPhotoLibraryContents(path = ''): Promise<{
   files: Array<{ name: string, path: string }>;
 }> {
   return api.get('/api/system/photo-library', { path });
+}
+
+/**
+ * Read-only photo library status for the instance owner. The server answers
+ * 404 when no library is configured and 403 to anyone but the owner, so this
+ * resolves to null in both cases.
+ */
+export async function getPhotoLibraryStatus(): Promise<{ configured: boolean; path: string } | null> {
+  try {
+    return await api.get('/api/system/photo-library/status');
+  } catch {
+    return null;
+  }
 }
 
 /**

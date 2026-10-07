@@ -1015,3 +1015,72 @@ body:has(.light-layout) {
 :root:not([data-theme="dark"]) .more-footer-btn .icon-moon,
 [data-theme="light"] .more-footer-btn .icon-moon { display: flex; }
 [data-theme="light"] .more-footer-btn .icon-sun { display: none; }
+
+/* ===========================
+   First-post flow (US-005)
+   ===========================
+   Same full-screen card as setup, wider to fit the photo strip. */
+.first-post-page .first-post-card {
+    max-width: calc(var(--card-max-width) * 1.5);
+}
+
+.first-post-page .error-message {
+    margin: var(--spacing-lg) var(--spacing-xl) 0;
+}
+
+.first-post-drop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-xl);
+    border: var(--border-width) dashed var(--border-primary);
+    border-radius: var(--border-radius-xl);
+    cursor: pointer;
+    text-align: center;
+}
+
+.first-post-drop.is-over {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+.first-post-drop.is-busy {
+    cursor: progress;
+    opacity: 0.7;
+}
+
+.first-post-skip {
+    margin-top: var(--spacing-lg);
+    text-align: center;
+    font-size: var(--font-size-sm);
+}
+
+.first-post-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    gap: var(--spacing-md);
+    padding: 0;
+    list-style: none;
+}
+
+.first-post-item img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: var(--border-radius-xl);
+}
+
+.first-post-item-actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-xs);
+}
+
+.first-post-done-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+}

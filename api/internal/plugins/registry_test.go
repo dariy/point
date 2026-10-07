@@ -369,3 +369,12 @@ func TestDefaultPresets(t *testing.T) {
 		}
 	}
 }
+
+func TestComments_DefaultOffOnFreshRegistry(t *testing.T) {
+	if IsEnabled("comments", map[string]string{}) {
+		t.Errorf("comments must default to disabled on a fresh install")
+	}
+	if !IsEnabled("comments", map[string]string{EnabledKey("comments"): "true"}) {
+		t.Errorf("stored comments=true must keep comments enabled")
+	}
+}

@@ -20,14 +20,12 @@ export default class SetupPage extends Component {
     this.state = {
       loading: false,
       error: null,
-      blog_title: '',
-      author_name: '',
-      email: '',
+      username: '',
     };
   }
 
   render() {
-    const { loading, error, blog_title, author_name, email } = this.state;
+    const { loading, error, username } = this.state;
 
     return html`
       <div class="setup-page-container">
@@ -35,35 +33,18 @@ export default class SetupPage extends Component {
           <div class="card-header">
             ${raw(APP_LOGO_SVG)}
             <h2>Welcome to Point</h2>
-            <p class="text-muted text-small">Complete this one-time setup to create your blog.</p>
+            <p class="text-muted text-small">Create your account to get started.</p>
           </div>
           <div class="card-body">
             ${error ? html`<div class="error-message" role="alert">${error}</div>` : ''}
 
             <form id="setup-form" novalidate>
               <div class="form-group">
-                <label class="form-label" for="blog_title">Blog Title</label>
-                <input type="text" id="blog_title" name="blog_title" class="form-input"
-                       value="${blog_title}" required placeholder="My Photo Blog"
-                       autocomplete="off"
+                <label class="form-label" for="username">Username</label>
+                <input type="text" id="username" name="username" class="form-input"
+                       value="${username}" required placeholder="alex"
+                       autocomplete="username" autocapitalize="none" spellcheck="false"
                        ${loading ? 'disabled' : ''}>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="author_name">Your Name</label>
-                <input type="text" id="author_name" name="author_name" class="form-input"
-                       value="${author_name}" required placeholder="Jane Doe"
-                       autocomplete="off"
-                       ${loading ? 'disabled' : ''}>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="email">Email Address</label>
-                <input type="text" id="email" name="email" class="form-input"
-                       value="${email}" placeholder="you@example.com"
-                       autocomplete="off"
-                       ${loading ? 'disabled' : ''}>
-                <span class="form-help">(used for password reset)</span>
               </div>
 
               <div class="form-group">
@@ -104,14 +85,17 @@ export default class SetupPage extends Component {
 
       const field = (id: string) =>
         (this.$(id) as HTMLInputElement).value;
-      const blog_title = field('#blog_title').trim();
-      const author_name = field('#author_name').trim();
-      const email = field('#email').trim();
+      const username = field('#username').trim();
       const password = field('#password');
       const confirm_password = field('#confirm_password');
 
-      if (!blog_title || !author_name || !password) {
-        this.setState({ error: 'Blog title, your name, and password are required.' });
+      if (!username || !password) {
+        this.setState({ error: 'Username and password are required.' });
+        return;
+      }
+
+      if (!/^[A-Za-z0-9._-]{1,32}$/.test(username)) {
+        this.setState({ error: 'Username can use up to 32 letters, digits, ".", "_" or "-".' });
         return;
       }
 
@@ -125,13 +109,11 @@ export default class SetupPage extends Component {
         return;
       }
 
-      this.setState({ loading: true, error: null, blog_title, author_name, email });
+      this.setState({ loading: true, error: null, username });
 
       try {
         await api.post('/api/setup', {
-          blog_title,
-          author_name,
-          email,
+          username,
           name: await sha256(password),
           token: setupTokenFrom(window.location.search),
         });
@@ -140,9 +122,10 @@ export default class SetupPage extends Component {
         // against an unconfigured install (no settings, no user, no theme), and
         // setup has just changed all three. Reloading picks up the seeded
         // settings and the session the API issued — landing the owner straight
-        // in the admin instead of at the login screen. If the session could not
-        // be minted, the auth guard sends them to login from there.
-        window.location.assign('/light');
+        // in the app instead of at the login screen. If the session could not
+        // be minted, the auth guard sends them to login from there. The owner
+        // lands in the first-post flow (US-005).
+        window.location.assign('/light/first-post');
       } catch (err) {
         this.setState({
           loading: false,
@@ -152,7 +135,7 @@ export default class SetupPage extends Component {
     });
 
     setTimeout(() => {
-      const firstInput = this.$('#blog_title');
+      const firstInput = this.$('#username');
       if (firstInput) firstInput.focus();
     }, 100);
   }

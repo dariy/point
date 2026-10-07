@@ -51,6 +51,24 @@ theme for the full variable set (`--bg-*`, `--text-*`, `--color-*`, `--surface-*
 - `golden.css`, `minimal.css`, `ocean.css`, `sepia.css` — additional built-in
   palettes.
 
+## Style Presets
+
+A theme that carries a `/* preset: "..." */` comment is also an onboarding style
+preset. `ThemeService` returns its metadata in the `preset` field:
+
+- `/* preset-description: "..." */` — one line for the picker card.
+- `/* preview-image: "/assets/images/presets/<name>.svg" */` — a file in
+  `frontend/images/presets/`. Other paths are dropped.
+- `/* preset-layout: "..." */`, `/* preset-typography: "..." */`,
+  `/* preset-palette: "..." */`, `/* preset-header: "..." */` — labels for the
+  four dimensions that the CSS sets. Each pair of presets must differ in two or
+  more of them (`theme_presets_test.go`).
+
+The presets are `default.css` (Classic, the stock look and the fallback for
+installs with no stored theme), `editorial.css`, `gallery.css`, `journal.css`,
+`dark-studio.css` and `zine.css`. Fonts are local font stacks: a theme must not
+`@import` or `url()` another origin.
+
 ## How Themes Are Applied
 
 `ThemeService` reads the active theme's CSS file server-side and serves it

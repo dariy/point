@@ -1,0 +1,105 @@
+/* theme-title: "Editorial" */
+/* description: "Serif type in one wide column, like a printed photo essay." */
+/* preview-color: "#8a2c1f" */
+/* preset: "Editorial" */
+/* preset-description: "Serif type in one wide column, like a printed photo essay." */
+/* preset-layout: "single-column-wide" */
+/* preset-typography: "oldstyle-serif" */
+/* preset-palette: "paper-oxblood" */
+/* preset-header: "centered-serif" */
+/* preview-image: "/assets/images/presets/editorial.svg" */
+
+/*
+ * Editorial: one wide column of posts set in an old-style serif. The header
+ * centres the site name and drops the translucent blur for a printed rule.
+ */
+
+html[data-section="public"] .posts-grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 60rem;
+  width: 100%;
+  margin-inline: auto;
+  gap: var(--spacing-3xl);
+}
+
+.site-title,
+.post-card-title,
+h1, h2, h3 {
+  font-family: var(--font-family);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+html[data-section="public"] .site-header-group {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 3px double var(--border-secondary);
+}
+
+html[data-section="public"] .site-identity {
+  margin-inline: auto;
+}
+
+html[data-section="public"] .site-title {
+  font-size: var(--font-size-2xl);
+  font-style: italic;
+}
+
+:root {
+  --bg-primary: #fbf9f4;
+  --bg-secondary: #f3efe6;
+  --bg-tertiary: #e9e3d6;
+  --bg-elevated: #ffffff;
+  --surface-card: #ffffff;
+  --surface-input: #ffffff;
+  --surface-hover: #f3efe6;
+  --text-primary: #1d1a16;
+  --text-secondary: #4a443b;
+  --text-tertiary: #6b6357;
+  --text-muted: #958c7e;
+  --text-inverted: #fbf9f4;
+  --color-primary: #8a2c1f;
+  --color-primary-hover: #6e2318;
+  --border-primary: #e3dccd;
+  --border-secondary: #cfc6b3;
+  --pt-colors-sidebar-bg: #1d1a16;
+  --pt-colors-sidebar-text: #a59c8c;
+  --pt-colors-sidebar-text-hover: #fbf9f4;
+  --pt-colors-sidebar-active-bg: #2c2822;
+  --pt-colors-sidebar-border: #3a352d;
+  --footer-link: #8a2c1f;
+  --color-accent: #8a2c1f;
+  --header-bg: rgba(251, 249, 244, 0.95);
+  --footer-bg: rgba(251, 249, 244, 0.95);
+  --font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --border-radius: 2px;
+  --border-radius-lg: 2px;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #161412;
+  --bg-secondary: #1f1c19;
+  --bg-tertiary: #2a2622;
+  --bg-elevated: #1f1c19;
+  --surface-card: #1f1c19;
+  --surface-input: #1f1c19;
+  --surface-hover: #2a2622;
+  --text-primary: #f1ece3;
+  --text-secondary: #cdc5b8;
+  --text-tertiary: #a49b8d;
+  --text-muted: #7a7266;
+  --text-inverted: #161412;
+  --color-primary: #e07a63;
+  --color-primary-hover: #ec9984;
+  --border-primary: #2f2a25;
+  --border-secondary: #433c35;
+  --pt-colors-sidebar-bg: #0f0d0c;
+  --pt-colors-sidebar-text: #a49b8d;
+  --pt-colors-sidebar-text-hover: #f1ece3;
+  --pt-colors-sidebar-active-bg: #2a2622;
+  --pt-colors-sidebar-border: #2f2a25;
+  --footer-link: #e07a63;
+  --color-accent: #e07a63;
+  --header-bg: rgba(22, 20, 18, 0.95);
+  --footer-bg: rgba(22, 20, 18, 0.95);
+}

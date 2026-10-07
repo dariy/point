@@ -778,6 +778,10 @@ func (m *mockRepository) DB() *sql.DB {
 	return nil
 }
 
+func (m *mockRepository) GetOwnerUserID(ctx context.Context) (int64, error) {
+	return 1, nil
+}
+
 func (m *mockRepository) DeleteSecret(ctx context.Context, key string) error {
 	if m.MockDeleteSecret != nil {
 		return m.MockDeleteSecret(ctx, key)

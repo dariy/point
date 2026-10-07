@@ -364,6 +364,11 @@ const routes: Route[] = [
     title: "Light",
   },
   {
+    path: "/light/first-post",
+    load: () => import("./pages/light/FirstPostPage.ts"),
+    title: "Your first post · Light",
+  },
+  {
     path: "/light/posts",
     load: () => import("./pages/light/PostsListPage.ts"),
     title: "Posts · Light",
@@ -394,6 +399,12 @@ const routes: Route[] = [
     title: "Tags · Light",
   },
 
+  {
+    // Outside /light on purpose: the preview is the public home page.
+    path: "/style",
+    load: () => import("./pages/light/StylePickerPage.ts"),
+    title: "Choose a look",
+  },
   {
     path: "/light/themes",
     load: () => import("./pages/light/ThemesPage.ts"),

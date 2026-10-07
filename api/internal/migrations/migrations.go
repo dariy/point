@@ -453,6 +453,23 @@ var schema = []struct{ name, sql string }{
 		"add_api_keys_scope",
 		`ALTER TABLE api_keys ADD COLUMN scope TEXT NOT NULL DEFAULT 'general'`,
 	},
+	{
+		// The comments plugin now defaults to off. An install set up before
+		// setup seeded plugin keys has no stored state and fell back to the
+		// old default (on), so pin that value. INSERT OR IGNORE keeps every
+		// stored value, and a fresh database (no users yet) gets its value from
+		// the registry at setup time.
+		"pin_comments_for_existing_installs",
+		`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'plugin.comments.enabled', 'true', 'boolean', CURRENT_TIMESTAMP
+			  WHERE EXISTS (SELECT 1 FROM users)`,
+	},
+	{
+		// The photo library path now comes only from PHOTO_LIBRARY_PATH.
+		// A stale copy in blog_secrets must not keep the library on.
+		"drop_photo_library_path_secret",
+		`DELETE FROM blog_secrets WHERE key = 'photo_library_path'`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

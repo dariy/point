@@ -86,6 +86,10 @@ export default class SettingsPage extends Component {
     if (error) return html`<p class="error-state" role="alert">${error}</p>`;
 
     return html`
+        <p class="settings-style-picker">
+          <a href="/style" class="btn btn-secondary" id="open-style-picker">Choose a look</a>
+          <span class="form-hint">Preview the style presets on your own site.</span>
+        </p>
         <form id="settings-form" class="settings-grid">
           ${SETTING_GROUPS.map((group) => this._renderGroup(group, settings, posts))}
         </form>`;

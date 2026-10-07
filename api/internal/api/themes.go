@@ -54,6 +54,16 @@ func (h *ThemeHandler) SetActiveTheme(c echo.Context) error {
 	return c.JSON(http.StatusOK, theme)
 }
 
+// GetThemeCSS serves a theme's CSS (with the system custom CSS) without
+// making it active, for the style picker's live preview.
+func (h *ThemeHandler) GetThemeCSS(c echo.Context) error {
+	css, err := h.themeService.ThemeCSS(c.Request().Context(), c.Param("name"))
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"detail": "theme not found"})
+	}
+	return c.Blob(http.StatusOK, "text/css; charset=utf-8", css)
+}
+
 func (h *ThemeHandler) GetCustomCSS(c echo.Context) error {
 	// GetSetting always returns nil error (silently falls back to default on DB error),
 	// so we ignore the error here.

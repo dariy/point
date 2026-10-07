@@ -58,6 +58,9 @@ type SystemHandler struct {
 	// storageQuotaMB is the operator-configured media allowance (STORAGE_QUOTA_MB)
 	// reported by GetStats. 0 means unlimited and is omitted from the response.
 	storageQuotaMB int
+	// photoLibraryPath is PHOTO_LIBRARY_PATH from the environment, the only
+	// source of the photo library root. Empty means no library.
+	photoLibraryPath string
 }
 
 // WithHealth attaches the background-job health registry. A setter rather than
@@ -135,6 +138,70 @@ func (h *SystemHandler) ClearFailedJobs(c echo.Context) error {
 func (h *SystemHandler) WithStorageQuotaMB(mb int) *SystemHandler {
 	h.storageQuotaMB = mb
 	return h
+}
+
+// WithPhotoLibraryPath attaches PHOTO_LIBRARY_PATH. Empty disables the photo
+// library endpoints.
+func (h *SystemHandler) WithPhotoLibraryPath(path string) *SystemHandler {
+	h.photoLibraryPath = path
+	return h
+}
+
+// photoLibraryRoot returns the cleaned library root and true only when
+// PHOTO_LIBRARY_PATH is set and names a readable directory. The check runs on
+// each call, so a library that is mounted or unmounted later is seen.
+func (h *SystemHandler) photoLibraryConfigured() bool {
+	_, ok := h.photoLibraryRoot()
+	return ok
+}
+
+func (h *SystemHandler) photoLibraryRoot() (string, bool) {
+	if h.photoLibraryPath == "" {
+		return "", false
+	}
+	root := filepath.Clean(h.photoLibraryPath)
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return "", false
+	}
+	d, err := os.Open(root)
+	if err != nil {
+		return "", false
+	}
+	_, err = d.Readdirnames(1)
+	_ = d.Close()
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", false
+	}
+	return root, true
+}
+
+// isInstanceOwner reports whether the request comes from the owner's browser
+// session. API keys and other users are not the owner.
+func (h *SystemHandler) isInstanceOwner(c echo.Context) bool {
+	s, ok := c.Get("user").(models.GetSessionByTokenRow)
+	if !ok {
+		return false
+	}
+	ownerID, err := h.repo.GetOwnerUserID(c.Request().Context())
+	return err == nil && ownerID != 0 && s.UserID == ownerID
+}
+
+// GetPhotoLibraryStatus is the read-only photo library status for the
+// instance owner. It returns 404 when the library is not configured and 403
+// to any caller that is not the owner, so the path stays private.
+func (h *SystemHandler) GetPhotoLibraryStatus(c echo.Context) error {
+	root, ok := h.photoLibraryRoot()
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "photo library not configured")
+	}
+	if !h.isInstanceOwner(c) {
+		return echo.NewHTTPError(http.StatusForbidden, "instance owner only")
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"configured": true,
+		"path":       root,
+	})
 }
 
 // GetHealth reports the last outcome of every background job: the scheduled
@@ -436,7 +503,8 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		"total_media":       stats.MediaCount,
 		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
 		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
-		"import_configured": h.settingsService.SecretIsSet(ctx, "photo_library_path"),
+		// True only when PHOTO_LIBRARY_PATH names a readable directory.
+		"import_configured": h.photoLibraryConfigured(),
 	}
 	// Omitted when unset so the dashboard shows plain usage rather than a
 	// "0 MB of 0 MB" bar.
@@ -893,16 +961,10 @@ var importableExtensions = map[string]bool{
 func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	importPath, _ := h.settingsService.GetSecret(ctx, "photo_library_path")
-	if importPath == "" {
+	importPath, ok := h.photoLibraryRoot()
+	if !ok {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"detail": "photo_library_path not configured",
-		})
-	}
-
-	if _, err := os.Stat(importPath); os.IsNotExist(err) {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"detail": fmt.Sprintf("import path does not exist: %s", importPath),
+			"detail": "photo library not configured",
 		})
 	}
 
@@ -983,12 +1045,10 @@ type photoLibraryFileEntry struct {
 }
 
 func (h *SystemHandler) getLibraryRoot(c echo.Context) (string, error) {
-	libraryRoot, _ := h.settingsService.GetSecret(c.Request().Context(), "photo_library_path")
-	if libraryRoot == "" {
-		return "", echo.NewHTTPError(http.StatusBadRequest, "photo_library_path not configured")
+	libraryRoot, ok := h.photoLibraryRoot()
+	if !ok {
+		return "", echo.NewHTTPError(http.StatusBadRequest, "photo library not configured")
 	}
-	// Ensure root is cleaned (no trailing slash issues)
-	libraryRoot = filepath.Clean(libraryRoot)
 	return libraryRoot, nil
 }
 

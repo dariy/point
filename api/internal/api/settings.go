@@ -88,7 +88,6 @@ var writableSecretKeys = map[string]bool{
 // the admin UI as "<key>_is_set" booleans on the settings response.
 var secretIsSetKeys = []string{
 	"gemini_api_key",
-	"photo_library_path",
 	"instagram_app_id",
 	"instagram_app_secret",
 	"instagram_access_token",

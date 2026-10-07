@@ -69,8 +69,8 @@ func TestSettingsHandler_GetSettings_SecretKeysAbsent(t *testing.T) {
 	if res["gemini_api_key_is_set"] != "true" {
 		t.Errorf("gemini_api_key_is_set should be true, got %q", res["gemini_api_key_is_set"])
 	}
-	if res["photo_library_path_is_set"] != "false" {
-		t.Errorf("photo_library_path_is_set should be false, got %q", res["photo_library_path_is_set"])
+	if _, ok := res["photo_library_path_is_set"]; ok {
+		t.Error("photo_library_path_is_set must not appear: the path is env-only")
 	}
 	if res["blog_title"] != "My Blog" {
 		t.Errorf("blog_title should be My Blog, got %q", res["blog_title"])

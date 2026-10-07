@@ -44,6 +44,7 @@ func (h *SetupHandler) SetupStatus(c echo.Context) error {
 
 func (h *SetupHandler) Setup(c echo.Context) error {
 	var req struct {
+		Username   string `json:"username"`
 		Password   string `json:"name"`
 		BlogTitle  string `json:"blog_title"`
 		AuthorName string `json:"author_name"`
@@ -64,9 +65,27 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 	}
 
 	req.Email = strings.TrimSpace(req.Email)
+	req.Username = strings.TrimSpace(req.Username)
+	req.BlogTitle = strings.TrimSpace(req.BlogTitle)
+	req.AuthorName = strings.TrimSpace(req.AuthorName)
 
-	if req.Password == "" || req.BlogTitle == "" || req.AuthorName == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "all fields are required"})
+	if req.Password == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "password is required"})
+	}
+
+	// The wizard asks for the account only. Older callers (quickstart, e2e
+	// bootstrap) send no username and get the historical owner name.
+	if req.Username == "" {
+		req.Username = defaultOwnerUsername
+	}
+	if !validSetupUsername(req.Username) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "username must be 1-32 letters, digits, '.', '_' or '-'"})
+	}
+	if req.BlogTitle == "" {
+		req.BlogTitle = defaultBlogTitle(req.Username)
+	}
+	if req.AuthorName == "" {
+		req.AuthorName = defaultBlogTitle(req.Username)
 	}
 
 	// req.Password is a SHA-256 hex string sent by the frontend (always 64 chars)
@@ -90,7 +109,7 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 	}
 
 	user, err := h.repo.CreateUser(ctx, models.CreateUserParams{
-		Username:     "the_owner",
+		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: hash,
 		DisplayName:  req.AuthorName,
@@ -156,6 +175,37 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 			"email":        user.Email,
 		},
 	})
+}
+
+const defaultOwnerUsername = "the_owner"
+
+// validSetupUsername accepts 1-32 ASCII letters, digits, '.', '_' and '-'.
+func validSetupUsername(u string) bool {
+	if len(u) == 0 || len(u) > 32 {
+		return false
+	}
+	for _, r := range u {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// defaultBlogTitle makes a display name from a username: separators become
+// spaces and each word gets an upper-case first letter ("alex" -> "Alex",
+// "the_owner" -> "The Owner").
+func defaultBlogTitle(username string) string {
+	words := strings.FieldsFunc(username, func(r rune) bool { return r == '_' || r == '.' || r == '-' })
+	for i, w := range words {
+		words[i] = strings.ToUpper(w[:1]) + w[1:]
+	}
+	if len(words) == 0 {
+		return username
+	}
+	return strings.Join(words, " ")
 }
 
 // startOwnerSession issues a session cookie for the freshly created owner,

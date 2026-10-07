@@ -90,6 +90,7 @@ for (const file of files) {
 
   const vars = rootColorVars(content);
   themes.push({
+    id: slug,
     name,
     description: DESC_RE.exec(content)?.[1] || "",
     preview_color: COLOR_RE.exec(content)?.[1] || vars["--color-primary"] || "",

@@ -1,0 +1,113 @@
+/* theme-title: "Zine" */
+/* description: "Heavy type, thick rules and loud color, like a cut-and-paste magazine." */
+/* preview-color: "#ff3d00" */
+/* preset: "Zine" */
+/* preset-description: "Heavy type, thick rules and loud color, like a cut-and-paste magazine." */
+/* preset-layout: "card-grid-bordered" */
+/* preset-typography: "black-grotesk-mono" */
+/* preset-palette: "newsprint-red" */
+/* preset-header: "masthead-bold" */
+/* preview-image: "/assets/images/presets/zine.svg" */
+
+/*
+ * Zine: heavy black grotesk for titles, monospace for small text, and thick
+ * black rules around every card and under the masthead.
+ */
+
+html[data-section="public"] {
+  --posts-grid-grid-template-columns: 18rem;
+}
+
+html[data-section="public"] .posts-grid {
+  gap: var(--spacing-lg);
+}
+
+html[data-section="public"] .post-card {
+  border: 3px solid var(--border-primary);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 var(--border-primary);
+}
+
+.site-title,
+.post-card-title,
+h1, h2, h3 {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.post-card-meta,
+.post-card-excerpt {
+  font-family: var(--font-meta);
+}
+
+html[data-section="public"] .site-header-group {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 4px solid var(--border-primary);
+}
+
+html[data-section="public"] .site-title {
+  font-size: var(--font-size-3xl);
+  color: var(--color-primary);
+}
+
+:root {
+  --bg-primary: #fffbe6;
+  --bg-secondary: #fff4c2;
+  --bg-tertiary: #ffeb99;
+  --bg-elevated: #ffffff;
+  --surface-card: #ffffff;
+  --surface-input: #ffffff;
+  --surface-hover: #fff4c2;
+  --text-primary: #000000;
+  --text-secondary: #1a1a1a;
+  --text-tertiary: #333333;
+  --text-muted: #555555;
+  --text-inverted: #ffffff;
+  --color-primary: #d63300;
+  --color-primary-hover: #a82800;
+  --border-primary: #000000;
+  --border-secondary: #000000;
+  --pt-colors-sidebar-bg: #000000;
+  --pt-colors-sidebar-text: #bbbbbb;
+  --pt-colors-sidebar-text-hover: #ffffff;
+  --pt-colors-sidebar-active-bg: #1a1a1a;
+  --pt-colors-sidebar-border: #333333;
+  --footer-link: #d63300;
+  --color-accent: #d63300;
+  --header-bg: #fffbe6;
+  --footer-bg: #fffbe6;
+  --font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  --font-meta: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --border-radius: 0;
+  --border-radius-lg: 0;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #111111;
+  --bg-secondary: #1b1b1b;
+  --bg-tertiary: #262626;
+  --bg-elevated: #1b1b1b;
+  --surface-card: #1b1b1b;
+  --surface-input: #1b1b1b;
+  --surface-hover: #262626;
+  --text-primary: #fffbe6;
+  --text-secondary: #f0e9c8;
+  --text-tertiary: #cfc8a8;
+  --text-muted: #9a957d;
+  --text-inverted: #111111;
+  --color-primary: #ff6a3d;
+  --color-primary-hover: #ff8a66;
+  --border-primary: #fffbe6;
+  --border-secondary: #fffbe6;
+  --pt-colors-sidebar-bg: #000000;
+  --pt-colors-sidebar-text: #bbbbbb;
+  --pt-colors-sidebar-text-hover: #fffbe6;
+  --pt-colors-sidebar-active-bg: #262626;
+  --pt-colors-sidebar-border: #333333;
+  --footer-link: #ff6a3d;
+  --color-accent: #ff6a3d;
+  --header-bg: #111111;
+  --footer-bg: #111111;
+}

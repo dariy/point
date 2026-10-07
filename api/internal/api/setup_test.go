@@ -258,3 +258,51 @@ func TestSetup_RequiresSetupToken(t *testing.T) {
 		}
 	}
 }
+
+// The wizard sends only the account. Setup must succeed and store a blog
+// title and author name made from the username (US-001).
+func TestSetup_DefaultsBlogTitleFromUsername(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo, h.cfg)
+	body := `{"username":"alex","name":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"}`
+	c, rec := echoCtx(http.MethodPost, "/setup", body)
+	if err := sh.Setup(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	ctx := context.Background()
+	if v, _ := h.settingsSvc.GetSetting(ctx, "blog_title", ""); v != "Alex" {
+		t.Errorf("blog_title = %q, want Alex", v)
+	}
+	if v, _ := h.settingsSvc.GetSetting(ctx, "author_name", ""); v != "Alex" {
+		t.Errorf("author_name = %q, want Alex", v)
+	}
+	if _, err := h.repo.GetUserByUsername(ctx, "alex"); err != nil {
+		t.Errorf("owner not stored as alex: %v", err)
+	}
+}
+
+func TestSetup_RejectsInvalidUsername(t *testing.T) {
+	h := setupHandlers(t)
+	defer h.close()
+	sh := NewSetupHandler(h.authSvc, h.settingsSvc, h.repo, h.cfg)
+	body := `{"username":"a b","name":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"}`
+	c, rec := echoCtx(http.MethodPost, "/setup", body)
+	if err := sh.Setup(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestDefaultBlogTitle(t *testing.T) {
+	for in, want := range map[string]string{"alex": "Alex", "the_owner": "The Owner", "jo.ann-x": "Jo Ann X", "_": "_"} {
+		if got := defaultBlogTitle(in); got != want {
+			t.Errorf("defaultBlogTitle(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

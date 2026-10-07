@@ -159,8 +159,10 @@ var Registry = []Descriptor{
 	// Remark42 comments: widget embedded after post content (post-comments
 	// slot), served by the remark42 sidecar through the gated /comments reverse
 	// proxy, plus the /light/comments moderation page (nav-menu pattern: one
-	// plugin = public surface + admin page).
-	{ID: "comments", Title: "Comments (Remark42)", Type: TypeEnhancer, Slot: "post-comments", Routes: []string{"/comments", "/light/comments", "/api/admin/comments"}, EntryName: "comments", DefaultEnabled: true},
+	// plugin = public surface + admin page). Off by default: a fresh site has
+	// no Remark42 sidecar configured, so the widget would only show an error.
+	// Migration pin_comments_for_existing_installs keeps older installs on.
+	{ID: "comments", Title: "Comments (Remark42)", Type: TypeEnhancer, Slot: "post-comments", Routes: []string{"/comments", "/light/comments", "/api/admin/comments"}, EntryName: "comments", DefaultEnabled: false},
 
 	// Previous/next post links at the foot of the article (non-immersive view).
 	// No JS chunk — the post renderer gates the block on this plugin's enabled
