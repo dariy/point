@@ -41,47 +41,78 @@ cd "$ROOT_DIR/api"
 go build -o ../point-e2e ./cmd/api
 cd ..
 
-export STORAGE_PATH=$(mktemp -d)
-export DATABASE_URL="sqlite:$STORAGE_PATH/point.db"
+# Each e2e file gets its own server and an empty storage path, so no file sees
+# what an earlier file left behind and the result does not depend on the order.
+# A start costs about 0.3 s. Pass test files as arguments to run a subset or a
+# different order (for example `$(ls -r frontend/e2e/*.test.ts)`).
+WORK_DIR=$(mktemp -d)
 # Serve a private copy of the built frontend. build-js.sh starts with
 # `rm -rf frontend/js`, and `run.sh --watch` runs it whenever frontend/src
 # changes — which check.sh's js-test lane does (eslintRules.test.ts writes its
 # fixtures there). Served from the shared tree, the page then gets no app.js
 # and never boots, and a test fails on a handle that never appears.
-cp -a frontend "$STORAGE_PATH/frontend"
-export FRONTEND_DIR="$STORAGE_PATH/frontend"
+cp -a frontend "$WORK_DIR/frontend"
+export FRONTEND_DIR="$WORK_DIR/frontend"
 
-mkdir -p "$STORAGE_PATH/media/originals" "$STORAGE_PATH/media/thumbnails" "$STORAGE_PATH/media/variants" "$STORAGE_PATH/logs" "$STORAGE_PATH/themes"
-
-echo "==> Starting backend on port $PORT..."
-./point-e2e > "$STORAGE_PATH/logs/e2e.log" 2>&1 &
-APP_PID=$!
+APP_PID=""
+stop_server() {
+    if [ -n "$APP_PID" ]; then
+        kill $APP_PID 2>/dev/null || true
+        wait $APP_PID 2>/dev/null || true
+        APP_PID=""
+    fi
+}
 
 cleanup() {
-    kill $APP_PID 2>/dev/null || true
-    rm -rf "$STORAGE_PATH"
+    stop_server
+    rm -rf "$WORK_DIR"
     rm -f point-e2e
 }
 trap cleanup EXIT INT TERM
 
-# Wait for server
-for i in $(seq 1 30); do
-    if curl -s http://127.0.0.1:$PORT/health > /dev/null; then
-        echo "==> Server is up"
-        break
-    fi
-    sleep 0.2
-    if [ $i -eq 30 ]; then
-        echo "Server failed to start. Logs:"
-        cat "$STORAGE_PATH/logs/e2e.log"
-        exit 1
-    fi
-done
+start_server() {
+    export STORAGE_PATH="$WORK_DIR/storage-$1"
+    export DATABASE_URL="sqlite:$STORAGE_PATH/point.db"
+    mkdir -p "$STORAGE_PATH/media/originals" "$STORAGE_PATH/media/thumbnails" "$STORAGE_PATH/media/variants" "$STORAGE_PATH/logs" "$STORAGE_PATH/themes"
+    ./point-e2e > "$STORAGE_PATH/logs/e2e.log" 2>&1 &
+    APP_PID=$!
+    for i in $(seq 1 150); do
+        if curl -s http://127.0.0.1:$PORT/health > /dev/null; then
+            return 0
+        fi
+        sleep 0.02
+    done
+    echo "Server failed to start. Logs:"
+    cat "$STORAGE_PATH/logs/e2e.log"
+    exit 1
+}
 
 export E2E_BASE_URL="http://127.0.0.1:$PORT"
-# One file at a time: every e2e file drives the SAME server, and they all
-# bootstrap it (POST /api/setup, publish a post). Run in parallel and two of
-# them race on creating the owner, which the engine answers with a 409 for the
-# loser at best and a 500 at worst. Serial also keeps a failure readable — the
-# browser log belongs to one file.
-node --test --test-concurrency=1 frontend/e2e/*.test.ts
+if [ $# -gt 0 ]; then
+    FILES=("$@")
+else
+    FILES=(frontend/e2e/*.test.ts)
+fi
+
+# One file at a time: every file uses the same port. Serial also keeps a
+# failure readable — the browser log belongs to one file.
+FAILED=()
+n=0
+for f in "${FILES[@]}"; do
+    n=$((n + 1))
+    echo "==> [$n/${#FILES[@]}] $f"
+    start_server "$n"
+    if ! node --test "$f"; then
+        FAILED+=("$f")
+        echo "Server log for $f:"
+        tail -n 50 "$STORAGE_PATH/logs/e2e.log"
+    fi
+    stop_server
+done
+
+if [ ${#FAILED[@]} -gt 0 ]; then
+    echo "==> Failed e2e files:"
+    printf '    %s\n' "${FAILED[@]}"
+    exit 1
+fi
+echo "==> All ${#FILES[@]} e2e files passed"

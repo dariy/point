@@ -36,7 +36,7 @@ describe('Atlas layer header', () => {
     await page.addInitScript(() => localStorage.removeItem('atlasLayerState'));
     cdp = await ctx.newCDPSession(page);
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
-    if (!setup.ok && setup.status !== 409) throw new Error('Setup failed: ' + setup.status);
+    if (!setup.ok) throw new Error('Setup failed: ' + setup.status);
     const login = await api('/api/auth/login', { username: 'the_owner', name: PW });
     if (!login.ok) throw new Error('Login failed: ' + login.status);
     cookie = ((login.headers.get('set-cookie') || '').match(/session=([^;]+)/) || [])[1] || '';
@@ -44,7 +44,7 @@ describe('Atlas layer header', () => {
       title: 'Atlas header probe', slug: 'atlas-header-probe', content: 'Body.', excerpt: 'Card.',
       status: 'published', tags: ['atlas-header'],
     });
-    if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + (await post.text()));
+    if (!post.ok) throw new Error('Post creation failed: ' + (await post.text()));
   });
 
   after(async () => {

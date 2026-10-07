@@ -27,33 +27,33 @@ describe('Atlas layer URL state', () => {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     page = await ctx.newPage();
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
-    if (!setup.ok && setup.status !== 409) throw new Error('Setup failed: ' + setup.status);
+    if (!setup.ok) throw new Error('Setup failed: ' + setup.status);
     const login = await api('/api/auth/login', { username: 'the_owner', name: PW });
     if (!login.ok) throw new Error('Login failed: ' + login.status);
     cookie = ((login.headers.get('set-cookie') || '').match(/session=([^;]+)/) || [])[1] || '';
     const vis = await api('/api/settings', { tags_visibility: 'all' }, 'PUT');
     if (!vis.ok) throw new Error('Settings failed: ' + vis.status);
     const place = await api('/api/tags', { name: 'Urlton', slug: 'urlton', kind: 'place', latitude: 40.7, longitude: -74 });
-    if (!place.ok && place.status !== 409) throw new Error('Tag creation failed: ' + (await place.text()));
+    if (!place.ok) throw new Error('Tag creation failed: ' + (await place.text()));
     const placed = await api('/api/posts', {
       title: 'Atlas url place', slug: 'atlas-url-place', content: 'Body.', excerpt: 'Card.',
       status: 'published', tags: ['urlton'],
     });
-    if (!placed.ok && placed.status !== 409) throw new Error('Post creation failed: ' + (await placed.text()));
+    if (!placed.ok) throw new Error('Post creation failed: ' + (await placed.text()));
     const post = await api('/api/posts', {
       title: 'Atlas url probe', slug: 'atlas-url-probe', content: 'Body.', excerpt: 'Card.',
       status: 'published', tags: ['atlas-url'],
     });
-    if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + (await post.text()));
+    if (!post.ok) throw new Error('Post creation failed: ' + (await post.text()));
     // Year tags exist before any page asks for the timeline.
     for (const y of ['2025', '2026']) {
       const tag = await api('/api/tags', { name: y, slug: y, kind: 'year' });
-      if (!tag.ok && tag.status !== 409) throw new Error('Tag creation failed: ' + (await tag.text()));
+      if (!tag.ok) throw new Error('Tag creation failed: ' + (await tag.text()));
       const post = await api('/api/posts', {
         title: 'Year probe ' + y, slug: 'year-probe-' + y, content: 'Body.', excerpt: 'Card.',
         status: 'published', published_at: y + '-06-01T12:00:00Z', tags: [y],
       });
-      if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + (await post.text()));
+      if (!post.ok) throw new Error('Post creation failed: ' + (await post.text()));
     }
   });
 

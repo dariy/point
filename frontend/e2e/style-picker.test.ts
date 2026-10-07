@@ -21,10 +21,10 @@ describe('Style picker', () => {
     });
 
   before(async () => {
-    // Another e2e file may have run setup already (409).
-    await api('/api/setup', {
+    const setup = await api('/api/setup', {
       name: PW, blog_title: 'Style Blog', author_name: 'Style User', email: 'style@example.com',
-    }).catch(() => {});
+    });
+    if (!setup.ok) throw new Error('Setup failed: ' + setup.status);
     const res = await api('/api/auth/login', { username: 'the_owner', name: PW });
     if (!res.ok) throw new Error('Login failed: ' + res.status);
     const match = (res.headers.get('set-cookie') || '').match(/session=([^;]+)/);
@@ -34,7 +34,7 @@ describe('Style picker', () => {
       title: 'Style picker probe', slug: 'style-picker-probe',
       content: 'Body text.', excerpt: 'Card text.', status: 'published',
     });
-    if (!post.ok && post.status !== 409) throw new Error('Post creation failed: ' + await post.text());
+    if (!post.ok) throw new Error('Post creation failed: ' + await post.text());
 
     browser = await chromium.launch();
     const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
@@ -44,8 +44,6 @@ describe('Style picker', () => {
   });
 
   after(async () => {
-    // The other e2e files expect the stock look.
-    if (cookie) await api('/api/themes/active', { name: 'default' }, 'PUT');
     await browser?.close();
   });
 
