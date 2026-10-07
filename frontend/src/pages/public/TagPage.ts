@@ -356,7 +356,11 @@ export default class TagPage extends Component<PageProps> {
     // the grid view has pages, so the post/loading/error views show none.
     setPagination(null);
     document.body.classList.remove("immersive-layout", "ui-hidden", "immersive-overlay-sheet");
-    this._pager.disarm();
+    // Post mode is the same page, so no unmount removes the atlas layout. A kept
+    // layout keeps body[data-atlas-layer], and CSS then puts the post in the list
+    // panel. Remove it here; the next grid view mounts it again from the URL.
+    if (this._isPostView()) this._pager.destroy();
+    else this._pager.disarm();
     // A grid view means no post is open from the Atlas any more: drop its marker.
     if (!this._isPostView()) clearAtlasOpen();
     const settings = getSettings() || {};

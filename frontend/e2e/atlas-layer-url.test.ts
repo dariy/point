@@ -98,15 +98,23 @@ describe('Atlas layer URL state', () => {
     });
   }
 
-  it('closing a post opened from mapList returns to the same state', async () => {
-    await page.goto(BASE + '/tags/atlas-url?view=split');
-    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
-    await page.locator('#grid-mount .post-card').first().click();
-    await page.waitForFunction(() => location.search.includes('slug=') || location.pathname.startsWith('/posts/'));
-    await page.goBack();
-    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
-    assert.match(await search(), /view=split/);
-  });
+  // Map only hides the cards, so a card click exists only in list and mapList.
+  for (const [name, value] of [['list', 'list'], ['mapList', 'split']] as const) {
+    it(`a post opened from ${name} fills the screen, and Back returns to ${name}`, async () => {
+      await page.goto(BASE + `/tags/atlas-url?view=${value}`);
+      await page.waitForFunction((n) => document.body.dataset.atlasLayer === n, name);
+      await page.locator('#grid-mount .post-card').first().click();
+      await page.waitForFunction(() => location.search.includes('slug='));
+      await page.locator('#content-mount').waitFor({ state: 'attached' });
+      // The post view on the tag page is the same page: the atlas layout must go, or CSS puts the post in the list panel.
+      await page.waitForFunction(() => !document.querySelector('body > .atlas-layer-map'));
+      assert.notEqual(await state(), 'mapList');
+      assert.notEqual(await state(), 'map');
+      await page.goBack();
+      await page.waitForFunction((n) => document.body.dataset.atlasLayer === n, name);
+      assert.match(await search(), new RegExp(`view=${value}`));
+    });
+  }
 
   const cards = () => page.locator('#grid-mount .post-card').count();
 
