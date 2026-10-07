@@ -25,7 +25,23 @@ type Theme struct {
 	PreviewText    string `json:"preview_text,omitempty"`
 	PreviewBorder  string `json:"preview_border,omitempty"`
 	HasDarkMode    bool   `json:"has_dark_mode"`
-	Path           string `json:"-"`
+	// Preset is set when the theme is one of the onboarding style presets
+	// (`/* preset: "..." */` metadata). Nil for a plain palette theme.
+	Preset *ThemePreset `json:"preset,omitempty"`
+	Path   string       `json:"-"`
+}
+
+// ThemePreset is a style preset's picker metadata. The four dimensions name
+// the layout (grid type and density), typography (font pairing), palette and
+// header style that the theme CSS sets, so presets can be compared.
+type ThemePreset struct {
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	PreviewImage string `json:"preview_image"`
+	Layout       string `json:"layout"`
+	Typography   string `json:"typography"`
+	Palette      string `json:"palette"`
+	Header       string `json:"header"`
 }
 
 type ThemeService struct {
@@ -47,6 +63,10 @@ var (
 	metaDescRe      = regexp.MustCompile(`/\*\s*description:\s*"([^"]+)"\s*\*/`)
 	metaColorRe     = regexp.MustCompile(`/\*\s*preview-color:\s*"([^"]+)"\s*\*/`)
 	themeNameSafeRe = regexp.MustCompile(`^[a-z0-9_-]+$`)
+	// Preset metadata, e.g. /* preset-layout: "card-grid-dense" */.
+	metaPresetRe = regexp.MustCompile(`/\*\s*(preset(?:-[a-z]+)?|preview-image):\s*"([^"]+)"\s*\*/`)
+	// A preview image must be a same-origin asset path.
+	presetImageRe = regexp.MustCompile(`^/assets/images/presets/[a-z0-9_-]+\.(svg|png|jpg|webp)$`)
 
 	// Light-mode :root block and the custom-property declarations inside it.
 	rootBlockRe = regexp.MustCompile(`(?s):root\s*\{(.*?)\}`)
@@ -191,7 +211,35 @@ func (s *ThemeService) ReadAndValidateTheme(path string, name string) (Theme, er
 		theme.PreviewColor = vars["--color-primary"]
 	}
 
+	theme.Preset = parsePreset(content)
+
 	return theme, nil
+}
+
+// parsePreset reads the preset metadata comments. It returns nil when the
+// theme has no `preset` name.
+func parsePreset(content string) *ThemePreset {
+	meta := make(map[string]string)
+	for _, m := range metaPresetRe.FindAllStringSubmatch(content, -1) {
+		if _, ok := meta[m[1]]; !ok {
+			meta[m[1]] = m[2]
+		}
+	}
+	if meta["preset"] == "" {
+		return nil
+	}
+	p := &ThemePreset{
+		Name:        meta["preset"],
+		Description: meta["preset-description"],
+		Layout:      meta["preset-layout"],
+		Typography:  meta["preset-typography"],
+		Palette:     meta["preset-palette"],
+		Header:      meta["preset-header"],
+	}
+	if presetImageRe.MatchString(meta["preview-image"]) {
+		p.PreviewImage = meta["preview-image"]
+	}
+	return p
 }
 
 // pathWithinDir resolves symlinks and verifies the path stays inside dir.

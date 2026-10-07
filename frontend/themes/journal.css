@@ -1,0 +1,99 @@
+/* theme-title: "Journal" */
+/* description: "A narrow column for stories, with text and photos read in turn." */
+/* preview-color: "#3f6b4a" */
+/* preset: "Journal" */
+/* preset-description: "A narrow column for stories, with text and photos read in turn." */
+/* preset-layout: "single-column-narrow" */
+/* preset-typography: "charter-serif-sans" */
+/* preset-palette: "linen-moss" */
+/* preset-header: "left-subtitle" */
+/* preview-image: "/assets/images/presets/journal.svg" */
+
+/*
+ * Journal: a narrow reading column. Body text is a book serif and headings
+ * are a plain sans, so a long story reads easily between the photos.
+ */
+
+html[data-section="public"] .posts-grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 42rem;
+  width: 100%;
+  margin-inline: auto;
+  gap: var(--spacing-2xl);
+}
+
+html[data-section="public"] .post-card-excerpt,
+html[data-section="public"] .post-card-text-preview {
+  font-size: var(--font-size-lg);
+  line-height: 1.7;
+}
+
+.site-title,
+.post-card-title,
+h1, h2, h3 {
+  font-family: var(--font-heading);
+}
+
+html[data-section="public"] .site-header-group {
+  border-bottom: 1px solid var(--color-primary);
+}
+
+:root {
+  --bg-primary: #f7f5ef;
+  --bg-secondary: #efece3;
+  --bg-tertiary: #e4e0d4;
+  --bg-elevated: #fdfcf8;
+  --surface-card: #fdfcf8;
+  --surface-input: #fdfcf8;
+  --surface-hover: #efece3;
+  --text-primary: #22261f;
+  --text-secondary: #4b5145;
+  --text-tertiary: #6a7064;
+  --text-muted: #959a8e;
+  --text-inverted: #fdfcf8;
+  --color-primary: #3f6b4a;
+  --color-primary-hover: #30543a;
+  --border-primary: #dcd8cb;
+  --border-secondary: #c6c1b1;
+  --pt-colors-sidebar-bg: #22261f;
+  --pt-colors-sidebar-text: #959a8e;
+  --pt-colors-sidebar-text-hover: #fdfcf8;
+  --pt-colors-sidebar-active-bg: #30352c;
+  --pt-colors-sidebar-border: #3d4338;
+  --footer-link: #3f6b4a;
+  --color-accent: #3f6b4a;
+  --header-bg: rgba(247, 245, 239, 0.92);
+  --footer-bg: rgba(247, 245, 239, 0.92);
+  --font-family: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+  --font-heading: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --border-radius: 6px;
+  --border-radius-lg: 10px;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #171a16;
+  --bg-secondary: #1f231e;
+  --bg-tertiary: #292e27;
+  --bg-elevated: #1f231e;
+  --surface-card: #1f231e;
+  --surface-input: #1f231e;
+  --surface-hover: #292e27;
+  --text-primary: #e8ebe3;
+  --text-secondary: #c2c7bb;
+  --text-tertiary: #9aa093;
+  --text-muted: #70766a;
+  --text-inverted: #171a16;
+  --color-primary: #8fbf98;
+  --color-primary-hover: #a8d2b0;
+  --border-primary: #2b3029;
+  --border-secondary: #3c4239;
+  --pt-colors-sidebar-bg: #101210;
+  --pt-colors-sidebar-text: #9aa093;
+  --pt-colors-sidebar-text-hover: #e8ebe3;
+  --pt-colors-sidebar-active-bg: #292e27;
+  --pt-colors-sidebar-border: #2b3029;
+  --footer-link: #8fbf98;
+  --color-accent: #8fbf98;
+  --header-bg: rgba(23, 26, 22, 0.92);
+  --footer-bg: rgba(23, 26, 22, 0.92);
+}

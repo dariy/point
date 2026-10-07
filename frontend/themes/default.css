@@ -1,6 +1,13 @@
 /* theme-title: "Default" */
 /* description: "The standard Point experience. Clean, modern, and reliable." */
 /* preview-color: "#2563eb" */
+/* preset: "Classic" */
+/* preset-description: "The standard Point look: a regular card grid, clean sans type and a translucent header bar." */
+/* preset-layout: "card-grid-regular" */
+/* preset-typography: "inter-sans" */
+/* preset-palette: "slate-blue" */
+/* preset-header: "bar" */
+/* preview-image: "/assets/images/presets/default.svg" */
 
 :root {
   --bg-primary: #ffffff;
