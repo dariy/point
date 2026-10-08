@@ -13,7 +13,7 @@ import { listTags } from '../../api/tags.ts';
 import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { hideFlyout } from '../../utils/tagFlyout.ts';
-import { HeaderFold } from '../../utils/headerFold.ts';
+import { FOLD_ORDER, HeaderFold } from '../../utils/headerFold.ts';
 import type { Slot, StoreSettings } from '../../utils/helpers.ts';
 import type { NavTagNode } from '../../api/nav.ts';
 import type { Post } from '../../api/posts.ts';
@@ -487,14 +487,21 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     };
 
     // 10 — ornament: the subtitle goes first.
-    fold.register(10, {
+    fold.register(FOLD_ORDER.subtitle, {
       reset: () => group.classList.remove('fold-title'),
       ops: () => [() => group.classList.add('fold-title')]
     });
 
+    // 32 — the timeline takes its short form (active pill + year spinner)
+    // before any crumb folds.
+    fold.register(FOLD_ORDER.timeline, {
+      reset: () => group.classList.remove('fold-timeline'),
+      ops: () => [() => group.classList.add('fold-timeline')]
+    });
+
     // 35 — history (after nav links fold at 30): facet pairs, then ancestor tag pairs, left to right. The
     // blog-title (site) pair is spared here; it folds at 50.
-    fold.register(35, {
+    fold.register(FOLD_ORDER.ancestorCrumbs, {
       reset: () => {
         group.querySelectorAll('.crumb-pair.folded').forEach(p => {
           p.classList.remove('folded', 'show-ellipsis');
@@ -515,7 +522,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     });
 
     // 40 — the nav zone collapses into the burger.
-    fold.register(40, {
+    fold.register(FOLD_ORDER.nav, {
       // Don't close an open burger here: every relayout runs reset, and opening
       // the burger dropdown can itself trigger one (a scrollbar appearing shifts
       // the observed width), which would slam the menu shut the instant it
@@ -527,7 +534,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
 
     // 50 — brand: the blog-title crumb folds, leaving the logo as the brand.
     // (Unfolding is covered by stage 35's reset, which unfolds every pair.)
-    fold.register(50, {
+    fold.register(FOLD_ORDER.brand, {
       ops: () => {
         const sitePair = group.querySelector('#site-crumb-pair');
         return sitePair ? [() => {
@@ -538,16 +545,11 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     });
 
     // 60 — last resort: ellipsize the current crumb (click opens the full path).
-    fold.register(60, {
+    fold.register(FOLD_ORDER.currentCrumb, {
       reset: () => group.classList.remove('fold-current'),
       ops: () => [() => group.classList.add('fold-current')]
     });
 
-    // 70 — the timeline is the last to shrink: only its active pill stays.
-    fold.register(70, {
-      reset: () => group.classList.remove('fold-timeline'),
-      ops: () => [() => group.classList.add('fold-timeline')]
-    });
   }
 
   /**

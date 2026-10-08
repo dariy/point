@@ -16,21 +16,35 @@
  * Canonical order slots (leave gaps for future stages):
  *   10  subtitle / ornament        (PublicHeader)
  *   30  nav links → More ▾         (nav-menu plugin)
+ *   32  timeline → short form      (PublicHeader: active pill + year spinner)
  *   35  ancestor crumbs → "…"      (PublicHeader, over Breadcrumbs' DOM)
  *   40  nav zone → burger          (PublicHeader)
  *   50  brand text → logo only     (PublicHeader, site crumb pair)
  *   60  current crumb → ellipsis   (PublicHeader)
- *   70  timeline → active pill only (PublicHeader)
  *
- * Invariants encoded by that order: the current page's name is the last crumb
- * to degrade, the timeline's active year is the last thing to shrink, and every nav destination stays one tap away (inline → More →
- * burger).
+ * Invariants encoded by that order (see FOLD_ORDER):
+ *   - The timeline takes its short form before any crumb folds. The short
+ *     form keeps every year one tap away (the spinner); a folded crumb does not.
+ *   - The current crumb (the leaf) is the last crumb to fold: the ancestors
+ *     and the site title fold before it.
+ *   - Every nav destination stays one tap away (inline → More → burger).
  *
  * Layout is re-measured on container resize (ResizeObserver) and on any
  * explicit `relayout()` call — plugins call it after they render content that
  * changes the row's width (e.g. nav links arriving from the store). Late data
  * therefore triggers a re-flow instead of being silently invisible.
  */
+/** Fold order slots of the core providers. Lower orders fold first. */
+export const FOLD_ORDER = {
+  subtitle: 10,
+  navLinks: 30,
+  timeline: 32,
+  ancestorCrumbs: 35,
+  nav: 40,
+  brand: 50,
+  currentCrumb: 60,
+} as const;
+
 interface FoldProvider {
   order: number;
   reset?: () => void;

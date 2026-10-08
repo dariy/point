@@ -14,7 +14,7 @@
  */
 
 import { getTagsGraph, getTagCloud } from "../../api/pages.ts";
-import { getUser } from "../../store.ts";
+import { getUser, onRoute } from "../../store.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
 import { html, navigate, raw, safeUrl } from "../../utils/helpers.ts";
 import { tagKind } from "../../utils/tagLinks.ts";
@@ -216,6 +216,10 @@ export class AtlasPlaces {
   _hint: HTMLElement | null = null;
   _legend: HTMLElement | null = null;
   _unmounted = false;
+  /** The year scope `_data` was fetched for ("" = all years). */
+  _scopeKey = "";
+  _scopeReq = 0;
+  _unwatchRoute: Function | null = null;
 
   constructor({ L, map, root, isAlive, onSelect }: AtlasPlacesOptions) {
     this._onSelect = onSelect;
@@ -269,7 +273,11 @@ export class AtlasPlaces {
       this._clearSelection();
     });
 
+    // The timeline changes the year scope without a reload: draw it again.
+    this._unwatchRoute = onRoute(() => void this._onScopeChange());
+
     let data;
+    this._scopeKey = this._currentScopeKey();
     try {
       data = await getTagsGraph({ posts: 0, ...this._scopeParams() });
     } catch {
@@ -280,6 +288,28 @@ export class AtlasPlaces {
     this._buildIndexes(data);
     await this._drawLayers(L);
     this._restoreFromUrl();
+  }
+
+  _currentScopeKey(): string {
+    const years = ViewContext.current().years;
+    return years ? years.join("-") : "";
+  }
+
+  /** Fetch the places for a new year scope and redraw them. */
+  async _onScopeChange(): Promise<void> {
+    const key = this._currentScopeKey();
+    if (this._dead || key === this._scopeKey) return;
+    this._scopeKey = key;
+    const req = ++this._scopeReq;
+    let data;
+    try {
+      data = await getTagsGraph({ posts: 0, ...this._scopeParams() });
+    } catch {
+      return;
+    }
+    if (this._dead || req !== this._scopeReq) return;
+    this._data = data;
+    await this._redrawPlaces();
   }
 
   /** A load of `/tags/<slug>` reselects that place. A tag that is not on the map is ignored. */
@@ -365,6 +395,8 @@ export class AtlasPlaces {
   /** Remove the layers and the overlays. */
   destroy(): void {
     this._unmounted = true;
+    this._unwatchRoute?.();
+    this._unwatchRoute = null;
     this._map.off("zoomend viewreset", this._reposition);
     this._hint?.remove();
     this._legend?.remove();
