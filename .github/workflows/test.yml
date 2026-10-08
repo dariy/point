@@ -325,6 +325,23 @@ jobs:
           # it must parse and its --help must succeed.
           bash uninstall.sh --help >/dev/null
 
+      # A relative install or data directory used to reach .env as-is.
+      # Compose reads `test/data` as a named volume and fails, and resolves
+      # `./x` from the install directory, not from the caller's directory.
+      - name: Install with relative directories
+        working-directory: quickstart
+        run: |
+          set -euo pipefail
+          POINT_INSTALL_DIR=rel POINT_DATA_DIR=./rel-data \
+            bash install.sh --method=docker --auto --test
+          grep -q "^DATA_PATH=$PWD/rel-data\$" rel/.env
+          curl -fsS http://localhost:8001/health | grep -q '"status":"ok"'
+
+      - name: Relative install logs on failure
+        if: failure()
+        working-directory: quickstart/rel
+        run: docker compose logs || true
+
   # Instructions rot silently. AGENTS.md used to tell agents to ALWAYS build the
   # tests with -tags=integration and warned that a bare `go test ./...` skipped
   # them — both false for as long as the `//go:build !unit` convention has been
