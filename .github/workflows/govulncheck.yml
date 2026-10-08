@@ -1,0 +1,46 @@
+name: govulncheck
+
+# One govulncheck job for every pipeline. test.yml calls it on each develop
+# push and PR, release.yml calls it before a build, and the schedule runs it
+# every day on develop and main: new advisories arrive without a push, so a
+# scan that runs only on push finds them first in the release.
+#
+# The Go version is the one in api/go.mod, with no check-latest. govulncheck
+# reports stdlib vulns for the toolchain it runs on, and the release binaries
+# build with the api/go.mod version, so a scan on a newer patch would pass
+# here and fail in the release.
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Scheduled runs use the default branch, so name both branches here.
+        # An empty ref checks out the commit that started the run.
+        ref: ${{ github.event_name == 'schedule' && fromJSON('["develop", "main"]') || fromJSON('[""]') }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+      - name: Run govulncheck
+        run: ./scripts/check.sh --only govulncheck
