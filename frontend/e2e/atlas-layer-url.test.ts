@@ -206,6 +206,36 @@ describe('Atlas layer URL state', () => {
     assert.equal(await page.evaluate(() => (window as unknown as { __kept?: boolean }).__kept), true);
   });
 
+  it('a late reply for the year that Back left does not repaint the year Back returned to', async () => {
+    // The phone-width refit asks for the 2026 page again. Hold that reply until Back has returned to 2025.
+    const late = /\/api\/pages\/tags\/2026\?.*per_page=1(&|$)/;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    await page.route(late, async (route) => { await held; await route.continue(); });
+    try {
+      await page.goto(BASE + '/tags/2025?view=list');
+      await page.locator('.fold-timeline .timeline-pill-btn.is-active[data-year="2025"]').waitFor();
+      await page.locator('.timeline-pill-btn.is-active').click();
+      const next = page.locator('.timeline-spinner-year[data-year="2026"]');
+      await next.click();
+      await next.click();
+      await page.waitForFunction(() => document.querySelector('#grid-mount .post-card')?.textContent?.includes('Year probe 2026'));
+      const reply = page.waitForResponse(late);
+      await page.goBack();
+      await page.waitForFunction(() => document.querySelector('#grid-mount .post-card')?.textContent?.includes('Year probe 2025'));
+      release();
+      await reply;
+      // The late reply has arrived: give it the turns it needs to repaint.
+      await page.waitForTimeout(500);
+      assert.equal(await page.evaluate(() => location.pathname), '/tags/2025');
+      assert.equal(await page.locator('.timeline-pill-btn.is-active').textContent(), '2025');
+      assert.match(await page.locator('#grid-mount .post-card').first().innerText(), /Year probe 2025/);
+    } finally {
+      release();
+      await page.unroute(late);
+    }
+  });
+
   it('a double click toggles the timeline; a year-tag page collapses to home', async () => {
     await page.goto(BASE + '/?view=list');
     const all = page.locator('.timeline-pill-btn[data-action="expand"]');

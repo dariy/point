@@ -63,6 +63,12 @@ export default class TagPage extends Component<PageProps> {
   _resizeGate: ReturnType<typeof createResizeGate>;
   _pager: GridPager;
   _loadedVc: ViewContext | undefined;
+  /**
+   * Counts _load calls. A response is applied only if no _load started after
+   * its request: Back during a refit must not let the old tag's late reply
+   * repaint the grid and the timeline over the page it went back to.
+   */
+  _loadSeq = 0;
   _refitRefresh = false;
   _loadedPerPage = 0;
   _fitOwned = false;
@@ -151,6 +157,7 @@ export default class TagPage extends Component<PageProps> {
 
   async _refreshPostContent() {
     const vc = ViewContext.current();
+    const seq = this._loadSeq;
     const { slug } = this.props.params || {};
     if (!slug) {
       this._load();
@@ -183,15 +190,16 @@ export default class TagPage extends Component<PageProps> {
     try {
       data = await getTagPage(slug, this._buildParams(vc));
     } catch (e) {
+      if (seq !== this._loadSeq) return;
       const err = e as { status?: number; message?: string };
       const msg =
         err.status === 404 ? "Not found." : err.message || "Failed to load.";
       this.setState({ loading: false, data: null, post: null, error: msg });
       return;
     }
-    if (this._unmounted) return;
+    if (this._unmounted || seq !== this._loadSeq) return;
     await fadeOut;
-    if (this._unmounted) return;
+    if (this._unmounted || seq !== this._loadSeq) return;
     this.state.data = data;
     this.state.error = null;
     this._loadedVc = vc;
@@ -206,6 +214,7 @@ export default class TagPage extends Component<PageProps> {
     if (refit && this._applyRefit()) return;
     this._clearPostContent();
     await this._mountPostContent();
+    if (seq !== this._loadSeq) return;
     // A year tag sets the scope; any other tag keeps the timeline as it is.
     const tagYear = yearOfTag(data.tag);
     if (vc.years) this._timeline?.setScope({ from: vc.years[0], to: vc.years[1] });
@@ -711,6 +720,7 @@ export default class TagPage extends Component<PageProps> {
 
   async _load() {
     const vc = ViewContext.current();
+    const seq = ++this._loadSeq;
     this._loadedVc = vc;
     // A full render rebuilds the grid anyway; don't leave the flag set for
     // whatever refresh comes next.
@@ -724,9 +734,11 @@ export default class TagPage extends Component<PageProps> {
 
     try {
       const data = await getTagPage(slug, this._buildParams(vc));
+      if (seq !== this._loadSeq) return;
 
       if (vc.postSlug) {
         const post = await getPostBySlug(vc.postSlug);
+        if (seq !== this._loadSeq) return;
         setPageTitle(`${post.title} — ${data.tag?.name || slug}`);
         setCanonical(`${window.location.origin}/posts/${post.slug}`);
 
@@ -734,6 +746,7 @@ export default class TagPage extends Component<PageProps> {
         // just the loaded grid page. Optional — fall back to no cross-post nav.
         let nav = null;
         try { nav = await getPostNavigation(post.id, slug); } catch { /* optional */ }
+        if (seq !== this._loadSeq) return;
 
         // The slide hash (#1, #2, …) encodes forced immersive mode + start index.
         const { startIndex, forceImmersive } = decodeImmersiveHash(window.location.hash);
@@ -757,6 +770,7 @@ export default class TagPage extends Component<PageProps> {
         this.setState({ loading: false, data, post: null, error: null });
       }
     } catch (e) {
+      if (seq !== this._loadSeq) return;
       const err = e as { status?: number; message?: string };
       const msg =
         err.status === 404 ? "Not found." : err.message || "Failed to load.";
