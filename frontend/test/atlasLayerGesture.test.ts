@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyRelease, recentVelocity, snapState, lockAxis, stateAfter, stateAfterKey, stateLabel, startsOnControl } from '../src/plugins/tags-atlas/atlasLayerGesture.ts';
+import { classifyRelease, pullOpens, recentVelocity, snapState, lockAxis, stateAfter, stateAfterKey, stateLabel, startsOnControl } from '../src/plugins/tags-atlas/atlasLayerGesture.ts';
 
 describe('lockAxis', () => {
   it('stays open under 8px', () => assert.equal(lockAxis(5, 7), null));
@@ -56,6 +56,35 @@ describe('startsOnControl', () => {
     const n = mk();
     assert.equal(startsOnControl(n.pin, n, 'mapList'), false);
   });
+  // A footer node is a control when `closest` finds a button, link, input or paginator.
+  const mkFooter = () => {
+    const bg = Object.assign(new (globalThis as any).Node(), { closest: () => null });
+    const btn = Object.assign(new (globalThis as any).Node(), { closest: (s: string) => (s.includes('button') ? btn : null) });
+    const footer = new (globalThis as any).Node([bg, btn]);
+    return { ...mk(), bg, btn, footer };
+  };
+  it('the footer background takes a start in mapList and map', () => {
+    const n = mkFooter();
+    assert.equal(startsOnControl(n.bg, n, 'mapList'), true);
+    assert.equal(startsOnControl(n.bg, n, 'map'), true);
+  });
+  it('the footer does not take a start in list', () => {
+    const n = mkFooter();
+    assert.equal(startsOnControl(n.bg, n, 'list'), false);
+  });
+  it('a footer control never does', () => {
+    const n = mkFooter();
+    assert.equal(startsOnControl(n.btn, n, 'mapList'), false);
+    assert.equal(startsOnControl(n.btn, n, 'map'), false);
+  });
+});
+
+describe('pullOpens', () => {
+  it('a pull down at scroll top opens', () => assert.equal(pullOpens(0, 2, 12), true));
+  it('not after a scroll', () => assert.equal(pullOpens(200, 2, 12), false));
+  it('not going up', () => assert.equal(pullOpens(0, 2, -12), false));
+  it('not before the axis locks', () => assert.equal(pullOpens(0, 1, 5), false));
+  it('not on a horizontal move', () => assert.equal(pullOpens(0, 20, 9), false));
 });
 
 describe('stateAfterKey', () => {
