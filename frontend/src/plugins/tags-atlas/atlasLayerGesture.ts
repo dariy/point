@@ -229,7 +229,6 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
 
   const onDown = (e: PointerEvent) => {
     if (start || snapTimer !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    if (e.target instanceof globalThis.Element && e.target.closest('.atlas-layer-handle__btn')) return;
     if (!startsOnControl(e.target, els(), getAtlasLayerState())) return;
     start = {
       id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp,
@@ -238,7 +237,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
       from: getAtlasLayerState(),
     };
     axis = null;
-    // A mouse leaves the 20px handle on the first move, before the axis locks.
+    // A mouse leaves the 30px handle on the first move, before the axis locks.
     // Capture at once so the drag keeps its events.
     if (start.onHandle) {
       try { (e.target as Element).setPointerCapture(e.pointerId); } catch { /* target gone */ }

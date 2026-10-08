@@ -74,7 +74,7 @@ describe('Atlas layer', () => {
         assert.ok(await handle.getAttribute('aria-label'));
         assert.equal(await handle.getAttribute('aria-expanded'), 'false');
         const box = await handle.boundingBox();
-        assert.ok(box && box.height <= 24, `handle height ${box?.height}`);
+        assert.ok(box && box.height <= 34, `handle height ${box?.height}`);
         // It sits directly before the grid, so it is at the top of the list.
         const before = await page.evaluate(
           () => document.querySelector('.atlas-layer-handle')?.nextElementSibling?.id,
@@ -190,16 +190,6 @@ describe('Atlas layer', () => {
         assert.ok(boxes.length >= 2, `${boxes.length} cards show`);
         const gap = 390 - boxes[boxes.length - 1].right;
         assert.ok(gap >= 0 && gap < 16, `right gap ${gap}`);
-      });
-
-      it('the handle buttons show an icon, not a glyph', async () => {
-        await open(390, 844, 'split');
-        for (const label of ['Maximize map', 'Maximize list']) {
-          const btn = page.locator(`.atlas-layer-handle__btn[aria-label="${label}"]`);
-          assert.equal(await btn.locator('svg').count(), 1, label);
-          const b = (await btn.boundingBox())!;
-          assert.ok(b.width >= 44 && b.height >= 44, `${label} target ${b.width}x${b.height}`);
-        }
       });
 
       it('at 1440x900 the page arrows hide in mapList and map', async () => {

@@ -457,26 +457,3 @@ export const SLIDERS_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill
   <line x1="17" y1="16" x2="23" y2="16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
 </svg>`;
 
-
-/** A folded map: the atlas layer button that gives the map the whole height. */
-export const MAP_FOLD_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M9 4 3 6.5v14L9 18l6 2.5 6-2.5V4l-6 2.5L9 4z"/>
-  <path d="M9 4v14M15 6.5v14"/>
-</svg>`;
-
-/** Four cards: the atlas layer button that gives the post list the whole height. */
-export const GRID_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <rect x="3" y="3" width="7" height="7" rx="1"/>
-  <rect x="14" y="3" width="7" height="7" rx="1"/>
-  <rect x="3" y="14" width="7" height="7" rx="1"/>
-  <rect x="14" y="14" width="7" height="7" rx="1"/>
-</svg>`;
-
-/** A frame cut in two: the atlas layer button that restores map and list. */
-export const SPLIT_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <rect x="3" y="3" width="18" height="18" rx="2"/>
-  <path d="M3 14h18"/>
-</svg>`;
