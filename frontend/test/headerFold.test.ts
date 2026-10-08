@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 
-import { HeaderFold } from '../src/utils/headerFold.ts';
+import { FOLD_ORDER, HeaderFold } from '../src/utils/headerFold.ts';
 
 describe('HeaderFold while frozen', () => {
   const g = globalThis as unknown as { document?: unknown; ResizeObserver?: unknown };
@@ -47,5 +47,19 @@ describe('HeaderFold while frozen', () => {
     layer = 'list';
     h.fold.relayout();
     assert.equal(h.folds(), 0);
+  });
+});
+
+describe('HeaderFold order', () => {
+  test('the timeline takes its short form before any crumb folds', () => {
+    for (const crumb of [FOLD_ORDER.ancestorCrumbs, FOLD_ORDER.brand, FOLD_ORDER.currentCrumb]) {
+      assert.ok(FOLD_ORDER.timeline < crumb);
+    }
+  });
+
+  test('the current crumb is the last crumb to fold', () => {
+    assert.ok(FOLD_ORDER.currentCrumb > FOLD_ORDER.ancestorCrumbs);
+    assert.ok(FOLD_ORDER.currentCrumb > FOLD_ORDER.brand);
+    assert.equal(Math.max(...Object.values(FOLD_ORDER)), FOLD_ORDER.currentCrumb);
   });
 });

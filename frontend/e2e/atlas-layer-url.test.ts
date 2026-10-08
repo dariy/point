@@ -188,9 +188,13 @@ describe('Atlas layer URL state', () => {
 
   it('a year pill on a year tag page opens that year without a reload, and Back restores it', async () => {
     await page.goto(BASE + '/tags/2025?view=list');
-    await page.locator('.timeline-pill-btn[data-year="2026"]').waitFor();
+    // A phone width gives the short form: one pill, and its spinner picks the year.
+    await page.locator('.fold-timeline .timeline-pill-btn.is-active[data-year="2025"]').waitFor();
     await page.evaluate(() => { (window as unknown as { __kept?: boolean }).__kept = true; });
-    await page.locator('.timeline-pill-btn[data-year="2026"]').click();
+    await page.locator('.timeline-pill-btn.is-active').click();
+    const next = page.locator('.timeline-spinner-year[data-year="2026"]');
+    await next.click();
+    await next.click();
     await page.waitForFunction(() => location.pathname === '/tags/2026');
     await page.waitForFunction(() => document.querySelector('.timeline-pill-btn.is-active')?.textContent === '2026');
     assert.match(await page.locator('#header-mount').innerText(), /2026/);

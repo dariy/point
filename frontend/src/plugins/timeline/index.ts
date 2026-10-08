@@ -244,7 +244,7 @@ export class Timeline extends Component<TimelineProps> {
     document.removeEventListener("pointerdown", this._onOutsideDown, true);
   }
 
-  /** The short form: the header fold shows only the active pill (fold 70). */
+  /** The short form: the header fold shows only the active pill (FOLD_ORDER.timeline). */
   _isShort(): boolean {
     return !!this.container.closest?.(".fold-timeline");
   }
