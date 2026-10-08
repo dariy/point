@@ -305,6 +305,12 @@ body.grid-zoomable .footer-zoom {
     z-index: 106;
 }
 
+/* A vertical swipe on the footer changes the layer state (atlasLayerGesture.ts),
+   so the browser must not take it as a pan. */
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"]) #footer-mount {
+    touch-action: none;
+}
+
 :is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer .footer-content {
     display: flex;
     flex-direction: row;

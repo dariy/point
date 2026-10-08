@@ -23,12 +23,21 @@ The map shows only the posts of the current list (same filter as the cards). It 
 
 ## Gestures
 
-Only the handle and the card row take a gesture that changes the state. A gesture that
-starts inside the map goes to the map (pan, pinch, wheel zoom).
+These controls take a gesture that changes the state: the handle in every state, the card
+row in `mapList`, the footer background in `mapList` and `map`, and the post list in
+`list`. A gesture that starts inside the map goes to the map (pan, pinch, wheel zoom).
 
-- **Swipe or mouse drag** on the handle or the card row: down goes one state toward
-  `map`, up goes one state back. The threshold is 40px or 0.5 px/ms. A shorter drag
-  snaps back. A horizontal move scrolls the cards.
+- **Swipe or mouse drag** on the handle or the card row: the handle follows the finger.
+  On release it goes to the nearest state, or one state in the direction of a flick
+  (0.5 px/ms or faster). A horizontal move scrolls the cards.
+- **Swipe** on the footer in `mapList` and `map`: the same as on the handle. A swipe
+  that starts on a button, a link, an input or the paginator does not change the state,
+  and a tap on one of them does only its own action.
+- **Pull down** on the post list in `list`: anywhere on the post list, when the page is
+  at scroll top, the handle follows the finger and the map opens. When the page is
+  scrolled down, the move scrolls the page as usual. A pull uses touch events. The page
+  root has `overscroll-behavior-y: contain`, so the browser pull-to-refresh does not
+  start on a list page.
 - **Tap or click** on the handle: `list` → `mapList` → `map` → `list`.
 - **Wheel** over the handle: one step for each gesture.
 - **Keyboard** on the handle: Enter or Space cycles, ArrowDown goes forward, ArrowUp

@@ -233,6 +233,64 @@ describe('Atlas layer gestures', () => {
     assert.equal(await state(), 'mapList');
   });
 
+  it('a pull down on a card at scroll top opens the map', async () => {
+    await page.goto(BASE + '/tags/atlas-gesture');
+    await page.locator('.atlas-layer-handle').waitFor();
+    // The root keeps the browser pull-to-refresh off (css/public/layout.css).
+    assert.notEqual(await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY), 'auto');
+    const c = await center('#grid-mount .post-card');
+    await swipe(c.x, c.y, 0, 150);
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
+  });
+
+  it('the same pull after a scroll does not change the state', async () => {
+    await page.goto(BASE + '/tags/atlas-gesture');
+    await page.locator('.atlas-layer-handle').waitFor();
+    // One post fits the viewport: make the page tall enough to scroll 200px.
+    await page.evaluate(() => {
+      document.body.style.minHeight = '3000px';
+      window.scrollTo({ top: 200, behavior: 'instant' });
+    });
+    await page.waitForFunction(() => window.scrollY === 200);
+    const c = await center('#grid-mount .post-card');
+    await swipe(c.x, c.y, 0, 150);
+    await page.waitForTimeout(300);
+    assert.equal(await state(), 'list');
+    assert.ok(!(await page.evaluate(() => document.body.hasAttribute('data-atlas-dragging'))));
+  });
+
+  /** Centre of a point on the footer line that is not a button, link, input or paginator. */
+  const footerBackground = () => page.evaluate(() => {
+    const r = document.querySelector('#footer-mount .site-footer')!.getBoundingClientRect();
+    const y = r.top + r.height / 2;
+    for (let x = r.left + 4; x < r.right; x += 4) {
+      const el = document.elementFromPoint(x, y);
+      if (el?.closest('#footer-mount') && !el.closest('button, a, input, .pagination')) return { x, y };
+    }
+    throw new Error('no footer background');
+  });
+
+  it('a swipe up on the footer in map goes to mapList', async () => {
+    await page.goto(BASE + '/tags/atlas-gesture');
+    await page.locator('.atlas-layer-handle').waitFor();
+    await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'map'));
+    await settledBox(page, '#footer-mount .site-footer');
+    const p = await footerBackground();
+    await swipe(p.x, p.y, 0, -80);
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
+  });
+
+  it('a tap on a footer button does not change the state', async () => {
+    await page.goto(BASE + '/tags/atlas-gesture');
+    await page.locator('.atlas-layer-handle').waitFor();
+    await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
+    const b = await settledBox(page, '#footer-mount .site-footer button:visible >> nth=0');
+    await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
+    await page.waitForTimeout(300);
+    assert.equal(await state(), 'mapList');
+    assert.ok(!(await page.evaluate(() => document.body.hasAttribute('data-atlas-dragging'))));
+  });
+
   describe('desktop', () => {
     let dpage: Page;
     const dstate = () => dpage.evaluate(() => document.body.dataset.atlasLayer);

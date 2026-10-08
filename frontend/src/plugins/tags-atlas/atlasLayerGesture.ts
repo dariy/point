@@ -1,9 +1,11 @@
 /**
  * atlasLayerGesture — swipe and tap on the layer controls.
  *
- * Only the handle, and the card row while the layer is open, take a gesture.
- * The map is a separate element that has no listener here, so a gesture that
- * starts in the map goes to the map alone. The classifier functions are pure.
+ * The handle takes a gesture in every state. While the layer is open, the card
+ * row and the footer background take one too. In `list`, a pull down on the post
+ * list at scroll top opens the map. The map is a separate element that has no
+ * listener here, so a gesture that starts in the map goes to the map alone. The
+ * classifier functions are pure.
  */
 
 import { cycle, getAtlasLayerState, next, prev, setAtlasLayerState } from './atlasLayerState.ts';
@@ -77,19 +79,34 @@ export function stateAfter(state: AtlasLayerState, release: Release): AtlasLayer
   return state;
 }
 
+/** Footer elements that keep their own tap: a swipe that starts on one is not a layer gesture. */
+export const FOOTER_CONTROLS = 'button, a, input, .pagination';
+
 /**
  * True when a gesture that starts on `target` belongs to the layer controls:
- * the handle always, the card row only while the layer is open. Never the map.
+ * the handle always, the card row only in `mapList`, the footer background in
+ * `mapList` and `map`. Never the map.
  */
 export function startsOnControl(
   target: EventTarget | null,
-  els: { handle: Element; grid: Element | null; map: Element | null },
+  els: { handle: Element; grid: Element | null; map: Element | null; footer?: Element | null },
   state: AtlasLayerState,
 ): boolean {
   if (!(target instanceof globalThis.Node)) return false;
   if (els.map?.contains(target)) return false;
   if (els.handle.contains(target)) return true;
+  if (state !== 'list' && els.footer?.contains(target)) {
+    return !(target as Partial<Element>).closest?.(FOOTER_CONTROLS);
+  }
   return state === 'mapList' && !!els.grid?.contains(target);
+}
+
+/**
+ * True when a touch move on the post list in `list` opens the map: the page is
+ * at scroll top, and the move is locked to y and goes down.
+ */
+export function pullOpens(scrollY: number, dx: number, dy: number): boolean {
+  return scrollY <= 0 && lockAxis(dx, dy) === 'y' && dy > 0;
 }
 
 /** Quiet time (ms) after the last wheel event before the next wheel gesture counts. */
@@ -119,7 +136,8 @@ const px = (name: string): number => parseFloat(document.body.style.getPropertyV
 const viewportH = (): number => window.visualViewport?.height ?? window.innerHeight;
 
 /**
- * Wire swipe and tap on the handle and the card row. Returns a teardown.
+ * Wire swipe and tap on the handle, the card row and the footer, and the pull
+ * down on the post list. Returns a teardown.
  * A vertical drag moves the handle freely: `body[data-atlas-dragging]` shows the
  * map above it and the card row below it, and `--atlas-layer-list-h` (the height
  * under the map) follows the finger. On release the handle slides to the position
@@ -173,7 +191,41 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     });
   };
 
-  const els = () => ({ handle, grid: gridMount(), map: document.querySelector('body > .atlas-layer-map') });
+  const els = () => ({
+    handle, grid: gridMount(), map: document.querySelector('body > .atlas-layer-map'), footer: document.getElementById('footer-mount'),
+  });
+
+  // The free drag. The pointer path and the touch path share it: `handleY` is the
+  // handle top when the drag started, `dy` the finger movement since then.
+  const beginDrag = (handleY: number, from: AtlasLayerState) => {
+    samples = [];
+    setHandleY(handleY);
+    setDragTarget(from);
+    body.setAttribute('data-atlas-dragging', '');
+  };
+  const moveDrag = (handleY: number, from: AtlasLayerState, dy: number, clientY: number, t: number) => {
+    const { top, bottom } = bounds();
+    const y = Math.min(bottom, Math.max(top, handleY + dy));
+    setHandleY(y);
+    setDragTarget(snapState(y, from, 0, positions()));
+    samples.push({ y: clientY, t });
+    if (samples.length > 8) samples.shift();
+  };
+  const releaseDrag = (handleY: number, from: AtlasLayerState, dy: number, cancelled: boolean) => {
+    const pos = positions();
+    const { top, bottom } = bounds();
+    const releaseY = Math.min(bottom, Math.max(top, handleY + dy));
+    const target = cancelled ? from : snapState(releaseY, from, recentVelocity(samples), pos);
+    snapTo = target;
+    setDragTarget(target);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      finishDrag();
+    } else {
+      body.setAttribute('data-atlas-snapping', '');
+      setHandleY(pos[target]);
+      snapTimer = setTimeout(finishDrag, SNAP_MS + 20);
+    }
+  };
 
   const onDown = (e: PointerEvent) => {
     if (start || snapTimer !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
@@ -186,7 +238,6 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
       from: getAtlasLayerState(),
     };
     axis = null;
-    samples = [];
     // A mouse leaves the 20px handle on the first move, before the axis locks.
     // Capture at once so the drag keeps its events.
     if (start.onHandle) {
@@ -201,18 +252,11 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
       axis = lockAxis(e.clientX - start.x, dy);
       if (axis === 'y') {
         try { (e.target as Element).setPointerCapture(e.pointerId); } catch { /* target gone */ }
-        setHandleY(start.handleY);
-        setDragTarget(start.from);
-        body.setAttribute('data-atlas-dragging', '');
+        beginDrag(start.handleY, start.from);
       }
     }
     if (axis !== 'y') return;
-    const { top, bottom } = bounds();
-    const y = Math.min(bottom, Math.max(top, start.handleY + dy));
-    setHandleY(y);
-    setDragTarget(snapState(y, start.from, 0, positions()));
-    samples.push({ y: e.clientY, t: e.timeStamp });
-    if (samples.length > 8) samples.shift();
+    moveDrag(start.handleY, start.from, dy, e.clientY, e.timeStamp);
   };
 
   const end = (e: PointerEvent, cancelled: boolean) => {
@@ -222,19 +266,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     const wasAxis = axis;
     axis = null;
     if (wasAxis === 'y') {
-      const pos = positions();
-      const { top, bottom } = bounds();
-      const releaseY = Math.min(bottom, Math.max(top, handleY + e.clientY - y));
-      const target = cancelled ? from : snapState(releaseY, from, recentVelocity(samples), pos);
-      snapTo = target;
-      setDragTarget(target);
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        finishDrag();
-      } else {
-        body.setAttribute('data-atlas-snapping', '');
-        setHandleY(pos[target]);
-        snapTimer = setTimeout(finishDrag, SNAP_MS + 20);
-      }
+      releaseDrag(handleY, from, e.clientY - y, cancelled);
       return;
     }
     // No drag: a tap on the handle cycles the state.
@@ -247,6 +279,57 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
   };
   const onUp = (e: PointerEvent) => end(e, false);
   const onCancel = (e: PointerEvent) => end(e, true);
+
+  // Pull down in `list`. Touch events, not pointer events: only a cancelable
+  // touchmove can stop the page scroll. The post list container is the whole
+  // main column, so a pull can start anywhere on it.
+  let pull: { id: number; x: number; y: number; handleY: number; axis: Axis } | null = null;
+  const listArea = () => {
+    const gm = gridMount();
+    return gm?.closest('.site-main') ?? gm;
+  };
+  const pullTouch = (e: TouchEvent) => Array.from(e.changedTouches).find((t) => t.identifier === pull?.id);
+  const onTouchStart = (e: TouchEvent) => {
+    if (pull || start || snapTimer !== null || e.touches.length !== 1) return;
+    if (getAtlasLayerState() !== 'list') return;
+    const target = e.target;
+    if (!(target instanceof globalThis.Node) || handle.contains(target) || !listArea()?.contains(target)) return;
+    const t = e.touches[0]!;
+    pull = { id: t.identifier, x: t.clientX, y: t.clientY, handleY: handle.getBoundingClientRect().top, axis: null };
+  };
+  const onTouchMove = (e: TouchEvent) => {
+    if (!pull) return;
+    const t = pullTouch(e);
+    if (!t) return;
+    const dx = t.clientX - pull.x;
+    const dy = t.clientY - pull.y;
+    if (pull.axis === null) {
+      pull.axis = lockAxis(dx, dy);
+      if (pull.axis === null) {
+        // Hold the page still while a pull may start: once the browser scrolls,
+        // the next touchmove is not cancelable.
+        if (e.cancelable && window.scrollY <= 0 && dy > 0 && dy >= Math.abs(dx)) e.preventDefault();
+        return;
+      }
+      if (!e.cancelable || !pullOpens(window.scrollY, dx, dy)) {
+        pull = null;
+        return;
+      }
+      beginDrag(pull.handleY, 'list');
+    }
+    e.preventDefault();
+    moveDrag(pull.handleY, 'list', dy, t.clientY, e.timeStamp);
+  };
+  const endPull = (e: TouchEvent, cancelled: boolean) => {
+    if (!pull) return;
+    const t = pullTouch(e);
+    if (!t) return;
+    const { y, handleY, axis: pullAxis } = pull;
+    pull = null;
+    if (pullAxis === 'y') releaseDrag(handleY, 'list', t.clientY - y, cancelled);
+  };
+  const onTouchEnd = (e: TouchEvent) => endPull(e, false);
+  const onTouchCancel = (e: TouchEvent) => endPull(e, true);
 
   const live = document.createElement('span');
   live.className = 'atlas-layer-handle__live';
@@ -288,11 +371,19 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
   document.addEventListener('pointermove', onMove);
   document.addEventListener('pointerup', onUp);
   document.addEventListener('pointercancel', onCancel);
+  document.addEventListener('touchstart', onTouchStart, { passive: false });
+  document.addEventListener('touchmove', onTouchMove, { passive: false });
+  document.addEventListener('touchend', onTouchEnd);
+  document.addEventListener('touchcancel', onTouchCancel);
   return () => {
     document.removeEventListener('pointerdown', onDown);
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
     document.removeEventListener('pointercancel', onCancel);
+    document.removeEventListener('touchstart', onTouchStart);
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onTouchEnd);
+    document.removeEventListener('touchcancel', onTouchCancel);
     observer.disconnect();
     handle.removeEventListener('keydown', onKey);
     handle.removeEventListener('wheel', onWheel);
