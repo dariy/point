@@ -72,6 +72,10 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 		trustOpts = append(trustOpts, echo.TrustIPRange(n))
 	}
 	e.IPExtractor = echo.ExtractIPFromXFFHeader(trustOpts...)
+	// Trust X-Forwarded-Proto from the same hops. echo's default trusts only
+	// loopback and private peers, so without TRUSTED_PROXIES here a public
+	// proxy's https would read as http: HTTPSRedirect loops and HSTS is lost.
+	e.SchemeExtractor = echo.ExtractSchemeFromHeaders(trustOpts...)
 
 	// Redirect HTTP to HTTPS if AppURL is configured as HTTPS.
 	if strings.HasPrefix(cfg.AppURL, "https://") {

@@ -199,6 +199,7 @@ func TestHSTS(t *testing.T) {
 	const want = "max-age=31536000; includeSubdomains"
 
 	httpsReq := httptest.NewRequest(http.MethodGet, "/health", nil)
+	httpsReq.RemoteAddr = "10.0.0.1:1234" // a private-network proxy; its X-Forwarded-Proto is trusted
 	httpsReq.Header.Set("X-Forwarded-Proto", "https")
 	httpsRec := httptest.NewRecorder()
 	e.ServeHTTP(httpsRec, httpsReq)
