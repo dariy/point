@@ -382,6 +382,45 @@
     border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
 }
 
+/* The button that opens a collapsed legend. Only a short layer map shows it. */
+.atlas-legend__more {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    margin: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* A short layer map (a phone on its side) has no room for the legend column
+   under the zoom control. The legend becomes one button; open, it is one row. */
+@container atlas-layer-map (max-height: 320px) {
+    /* Right of the zoom control column (10px + 34px), so they never meet. */
+    .atlas-legend {
+        bottom: 8px;
+        left: 52px;
+        flex-direction: row;
+        align-items: center;
+        padding: 0;
+    }
+    .atlas-legend__more {
+        display: flex;
+    }
+    .atlas-legend:not(.is-open) .atlas-toggle {
+        display: none;
+    }
+    .atlas-legend .atlas-toggle {
+        width: auto;
+        min-height: 44px;
+    }
+}
+
 /* The legend custom props live on .atlas-map; mirror them here for the dots. */
 .atlas-legend {
     --atlas-tag: var(--tag-type-tag);
@@ -678,21 +717,23 @@
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 44px;
     height: 44px;
     padding: 0;
     border: 0;
+    border-radius: var(--border-radius);
     background: transparent;
     color: inherit;
-    font-size: 14px;
     line-height: 1;
     cursor: pointer;
-    opacity: 0.6;
 }
 
 .atlas-layer-handle__btn:hover,
 .atlas-layer-handle__btn:focus-visible {
-    opacity: 1;
+    background: var(--surface-hover, rgba(0, 0, 0, 0.05));
 }
 
 .atlas-layer-handle__btn--start {
@@ -731,8 +772,27 @@
    handle sit above the map, below the header. Bottom to top: the footer
    (--atlas-layer-footer-h, css/public/footer.css), the card row, the handle,
    the map. --atlas-layer-list-h is the height under the map, footer included. */
+/* Registered as a length, so getComputedStyle gives px and
+   atlasLayerGesture.ts::positions reads the same row height. */
+@property --atlas-layer-row-h {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 120px;
+}
+
 body {
-    --atlas-layer-list-h: max(20dvh, calc(var(--atlas-layer-footer-h, 0px) + var(--atlas-layer-handle-h, 20px) + var(--atlas-layer-row-min, 120px)));
+    --atlas-layer-row-h: clamp(96px, 22dvh, 220px);
+    --atlas-layer-list-h: calc(var(--atlas-layer-footer-h, 0px) + var(--atlas-layer-handle-h, 20px) + var(--atlas-layer-row-h));
+}
+
+/* The map takes no pull-to-refresh or scroll chaining while it is open. */
+html:has(> body:is([data-atlas-layer="mapList"], [data-atlas-layer="map"])) {
+    overscroll-behavior: none;
+}
+
+/* The edge page-arrows float over the map; the footer paginator pages the strip. */
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"]) .page-nav-arrow {
+    display: none;
 }
 
 .atlas-layer-map {
@@ -743,6 +803,7 @@ body {
     bottom: 0;
     z-index: 100;
     background: var(--bg-secondary, var(--bg-primary));
+    container: atlas-layer-map / size;
     transform: translateY(-100%);
     visibility: hidden;
     pointer-events: none;
@@ -799,7 +860,7 @@ body[data-atlas-layer="map"] .atlas-layer-handle {
     z-index: 105;
     display: block;
     background: var(--bg-primary);
-    padding: 0 var(--spacing-md);
+    padding: var(--atlas-layer-gap, 8px);
     box-sizing: border-box;
     overflow: hidden;
     touch-action: none;
@@ -819,8 +880,10 @@ body[data-atlas-layer="map"] #grid-mount {
     display: none;
 }
 
-/* One flex row of square cards. Flex, not grid, so the zoom template and the
-   hero span of post-grid.css have no effect. */
+/* One flex row of cards. Flex, not grid, so the zoom template and the hero span
+   of post-grid.css have no effect. gridFit.ts::stripPerPage counts square cards;
+   the cards then grow to fill the row. A card is at most two rows wide, which a
+   full page never reaches, so a short last page does not stretch one card. */
 :is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .posts-grid {
     display: flex;
     flex-wrap: nowrap;
@@ -831,10 +894,12 @@ body[data-atlas-layer="map"] #grid-mount {
 }
 
 :is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card-slot {
-    flex: 0 0 auto;
+    flex: 1 1 0;
     height: 100%;
     width: auto;
-    aspect-ratio: var(--atlas-layer-aspect, 1);
+    min-width: 0;
+    max-width: calc(2 * var(--atlas-layer-row-h));
+    aspect-ratio: auto;
     min-height: 0;
     grid-column: auto !important;
 }

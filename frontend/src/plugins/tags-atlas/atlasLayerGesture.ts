@@ -115,6 +115,8 @@ export function stateLabel(state: AtlasLayerState): string {
 const SNAP_MS = 200;
 
 const px = (name: string): number => parseFloat(document.body.style.getPropertyValue(name)) || 0;
+/** The visible height. On a phone the visual viewport excludes the browser bars and the keyboard. */
+const viewportH = (): number => window.visualViewport?.height ?? window.innerHeight;
 
 /**
  * Wire swipe and tap on the handle and the card row. Returns a teardown.
@@ -133,18 +135,18 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
 
   const bounds = () => {
     const top = px('--atlas-layer-top');
-    const bottom = window.innerHeight - px('--atlas-layer-footer-h') - handle.offsetHeight;
+    const bottom = viewportH() - px('--atlas-layer-footer-h') - handle.offsetHeight;
     return { top, bottom: Math.max(top, bottom) };
   };
   const positions = (): SnapPositions => {
     const { top, bottom } = bounds();
-    const cs = getComputedStyle(body);
-    const rowMin = parseFloat(cs.getPropertyValue('--atlas-layer-row-min')) || 120;
-    // The same height as the --atlas-layer-list-h default in atlas.css: the footer, the handle and one card row.
-    const mapList = window.innerHeight - Math.max(window.innerHeight * 0.2, px('--atlas-layer-footer-h') + handle.offsetHeight + rowMin);
+    // atlas.css registers --atlas-layer-row-h as a length, so it computes to px.
+    const rowH = parseFloat(getComputedStyle(body).getPropertyValue('--atlas-layer-row-h')) || 120;
+    // The same height as --atlas-layer-list-h in atlas.css: the footer, the handle and one card row.
+    const mapList = viewportH() - (px('--atlas-layer-footer-h') + handle.offsetHeight + rowH);
     return { list: top, mapList: Math.min(Math.max(mapList, top), bottom), map: bottom };
   };
-  const setHandleY = (y: number) => body.style.setProperty('--atlas-layer-list-h', `${window.innerHeight - y}px`);
+  const setHandleY = (y: number) => body.style.setProperty('--atlas-layer-list-h', `${viewportH() - y}px`);
   // The cards take the layout of the state the handle would snap to now.
   const setDragTarget = (state: AtlasLayerState) => {
     if (body.dataset.atlasDragTarget !== state) body.dataset.atlasDragTarget = state;
