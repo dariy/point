@@ -342,6 +342,22 @@ export class AtlasPlaces {
       ["post", "post", "Post"],
     ];
     if (this._canFilterHidden()) kinds.push(["concealed", "concealed", "Hidden"]);
+    // A short layer map shows only this button; it opens the toggles (atlas.css).
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "atlas-legend__more";
+    more.setAttribute("aria-label", "Show the node type filters");
+    more.setAttribute("aria-expanded", "false");
+    for (const [, dot] of kinds) {
+      const span = document.createElement("span");
+      span.className = "atlas-legend__dot atlas-legend__dot--" + dot;
+      more.append(span);
+    }
+    more.addEventListener("click", () => {
+      const open = legend.classList.toggle("is-open");
+      more.setAttribute("aria-expanded", String(open));
+    });
+    legend.append(more);
     for (const [type, dot, label] of kinds) {
       const btn = document.createElement("button");
       btn.type = "button";

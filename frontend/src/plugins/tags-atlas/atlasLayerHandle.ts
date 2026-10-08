@@ -7,6 +7,8 @@
 
 import { getAtlasLayerState, setAtlasLayerState } from './atlasLayerState.ts';
 import type { AtlasLayerState } from './atlasLayerState.ts';
+import { GRID_SVG, MAP_FOLD_SVG, SPLIT_SVG } from '../../utils/icons.ts';
+import { html, raw, setHTML } from '../../utils/helpers.ts';
 
 const CLASS = 'atlas-layer-handle';
 export const BUTTON_CLASS = `${CLASS}__btn`;
@@ -14,6 +16,7 @@ export const BUTTON_CLASS = `${CLASS}__btn`;
 interface HandleButton {
   label: string;
   to: AtlasLayerState;
+  /** SVG markup, one of the constants in utils/icons.ts. */
   icon: string;
   side: 'start' | 'end';
 }
@@ -22,11 +25,11 @@ interface HandleButton {
 export function buttonsFor(state: AtlasLayerState): HandleButton[] {
   if (state === 'mapList') {
     return [
-      { label: 'Maximize map', to: 'map', icon: '▼', side: 'start' },
-      { label: 'Maximize list', to: 'list', icon: '▲', side: 'end' },
+      { label: 'Maximize map', to: 'map', icon: MAP_FOLD_SVG, side: 'start' },
+      { label: 'Maximize list', to: 'list', icon: GRID_SVG, side: 'end' },
     ];
   }
-  return [{ label: 'Restore map and list', to: 'mapList', icon: state === 'map' ? '▲' : '▼', side: 'end' }];
+  return [{ label: 'Restore map and list', to: 'mapList', icon: SPLIT_SVG, side: 'end' }];
 }
 
 function renderButtons(handle: HTMLElement): void {
@@ -37,7 +40,7 @@ function renderButtons(handle: HTMLElement): void {
     btn.className = `${BUTTON_CLASS} ${BUTTON_CLASS}--${b.side}`;
     btn.setAttribute('aria-label', b.label);
     btn.dataset.atlasTo = b.to;
-    btn.textContent = b.icon;
+    setHTML(btn, html`${raw(b.icon)}`);
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       setAtlasLayerState(b.to);

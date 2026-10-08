@@ -14,7 +14,7 @@ reads only that attribute.
 | State | `?view=` | What you see |
 |-------|-----------|--------------|
 | `list` | `list` | The page as it is, plus the handle. The footer shows. |
-| `mapList` | `split` | The map comes down from behind the header. The post list is one row of cards on the footer, about 20% of the viewport high with the footer. The footer is one line at the bottom, with the paginator in it. |
+| `mapList` | `split` | The map comes down from behind the header. The post list is one row of cards on the footer, `clamp(96px, 22dvh, 220px)` high (`--atlas-layer-row-h`). The cards fill the row width. The footer is one line at the bottom, with the paginator in it. The edge page arrows do not show. |
 | `map` | `map` | The map fills the space below the header. The post list is only the handle, on the footer. The footer is one line at the bottom, without the paginator. |
 
 The map shows only the posts of the current list (same filter as the cards). It loads
@@ -33,6 +33,12 @@ starts inside the map goes to the map (pan, pinch, wheel zoom).
 - **Wheel** over the handle: one step for each gesture.
 - **Keyboard** on the handle: Enter or Space cycles, ArrowDown goes forward, ArrowUp
   goes back, Escape goes to `list`.
+- **Buttons** on the handle: in `mapList`, a map icon at the start ("Maximize map") and
+  a grid icon at the end ("Maximize list"). In `list` and `map`, a split icon ("Restore
+  map and list"). Each button is a 44px target.
+
+When the layer map is less than 320px high (a phone on its side), the legend is one
+button to the right of the zoom control. The button opens the filters in one row.
 
 ## URL
 
