@@ -42,9 +42,6 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
 - **Wheel** over the handle: one step for each gesture.
 - **Keyboard** on the handle: Enter or Space cycles, ArrowDown goes forward, ArrowUp
   goes back, Escape goes to `list`.
-- **Buttons** on the handle: in `mapList`, a map icon at the start ("Maximize map") and
-  a grid icon at the end ("Maximize list"). In `list` and `map`, a split icon ("Restore
-  map and list"). Each button is a 44px target.
 
 When the layer map is less than 320px high (a phone on its side), the legend is one
 button to the right of the zoom control. The button opens the filters in one row.

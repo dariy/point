@@ -111,37 +111,6 @@ describe('Atlas layer gestures', () => {
     assert.equal(await page.locator('.atlas-layer-handle').getAttribute('aria-expanded'), 'true');
   });
 
-  it('the handle buttons change the state and a tap on one starts no drag', async () => {
-    await page.goto(BASE + '/tags/atlas-gesture');
-    await page.locator('.atlas-layer-handle').waitFor();
-    const btn = (label: string) => page.locator(`.atlas-layer-handle__btn[aria-label="${label}"]`);
-    const tapBtn = async (label: string) => {
-      await page.locator('.atlas-layer-handle__btn').first().waitFor();
-      const b = await settledBox(page, `.atlas-layer-handle__btn[aria-label="${label}"]`);
-      assert.ok(b.width >= 44 && b.height >= 44, `${label} target ${b.width}x${b.height}`);
-      await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
-    };
-    const to = (v: string) => page.waitForFunction((x) => document.body.dataset.atlasLayer === x, v);
-
-    assert.equal(await page.locator('.atlas-layer-handle__btn').count(), 1);
-    await tapBtn('Restore map and list');
-    await to('mapList');
-    assert.equal(await page.locator('.atlas-layer-handle__btn').count(), 2);
-    await tapBtn('Maximize map');
-    await to('map');
-    assert.equal(await page.locator('.atlas-layer-handle__btn').count(), 1);
-    await tapBtn('Restore map and list');
-    await to('mapList');
-    await tapBtn('Maximize list');
-    await to('list');
-    await page.waitForTimeout(300);
-    assert.equal(await state(), 'list');
-
-    await btn('Restore map and list').focus();
-    await page.keyboard.press('Enter');
-    await to('mapList');
-  });
-
   it('a free drag keeps map and list on screen and snaps to the nearest position on release', async () => {
     await page.goto(BASE + '/tags/atlas-gesture');
     await page.locator('.atlas-layer-handle').waitFor();

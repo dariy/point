@@ -703,45 +703,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 20px;
+    height: var(--atlas-layer-handle-h);
     cursor: pointer;
     touch-action: none;
 }
 
 .atlas-layer-handle {
     position: relative;
-}
-
-/* 44px touch target; the handle is 20px, so the button overflows it and has no fill. */
-.atlas-layer-handle__btn {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--border-radius);
-    background: transparent;
-    color: inherit;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.atlas-layer-handle__btn:hover,
-.atlas-layer-handle__btn:focus-visible {
-    background: var(--surface-hover, rgba(0, 0, 0, 0.05));
-}
-
-.atlas-layer-handle__btn--start {
-    left: 8px;
-}
-
-.atlas-layer-handle__btn--end {
-    right: 8px;
 }
 
 .atlas-layer-handle__live {
@@ -781,8 +749,9 @@
 }
 
 body {
+    --atlas-layer-handle-h: 30px;
     --atlas-layer-row-h: clamp(96px, 22dvh, 220px);
-    --atlas-layer-list-h: calc(var(--atlas-layer-footer-h, 0px) + var(--atlas-layer-handle-h, 20px) + var(--atlas-layer-row-h));
+    --atlas-layer-list-h: calc(var(--atlas-layer-footer-h, 0px) + var(--atlas-layer-handle-h) + var(--atlas-layer-row-h));
 }
 
 /* The map takes no pull-to-refresh or scroll chaining while it is open. */
@@ -844,7 +813,7 @@ body[data-atlas-layer="map"] .atlas-layer-handle {
 }
 
 body[data-atlas-layer="mapList"] .atlas-layer-handle {
-    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h));
 }
 
 body[data-atlas-layer="map"] .atlas-layer-handle {
@@ -856,7 +825,7 @@ body[data-atlas-layer="map"] .atlas-layer-handle {
     left: 0;
     right: 0;
     bottom: var(--atlas-layer-footer-h, 0px);
-    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px) - var(--atlas-layer-footer-h, 0px));
+    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h) - var(--atlas-layer-footer-h, 0px));
     z-index: 105;
     display: block;
     background: var(--bg-primary);
@@ -940,7 +909,7 @@ body[data-atlas-dragging] .atlas-layer-handle {
     z-index: 105;
     background: var(--bg-primary);
     border-top: var(--border-width) solid var(--border-primary);
-    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h));
 }
 
 body[data-atlas-dragging] #grid-mount {
