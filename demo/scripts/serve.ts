@@ -20,7 +20,7 @@ import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createReadStream } from "node:fs";
 import { stat, readFile } from "node:fs/promises";
-import { extname, join, normalize, resolve, sep } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 
 const args: Record<string, string | true> = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -117,8 +117,10 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Resolves a URL path to a file inside ROOT, or null. Refuses to escape ROOT. */
 async function resolveFile(urlPath: string): Promise<ServedFile | null> {
   const decoded = decodeURIComponent(urlPath);
-  const rel = normalize(decoded.endsWith("/") ? `${decoded}index.html` : decoded);
-  const abs = join(ROOT, rel);
+  const rel = decoded.endsWith("/") ? `${decoded}index.html` : decoded;
+  // resolve() rather than join(): CodeQL accepts a resolved path checked
+  // against ROOT as safe, and the leading "./" keeps an absolute rel inside ROOT.
+  const abs = resolve(ROOT, `./${rel}`);
   if (abs !== ROOT && !abs.startsWith(ROOT + sep)) return null;
 
   try {
