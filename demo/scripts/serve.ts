@@ -120,8 +120,11 @@ async function resolveFile(urlPath: string): Promise<ServedFile | null> {
   const rel = decoded.endsWith("/") ? `${decoded}index.html` : decoded;
   // resolve() rather than join(): CodeQL accepts a resolved path checked
   // against ROOT as safe, and the leading "./" keeps an absolute rel inside ROOT.
+  // Keep the guard a single startsWith(): CodeQL does not accept an
+  // `abs !== ROOT ||` branch as a sanitizer. ROOT itself is a directory and is
+  // never served as a file, so that branch has no use.
   const abs = resolve(ROOT, `./${rel}`);
-  if (abs !== ROOT && !abs.startsWith(ROOT + sep)) return null;
+  if (!abs.startsWith(ROOT + sep)) return null;
 
   try {
     const stats = await stat(abs);
