@@ -92,14 +92,23 @@ for arch in "${ARCHES[@]}"; do
     mkdir -p "$stage"
 
     echo "▶ building ${name}/point"
+    # nodynamic: without it gen2brain/avif pulls in purego, which links the
+    # binary against glibc even with CGO_ENABLED=0 (see build/Dockerfile).
     (cd "$ROOT_DIR/api" && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
-        -trimpath -ldflags="-s -w -X main.Version=${VERSION}" \
+        -tags nodynamic -trimpath -ldflags="-s -w -X main.Version=${VERSION}" \
         -o "$stage/point" ./cmd/api)
 
     echo "▶ building ${name}/migrate-paths"
     (cd "$ROOT_DIR/api" && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
-        -trimpath -ldflags="-s -w" \
+        -tags nodynamic -trimpath -ldflags="-s -w" \
         -o "$stage/migrate-paths" ./cmd/migrate-paths)
+
+    for bin in point migrate-paths; do
+        if grep -q -a -E '/lib(64)?/ld-' "$stage/$bin"; then
+            echo "ERROR: ${name}/${bin} is dynamically linked" >&2
+            exit 1
+        fi
+    done
 
     cp "$ROOT_DIR/api/data.yml" "$ROOT_DIR/LICENSE" "$stage/"
     cp -r "$ROOT_DIR/frontend" "$stage/frontend"
