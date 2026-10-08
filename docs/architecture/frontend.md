@@ -50,7 +50,7 @@ Every UI element inherits from `Component`. The class handles the contract
 between a component and its DOM node.
 
 ```javascript
-// frontend/src/components/Component.js
+// frontend/src/components/Component.ts
 
 export class Component {
   /**
@@ -62,15 +62,24 @@ export class Component {
     this.props = props;
     this.state = {};
     this._children = []; // child Component instances for lifecycle propagation
+    this._cleanups = [];        // teardowns for THIS render's resources (see 2.3)
+    this._actionTeardowns = []; // the delegated `actions` listeners (see 2.4)
+    this._rendered = false;     // gates update(): nothing to update in place yet
+    this._unmounted = false;
   }
 
   /**
-   * Returns an HTML string describing this component.
+   * Optional: delegated handlers keyed by `data-action` value (see 2.4).
+   * @type {Object<string, function(Event, HTMLElement): void>|undefined}
+   */
+
+  /**
+   * Returns the markup describing this component, built with the html`` tag.
    * MUST be overridden by subclasses.
-   * SECURITY: This string is set via innerHTML. Only include trusted,
-   * server-sanitized HTML. Never interpolate raw user input directly —
-   * always use escapeHtml() for any user-provided text values.
-   * @returns {string}
+   * SECURITY: the tag escapes every interpolation, and _rerender() throws on
+   * anything it did not produce — so a subclass never escapes by hand and
+   * never forgets to. See the Security Model section.
+   * @returns {RawHtml}
    */
   render() {
     throw new Error(`${this.constructor.name}.render() not implemented`);
@@ -84,17 +93,37 @@ export class Component {
 
   /**
    * Called before the component is removed from the DOM.
-   * Override to unsubscribe from store, cancel timers, etc.
+   * Override to release what outlives a single render — a poll timer started
+   * in the constructor, say. Anything afterRender() acquires belongs in
+   * registerCleanup() instead, which also runs BETWEEN renders.
    */
   beforeUnmount() {}
+
+  /**
+   * Optional hook, called before every render including the first.
+   * The imperative sibling of registerCleanup(); override it when the teardown
+   * is easier to write as one method than as a closure per resource.
+   */
+  beforeRender() {}
+
+  /**
+   * Optional: update(prevProps, prevState) — update the DOM in place instead
+   * of rebuilding it (see 2.5). Declared by the subclass, not here, so the
+   * base class can tell "cannot" from "would not". Return exactly true to say
+   * "handled": render(), afterRender(), the cleanup list and the mounted
+   * children are then all left alone. Anything else rebuilds. Not called for
+   * the first render.
+   * @type {((prevProps: object, prevState: object) => boolean)|undefined}
+   */
 
   /**
    * Merges newState into this.state and re-renders.
    * @param {object} newState
    */
   setState(newState) {
+    const prevState = this.state;
     this.state = { ...this.state, ...newState };
-    this._rerender();
+    this._rerender(this.props, prevState);   // prev* are what update() diffs
   }
 
   /**
@@ -102,8 +131,9 @@ export class Component {
    * @param {object} newProps
    */
   setProps(newProps) {
+    const prevProps = this.props;
     this.props = { ...this.props, ...newProps };
-    this._rerender();
+    this._rerender(prevProps, this.state);
   }
 
   /**
@@ -114,27 +144,60 @@ export class Component {
   }
 
   /**
-   * Cleans up: call beforeUnmount on self and all children, clear container.
+   * Cleans up: release this render's resources, unmount children, call
+   * beforeUnmount, clear container.
    */
   unmount() {
+    this._unmounted = true;
+    this._runCleanups();
     this._unmountChildren();
     this.beforeUnmount();
     this.container.textContent = '';
   }
 
+  /**
+   * Helper: register a teardown for something this render acquired.
+   * Runs before the next re-render, or on unmount — whichever comes first —
+   * and is then forgotten, so afterRender() re-registers freely.
+   */
+  registerCleanup(fn) {
+    if (typeof fn === 'function') this._cleanups.push(fn);
+  }
+
+  /**
+   * Helper: subscribe to a store key for the lifetime of the current render.
+   * Takes one of store.ts's `on*` accessors, not a store and a string key.
+   */
+  subscribeStore(subscribe, callback) {
+    this.registerCleanup(subscribe(callback));
+  }
+
   // ── Private ──────────────────────────────────────────────────────────────
 
   _rerender() {
+    // Release the previous render while its DOM is still in place.
+    this._runCleanups();
+    this.beforeRender?.();
     this._unmountChildren();
     this._children = [];
-    // SECURITY: render() returns trusted HTML only (see Security Model section)
-    this.container.innerHTML = this.render();
+    // SECURITY: setHTML() refuses anything the html`` tag did not produce, and
+    // is the one HTML sink in the frontend (see Security Model section).
+    setHTML(this.container, this.render());
     this.afterRender();
   }
 
   _unmountChildren() {
     for (const child of this._children) {
       child.unmount();
+    }
+    this._children = [];
+  }
+
+  _runCleanups() {
+    const fns = this._cleanups;
+    this._cleanups = [];   // cleared first: a teardown may re-render
+    for (const fn of fns) {
+      try { fn(); } catch (err) { console.error('cleanup failed', err); }
     }
   }
 
@@ -156,6 +219,16 @@ export class Component {
     this._children.push(child);
     return child;
   }
+
+  /**
+   * Resource helpers — registerCleanup() with the acquisition folded in, so
+   * each releases at the next render boundary. See 2.3.
+   */
+  on(target, type, handler, options) { /* addEventListener + removeEventListener */ }
+  timer(fn, ms) { /* setTimeout + clearTimeout */ }
+  interval(fn, ms) { /* setInterval + clearInterval */ }
+  observe(observer) { /* returns it; disconnect() on release */ }
+  raf(fn) { /* requestAnimationFrame + cancelAnimationFrame */ }
 
   /**
    * Helper: query within this component's container.
@@ -185,78 +258,285 @@ new Component(container, props)
         v
   .mount()
         |
+        |-- _bindActions()            (one delegated listener per event type,
+        |                              on the container — see 2.4)
+        |-- _runCleanups()            (empty on the first pass)
+        |-- beforeRender()            (imperative teardown hook)
         |-- _unmountChildren()        (clean up any previous children)
-        |-- container.innerHTML = render()
-        `-- afterRender()             (attach events, mount children)
-                |
+        |-- setHTML(container, render())
+        `-- afterRender()             (attach events, mount children,
+                |                      registerCleanup() what you acquire)
                 v (user interaction or async data)
         .setState(delta)
                 |
                 |-- merge state
-                `-- _rerender()
+                `-- _rerender(prevProps, prevState)
                         |
+                        |-- update(prevProps, prevState)?  -> true: STOP here,
+                        |                                     the DOM stands
+                        |                                     (see 2.5)
+                        |-- _runCleanups()   <- releases the PREVIOUS render
+                        |-- beforeRender()
                         |-- _unmountChildren()
-                        |-- container.innerHTML = render()
+                        |-- setHTML(container, render())
                         `-- afterRender()
                 |
                 v (navigation away or parent re-renders)
         .unmount()
                 |
+                |-- _unbindActions()   (the delegated listeners, bound at mount)
+                |-- _runCleanups()     (the last render's resources)
                 |-- _unmountChildren()
-                |-- beforeUnmount()    (clean up subscriptions, timers)
+                |-- beforeUnmount()    (whatever outlived a single render)
                 `-- container.textContent = ''
 ```
 
-### 2.3 — Example: Simple Component
+Note where `_runCleanups()` sits: at the *top* of `_rerender()`, not the
+bottom. A teardown therefore runs while the DOM it was wired to is still on
+screen, which is what makes `removeEventListener` and observer `disconnect()`
+land on the right nodes.
+
+### 2.3 — Resource Lifetime
+
+`afterRender()` runs again on **every** `setState()` / `setProps()`, so it is
+not a mount hook. Anything it acquires — a `ResizeObserver`, a store
+subscription, a listener on `document`/`window`, a node appended outside the
+container, an `AbortController`, a timer — has to be released before the next
+pass acquires its own copy. `registerCleanup()` is how:
 
 ```javascript
-// frontend/src/components/Pagination.js
-import { Component } from './Component.js';
-import { escapeHtml } from '../utils/helpers.js';
+afterRender() {
+  const ro = new ResizeObserver(() => this._refit());
+  ro.observe(this.$('.panel'));
+  this.registerCleanup(() => ro.disconnect());
 
-export class Pagination extends Component {
-  // props: { page, totalPages, onPageChange }
+  const onKey = (e) => this._onKey(e);
+  document.addEventListener('keydown', onKey);
+  this.registerCleanup(() => document.removeEventListener('keydown', onKey));
+
+  // subscribeStore() and mountChild() are already built on it.
+  this.subscribeStore(onSettings, () => this.setState({}));
+}
+```
+
+The list is drained before each re-render and again on `unmount()`, then
+forgotten — so re-registering on every pass is correct and expected.
+
+Five helpers are that same registration with the acquisition folded in, which
+matters because the shortest thing to type is what actually gets typed —
+`frontend/src` carries 539 `addEventListener` calls against 102
+`removeEventListener`:
+
+| Helper | Acquires | Releases with |
+|---|---|---|
+| `on(target, type, fn, opts)` | `addEventListener` | `removeEventListener` (same `opts`) |
+| `timer(fn, ms)` | `setTimeout` | `clearTimeout` |
+| `interval(fn, ms)` | `setInterval` | `clearInterval` |
+| `observe(observer)` | nothing — takes one you built | `observer.disconnect()` |
+| `raf(fn)` | `requestAnimationFrame` | `cancelAnimationFrame` |
+
+So the block above is really:
+
+```javascript
+afterRender() {
+  this.observe(new ResizeObserver(() => this._refit())).observe(this.$('.panel'));
+  this.on(document, 'keydown', (e) => this._onKey(e));
+  this.subscribeStore(onSettings, () => this.setState({}));
+}
+```
+
+`on()` treats a missing target as a no-op and returns `null`, so the result of
+`this.$('.maybe')` can go straight in. `observe()` returns its argument, which
+is what lets the observer line stay one statement. Everything they hold is
+render-scoped: a resource that must outlive renders — a poll started once in the
+constructor — belongs in `beforeUnmount()`, not in these.
+
+**Do not guard an acquisition with an "already done this" flag.** It looks like
+it prevents a leak and does the opposite now: the flag survives the cleanup
+that released the resource, so the second render gets neither the old
+subscription nor a new one. Twelve admin pages carried the mirror-image bug —
+they stored `setupAdminLayout`'s teardown in an instance field, overwrote it on
+every render and only ever called the last one, leaking an observer and two
+store subscriptions per `setState()`. Each leaked subscription closed over the
+same live page, so a single `autosave_status` update rewrote the header once
+per leaked copy (`frontend/test/componentCleanup.test.js`).
+
+Use `beforeRender()` instead when the teardown is genuinely one method rather
+than one closure per resource (`PostContent`, `PublicHeader`, `BackupsSection`).
+It runs in the same place, right after the cleanup list.
+
+Reach for `beforeUnmount()` only for what outlives a render — a poll timer
+started in the constructor, a portal node created once.
+
+### 2.4 — Event Delegation with `data-action`
+
+A component may declare an `actions` map instead of wiring buttons one at a
+time. `mount()` binds **one** listener per event type to `this.container`, and
+`unmount()` releases it:
+
+```javascript
+export class CommentRows extends Component {
+  actions = {
+    delete(e, el) { this._delete(Number(el.dataset.i)); },
+    block(e, el) { this._block(Number(el.dataset.i)); },
+    'change:select-all'(e, el) { this._selectAll(el.checked); },
+  };
 
   render() {
-    const { page, totalPages } = this.props;
-    if (totalPages <= 1) return '';
-
-    const prev = page > 1
-      ? `<button class="btn btn-ghost" data-page="${page - 1}">&larr; Prev</button>`
-      : `<button class="btn btn-ghost" disabled>&larr; Prev</button>`;
-
-    const next = page < totalPages
-      ? `<button class="btn btn-ghost" data-page="${page + 1}">Next &rarr;</button>`
-      : `<button class="btn btn-ghost" disabled>Next &rarr;</button>`;
-
-    return `
-      <nav class="pagination">
-        ${prev}
-        <span class="pagination__info">
-          Page ${escapeHtml(String(page))} of ${escapeHtml(String(totalPages))}
-        </span>
-        ${next}
-      </nav>
-    `;
-  }
-
-  afterRender() {
-    this.$$('button[data-page]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.props.onPageChange(parseInt(btn.dataset.page, 10));
-      });
-    });
+    return html`
+      <input type="checkbox" data-action="select-all">
+      ${rows.map((r, i) => html`
+        <button data-action="delete" data-i="${i}">${raw(TRASH_SVG)}</button>
+        <button data-action="block"  data-i="${i}">Block</button>
+      `)}`;
   }
 }
 ```
 
-### 2.4 — Example: Async Component (loads data)
+The rules, all of them:
+
+- A **bare key answers `click`**. Any other event type is written into the key
+  as `'<type>:<name>'`, and the set of types to delegate is read off the map —
+  there is no second list to keep in sync, because a second list is a thing to
+  forget, and forgetting it yields a control that silently does nothing.
+- The handler is called with `this` bound to the component, the event, and the
+  nearest `[data-action]` **ancestor** of `event.target` — so a click landing on
+  an icon inside the button still finds the button.
+- An event originating inside a child mounted with `mountChild()` belongs to
+  that child and is not dispatched again by the parent.
+
+Why this and not `afterRender()`: `this.container` is the one node that survives
+a re-render, so the binding happens once instead of being re-attached on every
+pass. That retires both halves of the usual pair of bugs — a listener never
+re-attached is a dead button, and one attached twice fires twice — along with
+the `querySelector` + `addEventListener` pair per control.
+
+Keep `on()` for what delegation cannot express: a listener on `document` or
+`window`, one that needs `capture` or `passive`, or a handler on a specific node
+rather than a class of them.
+
+### 2.5 — In-Place Updates
+
+The default re-render is a rebuild: children unmounted, `render()` called,
+`innerHTML` assigned. That is right whenever the markup is the whole truth, and
+wrong whenever DOM identity carries something it does not — a decoded `<img>`
+rebuilt is an image thrown away and fetched again, which is a visible flash.
+
+A component that can answer a particular change without the rebuild declares
+`update(prevProps, prevState)`:
 
 ```javascript
-// frontend/src/pages/public/HomePage.js
-import { Component } from '../../components/Component.js';
-import { PostGrid } from '../../components/PostGrid.js';
-import { pagesApi } from '../../api/pages.js';
+update(prevProps) {
+  if (prevProps.posts === this.props.posts) return false;   // not our case
+  reconcileList(this.$('.posts-grid'), this.props.posts, p => p.id, {
+    create: post => buildSlot(post),
+    update: (slot, post, i) => { slot.dataset.index = String(i); },
+    remove: slot => this._cardFor(slot).unmount(),
+  });
+  return true;                                              // handled
+}
+```
+
+Returning exactly `true` means handled. `_rerender()` returns immediately, so
+`render()` and `afterRender()` do not run — and because the DOM they wired is
+still on screen, neither the cleanup list nor the mounted children are touched.
+Anything else falls through to the rebuild, so `return false`, dropping off the
+end, and a case nobody thought about are all the same safe answer: a slower
+render, never a stale screen. `update()` is not consulted for the first render;
+there is nothing to update yet.
+
+The cost of "handled" is that the component now owns keeping its DOM true to its
+props. Two helpers carry most of that:
+
+**`reconcileList(container, items, keyOf, ops)`** — `frontend/src/utils/reconcileList.ts`.
+Brings a container's children into line with a list, matching nodes to items by
+key rather than by position, so a survivor is *moved* rather than rebuilt. Nodes
+carry their key in `data-rkey`; `create` gets it stamped for free, and
+`setKey(node, key)` is how `afterRender()` stamps the ones the first render
+produced. `ops` is `{ create(item, i), update?(node, item, i), remove?(node, key) }`,
+and the result is `{ created, removed, nodes, moved }` — `nodes` in list order,
+`moved` counting survivors that had to be lifted.
+
+Departures are detached before the arrivals are placed, which is what makes a
+list that only lost a middle element cost zero moves. An element without
+`data-rkey` belongs to something else and is never moved, keyed or removed.
+
+**`preserveInteraction(container, fn)`** — `frontend/src/utils/preserveInteraction.ts`.
+Snapshots focus, caret and scroll, runs `fn`, puts them back — for the rebuilds
+that still happen. The snapshot is a *selector*, not a node reference, because
+the node is about to stop existing: an `id`, a `name`, or a `data-action`, and
+only when it matches exactly one element. An ambiguous one restores nothing,
+since focusing the first `[data-action="delete"]` of twenty rows is a wrong
+answer that looks like a right one. `captureInteraction(container)` is the same
+snapshot with the restore handed back as a function, for a page that reloads
+across an `await` (`PostsListPage._load`).
+
+The sites this replaced: `PostGrid.reconcile()` was this loop written by hand
+for the `per_page` refit; `GridPager`'s ghost element (`core/gridPager.ts`) and
+`utils/gridFlip.ts` still cover what a reconciler cannot — a swipe handed across
+a route change, and the FLIP animation over a zoom step.
+
+### 2.6 — Example: Simple Component
+
+```javascript
+// frontend/src/components/shared/Pagination.ts
+import { Component } from '../Component.js';
+import { html } from '../../utils/helpers.ts';
+
+export class Pagination extends Component {
+  // props: { page, pages, total, minPage, onPage }
+
+  render() {
+    const { page, pages, total } = this.props;
+    const minPage = this._minPage();
+    // A markup helper with nothing to render returns '' — html`` yields a
+    // String OBJECT, so an empty one is still truthy to a caller testing it.
+    if (!pages || pages - minPage < 1) return html``;
+
+    const buttons = this._buildItems(page, pages, minPage).map((item) => html`
+      <button class="page-btn${item === page ? ' active' : ''}"
+              data-action="page" data-page="${item}" type="button">${item}</button>`);
+
+    return html`
+      <nav class="pagination" aria-label="Page navigation">
+        <button class="page-btn page-prev" data-action="page" data-page="${page - 1}"
+                type="button"${page <= minPage ? html` disabled` : ''}
+                aria-label="Previous page">&#8592;</button>
+        <span class="page-numbers">${buttons}</span>
+        <button class="page-btn page-next" data-action="page" data-page="${page + 1}"
+                type="button"${page >= pages ? html` disabled` : ''}
+                aria-label="Next page">&#8594;</button>
+        <span class="page-info" aria-live="polite">${total} items</span>
+      </nav>`;
+  }
+
+  // One listener on the container for the whole strip, bound at mount() — the
+  // buttons themselves are rebuilt on every render (see 2.4).
+  actions = {
+    page(e, el) {
+      if (el.disabled) return;
+      const p = parseInt(el.dataset.page, 10);
+      if (p >= this._minPage() && p <= this.props.pages && this.props.onPage) {
+        this.props.onPage(p);
+      }
+    },
+  };
+}
+```
+
+Note what `render()` does *not* do: no `escapeHtml()` by hand. The html tagged
+template escapes every interpolation on the way through, and
+`Component._rerender()` rejects anything that is not its output — see
+[Security Model](#security-model).
+
+### 2.7 — Example: Async Component (loads data)
+
+```javascript
+// frontend/src/pages/public/HomePage.ts
+import { Component } from '../../components/Component.ts';
+import { PostGrid } from '../../components/public/PostGrid.ts';
+import { html } from '../../utils/helpers.ts';
+import { pagesApi } from '../../api/pages.ts';
 
 export class HomePage extends Component {
   // props: {} (no external props)
@@ -268,9 +548,9 @@ export class HomePage extends Component {
 
   render() {
     const { loading, data, error } = this.state;
-    if (loading) return '<div class="loading-spinner"></div>';
-    if (error)   return `<div class="error-state"><p class="error-message"></p></div>`;
-    return `
+    if (loading) return html`<div class="loading-spinner"></div>`;
+    if (error)   return html`<div class="error-state"><p class="error-message"></p></div>`;
+    return html`
       <div class="home-page">
         <div class="home-posts" id="post-grid-mount"></div>
         <div class="home-sidebar" id="tag-cloud-mount"></div>
@@ -321,37 +601,37 @@ export class HomePage extends Component {
 ### 3.1 — Route Table
 
 ```javascript
-// frontend/src/router.js
+// frontend/src/router.ts
 
-import { store } from './store.js';
+import { store } from './store.ts';
 
 // Public routes (no auth required)
 const PUBLIC_ROUTES = [
   {
     pattern: /^\/$/,
-    component: () => import('./pages/public/HomePage.js').then(m => m.HomePage),
+    component: () => import('./pages/public/HomePage.ts').then(m => m.HomePage),
   },
   {
     pattern: /^\/posts\/([^/]+)$/,
-    component: () => import('./pages/public/PostPage.js').then(m => m.PostPage),
+    component: () => import('./pages/public/PostPage.ts').then(m => m.PostPage),
     params: ['slug'],
   },
   {
     pattern: /^\/tag\/([^/]+)$/,
-    component: () => import('./pages/public/TagPage.js').then(m => m.TagPage),
+    component: () => import('./pages/public/TagPage.ts').then(m => m.TagPage),
     params: ['slug'],
   },
   {
     pattern: /^\/tags$/,
-    component: () => import('./pages/public/TagsPage.js').then(m => m.TagsPage),
+    component: () => import('./pages/public/TagsPage.ts').then(m => m.TagsPage),
   },
   {
     pattern: /^\/map$/,
-    component: () => import('./pages/public/MapPage.js').then(m => m.MapPage),
+    component: () => import('./pages/public/MapPage.ts').then(m => m.MapPage),
   },
   {
     pattern: /^\/preview\/([^/]+)$/,
-    component: () => import('./pages/public/PreviewPage.js').then(m => m.PreviewPage),
+    component: () => import('./pages/public/PreviewPage.ts').then(m => m.PreviewPage),
     params: ['token'],
   },
 ];
@@ -360,45 +640,45 @@ const PUBLIC_ROUTES = [
 const LIGHT_ROUTES = [
   {
     pattern: /^\/light\/login$/,
-    component: () => import('./pages/light/LoginPage.js').then(m => m.LoginPage),
+    component: () => import('./pages/light/LoginPage.ts').then(m => m.LoginPage),
     public: true,
   },
   {
     pattern: /^\/light\/?$/,
-    component: () => import('./pages/light/DashboardPage.js').then(m => m.DashboardPage),
+    component: () => import('./pages/light/DashboardPage.ts').then(m => m.DashboardPage),
   },
   {
     pattern: /^\/light\/posts$/,
-    component: () => import('./pages/light/PostsListPage.js').then(m => m.PostsListPage),
+    component: () => import('./pages/light/PostsListPage.ts').then(m => m.PostsListPage),
   },
   {
     pattern: /^\/light\/posts\/new$/,
-    component: () => import('./pages/light/PostEditPage.js').then(m => m.PostEditPage),
+    component: () => import('./pages/light/PostEditPage.ts').then(m => m.PostEditPage),
   },
   {
     pattern: /^\/light\/posts\/(\d+)$/,
-    component: () => import('./pages/light/PostEditPage.js').then(m => m.PostEditPage),
+    component: () => import('./pages/light/PostEditPage.ts').then(m => m.PostEditPage),
     params: ['id'],
   },
   {
     pattern: /^\/light\/media$/,
-    component: () => import('./pages/light/MediaPage.js').then(m => m.MediaPage),
+    component: () => import('./pages/light/MediaPage.ts').then(m => m.MediaPage),
   },
   {
     pattern: /^\/light\/tags$/,
-    component: () => import('./pages/light/TagsManagerPage.js').then(m => m.TagsManagerPage),
+    component: () => import('./pages/light/TagsManagerPage.ts').then(m => m.TagsManagerPage),
   },
   {
     pattern: /^\/light\/settings$/,
-    component: () => import('./pages/light/SettingsPage.js').then(m => m.SettingsPage),
+    component: () => import('./pages/light/SettingsPage.ts').then(m => m.SettingsPage),
   },
   {
     pattern: /^\/light\/security$/,
-    component: () => import('./pages/light/SecurityPage.js').then(m => m.SecurityPage),
+    component: () => import('./pages/light/SecurityPage.ts').then(m => m.SecurityPage),
   },
   {
     pattern: /^\/light\/system$/,
-    component: () => import('./pages/light/SystemPage.js').then(m => m.SystemPage),
+    component: () => import('./pages/light/SystemPage.ts').then(m => m.SystemPage),
   },
 ];
 
@@ -459,7 +739,7 @@ export class Router {
     // its own fresh document, isolated from any third-party markup injected into
     // the guest shell via HEAD_HTML (see features/syndication.md).
     if (isAdminRoute && !isPublicRoute) {
-      const user = store.get('user');
+      const user = getUser();
       if (!user) {
         window.location.assign(`/light/login?next=${encodeURIComponent(path)}`);
         return;
@@ -514,10 +794,10 @@ export class Router {
 ### 3.3 — App Entry Point
 
 ```javascript
-// frontend/src/app.js
-import { Router } from './router.js';
-import { store } from './store.js';
-import { authApi } from './api/auth.js';
+// frontend/src/app.ts
+import { Router } from './router.ts';
+import { store } from './store.ts';
+import { authApi } from './api/auth.ts';
 
 const router = new Router(document.getElementById('app'));
 
@@ -525,9 +805,9 @@ const router = new Router(document.getElementById('app'));
 async function bootstrap() {
   try {
     const user = await authApi.me();
-    store.set('user', user);
+    setUser(user);
   } catch {
-    store.set('user', null);
+    setUser(null);
   }
   router._resolve();
 }
@@ -543,7 +823,7 @@ A minimal reactive key-value store. Components subscribe to changes in
 specific keys.
 
 ```javascript
-// frontend/src/store.js
+// frontend/src/store.ts
 
 class Store {
   constructor() {
@@ -556,9 +836,21 @@ class Store {
   }
 
   set(key, value) {
+    // A write of the value already there is dropped. The usual subscriber
+    // answers by calling setState(), which rebuilds its whole subtree, so a
+    // notification for a write that changed nothing is the most expensive
+    // no-op in the frontend.
+    if (Object.is(this._state[key], value) && key in this._state) return;
     this._state[key] = value;
-    if (this._listeners[key]) {
-      this._listeners[key].forEach(fn => fn(value));
+    const listeners = this._listeners[key];
+    if (!listeners) return;
+    // Snapshot, and skip anyone unsubscribed along the way. Subscribers
+    // re-render, and a re-render swaps this render's subscription for a fresh
+    // one — iterating the live Set would visit the replacement (and its
+    // replacement, forever), while calling a callback torn down earlier in
+    // the same dispatch would run it against a dead component.
+    for (const fn of [...listeners]) {
+      if (this._listeners[key]?.has(fn)) fn(value);
     }
   }
 
@@ -568,19 +860,100 @@ class Store {
     // Return unsubscribe function
     return () => this._listeners[key].delete(callback);
   }
+
+  // Fire only when the selected slice moves. The result is compared with
+  // Object.is, so a selector must return a primitive or a stable reference.
+  subscribeSelector(key, select, callback) {
+    let previous = select(this._state[key]);
+    return this.subscribe(key, (value) => {
+      const next = select(value);
+      if (Object.is(previous, next)) return;
+      previous = next;
+      callback(next, value);
+    });
+  }
+
+  // Patch an object key, keeping the current object — and skipping the
+  // dispatch — when the patch changes nothing one level deep.
+  merge(key, patch) {
+    const current = this._state[key];
+    const next = { ...current, ...patch };
+    if (current && typeof current === 'object' && shallowEqual(current, next)) return;
+    this.set(key, next);
+  }
 }
 
 export const store = new Store();
 ```
 
-**Store keys used across the app:**
+`set()`'s guard is reference equality, which is exactly what a re-fetched
+payload does not have: settings come back parsed from JSON on every page load,
+a fresh object every time. That is what `merge()` is for — writers patch the
+key (`mergeSettings(normalizeSettings(data.settings))`) instead of rebuilding it
+with a spread, so an unchanged payload keeps the object that is already there
+and nothing repaints.
 
-| Key | Type | Description |
+`subscribeSelector()` is the escape valve for the coarse keys: `settings` holds
+every public setting, so a subscriber of the key wakes for every write to any
+part of it. `NavMenu` watches the four settings it renders from
+(`onSettingsSelector(navSlice, …)`) and stays asleep for the rest.
+`Component.subscribeStoreSelector()` is the same thing released at the next
+render boundary, alongside `subscribeStore()`.
+
+Neither is reached through the store object at a call site, though:
+
+### Keys are not strings at the call site
+
+`store.get()`, `store.set()` and `store.subscribe()` take a string, and a string
+is checked by nothing: `store.get('usr')` is `undefined`, so a mistyped key
+shows up as a component that renders empty forever and a report that says "the
+toast never appears". The keys with a single call site are the worst of it,
+because there is no second use to compare a typo against.
+
+So `store.ts` binds each key once and exports a get/set/subscribe triple, and
+the rest of the app imports those. esbuild resolves named imports at build time,
+which turns the same typo into a build failure that names the fix:
+
+```
+✘ [ERROR] No matching export in "store.ts" for import "getUsr"
+          Did you mean to import "getUser" instead?
+```
+
+A `point/restricted-syntax` lint rule (`scripts/oxlint-point.ts`) rejects a string-literal key
+outside `store.ts` — for `merge` and `subscribeSelector` as much as for the
+basic three — so the raw form cannot come back. A hand-written list of
+"well-known keys" lived here and in a comment at the tail of `store.ts` before
+this; both had drifted to about a third of the real set, which is what a
+contract kept as prose does.
+
+**The keys, as exported (`frontend/src/store.ts`):**
+
+| Key | Accessors | Type |
 |---|---|---|
-| `user` | `object or null` | Current authenticated user |
-| `settings` | `object` | Public blog settings (title, description) |
-| `theme` | `'dark' or 'light'` | UI theme |
-| `toast` | `{message, type}` | Active toast notification |
+| `user` | `getUser` `setUser` `onUser` | `object or null` — authenticated user |
+| `settings` | `getSettings` `setSettings` `onSettings` `mergeSettings` `onSettingsSelector` | `object` — public blog settings |
+| `theme` | `getTheme` `setTheme` `onTheme` | `'dark' \| 'light' \| 'auto'` |
+| `route` | `getRoute` `setRoute` `onRoute` | `{pathname, params, query}` |
+| `toast` | `getToast` `setToast` `onToast` | `{message, type} or null` |
+| `toast_log` | `getToastLog` `setToastLog` `onToastLog` | `{id, message, type, timestamp}[]` |
+| `pagination` | `getPagination` `setPagination` `onPagination` | `{page, pages, total} or null` |
+| `offline_status` | `getOfflineStatus` `setOfflineStatus` `onOfflineStatus` | `{pending, failed, syncing, has_ops}` |
+| `autosave_status` | `getAutosaveStatus` `setAutosaveStatus` `onAutosaveStatus` | `{state, at} or null` |
+| `navTags` | `getNavTags` `setNavTags` `onNavTags` | `object[]` — public nav entries |
+| `rootTags` | `getRootTags` `setRootTags` `onRootTags` | `object[]` — top-level tags |
+| `tagCloud` | `getTagCloudCache` `setTagCloudCache` | `object[] or null` — home page cache |
+| `version` | `getAppVersion` `setAppVersion` `onAppVersion` | `string` |
+| `plugin_toggled` | `setPluginToggled` `onPluginToggled` | `number` — bump to re-render admin chrome |
+| `tags_view` | `getTagsView` | `'tree' \| 'list'` — read-only; nothing writes it yet |
+| `bc:tag:<slug>` | `getTagBreadcrumb(slug)` `setTagBreadcrumb(slug, …)` | `object[]` — per-tag breadcrumb cache |
+
+`settings` is the one key that also exports the two cheap-write helpers, being
+the one coarse enough to need them; `keyed()` binds `merge` and `onSelector` for
+every key, and the rest simply do not destructure them.
+
+The last one is the only key built at runtime. Its accessors take the slug and
+own the `bc:tag:` prefix, so the key space stays enumerable from this file
+rather than growing wherever a template literal happens to be written.
 
 ---
 
@@ -589,7 +962,7 @@ export const store = new Store();
 ### 5.1 — Base Client
 
 ```javascript
-// frontend/src/api/client.js
+// frontend/src/api/client.ts
 
 export class ApiError extends Error {
   constructor(status, data) {
@@ -653,7 +1026,7 @@ export const api = {
 Each module mirrors its backend router:
 
 ```javascript
-// frontend/src/api/posts.js
+// frontend/src/api/posts.ts
 import { api } from './client.js';
 
 export const postsApi = {
@@ -670,7 +1043,7 @@ export const postsApi = {
 ```
 
 ```javascript
-// frontend/src/api/pages.js
+// frontend/src/api/pages.ts
 import { api } from './client.js';
 
 export const pagesApi = {
@@ -689,9 +1062,9 @@ frontend/
 |-- index.html                      <- SPA shell (never changes)
 |
 |-- src/
-|   |-- app.js                      <- Bootstrap: auth check + router start
-|   |-- router.js                   <- Router class + route table
-|   |-- store.js                    <- Global reactive state
+|   |-- app.ts                      <- Bootstrap: auth check + router start
+|   |-- router.ts                   <- Router class + route table
+|   |-- store.ts                    <- Global reactive state
 |   |
 |   |-- api/
 |   |   |-- client.js               <- Base fetch wrapper
@@ -707,32 +1080,32 @@ frontend/
 |   |   |-- Component.js            <- Base class
 |   |   |
 |   |   |-- shared/                 <- Used in both public + light
-|   |   |   |-- Modal.js
-|   |   |   |-- Toast.js
-|   |   |   |-- Pagination.js
+|   |   |   |-- Modal.ts
+|   |   |   |-- Toast.ts
+|   |   |   |-- Pagination.ts
 |   |   |   |-- TagBadge.js
 |   |   |   |-- ThemeToggle.js
-|   |   |   |-- ConfirmDialog.js
+|   |   |   |-- ConfirmDialog.ts
 |   |   |   `-- LoadingSpinner.js
 |   |   |
 |   |   |-- public/                 <- Public blog components
 |   |   |   |-- PublicHeader.js
 |   |   |   |-- PublicFooter.js
-|   |   |   |-- PostCard.js
-|   |   |   |-- PostGrid.js
-|   |   |   |-- PostContent.js
-|   |   |   |-- MediaLightbox.js
+|   |   |   |-- PostCard.ts
+|   |   |   |-- PostGrid.ts
+|   |   |   |-- PostContent.ts
+|   |   |   |-- MediaLightbox.ts
 |   |   |   |-- TagCloud.js
 |   |   |   `-- ImmersiveViewer.js
 |   |   |
 |   |   `-- light/                  <- Admin panel components
-|   |       |-- AdminLayout.js
+|   |       |-- AdminLayout.ts
 |   |       |-- Sidebar.js
 |   |       |-- StatusSelect.js
 |   |       |-- TagSelector.js
 |   |       |-- MediaPicker.js
 |   |       |-- MediaDropZone.js
-|   |       |-- MarkdownEditor.js
+|   |       |-- MarkdownEditor.ts
 |   |       |-- DataTable.js
 |   |       |-- TreeView.js
 |   |       |-- StatCard.js
@@ -741,27 +1114,27 @@ frontend/
 |   |
 |   |-- pages/
 |   |   |-- public/
-|   |   |   |-- HomePage.js
-|   |   |   |-- PostPage.js
-|   |   |   |-- TagPage.js
+|   |   |   |-- HomePage.ts
+|   |   |   |-- PostPage.ts
+|   |   |   |-- TagPage.ts
 |   |   |   |-- TagsPage.js
 |   |   |   |-- MapPage.js
-|   |   |   `-- PreviewPage.js
+|   |   |   `-- PreviewPage.ts
 |   |   |
 |   |   `-- light/
-|   |       |-- LoginPage.js
-|   |       |-- DashboardPage.js
-|   |       |-- PostsListPage.js
-|   |       |-- PostEditPage.js
-|   |       |-- MediaPage.js
-|   |       |-- TagsManagerPage.js
-|   |       |-- SettingsPage.js
-|   |       |-- SecurityPage.js
-|   |       `-- SystemPage.js
+|   |       |-- LoginPage.ts
+|   |       |-- DashboardPage.ts
+|   |       |-- PostsListPage.ts
+|   |       |-- PostEditPage.ts
+|   |       |-- MediaPage.ts
+|   |       |-- TagsManagerPage.ts
+|   |       |-- SettingsPage.ts
+|   |       |-- SecurityPage.ts
+|   |       `-- SystemPage.ts
 |   |
 |   `-- utils/
-|       |-- formatters.js           <- Date, file size, truncation
-|       |-- helpers.js              <- DOM helpers, escapeHtml, debounce
+|       |-- formatters.ts           <- Date, file size, truncation
+|       |-- helpers.ts              <- DOM helpers, escapeHtml, debounce
 |       `-- validators.js          <- Client-side input validation
 |
 `-- css/
@@ -829,19 +1202,30 @@ frontend/
 
 ### AdminLayout
 
-All `/light/*` pages (except login) are wrapped in `AdminLayout`:
+`AdminLayout` is not a wrapper component but a pair of helpers each `/light/*`
+page calls itself — a template for `render()` and a setup for `afterRender()`:
 
-```
-AdminLayout renders:
-  <div class="admin-layout">
-    <aside class="sidebar" id="sidebar-mount"></aside>
-    <main class="admin-main" id="page-content-mount"></main>
-  </div>
+```javascript
+render() {
+  return adminLayoutTemplate({ title: 'Tags', actions, content });
+}
 
-Then mounts:
-  - Sidebar into #sidebar-mount
-  - The actual page component into #page-content-mount
+afterRender() {
+  setupAdminLayout(this, { currentPath: '/light/tags', publicUrl });
+  // ...the page's own wiring
+}
 ```
+
+`adminLayoutTemplate` emits the shell — `.light-header` with its title row and
+sync pill, `.light-content`, and mount points for the sidebar, bottom bar,
+command palette and shortcut help. `setupAdminLayout` fills those in, adds the
+public-site link, and takes out the header's resize observer and the two store
+subscriptions behind the sync pill.
+
+**It returns nothing on purpose.** Everything it acquires is registered on the
+page's per-render cleanup list (see [2.3](#23--resource-lifetime)), so the next
+re-render releases it. Pages must not store a teardown handle or call anything
+from `beforeUnmount()` — that is precisely the shape that leaked.
 
 ### PostEditPage
 
@@ -887,11 +1271,11 @@ is needed, it must be server-generated and sanitized.
 
 ```javascript
 // Global toast system via store:
-import { store } from '../store.js';
-store.set('toast', { message: 'Post saved!', type: 'success' });
+import { setToast } from '../store.ts';
+setToast({ message: 'Post saved!', type: 'success' });
 ```
 
-A `ToastContainer` component subscribes to `store.get('toast')` and renders
+A `ToastContainer` component subscribes with `onToast()` and renders
 notifications in the corner. All toast messages are set via `textContent`.
 
 ### ThemeToggle
@@ -932,38 +1316,108 @@ document.documentElement.setAttribute('data-theme', theme);
 
 ## Security Model
 
-### innerHTML policy
+### The HTML write path
 
-The component system uses `container.innerHTML = this.render()` for
-performance. This is safe **only** when the following rules are followed:
+There is exactly one HTML sink in `frontend/src`, and it is three lines long:
 
-1. **Server-generated HTML** (`content_html` from the API): Post content is
-   converted from Markdown server-side by a trusted formatter. The backend
-   is responsible for sanitizing any user-submitted HTML before storage.
-   The frontend renders `content_html` directly.
+```javascript
+// frontend/src/utils/helpers.ts
+export function setHTML(el, markup) {
+  el.innerHTML = trusted(markup, 'setHTML');
+}
+```
 
-2. **User-input text in templates**: ALL user-input values interpolated into
-   template literal HTML strings MUST be escaped with `escapeHtml()`:
-   ```javascript
-   // frontend/src/utils/helpers.js
-   export function escapeHtml(str) {
-     return String(str)
-       .replace(/&/g, '&amp;')
-       .replace(/</g, '&lt;')
-       .replace(/>/g, '&gt;')
-       .replace(/"/g, '&quot;')
-       .replace(/'/g, '&#39;');
-   }
+Everything else — every component's re-render, every hand-written patch of a
+node's contents — goes through it or through its `insertAdjacentHTML` twin,
+`insertHTML(el, position, markup)`. Three layers hold that up, each catching
+what the one before it misses:
+
+1. **The tagged template escapes.** Interpolations are escaped on the way
+   through — `safeUrl()` in `href`/`src` position, `escapeHtml()` everywhere
+   else — so no caller applies either by hand and no caller forgets to.
+   `raw()` is the opt-out, and it belongs around module-level constants (the
+   SVG blobs in `utils/icons.ts`) and around HTML the server sanitized before
+   storing it (a post body). Nothing else.
+
+2. **`setHTML()` refuses anything else.** The tag returns a `RawHtml`, not a
+   string; `setHTML()` throws a `TypeError` on a plain string, so markup
+   assembled by hand cannot reach the DOM even by accident. `Component._rerender()`
+   makes the same check first, to name the subclass whose `render()` is at fault.
+
+3. **The browser refuses a write that skipped the funnel.** `setHTML()` mints
+   its string through a Trusted Types policy named `point`, and every response
+   carries, at the tail of the enforcing policy:
+
+   ```
+   require-trusted-types-for 'script'; trusted-types point point-leaflet point-codejar
    ```
 
-3. **Dynamic text nodes**: Prefer setting text via `element.textContent = value`
-   over interpolating into HTML strings when possible (e.g., error messages,
-   user names, toast notifications).
+   A Chromium browser rejects any `.innerHTML` / `.outerHTML` /
+   `insertAdjacentHTML` write whose value did not come from a named policy —
+   which moves the rule from lint, where an author can suppress it, to the
+   browser, where nobody can. Firefox and Safari ignore the directive, so this
+   is defence in depth on top of the lint rule, never a replacement.
 
-4. **Attribute values**: URL values in `href` or `src` attributes must be
-   validated to start with `/` or `https://` — never allow `javascript:`.
+   **The three names are the security claim.** `point` is the frontend's own,
+   in `utils/helpers.ts`. The other two are waivers for vendored libraries that
+   write their own markup and were patched to route it through a policy instead
+   of a plain string:
 
-5. **No eval, no Function()**: Never execute strings as code.
+   | Policy | Lives in | Sinks |
+   |---|---|---|
+   | `point` | `frontend/src/utils/helpers.ts` | every write this frontend makes |
+   | `point-leaflet` | `frontend/vendor/leaflet/leaflet.js` | feature detection at import time, zoom buttons, attribution, scale, layer control, popup content, popup close button, `divIcon` markup |
+   | `point-codejar` | `frontend/vendor/codejar/codejar.js` | undo restore, redo restore, and the escaped-text paste via `execCommand('insertHTML')` |
+
+   Both vendor policies are pass-through: those libraries build their own
+   markup and there is no second escaping pass to add. What the split buys is
+   that the waiver is **scoped and named**. The cheap alternative — a
+   pass-through `default` policy — would have caught every unrouted sink on the
+   page, including one reached by injected content, and left the directive
+   decorative. These two catch only the writes inside two files that were read
+   line by line. There is no `'allow-duplicates'`, so each name mints exactly
+   once per document: the policies created at load are the only ones the page
+   will ever have.
+
+   Prism needed no waiver. `Prism.highlightElement` writes the highlighted
+   markup itself, so `PostContent` calls `Prism.highlight()` — the
+   string-returning form the editors already used — and writes the result with
+   `setHTML()`. `utils/prismManual.ts` switches off the automatic pass
+   prism-core otherwise runs on itself at load, which went through
+   `highlightElement` and was duplicated work even before it became a
+   violation.
+
+   A patched vendored file is a patch a version bump silently reverts, so
+   `scripts/check-vendor-sinks.sh` (in `check.sh` and in CI) counts the raw and
+   routed sinks in `frontend/vendor/`, checks both policies are still
+   registered, checks the names in the CSP and the names the code creates are
+   the same set, and fails if anything calls `highlightElement` again.
+   `build-js.sh` additionally fails if a `createPolicy()` call lands in more
+   than one chunk — a name mints once, so a graph split that duplicated
+   `helpers.ts` would silently take the write path down on every page loading
+   both chunks. `frontend/e2e/trustedTypes.test.js` then drives a real Chromium
+   under the real header and asserts not just zero violations but that the vendored
+   writers *produced* something — highlighted tokens, zoom buttons, an
+   attribution line, a marker, a popup, an undo that did not corrupt the
+   buffer. Zero violations is otherwise trivially satisfied by a map that never
+   initialises.
+
+The Oxlint rule `point/restricted-syntax` (`scripts/oxlint-point.ts`, enabled in
+`.oxlintrc.json`) is what keeps the funnel a funnel: a bare `.innerHTML =`,
+`.outerHTML =` or `insertAdjacentHTML(` anywhere under `frontend/src` or
+`demo/mock` is an error, as is `raw()` around a template literal or a call, or
+an interpolation into an unquoted attribute. `frontend/test/eslintRules.test.ts`
+proves each of those rules still fires, in `.js` and `.ts`, and through each
+TypeScript cast (`as`, `!`, `satisfies`, `<T>`).
+
+Three things sit outside all of this and are still worth stating:
+
+- **Server-generated HTML** (`content_html` from the API) is sanitized
+  server-side before storage; the frontend passes it through `raw()`.
+- **Dynamic text** is better set with `element.textContent = value` than
+  interpolated into markup at all — error messages, user names, toasts.
+- **No `eval`, no `Function()`.** `require-trusted-types-for 'script'` covers
+  those sinks too, and it is enforced.
 
 ### Auth security
 
@@ -972,20 +1426,25 @@ performance. This is safe **only** when the following rules are followed:
 - CSRF protection: FastAPI + same-site cookie policy handles this
 - The frontend never stores auth tokens in `localStorage`
 
-### Content Security Policy (recommended)
+### Content Security Policy
 
-Add a `Content-Security-Policy` header on the server:
+Shipped, not recommended — the policy is assembled in `api/cmd/api/csp.go`
+and sent on every response. `script-src` is `'self'` plus a sha256 for each
+inline `<script>`, computed from `index.html` at startup and re-spliced per
+request where the bootstrap script is injected (`routes.go`, `media.go`), so
+there is no `'unsafe-inline'` anywhere in it. An operator can widen `script-src`
+and `connect-src` for a deployment (`CSP_SCRIPT_SRC` / `CSP_CONNECT_SRC`)
+without the engine hardcoding a third-party domain.
 
-```
-Content-Security-Policy:
-  default-src 'self';
-  script-src 'self' 'sha256-+20twPiohHfGLZsSvahDBaYeh7l+te5yNz5UDCAfqsA=';
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob:;
-  media-src 'self' blob:;
-  connect-src 'self';
-  frame-ancestors 'none'
-```
+The Trusted Types directives are the tail of that same enforcing header — see
+*The HTML write path* above. Two documents on the origin deliberately do not
+inherit them, because both replace the policy outright rather than extend it:
+a directly-navigated SVG (`neutralizeSVG` in `media.go`, which denies
+everything and sandboxes) and the MCP OAuth login page (`oauth.go`, which runs
+no JS). The remark42 comments widget is proxied through this origin and is
+third-party code that sets `script.src` from a plain string, so
+`internal/api/comments.go` strips both CSP headers from every proxied
+response.
 
 ---
 
@@ -1029,42 +1488,49 @@ For production, the same files are served as-is. If minification is ever
 desired, it can be added as an optional pre-deployment step without
 changing the architecture.
 
----
+### Typechecking
 
-## Build & Deployment
-
-### Single-container deployment
-
-```
-Docker container
-|-- uvicorn (FastAPI, port 8000)
-|   |-- /api/* -> JSON API
-|   |-- /assets/* -> frontend/ static files
-|   `-- /{any} -> frontend/index.html (SPA fallback)
-`-- /data/ (volume: SQLite DB, media files, backups)
+```bash
+npm run typecheck        # tsc -p tsconfig.json
 ```
 
-No nginx required for basic deployment. For scale, put nginx in front:
+`frontend/src` is TypeScript. `scripts/check.sh` fails on a `.js` file there;
+JS stays only in `frontend/sw.js`, `frontend/vendor/`, the tests and `demo/`.
+Nothing is emitted: Node and the bundler remove the types. The conventions
+follow from that:
 
-```
-nginx
-|-- /api/* -> proxy to uvicorn:8000
-|-- /assets/* -> static file serve from frontend/
-`-- / -> frontend/index.html
-```
+- **Erasable syntax only** (`erasableSyntaxOnly`): no `enum`, no `namespace`,
+  no parameter properties. Type-only imports use `import type`
+  (`verbatimModuleSyntax`).
+- **An import names the real file**: `./x.ts` for a TS module, `./x.js` for a
+  JS module (`allowImportingTsExtensions`).
+- **Shapes**: object shapes are `interface`. Unions, aliases and mapped types
+  are `type`.
+- **Doc comments keep their prose** and have no `{Type}` part:
+  `@param name - text`, `@returns text`.
+- **Casts use `as`**, never `<T>expr`. Use `!` only for a DOM
+  element that is certain to exist (a query of the component's own template). Do
+  not add `any`, `@ts-ignore` or `@ts-nocheck` to reduce an error count.
+- **Class fields**: a class declares every `this.<prop>` it assigns as a typed
+  field.
+- **Globals live in `frontend/types/globals.d.ts`** — `__DEBUG__`, the payloads
+  the server injects (`window.__MEDIA__`, `window.__PLUGINS__`), and the browser
+  APIs missing from TypeScript's DOM lib (Trusted Types). Declare a genuine
+  global there rather than casting at each call site.
+- **The untyped boundaries are generic, not `any`.** `api.get()` /
+  `api.request()` and `store.get()` take a type parameter that defaults to
+  `unknown`, so the shape flows in from whatever the caller declares:
 
-### Docker changes
+  ```typescript
+  export function getTags(): Promise<{ tags: Tag[]; total: number }> {
+    return api.get('/api/tags');    // T comes from the return type
+  }
+  ```
 
-```dockerfile
-# Dockerfile (addition to existing COPY statements)
-COPY frontend/ /app/frontend/
-```
+  Declaring nothing leaves it `unknown` and the caller has to narrow — which is
+  the honest answer for a wire format.
 
-### Environment config
-
-The frontend has no environment variables. The API base URL is always
-`/api` (same origin). The backend's `CORS_ORIGINS` setting controls
-cross-origin access during development.
+`strict` is on. Fix a strict error with a real guard, not with a cast or `!`.
 
 ---
 
@@ -1074,7 +1540,7 @@ cross-origin access during development.
 
 | Item | Convention | Example |
 |---|---|---|
-| Component files | PascalCase | `PostCard.js` |
+| Component files | PascalCase | `PostCard.ts` |
 | Component classes | PascalCase | `class PostCard` |
 | API modules | camelCase | `postsApi` |
 | CSS classes | BEM-ish kebab | `.post-card__title` |
@@ -1107,8 +1573,7 @@ Every list or grid component renders a descriptive empty state:
 ```javascript
 render() {
   if (!this.state.data?.length) {
-    // Build empty state with DOM methods (no innerHTML needed for simple content)
-    return `<div class="empty-state"><p class="empty-state__text"></p></div>`;
+    return html`<div class="empty-state"><p class="empty-state__text"></p></div>`;
   }
   // normal render
 }
@@ -1136,7 +1601,7 @@ async _deleteTag(id) {
   } catch (err) {
     // Revert and show error
     this.setState({ tags: previousTags });
-    store.set('toast', { message: err.message, type: 'error' });
+    setToast({ message: err.message, type: 'error' });
   }
 }
 ```

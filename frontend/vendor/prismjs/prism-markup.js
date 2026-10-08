@@ -1,3 +1,4 @@
+// @ts-nocheck — vendored third-party source; not ours to annotate.
 Prism.languages.markup = {
 	'comment': {
 		pattern: /<!--(?:(?!<!--)[\s\S])*?-->/,

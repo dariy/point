@@ -1,0 +1,443 @@
+/**
+ * Client-side History API router.
+ *
+ * Routes are plain objects with a `path` pattern and an async `load` factory
+ * that returns a { default: Component } module (for lazy loading via import()).
+ *
+ * Route matching supports:
+ *   /exact/path
+ *   /path/:param         (single named segment)
+ *   /path/:param/rest    (params anywhere in the path)
+ *
+ * Usage:
+ *   import { router } from './router.ts';
+ *
+ *   router.init([
+ *     { path: '/',             load: () => import('./pages/public/HomePage.ts'),    public: true },
+ *     { path: '/posts/:slug',   load: () => import('./pages/public/PostPage.ts'),    public: true },
+ *     { path: '/light',        load: () => import('./pages/light/DashboardPage.ts') },
+ *     { path: '/light/login',  load: () => import('./pages/light/LoginPage.ts'),    public: true },
+ *   ], {
+ *     mountPoint: document.getElementById('app'),
+ *     authGuard: () => !!getUser(),
+ *     loginPath: '/light/login',
+ *   });
+ *
+ * The router also listens for the 'app:navigate' custom event dispatched by
+ * the navigate() helper in utils/helpers.ts, keeping components decoupled
+ * from the router module.
+ */
+
+import { setRoute, setToast } from "./store.ts";
+import { setPageTitle } from "./utils/documentTitle.ts";
+import { subclassHooks, type Component } from "./components/Component.ts";
+import { carryStateToPath, getAtlasLayerState } from "./plugins/tags-atlas/atlasLayerState.ts";
+
+/**
+ * What the router hands every page it mounts, and again to onRouteUpdate() on
+ * a same-route navigation: the `:name` segments of the matched pattern and the
+ * parsed query string.
+ */
+export interface PageProps {
+  params: Record<string, string>;
+  query: Record<string, string>;
+}
+
+/** One route table entry. */
+export interface Route {
+  /** Pattern, with `:name` segments. */
+  path: string;
+  /** Resolves to the page class. */
+  load: Function;
+  /** Reachable without a session. */
+  public?: boolean;
+  /** Document title. */
+  title?: string;
+  /**
+   * Shared identity: two patterns with the same key resolve to the same page instance, refreshed
+   * through onRouteUpdate().
+   */
+  key?: string;
+}
+
+class Router {
+  _routes: Route[];
+  _mountPoint: HTMLElement|null;
+  /** returns true if user is authenticated */
+  _authGuard: Function|null;
+  _loginPath: string;
+  _setupPath: string;
+  _currentPage: import('./components/Component.ts').Component|null;
+  _currentRoute: Route|null;
+
+  constructor() {
+    this._routes = [];
+    this._mountPoint = null;
+    this._authGuard = null;
+    this._loginPath = "/light/login";
+    this._setupPath = "/setup";
+    this._currentPage = null;
+    this._currentRoute = null;
+
+    this._onPopState = this._onPopState.bind(this);
+    this._onNavigate = this._onNavigate.bind(this);
+    this._onUnauthorized = this._onUnauthorized.bind(this);
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────────
+
+  /** Initialise the router and render the current URL. */
+  init(
+    routes: Route[],
+    {
+      mountPoint,
+      authGuard = null,
+      loginPath = "/light/login",
+      setupPath = "/setup",
+    }: { mountPoint: HTMLElement, authGuard?: Function | null, loginPath?: string, setupPath?: string },
+  ) {
+    this._routes = routes;
+    this._mountPoint = mountPoint;
+    this._authGuard = authGuard;
+    this._loginPath = loginPath;
+    this._setupPath = setupPath;
+
+    window.addEventListener("popstate", this._onPopState);
+    window.addEventListener("app:navigate", this._onNavigate);
+    window.addEventListener("api:unauthorized", this._onUnauthorized);
+
+    // Intercept <a> clicks for in-app navigation.
+    document.addEventListener("click", this._onLinkClick.bind(this));
+
+    // Render the current URL on boot.
+    this._render(location.pathname + location.search);
+  }
+
+  /** Render the standard 404 fallback without changing the URL. */
+  notFound() {
+    this._showFallback("404", "Page not found.");
+  }
+
+  /** Programmatically navigate to a path. */
+  navigate(path: string, { replace = false }: { replace?: boolean } = {}) {
+    // A move between post list pages keeps the atlas layer's view mode (list,
+    // map and list, map only). The URL carries it; the next page reads it on mount.
+    if (document.body.hasAttribute("data-atlas-layer")) {
+      path = carryStateToPath(path, getAtlasLayerState());
+    }
+    if (replace) {
+      history.replaceState(null, "", path);
+    } else {
+      history.pushState(null, "", path);
+    }
+    // Always render using the browser's resolved location to ensure absolute
+    // path matching in the router.
+    this._render(location.pathname + location.search + location.hash);
+  }
+
+  /**
+   * Re-render the current location from scratch, without touching history.
+   *
+   * navigate() to the same URL takes the same-route path and only calls
+   * onRouteUpdate, which refreshes the page's content but leaves the chrome
+   * (header, footer, tag cloud) as it was. This drops the page instance first,
+   * so everything is rebuilt — for when what changed is not *where* the reader
+   * is but *what they may see* there, i.e. the revelio switch.
+   *
+   * Still an in-document re-render: no document reload, so no white flash.
+   *
+   * @param path - Optional URL to render instead of the current one,
+   *   replacing the history entry (the scheduled feed pages do not exist on the
+   *   guest side of the switch, so concealing has to leave them).
+   */
+  refresh(path?: string) {
+    if (path && path !== location.pathname + location.search + location.hash) {
+      history.replaceState(null, "", path);
+    }
+    if (this._currentPage) {
+      this._currentPage.unmount();
+      this._currentPage = null;
+      this._currentRoute = null;
+    }
+    this._render(location.pathname + location.search + location.hash);
+  }
+
+  // ── Private ───────────────────────────────────────────────────────────────
+
+  _onPopState() {
+    this._render(location.pathname + location.search + location.hash);
+  }
+
+  _onNavigate(event: Event) {
+    const { path, replace } = (event as CustomEvent<{ path: string; replace?: boolean }>).detail;
+    this.navigate(path, { replace });
+  }
+
+  _onUnauthorized() {
+    window.dispatchEvent(
+      new CustomEvent("app:login-required", { detail: { next: null } }),
+    );
+  }
+
+  /** Intercept clicks on same-origin <a> elements. */
+  _onLinkClick(event: MouseEvent) {
+    if (event.defaultPrevented) return;
+
+    // A modified click asks for a destination other than "here" — a new tab or
+    // window, or a download. Leave those to the browser: now that the admin's
+    // links to the public site are ordinary in-app links, this is the way to
+    // deliberately open one beside the admin instead of navigating away from it.
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    const anchor = (event.target as Element).closest<HTMLAnchorElement>("a[href]");
+    if (!anchor) return;
+
+    const href = anchor.getAttribute("href");
+    if (
+      !href ||
+      href.startsWith("http") ||
+      href.startsWith("//") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("#") ||
+      href.startsWith("/api/") ||
+      anchor.hasAttribute("data-external") ||
+      anchor.target === "_blank"
+    ) {
+      return;
+    }
+
+    // The login page is intentionally reached by a full document load (see the
+    // auth guard), so links to it are not intercepted for SPA navigation.
+    if (anchor.pathname === this._loginPath) return;
+
+    // Use the resolved pathname, search and hash from the anchor element
+    // instead of the raw href attribute. This ensures that relative links are
+    // correctly resolved against the current base URL before we attempt to match.
+    const path = anchor.pathname + anchor.search + anchor.hash;
+
+    event.preventDefault();
+    this.navigate(path);
+  }
+
+  /**
+   * Match a route pattern against a pathname. Returns params object or null.
+   *
+   * @param pattern - e.g. '/posts/:slug'
+   * @param pathname - e.g. '/posts/my-first-post'
+   */
+  _match(pattern: string, pathname: string): Record<string,string> | null {
+    // Normalize: remove trailing slashes and multiple slashes
+    const cleanPattern = pattern.replace(/\/+$/, "") || "/";
+    const cleanPathname = pathname.replace(/\/+$/, "") || "/";
+
+    const patParts = cleanPattern.split("/");
+    const urlParts = cleanPathname.split("/");
+    if (patParts.length !== urlParts.length) return null;
+
+    const params: Record<string,string> = {};
+    for (let i = 0; i < patParts.length; i++) {
+      if (patParts[i].startsWith(":")) {
+        params[patParts[i].slice(1)] = decodeURIComponent(urlParts[i]);
+      } else if (patParts[i] !== urlParts[i]) {
+        return null;
+      }
+    }
+    return params;
+  }
+
+  /**
+   * Parse query string into a plain object.
+   *
+   * @param search - e.g. '?page=2&q=foo'
+   */
+  _parseSearch(search: string): Record<string,string> {
+    const out: Record<string,string> = {};
+    for (const [k, v] of new URLSearchParams(search)) {
+      out[k] = v;
+    }
+    return out;
+  }
+
+  /**
+   * Resolve the route for a path, unmount the current page, mount the new one.
+   *
+   * @param fullPath - pathname + optional search string
+   */
+  async _render(fullPath: string) {
+    // Strip hash if present
+    const hashIndex = fullPath.indexOf("#");
+    const pathWithoutHash =
+      hashIndex === -1 ? fullPath : fullPath.slice(0, hashIndex);
+
+    const qIndex = pathWithoutHash.indexOf("?");
+    const pathname =
+      qIndex === -1 ? pathWithoutHash : pathWithoutHash.slice(0, qIndex);
+    const search = qIndex === -1 ? "" : pathWithoutHash.slice(qIndex);
+    const query = this._parseSearch(search);
+
+    let matchedRoute = null;
+    let params = {};
+    for (const route of this._routes) {
+      const p = this._match(route.path, pathname);
+      if (p !== null) {
+        matchedRoute = route;
+        params = p;
+        break;
+      }
+    }
+
+    if (!matchedRoute) {
+      if (pathname.startsWith("/light") && pathname !== "/light") {
+        setToast({ message: "Page not found.", type: "error" });
+        this.navigate("/light", { replace: true });
+      } else {
+        this._showFallback("404", "Page not found.");
+      }
+      return;
+    }
+
+    // Setup guard, for in-app navigation. Document loads are already handled by
+    // the server, which redirects every path to /setup while the install has no
+    // owner (see the SPA fallback in cmd/api/main.go) — so a fresh install lands
+    // on the wizard from "/" too, without rendering a public shell first. That
+    // leaves this guard the SPA-side cases: navigating into /light/* before
+    // setup is complete, and landing on /setup once it is (→ /light). Public
+    // routes are deliberately not checked here: while setup is pending the only
+    // document that ever loads is /setup itself, so a status fetch on every
+    // public navigation would cost every visitor a request forever to cover a
+    // path that cannot be reached.
+    if (pathname.startsWith("/light") || pathname === this._setupPath) {
+      try {
+        const res = await fetch("/api/setup/status", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("unavailable");
+        const data = await res.json();
+        if (!data.setup_complete && pathname !== this._setupPath) {
+          this.navigate(this._setupPath, { replace: true });
+          return;
+        }
+        if (data.setup_complete && pathname === this._setupPath) {
+          this.navigate("/light", { replace: true });
+          return;
+        }
+      } catch {
+        // If the status check fails, proceed normally (e.g. network error).
+      }
+    }
+
+    // Auth guard: send unauthenticated visitors to the standalone login page
+    // via a hard navigation, so the credential form loads in its own document —
+    // isolated from any third-party markup injected into the guest UI, and
+    // tearing that guest document down before a password is entered.
+    if (!matchedRoute.public && this._authGuard && !this._authGuard()) {
+      window.location.assign(
+        `${this._loginPath}?next=${encodeURIComponent(fullPath)}`,
+      );
+      return;
+    }
+
+    // Same-route optimisation: reuse the existing page instance when navigating
+    // between pages that share the same route pattern (e.g. post → post), or
+    // distinct patterns that resolve to the same page via an explicit shared
+    // `key`. Reuse calls onRouteUpdate so the page can refresh in place instead
+    // of remounting.
+    const sameRoute =
+      this._currentRoute === matchedRoute ||
+      (this._currentRoute &&
+        matchedRoute.key &&
+        this._currentRoute.key === matchedRoute.key);
+    const hooks = this._currentPage && subclassHooks(this._currentPage);
+    if (
+      this._currentPage &&
+      sameRoute &&
+      typeof hooks?.onRouteUpdate === "function"
+    ) {
+      setRoute({ pathname, params, query });
+      this._currentRoute = matchedRoute;
+      hooks.onRouteUpdate(params, query);
+      return;
+    }
+
+    if (this._currentPage) {
+      this._currentPage.unmount();
+      this._currentPage = null;
+      this._currentRoute = null;
+    }
+
+    // A page is being replaced, so the title the outgoing one set is now stale.
+    // Reset it here — the one funnel every navigation passes through, including
+    // back/forward — rather than asking fifteen pages to remember. Routes with a
+    // fixed name declare it in the table (see app.ts); routes whose name depends
+    // on loaded data (a post, a tag, a search query) declare nothing and call
+    // setPageTitle() themselves once the fetch resolves, which lands after this.
+    // Deliberately *not* on the same-route path above: there the page instance
+    // survives and owns its own title across an in-place refresh.
+    setPageTitle(matchedRoute.title);
+
+    setRoute({ pathname, params, query });
+
+    try {
+      const mod = await matchedRoute.load();
+      const PageClass = mod.default;
+      const page: Component = new PageClass(this._mountPoint, { params, query });
+      this._currentPage = page;
+      this._currentRoute = matchedRoute;
+      page.mount();
+    } catch (err) {
+      console.error("[Router] Failed to load page:", err);
+      if (pathname.startsWith("/light") && pathname !== "/light") {
+        setToast({
+          message: "Failed to load page. Please try again.",
+          type: "error",
+        });
+        this.navigate("/light", { replace: true });
+      } else {
+        this._showFallback("Error", "Failed to load page. Please try again.");
+      }
+    }
+  }
+
+  /**
+   * Render a simple static fallback (404 / error) using safe DOM methods.
+   * No user content is interpolated here so no escaping is needed.
+   */
+  _showFallback(heading: string, body: string) {
+    setPageTitle(heading === "404" ? "Page not found" : heading);
+    if (this._currentPage) {
+      this._currentPage.unmount();
+      this._currentPage = null;
+    }
+    if (!this._mountPoint) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "error-page";
+
+    const h1 = document.createElement("h1");
+    h1.textContent = heading;
+
+    const p = document.createElement("p");
+    p.textContent = body;
+
+    const link = document.createElement("a");
+    const isLight = window.location.pathname.startsWith("/light");
+    link.href = isLight ? "/light" : "/";
+    link.textContent = "Go to main";
+
+    wrap.append(h1, p, link);
+    this._mountPoint.textContent = "";
+    this._mountPoint.appendChild(wrap);
+  }
+}
+
+/** Singleton router instance. */
+export const router = new Router();

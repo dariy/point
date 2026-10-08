@@ -20,6 +20,10 @@ import (
 
 type AuthService struct {
 	repo repository.Repository
+	// revokeOAuth revokes every MCP OAuth token. The default deletes the rows
+	// only; the MCP provider replaces it (SetOAuthRevoker) so that its memory
+	// tier is cleared at the same time.
+	revokeOAuth func(ctx context.Context) error
 }
 
 // dummyPasswordHash is a valid Argon2id hash. When a user lookup misses we still
@@ -28,7 +32,20 @@ type AuthService struct {
 var dummyPasswordHash, _ = HashPassword("0000000000000000000000000000000000000000000000000000000000000000")
 
 func NewAuthService(repo repository.Repository) *AuthService {
-	return &AuthService{repo: repo}
+	return &AuthService{repo: repo, revokeOAuth: repo.DeleteAllOAuthTokens}
+}
+
+// SetOAuthRevoker replaces how a credential change revokes MCP OAuth tokens.
+func (s *AuthService) SetOAuthRevoker(fn func(ctx context.Context) error) {
+	s.revokeOAuth = fn
+}
+
+// revokeOAuthTokens runs after a credential change. A failure is logged and
+// does not fail the change: the password is already stored.
+func (s *AuthService) revokeOAuthTokens(ctx context.Context) {
+	if err := s.revokeOAuth(ctx); err != nil {
+		slog.Error("auth: revoke OAuth tokens", "err", err)
+	}
 }
 
 func HashToken(token string) string {
@@ -138,8 +155,14 @@ func (s *AuthService) TerminateSession(ctx context.Context, sessionID, userID in
 	return s.repo.DeleteSession(ctx, models.DeleteSessionParams{ID: sessionID, UserID: userID})
 }
 
+// TerminateOtherSessions signs out every other session and revokes every MCP
+// OAuth token: a connected app is one more place the account is signed in.
 func (s *AuthService) TerminateOtherSessions(ctx context.Context, userID, currentSessionID int64) error {
-	return s.repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: userID, ID: currentSessionID})
+	if err := s.repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: userID, ID: currentSessionID}); err != nil {
+		return err
+	}
+	s.revokeOAuthTokens(ctx)
+	return nil
 }
 
 func (s *AuthService) ListSessions(ctx context.Context, userID int64) ([]models.Session, error) {
@@ -246,6 +269,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword stri
 	// A reset is a recovery action: kill every existing session so a previously
 	// compromised session can't survive the password change (ID 0 matches none).
 	_ = s.repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: userID, ID: 0})
+	s.revokeOAuthTokens(ctx)
 	return nil
 }
 
@@ -295,6 +319,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID, currentSession
 	}
 
 	_ = s.repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: userID, ID: currentSessionID})
+	s.revokeOAuthTokens(ctx)
 	return nil
 }
 

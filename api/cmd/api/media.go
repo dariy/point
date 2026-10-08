@@ -5,6 +5,7 @@ package main
 // registered in routes.go.
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"mime"
@@ -149,6 +150,16 @@ const publicVariantCacheControl = "public, max-age=86400, s-maxage=31536000"
 // not a caching one.
 const notFoundCacheControl = "public, max-age=30, s-maxage=60"
 
+// stripGPS reports whether served originals must carry no GPS position. The
+// setting is on when its row is absent.
+func stripGPS(ctx context.Context, settings *services.SettingsService) bool {
+	if settings == nil {
+		return true
+	}
+	v, err := settings.GetSetting(ctx, services.StripGPSPublicSetting, "true")
+	return err != nil || v != "false"
+}
+
 // serveSimplifiedMedia handles /YYYY/MM/filename for media files.
 //
 // Access rules:
@@ -167,8 +178,9 @@ const notFoundCacheControl = "public, max-age=30, s-maxage=60"
 //   - No size serves the original (media/originals/…), as does a size at or
 //     above the source's longest side.
 //
-// Non-numeric year/month segments are SPA routes — index.html is served instead.
-func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.Repository, mediaSvc *services.MediaService, s3Presigner *services.S3Presigner, settings *services.SettingsService, chunks map[string]string, cssMap map[string]bool) echo.HandlerFunc {
+// Non-numeric year/month segments are SPA routes — the public shell from
+// assets() is served instead.
+func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo repository.Repository, mediaSvc *services.MediaService, s3Presigner *services.S3Presigner, settings *services.SettingsService) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
@@ -178,15 +190,17 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 		yearInt, yearErr := strconv.Atoi(year)
 		monthInt, monthErr := strconv.Atoi(month)
 		if yearErr != nil || monthErr != nil || yearInt < 1000 || yearInt > 9999 || monthInt < 1 || monthInt > 12 {
-			if indexHTMLContent != "" {
-				script, hash := bootstrapScript(c.Request().Context(), settings, chunks, cssMap)
-				htmlStr := strings.Replace(indexHTMLContent, "</head>", script+"\n</head>", 1)
+			if a := assets(); a.Shell != "" {
+				script, hash := bootstrapScript(c.Request().Context(), settings, a.ChunkMap, a.CSSMap)
+				htmlStr := strings.Replace(a.Shell, "</head>", script+"\n</head>", 1)
 
 				csp := c.Response().Header().Get("Content-Security-Policy")
 				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
 				c.Response().Header().Set("Content-Security-Policy", csp)
 
-				return c.HTML(http.StatusOK, htmlStr)
+				// Only admin routes (/light/tags/<slug>, …) have three
+				// segments; any other path here is not a page.
+				return c.HTML(shellStatus(c.Request().URL.Path, seoMeta{}, hasSession(c)), htmlStr)
 			}
 			return c.JSON(http.StatusServiceUnavailable, map[string]string{
 				"detail": "Frontend not available — build the frontend first",
@@ -282,6 +296,14 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 			return c.File(servedVariant)
 		}
 
+		// A video is served as its browser-safe transcode once the job wrote
+		// it. Until then, or when the job failed, the original is served.
+		if variantSize == 0 {
+			if mp4 := mediaSvc.TranscodedVideo(media); mp4 != "" {
+				return c.File(mp4)
+			}
+		}
+
 		// Serve original — try exact path first, then checksum-glob fallback.
 		origDir := filepath.Join(storagePath, "media", "originals", year, month)
 		origFile := filepath.Clean(filepath.Join(origDir, filepath.Base(filename)))
@@ -294,6 +316,21 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 
 		if _, err := os.Stat(origFile); err == nil {
 			neutralizeSVG(c, origFile)
+
+			// The GPS rule does not depend on the requester, so a shared cache
+			// holds one version of the URL. A copy that cannot be written is
+			// not a reason to serve the position: fail closed.
+			if stripGPS(ctx, settings) {
+				noGPS, stripErr := mediaSvc.NoGPSOriginal(ctx, media)
+				if stripErr != nil {
+					log.Printf("strip GPS from %s: %v", media.OriginalPath, stripErr)
+					c.Response().Header().Set("Cache-Control", notFoundCacheControl)
+					return echo.NewHTTPError(http.StatusInternalServerError, "media unavailable")
+				}
+				if noGPS != "" {
+					return c.File(noGPS)
+				}
+			}
 
 			s3Enabled := c.Request().Header.Get("X-Point-Direct-S3") == "1"
 			if s3Enabled && s3Presigner != nil {
@@ -328,6 +365,12 @@ func serveSimplifiedMedia(storagePath, indexHTMLContent string, repo repository.
 				// Security: double-check the globbed file prefix.
 				if strings.HasPrefix(matchFile, filepath.Join(storagePath, "media", "originals")) {
 					neutralizeSVG(c, matchFile)
+					if stripGPS(ctx, settings) && services.StripsGPS(media.MimeType) {
+						// The record names another file than the one found, so
+						// no GPS-free copy maps to it. Do not serve the position.
+						c.Response().Header().Set("Cache-Control", notFoundCacheControl)
+						return echo.NewHTTPError(http.StatusNotFound, "media not found")
+					}
 					return c.File(matchFile)
 				}
 			}

@@ -1,4 +1,11 @@
 version: 2
+
+# One PR per ecosystem per cycle: minor and patch bumps are grouped, so a week
+# of dependency churn is one CI run and one merge instead of a PR per package.
+# Major bumps stay out of the group (a group only matches the update-types it
+# lists) and keep arriving one PR each, because each one can break something
+# and wants its own review. Docker base images and pinned actions move slowly,
+# so they are checked monthly.
 updates:
   - package-ecosystem: gomod
     directory: /api
@@ -6,24 +13,36 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     target-branch: "develop"
-    
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     target-branch: "develop"
-    
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     target-branch: "develop"
-    
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: docker
     directory: /build
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     target-branch: "develop"
+    groups:
+      docker-minor-patch:
+        update-types: [minor, patch]

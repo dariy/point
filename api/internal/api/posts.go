@@ -103,6 +103,45 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 	}
 }
 
+// guestEXIFKeys is the EXIF a guest may read: the six fields the viewer shows
+// (EXIF_FIELDS in frontend/src/utils/exif.ts). GPS is never among them.
+var guestEXIFKeys = []string{"ExposureTime", "FNumber", "FocalLength", "ISOSpeedRatings", "Make", "Model"}
+
+// guestMediaMetadata decides the metadata a guest gets for one media item.
+// With exif_visibility "all" it keeps only guestEXIFKeys; with any other value
+// the guest gets none. The stored blob keeps GPS for the admin and for
+// location tagging, so it must never reach a guest whole.
+func guestMediaMetadata(metadata map[string]interface{}, visibility string) map[string]interface{} {
+	if visibility != "all" || metadata == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(guestEXIFKeys))
+	for _, k := range guestEXIFKeys {
+		if v, ok := metadata[k]; ok {
+			out[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// scrubGuestMedia applies guestMediaMetadata to every media item of a post
+// response built by buildPostResponse. Every guest emitter calls it.
+func (h *PostHandler) scrubGuestMedia(ctx context.Context, resp map[string]interface{}) {
+	visibility, _ := h.settingsService.GetSetting(ctx, "exif_visibility", "hide")
+	items, _ := resp["media"].([]map[string]interface{})
+	for _, m := range items {
+		md, _ := m["metadata"].(map[string]interface{})
+		if g := guestMediaMetadata(md, visibility); g != nil {
+			m["metadata"] = g
+		} else {
+			delete(m, "metadata")
+		}
+	}
+}
+
 // fetchPostMedia returns the media rows a post references, plus the thumbnail
 // generation token its variant URLs are built with. The token comes back from
 // here rather than from a second call at each site because it is only ever
@@ -318,6 +357,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 		injectPostInstagramFields(resp, post)
 	} else {
+		h.scrubGuestMedia(ctx, resp)
 		showViewCountsStr, _ := h.settingsService.GetSetting(ctx, "show_view_counts", "false")
 		if showViewCountsStr != "true" {
 			delete(resp, "view_count")
@@ -474,6 +514,8 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 	if isAdmin {
 		injectPostHiddenFields(resp, post.Status, tags, effectiveHiddenPosts)
 		injectPostInstagramFields(resp, post)
+	} else {
+		h.scrubGuestMedia(ctx, resp)
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -885,6 +927,7 @@ func (h *PostHandler) GetPostByPreviewToken(c echo.Context) error {
 	htmlContent, _ := h.postService.RenderContent(post.Content)
 	postMedia, mediaGen := h.fetchPostMedia(c.Request().Context(), post)
 	resp := buildPostResponse(post, tags, htmlContent, nil, postMedia, mediaGen)
+	h.scrubGuestMedia(c.Request().Context(), resp)
 	resp["preview_mode"] = true
 
 	return c.JSON(http.StatusOK, resp)

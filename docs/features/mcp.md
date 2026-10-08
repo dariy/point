@@ -21,7 +21,9 @@ surface admins must consciously enable from `/light/plugins`).
   discovery, dynamic client registration, authorize, token) so remote clients
   (Claude.ai web/desktop) can connect by URL. OAuth login validates against the real
   admin credential — there is no separate MCP password.
-- **Plugin gating**: with the plugin disabled, `/mcp` and the OAuth discovery routes 404.
+- **Plugin gating**: with the `mcp` plugin disabled, `/mcp` and the OAuth discovery routes
+  404. Individual tools carry the plugin gate of the route they dispatch to as well — see
+  decision 6 below.
 
 ## Key architectural decisions
 
@@ -41,6 +43,42 @@ surface admins must consciously enable from `/light/plugins`).
    restricted to `PHOTO_LIBRARY_PATH` (the path is not on the MCP client's machine).
 5. **Config**: `MCP_BASE_URL` is the public HTTPS base for OAuth discovery; it falls
    back to `APP_URL`.
+6. **A disabled plugin disables the capability on every transport.** In-process dispatch
+   skips route middleware, so `api.RequirePlugin` — the thing that 404s a disabled
+   plugin's routes — never runs for MCP callers. Enabling `mcp` is not consent to the
+   capabilities an admin has switched off elsewhere, so `addGatedTool` re-applies the
+   named gate in the tool itself: the tool is omitted from `tools/list` when the plugin
+   is off as the session opens, and the call re-checks (a toggle can flip mid-session),
+   answering `404: not found` exactly as its route would. Today this covers
+   `point_analyze_media` (`ai-analysis`); every other tool lands on an ungated handler.
+7. **The sign-in page names where access goes.** Client registration is open, as MCP
+   requires, so any party can register a callback on its own host and send the owner an
+   authorize link. The page therefore states the redirect host ("Access goes to
+   host"), taken from the redirect URI that matched a registered URI. When the host is
+   not loopback (`localhost`, `127.0.0.1`, `[::1]`), the page also shows a warning:
+   continue only if you started the connection from that host. The page shows no client
+   name, because the client chooses its own name.
+8. **Refresh tokens expire after 30 days.** `mcp.Register` sets `RefreshTokenTTL`. Each
+   refresh issues a new refresh token, so a client in use stays connected. At startup,
+   refresh tokens stored with no expiry (issued before the TTL) get an expiry of now plus
+   30 days.
+9. **A credential change revokes every OAuth token.** A password change, a password
+   reset, "log out all other devices" and the offline `point reset-password` CLI delete
+   every row in `oauth_tokens`. Registered clients stay, so a client can sign in again
+   with the new password. `mcp.Register` installs `Provider.RevokeAll` as the
+   `AuthService` revoker, so the server clears its memory tier at the same time.
+10. **The owner can revoke one connected app.** The API Keys panel lists the OAuth
+    clients (`GET /api/auth/oauth-clients`: redirect hosts, registration time, live
+    tokens) with a Revoke button (`DELETE /api/auth/oauth-clients/:id`). A revoke deletes
+    the client and its tokens in both tiers; the client must register again. The routes
+    need a session cookie and 404 when the `mcp` plugin is off.
+11. **The memory tier trusts a cached token for at most one minute.** The provider
+    caches tokens in memory (`lookupToken`). After `tokenCacheTTL` (one minute), it reads
+    the Store again, and a token that is gone from the Store is gone from memory too.
+    This is how a revoke from the offline CLI, which cannot reach the server's memory,
+    takes effect: in at most one minute. A revoke through the provider is immediate. A
+    token whose Store write failed (`MemOnly`) is known only to memory, so it is not
+    read again; it dies with the process or with `RevokeAll`.
 
 ## Out of scope
 
@@ -54,4 +92,6 @@ surface admins must consciously enable from `/light/plugins`).
 - Destructive tool semantics: `point_update_tag` (like the REST PUT it wraps) replaces
   the whole tag — omitted fields are wiped; clients must resend the full object.
 - When adding a REST endpoint that should be MCP-visible, add a tool entry in
-  `tools.go`; the dispatcher needs no changes.
+  `tools.go`; the dispatcher needs no changes. If the route carries
+  `api.RequirePlugin(...)`, register with `addGatedTool(s, inv, "<plugin-id>", ...)` —
+  nothing fails when you forget, the gate is simply not enforced for MCP callers.

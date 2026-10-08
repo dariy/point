@@ -1,7 +1,7 @@
 # Timeline
 
 An interactive horizontal pan/zoom control over year tags (`kind='year'`), shipped as
-the `timeline` slot plugin (`frontend/src/plugins/timeline/index.js`, ~1500 lines). Two
+the `timeline` slot plugin (`frontend/src/plugins/timeline/index.ts`, ~1500 lines). Two
 modes:
 
 - **Filter mode** (HomePage, map): the centered year/range filters posts/pins live and
@@ -25,6 +25,10 @@ From the 2026 UX pass (the proposal graduated into implementation):
   of a cramped anchored card; the clicked year is always the first row.
 - **Haptic tick** on snap (`navigator.vibrate(10)`), respecting reduced motion.
 - ≥44 px touch targets on coarse pointers.
+- **Short form on narrow widths** (header fold 70, `.fold-timeline`): one pill. A tap
+  opens a vertical spinner panel (previous, active, next year, `…` marks). A vertical
+  drag, swipe or wheel and Up/Down move the previewed year; a tap on the active year or
+  Enter confirms (one `focusYear`); Escape or an outside tap cancels.
 
 ## Key decisions (including deliberate divergence from the proposal)
 

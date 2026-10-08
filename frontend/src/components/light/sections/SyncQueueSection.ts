@@ -1,0 +1,97 @@
+/**
+ * SyncQueueSection — the "Pending Sync Queue" block for the `offline-sync`
+ * plugin. Lists queued offline mutations and lets the admin retry failed ones or
+ * sync now. Extracted from SystemPage into the plugin settings drawer.
+ */
+
+import { Component } from "../../Component.ts";
+import { getQueue, resetFailedOps, updateStatus } from "../../../utils/mutationQueue.ts";
+import type { QueuedOp } from "../../../utils/mutationQueue.ts";
+import { syncQueue } from "../../../utils/sync.ts";
+import { setToast } from "../../../store.ts";
+import { html, raw } from "../../../utils/helpers.ts";
+import { formatDateShort } from "../../../utils/formatters.ts";
+import { WARNING_SVG } from "../../../utils/icons.ts";
+
+export class SyncQueueSection extends Component {
+  constructor(container: HTMLElement, props: object = {}) {
+    super(container, props);
+    this.state = { loading: true, queue: [] };
+  }
+
+  render() {
+    const { loading, queue } = this.state;
+    const failedCount = queue.filter((op: QueuedOp) => op.status === "failed").length;
+    const pendingCount = queue.filter((op: QueuedOp) => op.status !== "failed").length;
+
+    let rows;
+    if (loading) {
+      rows = html`<div class="loading-spinner btn-sm"></div>`;
+    } else if (!queue.length) {
+      rows = html`<p class="empty-state">No pending operations.</p>`;
+    } else {
+      rows = queue
+        .map((op: QueuedOp) => {
+          const icon = op.status === "failed" ? raw(WARNING_SVG) : "●";
+          const statusCls = op.status === "failed" ? "status-failed" : "status-pending";
+          return html`
+          <div class="sync-queue-item ${statusCls}">
+            <span class="sync-icon">${icon}</span>
+            <div class="sync-details">
+              <div class="sync-op"><strong>${op.method}</strong> ${op.url}</div>
+              ${op.error ? html`<div class="sync-error">${op.error}</div>` : ""}
+            </div>
+            <div class="sync-meta">${formatDateShort(new Date(op.timestamp).toISOString())}</div>
+          </div>`;
+        });
+    }
+
+    return html`
+      <section class="card">
+        <div class="card-header">
+          <h2>Pending Sync Queue</h2>
+          <div class="header-actions">
+            ${failedCount > 0 ? html`<button id="reset-sync-btn" class="btn btn-sm btn-secondary">Retry Failed</button>` : ""}
+            ${pendingCount > 0 ? html`<button id="sync-now-btn" class="btn btn-sm btn-primary">Sync Now</button>` : ""}
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="sync-queue-list">${rows}</div>
+        </div>
+      </section>`;
+  }
+
+  afterRender() {
+    this.$("#reset-sync-btn")?.addEventListener("click", () => this._handleReset());
+    this.$("#sync-now-btn")?.addEventListener("click", () => this._handleSync());
+  }
+
+  mount() {
+    super.mount();
+    this._load();
+  }
+
+  async _load() {
+    const queue = await getQueue().catch(() => []);
+    this.setState({ loading: false, queue: Array.isArray(queue) ? queue : [] });
+  }
+
+  async _handleReset() {
+    try {
+      await resetFailedOps();
+      this._load();
+      updateStatus();
+    } catch (_err) {
+      setToast({ message: "Failed to reset queue.", type: "error" });
+    }
+  }
+
+  async _handleSync() {
+    try {
+      await syncQueue();
+      this._load();
+    } catch (_err) {
+      /* already handled in syncQueue */
+    }
+  }
+}

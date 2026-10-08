@@ -1,0 +1,103 @@
+/**
+ * PasskeysSection — the WebAuthn passkey block for the `passkeys` plugin.
+ * Self-loads passkey status and handles register/remove. Extracted from
+ * SecurityPage into the plugin settings drawer.
+ */
+
+import { Component } from "../../Component.ts";
+import { getPasskeyStatus, registerPasskey, deletePasskey } from "../../../api/auth.ts";
+import { setToast } from "../../../store.ts";
+import { showConfirm } from "../../../utils/dialogs.ts";
+import { html } from "../../../utils/helpers.ts";
+
+export class PasskeysSection extends Component {
+  constructor(container: HTMLElement, props: object = {}) {
+    super(container, props);
+    this.state = {
+      loading: true,
+      supported: typeof window.PublicKeyCredential !== "undefined",
+      status: null,
+      working: false,
+    };
+  }
+
+  render() {
+    const { loading, supported, status, working } = this.state;
+
+    // Rendered flush inside the plugin drawer, which supplies the "Passkeys" title.
+    if (!supported) {
+      return html`<p class="text-muted">Passkeys are not supported by this browser.</p>`;
+    }
+    if (loading) {
+      return html`<div class="loading-spinner btn-sm"></div>`;
+    }
+    if (!status?.configured) {
+      return html`<p class="text-muted">Passkeys are not configured on this server.</p>`;
+    }
+    if (status?.has_passkey) {
+      return html`
+        <div class="passkey-status success">
+          <p>Passkey is registered.</p>
+          <button id="delete-passkey-btn" class="btn btn-sm btn-danger" ${working ? "disabled" : ""}>Remove Passkey</button>
+        </div>`;
+    }
+    return html`
+      <p>Register a passkey for faster, more secure login.</p>
+      <button id="register-passkey-btn" class="btn btn-primary" ${working ? "disabled" : ""}>Register Passkey</button>`;
+  }
+
+  afterRender() {
+    this.$("#register-passkey-btn")?.addEventListener("click", () => this._handleRegister());
+    this.$("#delete-passkey-btn")?.addEventListener("click", () => this._handleDelete());
+  }
+
+  mount() {
+    super.mount();
+    this._load();
+  }
+
+  async _load() {
+    if (!this.state.supported) {
+      this.setState({ loading: false });
+      return;
+    }
+    const status = await getPasskeyStatus().catch(() => null);
+    this.setState({ loading: false, status });
+  }
+
+  async _handleRegister() {
+    this.setState({ working: true });
+    try {
+      await registerPasskey();
+      setToast({ message: "Passkey registered.", type: "success" });
+      this._load();
+    } catch (err) {
+      if ((err as Error).name !== "NotAllowedError") {
+        setToast({ message: (err as Error).message || "Failed to register passkey.", type: "error" });
+      }
+    } finally {
+      this.setState({ working: false });
+    }
+  }
+
+  _handleDelete() {
+    showConfirm({
+      title: "Remove Passkey",
+      message: "Remove passkey? You will need to use your password to login.",
+      confirmText: "Remove",
+      variant: "danger",
+      onConfirm: async () => {
+        this.setState({ working: true });
+        try {
+          await deletePasskey();
+          setToast({ message: "Passkey removed.", type: "success" });
+          this._load();
+        } catch (err) {
+          setToast({ message: (err as Error).message || "Failed to remove passkey.", type: "error" });
+        } finally {
+          this.setState({ working: false });
+        }
+      },
+    });
+  }
+}

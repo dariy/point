@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -48,9 +49,18 @@ type SystemHandler struct {
 	// health is the background-job outcome registry surfaced by GetHealth.
 	// Nil is valid: the endpoint then reports no jobs.
 	health *services.HealthRegistry
+	// jobs is the durable job store shown by ListJobs. Nil is valid: the
+	// endpoint then reports no jobs.
+	jobs *services.JobService
+	// ffmpeg is the detected video toolchain reported by GetHealth. Nil is
+	// valid: the endpoint then reports ffmpeg as absent.
+	ffmpeg *services.FFmpeg
 	// storageQuotaMB is the operator-configured media allowance (STORAGE_QUOTA_MB)
 	// reported by GetStats. 0 means unlimited and is omitted from the response.
 	storageQuotaMB int
+	// photoLibraryPath is PHOTO_LIBRARY_PATH from the environment, the only
+	// source of the photo library root. Empty means no library.
+	photoLibraryPath string
 }
 
 // WithHealth attaches the background-job health registry. A setter rather than
@@ -58,6 +68,68 @@ type SystemHandler struct {
 func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
 	h.health = r
 	return h
+}
+
+// WithJobs attaches the durable job store for ListJobs and RetryJob.
+func (h *SystemHandler) WithJobs(j *services.JobService) *SystemHandler {
+	h.jobs = j
+	return h
+}
+
+// WithFFmpeg attaches the detected ffmpeg/ffprobe pair for GetHealth.
+func (h *SystemHandler) WithFFmpeg(f *services.FFmpeg) *SystemHandler {
+	h.ffmpeg = f
+	return h
+}
+
+// ListJobs reports the jobs table: a count per state, and the queued,
+// running and failed jobs (newest first, at most 100). Each job shows its
+// kind and the ids in its payload, not the raw payload.
+func (h *SystemHandler) ListJobs(c echo.Context) error {
+	if h.jobs == nil {
+		return c.JSON(http.StatusOK, map[string]any{"counts": map[string]int64{}, "jobs": []services.JobView{}})
+	}
+	ctx := c.Request().Context()
+	counts, err := h.jobs.Counts(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not count jobs")
+	}
+	jobs, err := h.jobs.List(ctx, 100)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not list jobs")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"counts": counts, "jobs": jobs})
+}
+
+// RetryJob sets a failed job back to queued so that the worker runs it again.
+func (h *SystemHandler) RetryJob(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid job id")
+	}
+	if h.jobs == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "No job store")
+	}
+	if err := h.jobs.Retry(c.Request().Context(), id); err != nil {
+		if errors.Is(err, services.ErrJobNotFailed) {
+			return echo.NewHTTPError(http.StatusNotFound, "No failed job with that id")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not retry job")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"status": "queued"})
+}
+
+// ClearFailedJobs removes every failed job and returns the count. It is the
+// only path that removes failed jobs; the daily prune leaves them.
+func (h *SystemHandler) ClearFailedJobs(c echo.Context) error {
+	if h.jobs == nil {
+		return c.JSON(http.StatusOK, map[string]any{"deleted": 0})
+	}
+	n, err := h.jobs.ClearFailed(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not clear failed jobs")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"deleted": n})
 }
 
 // WithStorageQuotaMB attaches the operator-configured storage allowance. A
@@ -68,13 +140,80 @@ func (h *SystemHandler) WithStorageQuotaMB(mb int) *SystemHandler {
 	return h
 }
 
+// WithPhotoLibraryPath attaches PHOTO_LIBRARY_PATH. Empty disables the photo
+// library endpoints.
+func (h *SystemHandler) WithPhotoLibraryPath(path string) *SystemHandler {
+	h.photoLibraryPath = path
+	return h
+}
+
+// photoLibraryRoot returns the cleaned library root and true only when
+// PHOTO_LIBRARY_PATH is set and names a readable directory. The check runs on
+// each call, so a library that is mounted or unmounted later is seen.
+func (h *SystemHandler) photoLibraryConfigured() bool {
+	_, ok := h.photoLibraryRoot()
+	return ok
+}
+
+func (h *SystemHandler) photoLibraryRoot() (string, bool) {
+	if h.photoLibraryPath == "" {
+		return "", false
+	}
+	root := filepath.Clean(h.photoLibraryPath)
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return "", false
+	}
+	d, err := os.Open(root)
+	if err != nil {
+		return "", false
+	}
+	_, err = d.Readdirnames(1)
+	_ = d.Close()
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", false
+	}
+	return root, true
+}
+
+// isInstanceOwner reports whether the request comes from the owner's browser
+// session. API keys and other users are not the owner.
+func (h *SystemHandler) isInstanceOwner(c echo.Context) bool {
+	s, ok := c.Get("user").(models.GetSessionByTokenRow)
+	if !ok {
+		return false
+	}
+	ownerID, err := h.repo.GetOwnerUserID(c.Request().Context())
+	return err == nil && ownerID != 0 && s.UserID == ownerID
+}
+
+// GetPhotoLibraryStatus is the read-only photo library status for the
+// instance owner. It returns 404 when the library is not configured and 403
+// to any caller that is not the owner, so the path stays private.
+func (h *SystemHandler) GetPhotoLibraryStatus(c echo.Context) error {
+	root, ok := h.photoLibraryRoot()
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "photo library not configured")
+	}
+	if !h.isInstanceOwner(c) {
+		return echo.NewHTTPError(http.StatusForbidden, "instance owner only")
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"configured": true,
+		"path":       root,
+	})
+}
+
 // GetHealth reports the last outcome of every background job: the scheduled
 // tasks, Instagram cross-posts and the comments sidecar.
 //
-// This is the whole of Point's runtime observability, and deliberately so —
-// a self-hosted single binary does not want a Prometheus. The question it
-// answers is "is anything quietly broken", which nothing short of reading the
-// request log could answer before.
+// This is the observability an operator gets without configuring anything: it
+// answers "is anything quietly broken" from the admin UI, with no scrape
+// target, no retention policy and no second process. An operator who wants
+// history, alerting or per-route error rates turns on METRICS_ENABLED and gets
+// a Prometheus exposition on a second listener (see
+// docs/features/observability.md); this endpoint stays the zero-configuration
+// answer and is not deprecated by it.
 //
 // The data is per process: a restart clears it, and jobs that have not run yet
 // in this process are absent rather than reported as failing.
@@ -111,10 +250,36 @@ func (h *SystemHandler) GetHealth(c echo.Context) error {
 		"tasks":    out,
 		"degraded": degraded,
 		"uptime":   int64(time.Since(startTime).Seconds()),
+		// capabilities lists optional tools the server found at startup.
+		// The slim image has no ffmpeg, so it serves video originals as is.
+		"capabilities": map[string]any{"ffmpeg": h.ffmpeg.Available()},
+		"backup":       h.backupHealth(c.Request().Context()),
 	})
 }
 
+// backupHealth is the backup block of GetHealth: whether the host manages
+// backups, whether scheduled backups run, and the newest archive time. A
+// host's dead-man check reads last_backup with an API key; it comes from the
+// disk, so it survives a restart, unlike the task entries above.
+func (h *SystemHandler) backupHealth(ctx context.Context) map[string]any {
+	setting, _ := h.settingsService.GetSetting(ctx, "enable_backup", "true")
+	out := map[string]any{
+		"managed": h.systemService.BackupManaged(),
+		"enabled": h.systemService.BackupEnabled(setting),
+	}
+	if last := h.systemService.LastBackupTime(); !last.IsZero() {
+		out["last_backup"] = last
+	}
+	return out
+}
+
 var startTime = time.Now()
+
+// StartTime is when this process began serving. Exported for the metrics
+// exposition, which reports uptime as a gauge; GetHealth and GetStats already
+// derive their uptime from the same variable, so there is one answer to the
+// question rather than three clocks that drift.
+func StartTime() time.Time { return startTime }
 
 func NewSystemHandler(repo repository.Repository, mediaService *services.MediaService, postService *services.PostService, settingsService *services.SettingsService, tagService *services.TagService, systemService *services.SystemService, cacheService *services.CacheService, authService *services.AuthService, dataPath string, appVersion string) *SystemHandler {
 	return &SystemHandler{
@@ -338,7 +503,8 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 		"total_media":       stats.MediaCount,
 		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
 		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
-		"import_configured": h.settingsService.SecretIsSet(ctx, "photo_library_path"),
+		// True only when PHOTO_LIBRARY_PATH names a readable directory.
+		"import_configured": h.photoLibraryConfigured(),
 	}
 	// Omitted when unset so the dashboard shows plain usage rather than a
 	// "0 MB of 0 MB" bar.
@@ -429,11 +595,13 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 		}
 	}
 
+	keep = h.systemService.BackupKeep(keep)
+
 	// Run in the background: a multi-GB archive can take minutes — far longer than
 	// a request should stay open. Progress is observable via ListBackups (the
 	// in-progress .partial entry) and survives page reloads. A detached context is
 	// used so the work isn't cancelled when this request returns.
-	go func() {
+	utils.SafeGo("system: create backup", func() {
 		bgCtx := context.Background()
 		if _, _, err := h.systemService.CreateBackup(bgCtx); err != nil {
 			slog.Error("backup failed", "err", err)
@@ -442,7 +610,7 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 		if _, err := h.systemService.RotateBackups(keep); err != nil {
 			slog.Error("backup rotation failed", "err", err)
 		}
-	}()
+	})
 
 	return c.JSON(http.StatusAccepted, map[string]string{"status": "started"})
 }
@@ -538,13 +706,13 @@ func (h *SystemHandler) RestoreBackup(c echo.Context) error {
 func (h *SystemHandler) RestartServer(c echo.Context) error {
 	// Respond first, then trigger shutdown from a goroutine — a short delay lets
 	// this response flush before the HTTP server stops accepting connections.
-	go func() {
+	utils.SafeGo("system: restart signal", func() {
 		time.Sleep(300 * time.Millisecond)
 		RestartRequested.Store(true)
 		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
 			slog.Error("restart: failed to signal shutdown", "error", err)
 		}
-	}()
+	})
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":  "restarting",
 		"message": "Server is restarting…",
@@ -793,16 +961,10 @@ var importableExtensions = map[string]bool{
 func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	importPath, _ := h.settingsService.GetSecret(ctx, "photo_library_path")
-	if importPath == "" {
+	importPath, ok := h.photoLibraryRoot()
+	if !ok {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"detail": "photo_library_path not configured",
-		})
-	}
-
-	if _, err := os.Stat(importPath); os.IsNotExist(err) {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"detail": fmt.Sprintf("import path does not exist: %s", importPath),
+			"detail": "photo library not configured",
 		})
 	}
 
@@ -883,12 +1045,10 @@ type photoLibraryFileEntry struct {
 }
 
 func (h *SystemHandler) getLibraryRoot(c echo.Context) (string, error) {
-	libraryRoot, _ := h.settingsService.GetSecret(c.Request().Context(), "photo_library_path")
-	if libraryRoot == "" {
-		return "", echo.NewHTTPError(http.StatusBadRequest, "photo_library_path not configured")
+	libraryRoot, ok := h.photoLibraryRoot()
+	if !ok {
+		return "", echo.NewHTTPError(http.StatusBadRequest, "photo library not configured")
 	}
-	// Ensure root is cleaned (no trailing slash issues)
-	libraryRoot = filepath.Clean(libraryRoot)
 	return libraryRoot, nil
 }
 

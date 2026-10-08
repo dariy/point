@@ -27,6 +27,7 @@ type Repository interface {
 	// models.Querier.
 	DeleteSession(ctx context.Context, arg models.DeleteSessionParams) error
 	DeleteSecret(ctx context.Context, key string) error
+	GetOwnerUserID(ctx context.Context) (int64, error)
 	CreateWebAuthnCredential(ctx context.Context, userID int64, credID, pubKey, aaguid []byte, signCount uint32, backupEligible, backupState bool) (*WebAuthnCredential, error)
 	GetWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebAuthnCredential, error)
 	GetWebAuthnCredentialByCredentialID(ctx context.Context, credID []byte) (*WebAuthnCredential, error)
@@ -52,12 +53,14 @@ type Repository interface {
 	// Media
 	ListOrphanedMedia(ctx context.Context, limit, offset int64) ([]models.Medium, error)
 	CountOrphanedMedia(ctx context.Context) (int64, error)
+	SetMediaDimensions(ctx context.Context, id, width, height int64) error
+	ReplaceMediaOriginal(ctx context.Context, id int64, filename, originalPath, mimeType string, fileSize int64) error
 	GetMediaByIDs(ctx context.Context, ids []int64) ([]models.Medium, error)
 	DeleteMediaByIDs(ctx context.Context, ids []int64) error
 	ListOrphanedMediaByPage(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
 	ListMediaFolders(ctx context.Context, fileType string) ([]MediaFolder, error)
-	ListMediaFiltered(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error)
-	CountMediaFiltered(ctx context.Context, fileType, folder string) (int64, error)
+	ListMediaFiltered(ctx context.Context, fileType, folder, filename string, limit, offset int64) ([]models.Medium, error)
+	CountMediaFiltered(ctx context.Context, fileType, folder, filename string) (int64, error)
 	GetMediaByPath(ctx context.Context, originalPath string) (models.Medium, error)
 	SetMediaPublic(ctx context.Context, mediaID int64, isPublic bool, postID *int64) error
 	GetAllMediaPaths(ctx context.Context) ([]models.Medium, error)
@@ -115,9 +118,25 @@ type Repository interface {
 	GetOAuthToken(ctx context.Context, tokenHash string) (clientID string, expiresAt time.Time, found bool, err error)
 	DeleteOAuthToken(ctx context.Context, tokenHash string) error
 	DeleteExpiredOAuthTokens(ctx context.Context, now time.Time) error
+	ExpireUnboundedOAuthTokens(ctx context.Context, expiresAt time.Time) error
+	ListOAuthClients(ctx context.Context, now time.Time) ([]OAuthClientSummary, error)
+	DeleteOAuthClient(ctx context.Context, clientID string) error
+	DeleteAllOAuthTokens(ctx context.Context) error
 
 	// System
 	GetSystemStats(ctx context.Context) (SystemStats, error)
+
+	// Jobs (services.JobService)
+	InsertJob(ctx context.Context, kind, payload string, maxAttempts int64, runAt time.Time) (int64, error)
+	ClaimDueJob(ctx context.Context, now time.Time) (*Job, error)
+	FinishJob(ctx context.Context, id int64, state, lastError string, nextRunAt time.Time) error
+	RequeueRunningJobs(ctx context.Context) (int64, error)
+	GetJob(ctx context.Context, id int64) (Job, error)
+	ListJobs(ctx context.Context, states []string, limit int) ([]Job, error)
+	CountJobsByState(ctx context.Context) (map[string]int64, error)
+	RetryFailedJob(ctx context.Context, id int64, runAt time.Time) (bool, error)
+	DeleteDoneJobsBefore(ctx context.Context, before time.Time) (int64, error)
+	DeleteFailedJobs(ctx context.Context) (int64, error)
 	BackupDB(ctx context.Context, destPath string) error
 
 	// Tags
@@ -339,14 +358,9 @@ func NewRepository(dbURL string) (Repository, error) {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		// Use SplitSeq for efficient iteration without allocating a full slice
-		for stmt := range strings.SplitSeq(pointsql.SchemaSQL, ";") {
-			trimmed := strings.TrimSpace(stmt)
-			if trimmed == "" {
-				continue
-			}
-			if _, err := tx.Exec(trimmed); err != nil {
-				return nil, fmt.Errorf("failed to execute schema statement: %w\nStatement: %s", err, trimmed)
+		for _, stmt := range pointsql.SchemaStatements() {
+			if _, err := tx.Exec(stmt); err != nil {
+				return nil, fmt.Errorf("failed to execute schema statement: %w\nStatement: %s", err, stmt)
 			}
 		}
 

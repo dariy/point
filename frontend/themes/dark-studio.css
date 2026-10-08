@@ -1,0 +1,100 @@
+/* theme-title: "Dark Studio" */
+/* description: "Dark first, with large images on near-black, like a gallery after hours." */
+/* preview-color: "#d4a24c" */
+/* preset: "Dark Studio" */
+/* preset-description: "Dark first, with large images on near-black, like a gallery after hours." */
+/* preset-layout: "card-grid-large" */
+/* preset-typography: "system-sans" */
+/* preset-palette: "graphite-amber" */
+/* preset-header: "solid-dark" */
+/* preview-image: "/assets/images/presets/dark-studio.svg" */
+
+/*
+ * Dark Studio: dark in both modes, so the light palette is a graphite grey
+ * and the dark palette is near-black. Tracks are wide, so each photo shows
+ * large. The header is a solid black bar with no blur.
+ */
+
+html[data-section="public"] {
+  --posts-grid-grid-template-columns: 30rem;
+}
+
+html[data-section="public"] .posts-grid {
+  gap: var(--spacing-2xl);
+}
+
+.post-card {
+  box-shadow: none;
+}
+
+html[data-section="public"] .site-header-group {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom-color: transparent;
+}
+
+html[data-section="public"] .site-title {
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+:root {
+  --bg-primary: #1b1b1d;
+  --bg-secondary: #232326;
+  --bg-tertiary: #2d2d31;
+  --bg-elevated: #232326;
+  --surface-card: #232326;
+  --surface-input: #232326;
+  --surface-hover: #2d2d31;
+  --text-primary: #ededee;
+  --text-secondary: #c4c4c8;
+  --text-tertiary: #9b9ba1;
+  --text-muted: #6f6f75;
+  --text-inverted: #1b1b1d;
+  --color-primary: #d4a24c;
+  --color-primary-hover: #e3b86b;
+  --border-primary: #323236;
+  --border-secondary: #45454a;
+  --pt-colors-sidebar-bg: #0e0e10;
+  --pt-colors-sidebar-text: #9b9ba1;
+  --pt-colors-sidebar-text-hover: #ededee;
+  --pt-colors-sidebar-active-bg: #232326;
+  --pt-colors-sidebar-border: #2d2d31;
+  --footer-link: #d4a24c;
+  --color-accent: #d4a24c;
+  --header-bg: #0e0e10;
+  --footer-bg: #0e0e10;
+  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+  --border-radius: 4px;
+  --border-radius-lg: 4px;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #050505;
+  --bg-secondary: #0e0e0f;
+  --bg-tertiary: #18181a;
+  --bg-elevated: #0e0e0f;
+  --surface-card: #0e0e0f;
+  --surface-input: #0e0e0f;
+  --surface-hover: #18181a;
+  --text-primary: #f2f2f2;
+  --text-secondary: #c8c8c8;
+  --text-tertiary: #9a9a9a;
+  --text-muted: #6a6a6a;
+  --text-inverted: #050505;
+  --color-primary: #e3b86b;
+  --color-primary-hover: #f0cc8a;
+  --border-primary: #1c1c1e;
+  --border-secondary: #2c2c2f;
+  --pt-colors-sidebar-bg: #000000;
+  --pt-colors-sidebar-text: #9a9a9a;
+  --pt-colors-sidebar-text-hover: #f2f2f2;
+  --pt-colors-sidebar-active-bg: #18181a;
+  --pt-colors-sidebar-border: #1c1c1e;
+  --footer-link: #e3b86b;
+  --color-accent: #e3b86b;
+  --header-bg: #000000;
+  --footer-bg: #000000;
+}

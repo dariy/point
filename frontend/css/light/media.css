@@ -22,8 +22,9 @@
            in light/layout.css for the full note. */
         flex: 0 0 auto;
         min-height: 0;
+        /* lvh, not dvh — see .light-layout in light/layout.css. */
         height: 100vh;
-        height: 100dvh;
+        height: 100lvh;
         overflow: hidden;
     }
 
@@ -88,7 +89,7 @@
    =========================== */
 /* "Zoom" on this grid is a pinned column count: fewer columns = bigger
    thumbnails, more = smaller. `--media-grid-cols` and the class are stamped by
-   core/mediaPager.js on the browser root and on each swipe ghost (which lives
+   core/mediaPager.ts on the browser root and on each swipe ghost (which lives
    on <body>, so it inherits nothing from the browser). More specific than the
    auto-fill rules above — including the narrow-viewport override at the end of
    this file — so a deliberate choice wins over the width-derived default.
@@ -1061,4 +1062,9 @@ select.mb-type-filter:hover {
         grid-template-columns: repeat(auto-fill, minmax(var(--media-grid-columns-mobile), 1fr));
         gap: var(--spacing-sm);
     }
+}
+
+.media-item-note {
+    font-size: var(--font-size-xs);
+    color: var(--color-warning);
 }

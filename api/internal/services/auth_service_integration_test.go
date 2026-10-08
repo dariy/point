@@ -5,6 +5,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -594,5 +595,69 @@ func TestAuthService_ValidatePasswordResetToken_Expired(t *testing.T) {
 	_, err := svc.ValidatePasswordResetToken(ctx, "expiredtoken")
 	if err == nil {
 		t.Error("expected error for expired token")
+	}
+}
+
+// TestAuthService_CredentialChangesRevokeOAuthTokens: a password change, a
+// password reset and "sign out all other sessions" each revoke every MCP OAuth
+// token. The default revoker deletes the rows; the MCP provider installs one
+// that also clears its memory tier.
+func TestAuthService_CredentialChangesRevokeOAuthTokens(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+	svc := NewAuthService(repo)
+
+	hash, _ := HashPassword("oldpass")
+	user, err := repo.CreateUser(ctx, models.CreateUserParams{
+		Username: "owner", Email: "o@example.com", PasswordHash: hash, DisplayName: "O",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed := func() {
+		t.Helper()
+		if err := repo.SaveOAuthToken(ctx, "tok", "client", time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	revoked := func(step string) {
+		t.Helper()
+		if _, _, found, _ := repo.GetOAuthToken(ctx, "tok"); found {
+			t.Errorf("%s: OAuth token survives", step)
+		}
+	}
+
+	seed()
+	if err := svc.ChangePassword(ctx, user.ID, 0, "oldpass", "newpass"); err != nil {
+		t.Fatalf("ChangePassword: %v", err)
+	}
+	revoked("ChangePassword")
+
+	seed()
+	token, err := svc.CreatePasswordResetToken(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ResetPassword(ctx, token, "resetpass"); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	revoked("ResetPassword")
+
+	seed()
+	if err := svc.TerminateOtherSessions(ctx, user.ID, 0); err != nil {
+		t.Fatalf("TerminateOtherSessions: %v", err)
+	}
+	revoked("TerminateOtherSessions")
+
+	// An installed revoker replaces the default, and its failure does not fail
+	// the credential change.
+	calls := 0
+	svc.SetOAuthRevoker(func(context.Context) error { calls++; return errors.New("down") })
+	if err := svc.TerminateOtherSessions(ctx, user.ID, 0); err != nil {
+		t.Fatalf("TerminateOtherSessions with a failing revoker: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("installed revoker ran %d times, want 1", calls)
 	}
 }

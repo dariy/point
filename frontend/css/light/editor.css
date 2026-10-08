@@ -236,6 +236,7 @@ body.drag-active::after {
     display: block;
     width: 100%;
     max-width: 100%;
+    min-height: 6em;
     resize: vertical;
 }
 
@@ -706,10 +707,6 @@ textarea.is-maximized,
     border-color: var(--color-success, #28a745);
 }
 
-
-.textarea-maximized-body-lock {
-    overflow: hidden !important;
-}
 
 /* Placeholder for CodeJar */
 .codejar-editor:empty:before {
@@ -1328,4 +1325,3 @@ textarea.is-maximized,
         background: var(--surface-card);
     }
 }
-

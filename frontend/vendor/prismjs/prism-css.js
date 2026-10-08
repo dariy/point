@@ -1,3 +1,4 @@
+// @ts-nocheck — vendored third-party source; not ours to annotate.
 (function (Prism) {
 
 	var string = /(?:"(?:\\(?:\r\n|[\s\S])|[^"\\\r\n])*"|'(?:\\(?:\r\n|[\s\S])|[^'\\\r\n])*')/;

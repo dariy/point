@@ -3,11 +3,24 @@ name: Tests
 on:
   pull_request:
     branches: [main, develop]
+  # A squash merge produces a tree no PR run tested: the PR ran against the
+  # develop it was opened on, not the develop it landed on. Testing develop
+  # after each merge catches that, and keeps codecov's base-branch coverage
+  # current, so a PR's patch coverage is compared against a fresh baseline.
+  push:
+    branches: [develop]
   workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
+
+# A new push supersedes the run for the previous one; finishing it only delays
+# the run that matters. On develop that means back-to-back merges test only the
+# newest tree, which contains the earlier ones.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -21,18 +34,27 @@ jobs:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
 
+      # Every check below is a `scripts/check.sh --only <step>` call, so CI and
+      # the local gate run the same commands and cannot drift. Under GitHub
+      # Actions check.sh streams each step's output instead of only logging it.
       - name: Install golangci-lint
-        # Pinned for reproducible CI; note the /v2 module path — the bare path
-        # installs the abandoned v1 line. Keep in sync with local tooling.
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+        uses: golangci/golangci-lint-action@v9
+        with:
+          # Pinned for reproducible CI; the action downloads the release binary
+          # rather than compiling it. Keep in sync with local tooling —
+          # scripts/doctor.sh reads this line.
+          version: v2.12.2
+          install-only: true
+          # The action's schema check of .golangci.yml is not part of the gate
+          # (and the config does not pass it).
+          verify: false
 
-      - name: golangci-lint
-        # No build tags, matching scripts/check.sh. Integration test files are
-        # constrained with `//go:build !unit`, so the default build already
-        # includes them — it is `-tags=unit` that excludes them, and no file in
-        # this repo declares an `integration` tag.
-        run: golangci-lint run --timeout=5m
-        working-directory: api
+      # No build tags. Integration test files are constrained with
+      # `//go:build !unit`, so the default build already includes them — it is
+      # `-tags=unit` that excludes them, and no file in this repo declares an
+      # `integration` tag.
+      - name: Go lint
+        run: ./scripts/check.sh --only go-lint
 
   js:
     runs-on: ubuntu-latest
@@ -42,32 +64,68 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
+          cache: npm
 
-      # Uses the lockfile-pinned eslint (flat config). Keep the file list in
-      # sync with scripts/check.sh — the 614-line service worker and the
-      # build scripts are lintable code too.
+      # The E2E step builds the Go backend; without a warm build cache that
+      # compile is most of the step.
+      - name: Set up Go
+        id: go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          # Cached per job in the next step. setup-go keys its cache on go.sum
+          # alone, so every job shares one entry and the first to finish saves
+          # it — lint or govulncheck, which compile nothing, leaving the jobs
+          # that do build to start from a cold build cache.
+          cache: false
+
+      - name: Go cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('api/go.sum') }}
+          restore-keys: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-
+
+      # run-e2e.sh runs `playwright install chromium`, a no-op when the browser
+      # for this playwright-core version is already on disk.
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright-core'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}
+
+      - name: Install npm dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Each step is `scripts/check.sh --only <step>`; what the step runs, and
+      # why, is documented on its function there.
       - name: JS lint
-        run: |
-          npm ci --no-audit --no-fund
-          node_modules/.bin/eslint frontend/src frontend/sw.js scripts/*.mjs
+        run: ./scripts/check.sh --only js-lint
 
-      # Coverage rides along on the same run (V8 instrumentation via the
-      # built-in runner — no c8, no extra devDependency).
+      - name: JS typecheck
+        run: ./scripts/check.sh --only js-typecheck
+
+      - name: html escaping
+        run: ./scripts/check.sh --only html-escaping
+
+      - name: Vendored TT sinks
+        run: ./scripts/check.sh --only vendor-sinks
+
       - name: E2E tests
-        run: ./scripts/run-e2e.sh
-
+        run: ./scripts/check.sh --only e2e
 
       - name: JS tests
-        run: |
-          node --test --experimental-test-coverage \
-            --test-coverage-include='frontend/src/**' \
-            --test-reporter=spec --test-reporter-destination=stdout \
-            --test-reporter=lcov --test-reporter-destination=coverage-frontend.lcov \
-            frontend/test/*.test.js
+        run: ./scripts/check.sh --only js-test
 
       - name: Frontend coverage floor
-        run: node scripts/js-coverage-report.mjs coverage-frontend.lcov
+        run: ./scripts/check.sh --only js-coverage
 
       - name: Upload frontend coverage
         uses: codecov/codecov-action@v7
@@ -95,23 +153,36 @@ jobs:
           check-latest: true
           cache-dependency-path: api/go.sum
 
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
       - name: Run govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          govulncheck ./...
-        working-directory: api
+        run: ./scripts/check.sh --only govulncheck
 
   test:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - name: Set up Go
+        id: go
         uses: actions/setup-go@v7
         with:
           go-version-file: api/go.mod
-          cache-dependency-path: api/go.sum
+          # Cached per job in the next step. setup-go keys its cache on go.sum
+          # alone, so every job shares one entry and the first to finish saves
+          # it — lint or govulncheck, which compile nothing, leaving the jobs
+          # that do build to start from a cold build cache.
+          cache: false
+
+      - name: Go cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('api/go.sum') }}
+          restore-keys: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-
 
       - name: Build CSS bundles
         run: chmod +x scripts/build-css.sh && ./scripts/build-css.sh
@@ -119,51 +190,77 @@ jobs:
       # sqlc is optional for contributors (the generated code is committed), so
       # the script skips its regeneration check when the binary is absent. CI is
       # where that skip must not happen — installing it here is what makes the
-      # committed models a checked fact rather than a convention.
+      # committed models a checked fact rather than a convention. The release
+      # binary, not `go install`, which compiled sqlc from source on every run.
       - name: Install sqlc
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+        uses: sqlc-dev/setup-sqlc@v5
+        with:
+          sqlc-version: "1.31.1"
 
       - name: SQL layer
-        run: ./scripts/check-sql-layer.sh
+        run: ./scripts/check.sh --only sql-layer
 
+      # check.sh's go-vet step is not repeated here: golangci-lint in the lint
+      # job runs govet (api/.golangci.yml, `default: standard`).
       - name: Run Go tests
         # The integration suite runs by default and requires a functioning
-        # SQLite environment (which ubuntu-latest provides).
-        run: |
-          cd api
-          go test ./... -coverprofile=coverage.txt -covermode=atomic
+        # SQLite environment (which ubuntu-latest provides). -count=1 because
+        # the Go cache restored above also holds test results: without it an
+        # unchanged package reports "(cached)" and its tests never run.
+        env:
+          GOFLAGS: -count=1
+        run: ./scripts/check.sh --only go-test
 
       # The build-failing half of the coverage gate. codecov's status checks
       # only report; this is what actually turns the job red.
       - name: Coverage floor
-        run: ./scripts/coverage-gate.sh api/coverage.txt
+        run: ./scripts/check.sh --only go-coverage
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v7
         with:
-          file: api/coverage.txt
+          file: api/coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           flags: unittests
           name: codecov-go
 
+  # One image build serves both smoke checks: the bare container and the
+  # quickstart wizard. The job keeps the docker-smoke name because the develop
+  # ruleset requires that check.
+  #
+  # The quickstart wizard is the largest bespoke-shell surface in the repo and
+  # has to keep working against every release, but nothing exercised it — a
+  # broken installer would only show up as a user report. The second half of
+  # this job drives its non-interactive Docker path end to end against the
+  # locally built image.
   docker-smoke:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
+      - name: Shellcheck the wizard
+        run: shellcheck quickstart/install.sh quickstart/uninstall.sh quickstart/update.sh
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image
+      # --test rewrites the compose file to localhost/point:dev, so the wizard
+      # runs against the code in this checkout rather than the published
+      # release. Its own cache scope: dev-image.yml builds two platforms and
+      # would otherwise overwrite this one's cache index.
+      - name: Build image as point:smoke and localhost/point:dev
         uses: docker/build-push-action@v6
         with:
           context: .
           file: build/Dockerfile
           push: false
           load: true
-          tags: point:smoke
+          tags: |
+            point:smoke
+            localhost/point:dev
+          cache-from: type=gha,scope=smoke
+          cache-to: type=gha,scope=smoke,mode=max
 
       - name: Start container and verify /health
         run: |
@@ -188,33 +285,6 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker rm -f point-smoke || true
-
-  # The quickstart wizard is the largest bespoke-shell surface in the repo and
-  # has to keep working against every release, but nothing exercised it — a
-  # broken installer would only show up as a user report. This drives its
-  # non-interactive Docker path end to end against a locally built image.
-  quickstart-smoke:
-    needs: lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Shellcheck the wizard
-        run: shellcheck quickstart/install.sh quickstart/uninstall.sh quickstart/update.sh
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # --test rewrites the compose file to this exact tag, so the wizard runs
-      # against the code in this checkout rather than the published release.
-      - name: Build image as localhost/point:dev
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: build/Dockerfile
-          push: false
-          load: true
-          tags: localhost/point:dev
 
       - name: Run the installer non-interactively
         working-directory: quickstart
@@ -255,12 +325,28 @@ jobs:
           # it must parse and its --help must succeed.
           bash uninstall.sh --help >/dev/null
 
+      # A relative install or data directory used to reach .env as-is.
+      # Compose reads `test/data` as a named volume and fails, and resolves
+      # `./x` from the install directory, not from the caller's directory.
+      - name: Install with relative directories
+        working-directory: quickstart
+        run: |
+          set -euo pipefail
+          POINT_INSTALL_DIR=rel POINT_DATA_DIR=./rel-data \
+            bash install.sh --method=docker --auto --test
+          grep -q "^DATA_PATH=$PWD/rel-data\$" rel/.env
+          curl -fsS http://localhost:8001/health | grep -q '"status":"ok"'
+
+      - name: Relative install logs on failure
+        if: failure()
+        working-directory: quickstart/rel
+        run: docker compose logs || true
+
   # Instructions rot silently. AGENTS.md used to tell agents to ALWAYS build the
   # tests with -tags=integration and warned that a bare `go test ./...` skipped
   # them — both false for as long as the `//go:build !unit` convention has been
   # in place, and nothing caught it. This job runs what the docs say to run.
   docs-commands:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       # Full history: ai-declaration.md's block counts commits and co-author
@@ -270,15 +356,30 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
+        id: go
         uses: actions/setup-go@v7
         with:
           go-version-file: api/go.mod
-          cache-dependency-path: api/go.sum
+          # Cached per job in the next step. setup-go keys its cache on go.sum
+          # alone, so every job shares one entry and the first to finish saves
+          # it — lint or govulncheck, which compile nothing, leaving the jobs
+          # that do build to start from a cold build cache.
+          cache: false
+
+      - name: Go cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('api/go.sum') }}
+          restore-keys: go-${{ github.job }}-${{ steps.go.outputs.go-version }}-
 
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
+          cache: npm
 
       # ./scripts/run.sh is the first command AGENTS.md and CONTRIBUTING.md give
       # a newcomer, and the one command the runner below cannot execute: it
@@ -303,15 +404,20 @@ jobs:
         if: failure()
         run: cat /tmp/run-sh.log || true
 
-      # The runner and doctor.sh — both are pure shell with no test suite of
-      # their own — plus the two release-path scripts, which only execute on a
-      # tag, so a syntax error in them would otherwise surface as a broken
-      # release rather than a failed PR.
+      # The runner, doctor.sh and check.sh — pure shell with no test suite of
+      # their own, and check.sh drives every check in this workflow — plus the
+      # two release-path scripts, which only execute on a tag, so a syntax
+      # error in them would otherwise surface as a broken release rather than
+      # a failed PR.
       - name: Shellcheck the runner
-        run: shellcheck scripts/check-docs.sh scripts/doctor.sh scripts/build-tarball.sh scripts/release-notes.sh
+        run: shellcheck scripts/check-docs.sh scripts/doctor.sh scripts/check.sh scripts/build-tarball.sh scripts/release-notes.sh
 
       # Extracts the fenced bash blocks and the AGENTS.md command table from the
       # documented set and runs them. Anything that cannot run unattended
       # carries a `<!-- verify:skip … -->` marker in the doc itself.
+      # GOFLAGS=-count=1: the Go cache restored above also holds test results,
+      # and a documented `go test` answered from it has not run anything.
       - name: Run every documented command
+        env:
+          GOFLAGS: -count=1
         run: ./scripts/check-docs.sh

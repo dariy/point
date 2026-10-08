@@ -366,6 +366,110 @@ var schema = []struct{ name, sql string }{
 		"drop_posts_deleted_at_index",
 		`DROP INDEX IF EXISTS idx_posts_deleted_at`,
 	},
+	{
+		// Search was five leading-wildcard LIKEs over title, slug, content and
+		// tag names — unindexable by construction, so every post body came off
+		// disk per keystroke of the admin search box. FTS5 makes it a lookup.
+		//
+		// External content (content='posts') means the virtual table holds the
+		// inverted index and nothing else: posts stays the one copy of the
+		// text. What SQLite does not then do is keep the two in step, which is
+		// what the three triggers below are for. Same statements as in
+		// sql/schema.sql, which is where a fresh database gets them; these are
+		// for the databases that already exist.
+		"create_posts_fts",
+		`CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
+				title, slug, content,
+				content='posts',
+				content_rowid='id',
+				tokenize='unicode61'
+			)`,
+	},
+	{
+		"create_posts_fts_insert_trigger",
+		`CREATE TRIGGER IF NOT EXISTS posts_fts_insert AFTER INSERT ON posts BEGIN
+				INSERT INTO posts_fts(rowid, title, slug, content)
+				VALUES (new.id, new.title, new.slug, new.content);
+			END`,
+	},
+	{
+		"create_posts_fts_delete_trigger",
+		`CREATE TRIGGER IF NOT EXISTS posts_fts_delete AFTER DELETE ON posts BEGIN
+				INSERT INTO posts_fts(posts_fts, rowid, title, slug, content)
+				VALUES ('delete', old.id, old.title, old.slug, old.content);
+			END`,
+	},
+	{
+		// OF title, slug, content — an unqualified UPDATE trigger would
+		// reindex a whole post body every time a view counter ticked.
+		"create_posts_fts_update_trigger",
+		`CREATE TRIGGER IF NOT EXISTS posts_fts_update AFTER UPDATE OF title, slug, content ON posts BEGIN
+				INSERT INTO posts_fts(posts_fts, rowid, title, slug, content)
+				VALUES ('delete', old.id, old.title, old.slug, old.content);
+				INSERT INTO posts_fts(rowid, title, slug, content)
+				VALUES (new.id, new.title, new.slug, new.content);
+			END`,
+	},
+	{
+		// The triggers only see writes made after they exist, so the index
+		// starts empty and every post already in the database is invisible to
+		// search until it is filled. 'rebuild' reads the content table and
+		// builds the whole index from it — the one-time backfill, and the
+		// repair if the two ever drift.
+		"backfill_posts_fts",
+		`INSERT INTO posts_fts(posts_fts) VALUES ('rebuild')`,
+	},
+	{
+		// Decode did not apply EXIF orientation before, so a rotated photo
+		// stored its sensor size. SQLite reads every SET right-hand side from
+		// the old row, so this swaps the two columns.
+		"swap_dims_for_rotated_exif",
+		`UPDATE media SET width = height, height = width
+			WHERE json_valid(metadata)
+			AND json_extract(metadata, '$.Orientation') IN ('5', '6', '7', '8')`,
+	},
+	{
+		// The durable job store (services.JobService). Times are unix seconds
+		// so the worker compares integers, not date strings.
+		"create_jobs",
+		`CREATE TABLE IF NOT EXISTS jobs (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				kind TEXT NOT NULL,
+				payload TEXT NOT NULL DEFAULT '{}',
+				state TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'running', 'done', 'failed')),
+				attempts INTEGER NOT NULL DEFAULT 0,
+				max_attempts INTEGER NOT NULL DEFAULT 5,
+				next_run_at INTEGER NOT NULL,
+				last_error TEXT NOT NULL DEFAULT '',
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			)`,
+	},
+	{
+		"create_jobs_due_index",
+		`CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(next_run_at, id) WHERE state = 'queued'`,
+	},
+	{
+		"add_api_keys_scope",
+		`ALTER TABLE api_keys ADD COLUMN scope TEXT NOT NULL DEFAULT 'general'`,
+	},
+	{
+		// The comments plugin now defaults to off. An install set up before
+		// setup seeded plugin keys has no stored state and fell back to the
+		// old default (on), so pin that value. INSERT OR IGNORE keeps every
+		// stored value, and a fresh database (no users yet) gets its value from
+		// the registry at setup time.
+		"pin_comments_for_existing_installs",
+		`INSERT OR IGNORE INTO blog_settings (key, value, value_type, updated_at)
+			 SELECT 'plugin.comments.enabled', 'true', 'boolean', CURRENT_TIMESTAMP
+			  WHERE EXISTS (SELECT 1 FROM users)`,
+	},
+	{
+		// The photo library path now comes only from PHOTO_LIBRARY_PATH.
+		// A stale copy in blog_secrets must not keep the library on.
+		"drop_photo_library_path_secret",
+		`DELETE FROM blog_secrets WHERE key = 'photo_library_path'`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

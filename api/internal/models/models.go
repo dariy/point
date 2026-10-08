@@ -19,6 +19,7 @@ type ApiKey struct {
 	LastUsedAt sql.NullTime `json:"last_used_at"`
 	ExpiresAt  sql.NullTime `json:"expires_at"`
 	RevokedAt  sql.NullTime `json:"revoked_at"`
+	Scope      string       `json:"scope"`
 }
 
 type BlogSecret struct {
@@ -110,6 +111,12 @@ type Post struct {
 type PostTag struct {
 	PostID int64 `json:"post_id"`
 	TagID  int64 `json:"tag_id"`
+}
+
+type PostsFt struct {
+	Title   string `json:"title"`
+	Slug    string `json:"slug"`
+	Content string `json:"content"`
 }
 
 type Session struct {

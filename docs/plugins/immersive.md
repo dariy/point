@@ -11,8 +11,7 @@ One of the two candidates for the `post-viewer` slot, together with
 [`immersive-sheet`](immersive-sheet.md). The slot's cardinality is `1`, so exactly
 one viewer is active: the Plugins page shows the active one read-only ("In use") and
 you switch by enabling the alternative, which flips this one off in the same call.
-The tag visualizations work the same way on `tags-route`; that slot just also allows
-"none".
+The two tag maps work the same way on `map-route`; that slot just also allows "none".
 
 See [Immersive Mode & Media Viewer](../features/immersive.md) for the full plugin
 family, including [`immersive-share`](immersive-share.md) and

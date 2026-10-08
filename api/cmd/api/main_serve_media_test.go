@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -83,9 +84,15 @@ func makeMediaFile(t *testing.T, storagePath, year, month, filename string) stri
 	return p
 }
 
+// fixedShell stands in for liveAssets.forShell: the same shell on every call.
+func fixedShell(html string) func() *assetSnapshot {
+	s := &assetSnapshot{Shell: html}
+	return func() *assetSnapshot { return s }
+}
+
 func serveMediaRequest(t *testing.T, storagePath, indexHTMLContent string, repo repository.Repository, year, month, filename string, authenticated bool) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, indexHTMLContent, repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, fixedShell(indexHTMLContent), repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo))
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
 	rec := httptest.NewRecorder()
@@ -118,9 +125,16 @@ func TestServeSimplifiedMedia_SPAFallback_NoIndex(t *testing.T) {
 
 func TestServeSimplifiedMedia_SPAFallback_WithIndex(t *testing.T) {
 	repo, storage := newMediaRepo(t)
-	rec := serveMediaRequest(t, storage, "<html><head></head><body>SPA</body></html>", repo, "not-a-year", "01", "photo.jpg", false)
+	const shell = "<html><head></head><body>SPA</body></html>"
+	// An admin route with three segments is a page.
+	rec := serveMediaRequest(t, storage, shell, repo, "light", "tags", "travel", false)
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200 (serve index.html), got %d", rec.Code)
+	}
+	// Any other non-date path is not a page: the shell with 404.
+	rec = serveMediaRequest(t, storage, shell, repo, "not-a-year", "01", "photo.jpg", false)
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "SPA") {
+		t.Errorf("expected 404 with the shell, got %d", rec.Code)
 	}
 }
 
@@ -268,7 +282,7 @@ func TestServeSimplifiedMedia_PublicMedia_FileMissing(t *testing.T) {
 // arbitrary query string (no leading "?").
 func serveQueryRequest(t *testing.T, storagePath string, repo repository.Repository, year, month, filename, query string) *httptest.ResponseRecorder {
 	t.Helper()
-	handler := serveSimplifiedMedia(storagePath, "", repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storagePath, fixedShell(""), repo, testMediaSvc(t, repo, storagePath), nil, services.NewSettingsService(repo))
 	e := echo.New()
 	url := "/" + year + "/" + month + "/" + filename
 	if query != "" {
@@ -808,7 +822,7 @@ func TestServeSimplifiedMedia_S3Direct(t *testing.T) {
 	// Setup Presigner
 	s3p, _ := services.NewS3Presigner("http://localhost:9000", "us-east-1", "test", "test", "mybucket")
 
-	handler := serveSimplifiedMedia(storage, "", repo, testMediaSvc(t, repo, storage), s3p, services.NewSettingsService(repo), nil, nil)
+	handler := serveSimplifiedMedia(storage, fixedShell(""), repo, testMediaSvc(t, repo, storage), s3p, services.NewSettingsService(repo))
 	e := echo.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
@@ -834,5 +848,140 @@ func TestServeSimplifiedMedia_S3Direct(t *testing.T) {
 	}
 	if !strings.Contains(presignedURL, filename) {
 		t.Errorf("presigned URL should contain filename, got %s", presignedURL)
+	}
+}
+
+// geotagOriginal inserts an XMP packet with a GPS position into the JPEG at p,
+// marks its media row as a JPEG, and returns the new file bytes.
+func geotagOriginal(t *testing.T, repo repository.Repository, p, origPath string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte("http://ns.adobe.com/xap/1.0/\x00" +
+		`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><rdf:Description exif:GPSLatitude="47,1.5N"/></rdf:RDF></x:xmpmeta>`)
+	n := len(payload) + 2
+	out := append([]byte{}, b[:2]...)
+	out = append(out, 0xFF, 0xE1, byte(n>>8), byte(n))
+	out = append(out, payload...)
+	out = append(out, b[2:]...)
+	if err := os.WriteFile(p, out, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.DB().Exec(`UPDATE media SET mime_type='image/jpeg' WHERE original_path=?`, origPath); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestServeSimplifiedMedia_OriginalWithoutGPS(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2026", "09", "geo_abcdef12.jpg", 64, 48)
+	p := filepath.Join(storage, "media", "originals", "2026", "09", "geo_abcdef12.jpg")
+	orig := geotagOriginal(t, repo, p, "originals/2026/09/geo_abcdef12.jpg")
+
+	rec := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "exif:GPS") {
+		t.Error("served original carries GPS")
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != immutableCacheControl {
+		t.Errorf("Cache-Control = %q, want %q", cc, immutableCacheControl)
+	}
+	if after, _ := os.ReadFile(p); !bytes.Equal(after, orig) {
+		t.Error("the original on disk changed")
+	}
+
+	// An authenticated request gets the same bytes: shared caches hold one
+	// version of the URL.
+	auth := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", true)
+	if !bytes.Equal(auth.Body.Bytes(), rec.Body.Bytes()) {
+		t.Error("authenticated response differs from the guest response")
+	}
+}
+
+func TestServeSimplifiedMedia_OriginalGPSSettingOff(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2026", "09", "geo_abcdef12.jpg", 64, 48)
+	p := filepath.Join(storage, "media", "originals", "2026", "09", "geo_abcdef12.jpg")
+	orig := geotagOriginal(t, repo, p, "originals/2026/09/geo_abcdef12.jpg")
+	if err := services.NewSettingsService(repo).SetSetting(context.Background(), services.StripGPSPublicSetting, "false", "string"); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if !bytes.Equal(rec.Body.Bytes(), orig) {
+		t.Error("with the setting off, the route must serve the original bytes")
+	}
+}
+
+// A copy that cannot be written is an error, never the original's GPS.
+func TestServeSimplifiedMedia_OriginalGPSCopyFails(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	publicImage(t, repo, storage, "2026", "09", "geo_abcdef12.jpg", 64, 48)
+	p := filepath.Join(storage, "media", "originals", "2026", "09", "geo_abcdef12.jpg")
+	geotagOriginal(t, repo, p, "originals/2026/09/geo_abcdef12.jpg")
+	if err := os.WriteFile(filepath.Join(storage, "media", services.VariantsRoot), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	rec := serveMediaRequest(t, storage, "", repo, "2026", "09", "geo_abcdef12.jpg", false)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "exif:GPS") {
+		t.Error("served the original's GPS")
+	}
+}
+
+func TestStripGPS_NilSettings(t *testing.T) {
+	if !stripGPS(context.Background(), nil) {
+		t.Error("nil settings must mean on")
+	}
+}
+
+// TestServeSimplifiedMedia_VideoTranscode: the original is served until the
+// transcode exists, then the transcode is served.
+func TestServeSimplifiedMedia_VideoTranscode(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	ctx := context.Background()
+	m, err := repo.CreateMedia(ctx, models.CreateMediaParams{
+		Filename:     "clip.mov",
+		OriginalPath: "originals/2024/01/clip.mov",
+		FileType:     "video",
+		MimeType:     "video/quicktime",
+		Checksum:     "mov-chk",
+		UploadedAt:   time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("CreateMedia: %v", err)
+	}
+	if _, err := repo.DB().ExecContext(ctx, `UPDATE media SET is_public=1 WHERE id=?`, m.ID); err != nil {
+		t.Fatalf("set is_public: %v", err)
+	}
+	makeMediaFile(t, storage, "2024", "01", "clip.mov")
+
+	if rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "clip.mov", false); rec.Body.String() != "fake-content" {
+		t.Fatalf("before the transcode: got %q, want the original", rec.Body.String())
+	}
+
+	mp4 := filepath.Join(storage, "media", services.VideoTranscodeRelPath(m.OriginalPath))
+	if err := os.MkdirAll(filepath.Dir(mp4), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mp4, []byte("transcoded"), 0o644); err != nil { //nolint:gosec // test file
+		t.Fatal(err)
+	}
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "clip.mov", false)
+	if rec.Body.String() != "transcoded" {
+		t.Fatalf("after the transcode: got %q", rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "video/mp4" {
+		t.Errorf("Content-Type = %q, want video/mp4", ct)
 	}
 }

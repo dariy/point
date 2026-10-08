@@ -27,13 +27,14 @@ All five phases of the original refactor are done.
 - Admin API: `GET /api/plugins` (full catalog — the one surface allowed to reveal
   disabled plugins, behind `AuthMiddleware`), `PATCH /api/plugins/:id`.
 
-### Frontend (`frontend/src/core/pluginHost.js`)
+### Frontend (`frontend/src/core/pluginHost.ts`)
 
 - Reads `window.__PLUGINS__` at bootstrap. A slot is *claimed* only when the plugin has
   a built chunk (`entry` URL); `fill(slot, el, ctx)` lazily imports and mounts claimants;
-  `claimRoute` resolves single-claim route slots (`tags-route`); `routes()` merges plugin
-  routes into the router. Broken plugins are logged and skipped; an absent/empty manifest
-  leaves the host inert (safe for tests — the hard constraint is enforced server-side).
+  `claimRoute` resolves single-claim route slots (`map-route`, `tags-route`);
+  `routes()` merges plugin routes into the router. Broken plugins are logged and
+  skipped; an absent/empty manifest leaves the host inert (safe for tests — the hard
+  constraint is enforced server-side).
 - Plugins live under `frontend/src/plugins/<id>/index.js`, exporting `mount(el, ctx)`
   (slot/enhancer) or a page class (route). `EntryName` in the Go registry must match the
   directory name.
@@ -43,7 +44,7 @@ All five phases of the original refactor are done.
 - `scripts/build-js.sh`: core `app.js` stays a **single unsplit bundle** (the PWA service
   worker precaches it; splitting the core would break offline for zero win). A second
   esbuild pass builds plugin entries with `--splitting --format=esm`, hashed into
-  `frontend/js/p/<id>-<hash>.js`; `scripts/build-plugin-manifest.mjs` writes
+  `frontend/js/p/<id>-<hash>.js`; `scripts/build-plugin-manifest.ts` writes
   `frontend/js/plugin-manifest.json` (id → chunk), which the Go server reads at startup.
 - `scripts/build-css.sh` emits per-plugin CSS to `frontend/css/p/<id>.css`, auto-wired
   into the manifest (`css` field). Never edit generated CSS bundles.
@@ -52,9 +53,10 @@ All five phases of the original refactor are done.
 
 ### Plugin catalog (registry as of 2026-07)
 
-- **Route / tags-viz** (slot `tags-route`, cardinality `0-1` — one claims `/tags`,
-  or none and the route is hidden): `tags-atlas` (default), `tags-map` (Leaflet
-  world map), `tags-graph` (force graph).
+- **Route / tag vizzes** (two slots, both cardinality `0-1` — one claimant per slot,
+  or none and that route is hidden): `map-route` owns `/map` with `tags-atlas`
+  (default) and `tags-map` (plain Leaflet world map) as alternatives; `tags-route`
+  owns `/tags` with `tags-graph` (force graph) as its only candidate.
 - **Slots**: `timeline`, `tag-cloud` (home-explore `ExploreBlock`), `nav-menu`,
   `breadcrumbs`, `public-header`, `public-footer`, `distraction-free`
   (post-list-tools), `immersive-share`, `slideshow`.
@@ -69,7 +71,7 @@ All five phases of the original refactor are done.
 ### Per-plugin settings drawer
 
 `PLUGIN_SETTINGS` in `PluginsPage.js` maps a plugin id to the settings it shows in
-the right-hand drawer (`PluginSettingsPanel.js`): `keys` renders plain settings
+the right-hand drawer (`PluginSettingsPanel.ts`): `keys` renders plain settings
 fields saved together through `PUT /api/settings`, `sections` mounts self-contained
 components from `components/light/sections/` (backups, Instagram import, passkeys,
 API keys, offline data, sync queue, version check). Plugins whose configuration is a
@@ -103,10 +105,13 @@ old release for exactly that.
    every rule follows from it: a single-claim slot (`0-1`, `1`) makes its candidates a
    radio group — enabling one switches the peers off (`SlotPeers`) — and a slot that
    requires a claimant (`1`, `1+`) locks its last enabled one (`IsLockedOff` → 409).
-   `tags-route` is `0-1` (none = /tags hidden), `post-viewer` is `1` (an immersive post
-   renders nothing else). Whole-configuration writes go through `NormalizeSlots`, which
-   trims and refills slots to satisfy the same rules; installs configured before a rule
-   existed are reconciled once by a migration, the way `tags_module` was.
+   `map-route` is `0-1` (the atlas or the plain map, or none and `/map` is hidden),
+   `post-viewer` is `1` (an immersive post renders nothing else). A rule is worth
+   declaring even for a one-candidate slot: `tags-route` holds only `tags-graph` today,
+   and `0-1` there is what keeps a second graph viz from silently double-claiming
+   `/tags`. Whole-configuration writes go through `NormalizeSlots`, which trims and
+   refills slots to satisfy the same rules; installs configured before a rule existed
+   are reconciled once by a migration, the way `tags_module` was.
 
 ## Notes for future development
 

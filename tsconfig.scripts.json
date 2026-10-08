@@ -1,0 +1,8 @@
+{
+  // The Node scripts under scripts/ (node strips the types; no build step).
+  // npm run typecheck and scripts/check.sh::step_js_typecheck run it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext", "types": ["node"] },
+  "include": ["scripts/*.ts"],
+  "exclude": ["node_modules"]
+}

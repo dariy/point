@@ -5,8 +5,10 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"point-api/internal/models"
@@ -664,6 +666,52 @@ func TestTagService_UpdateMissingCoordsNoBaseTags(t *testing.T) {
 	}
 }
 
+// fakeNominatim serves the reverse and search endpoints. reverse is the body
+// of every reverse answer; search maps a query to its "lat,lon" answer.
+func fakeNominatim(t *testing.T, svc *TagService, reverse string, search map[string][2]string) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/reverse") {
+			_, _ = w.Write([]byte(reverse))
+			return
+		}
+		ll, ok := search[r.URL.Query().Get("q")]
+		if !ok {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		_, _ = fmt.Fprintf(w, `[{"lat":%q,"lon":%q}]`, ll[0], ll[1])
+	}))
+	t.Cleanup(srv.Close)
+	svc.nominatimReverseURL = srv.URL + "/reverse"
+	svc.nominatimBaseURL = srv.URL + "/search"
+}
+
+func newGeoPost(t *testing.T, postSvc *PostService, slug string) models.Post {
+	t.Helper()
+	post, _, err := postSvc.CreatePost(context.Background(), CreatePostParams{
+		Title: slug, Slug: slug, AuthorID: 1, Status: "draft",
+	})
+	if err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+	return post
+}
+
+func postHasTag(t *testing.T, postSvc *PostService, postID, tagID int64) bool {
+	t.Helper()
+	tags, err := postSvc.GetTagsForPost(context.Background(), postID)
+	if err != nil {
+		t.Fatalf("GetTagsForPost failed: %v", err)
+	}
+	for _, tg := range tags {
+		if tg.ID == tagID {
+			return true
+		}
+	}
+	return false
+}
+
 func TestTagService_TagPostWithLocation(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
@@ -671,22 +719,14 @@ func TestTagService_TagPostWithLocation(t *testing.T) {
 
 	postSvc := NewPostService(repo, nil, nil, nil, "")
 	insertTestUser(t, postSvc)
-	post, _, err := postSvc.CreatePost(ctx, CreatePostParams{
-		Title: "Geo", Slug: "geo", AuthorID: 1, Status: "draft",
-	})
-	if err != nil {
-		t.Fatalf("CreatePost failed: %v", err)
-	}
+	post := newGeoPost(t, postSvc, "geo")
 
-	// Mock the Nominatim reverse endpoint. The "city" field must win over the
-	// less-specific "name" field.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"name":"Trastevere","address":{"suburb":"Trastevere","city":"Rome","country":"Italy"}}`))
-	}))
-	defer srv.Close()
-
+	// The "city" field must win over the less-specific "name" field. The
+	// result's own lat/lon is the centre of Rome, not the photo position.
 	svc := NewTagService(repo)
-	svc.nominatimReverseURL = srv.URL
+	fakeNominatim(t, svc,
+		`{"name":"Trastevere","lat":"41.8933","lon":"12.4829","address":{"suburb":"Trastevere","city":"Rome","country":"Italy"}}`,
+		map[string][2]string{"Italy": {"42.6384", "12.6743"}})
 
 	const lat, lon = 41.889, 12.469
 	tag, err := svc.TagPostWithLocation(ctx, post.ID, lat, lon)
@@ -696,35 +736,108 @@ func TestTagService_TagPostWithLocation(t *testing.T) {
 	if tag.Name != "Rome" {
 		t.Errorf("expected tag name Rome, got %q", tag.Name)
 	}
-	if !tag.Latitude.Valid || tag.Latitude.Float64 != lat || !tag.Longitude.Valid || tag.Longitude.Float64 != lon {
-		t.Errorf("expected coordinates %f,%f on tag, got %+v / %+v", lat, lon, tag.Latitude, tag.Longitude)
+	// Privacy: the tag carries the city centre, never the photo position.
+	if tag.Latitude.Float64 != 41.8933 || tag.Longitude.Float64 != 12.4829 {
+		t.Errorf("expected city centre 41.8933,12.4829 on tag, got %+v / %+v", tag.Latitude, tag.Longitude)
 	}
-
-	tags, err := postSvc.GetTagsForPost(ctx, post.ID)
-	if err != nil {
-		t.Fatalf("GetTagsForPost failed: %v", err)
-	}
-	found := false
-	for _, tg := range tags {
-		if tg.ID == tag.ID {
-			found = true
-		}
-	}
-	if !found {
+	if !postHasTag(t, postSvc, post.ID, tag.ID) {
 		t.Errorf("expected post to be tagged with %q (id %d)", tag.Name, tag.ID)
 	}
 
-	// A second image from the same city must reuse the existing tag, not create
-	// a duplicate, and attach it to a different post.
-	post2, _, _ := postSvc.CreatePost(ctx, CreatePostParams{
-		Title: "Geo2", Slug: "geo2", AuthorID: 1, Status: "draft",
-	})
+	country, err := svc.GetTagBySlug(ctx, "italy")
+	if err != nil {
+		t.Fatalf("expected country tag Italy: %v", err)
+	}
+	if country.Latitude.Float64 != 42.6384 || country.Longitude.Float64 != 12.6743 {
+		t.Errorf("expected country centre on Italy, got %+v / %+v", country.Latitude, country.Longitude)
+	}
+	parents, err := svc.GetTagParents(ctx, tag.ID)
+	if err != nil || len(parents) != 1 || parents[0].ID != country.ID {
+		t.Errorf("expected Rome to be a child of Italy, got %+v (err %v)", parents, err)
+	}
+
+	// A second image from the same city must reuse both tags, not create
+	// duplicates, and attach the city to a different post.
+	post2 := newGeoPost(t, postSvc, "geo2")
 	tag2, err := svc.TagPostWithLocation(ctx, post2.ID, lat, lon)
 	if err != nil {
 		t.Fatalf("second TagPostWithLocation failed: %v", err)
 	}
 	if tag2.ID != tag.ID {
 		t.Errorf("expected reuse of tag %d, got new tag %d", tag.ID, tag2.ID)
+	}
+	if !postHasTag(t, postSvc, post2.ID, tag.ID) {
+		t.Error("expected second post to be tagged with Rome")
+	}
+}
+
+func TestTagService_TagPostWithLocation_ExistingCityKeepsParents(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := NewPostService(repo, nil, nil, nil, "")
+	insertTestUser(t, postSvc)
+	post := newGeoPost(t, postSvc, "geo")
+
+	// The user already filed Rome under a tag of their own, with no coordinates.
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (50,'Trips','trips'),(51,'Rome','rome')`)
+	_, _ = repo.DB().Exec(`INSERT INTO tag_relationships (parent_id, child_id) VALUES (50,51)`)
+
+	svc := NewTagService(repo)
+	fakeNominatim(t, svc,
+		`{"lat":"41.8933","lon":"12.4829","address":{"city":"Rome","country":"Italy"}}`,
+		map[string][2]string{"Italy": {"42.6384", "12.6743"}})
+
+	tag, err := svc.TagPostWithLocation(ctx, post.ID, 41.889, 12.469)
+	if err != nil {
+		t.Fatalf("TagPostWithLocation failed: %v", err)
+	}
+	if tag.ID != 51 {
+		t.Fatalf("expected existing Rome tag 51, got %d", tag.ID)
+	}
+	if tag.Latitude.Float64 != 41.8933 {
+		t.Errorf("expected city centre backfilled, got %+v", tag.Latitude)
+	}
+	parents, _ := svc.GetTagParents(ctx, 51)
+	if len(parents) != 1 || parents[0].ID != 50 {
+		t.Errorf("expected Rome to keep only its parent Trips, got %+v", parents)
+	}
+}
+
+func TestTagService_TagPostWithLocation_CountryOnly(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := NewPostService(repo, nil, nil, nil, "")
+	insertTestUser(t, postSvc)
+	post := newGeoPost(t, postSvc, "geo")
+
+	// A "Countries" base tag exists, so a new country goes under it. The
+	// search answers nothing, so the country stays without coordinates.
+	_, _ = repo.DB().Exec(`INSERT INTO tags (id, name, slug) VALUES (60,'Countries','countries')`)
+
+	svc := NewTagService(repo)
+	fakeNominatim(t, svc, `{"lat":"64.9","lon":"-18.6","address":{"country":"Iceland"}}`, nil)
+
+	const lat, lon = 64.8, -18.5
+	tag, err := svc.TagPostWithLocation(ctx, post.ID, lat, lon)
+	if err != nil {
+		t.Fatalf("TagPostWithLocation failed: %v", err)
+	}
+	if tag.Name != "Iceland" {
+		t.Fatalf("expected country tag Iceland, got %q", tag.Name)
+	}
+	if tag.Latitude.Valid {
+		t.Errorf("expected no coordinates when the country search fails, got %+v", tag.Latitude)
+	}
+	if !postHasTag(t, postSvc, post.ID, tag.ID) {
+		t.Error("expected post to be tagged with Iceland")
+	}
+	parents, _ := svc.GetTagParents(ctx, tag.ID)
+	if len(parents) != 1 || parents[0].ID != 60 {
+		t.Errorf("expected Iceland under Countries, got %+v", parents)
 	}
 }
 

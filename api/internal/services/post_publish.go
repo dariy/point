@@ -3,14 +3,15 @@ package services
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"runtime/debug"
 	"strings"
 	"time"
 
 	"point-api/internal/models"
+	"point-api/internal/utils"
 )
 
 func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, error) {
@@ -31,26 +32,71 @@ func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, e
 	return post, nil
 }
 
-// crossPostToInstagramAsync runs a cross-post in the background with its own
-// timeout, logging failures and recovering panics (a panic in a raw goroutine
-// would otherwise kill the server). CrossPostToInstagram also records the
-// failure on the post itself via updateInstagramStatus, so the admin UI shows
-// it too.
+// JobKindInstagramCrossPost is the job kind for one post's cross-post.
+const JobKindInstagramCrossPost = "instagram.crosspost"
+
+type instagramCrossPostPayload struct {
+	PostID int64 `json:"post_id"`
+}
+
+// WithJobs attaches the durable job store and registers the cross-post
+// handler. Without it, a cross-post runs in a plain goroutine and a restart
+// loses it.
+func (s *PostService) WithJobs(jobs *JobService) *PostService {
+	s.jobs = jobs
+	if jobs != nil {
+		jobs.Register(JobKindInstagramCrossPost, s.runInstagramCrossPostJob)
+	}
+	return s
+}
+
+// crossPostToInstagramAsync enqueues a cross-post job. The job store retries
+// it after a failure or a restart. CrossPostToInstagram also records a failure
+// on the post itself via updateInstagramStatus, so the admin UI shows it too.
 func (s *PostService) crossPostToInstagramAsync(postID int64) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("instagram cross-post panicked",
-				"post_id", postID, "panic", r, "stack", string(debug.Stack()))
-			s.health.Record(healthTaskInstagramCrossPost, fmt.Errorf("panic: %v", r))
+	if s.jobs == nil {
+		utils.SafeGo("instagram cross-post", func() {
+			_ = s.runInstagramCrossPost(context.Background(), postID)
+		})
+		return
+	}
+	if _, err := s.jobs.Enqueue(context.Background(), JobKindInstagramCrossPost, instagramCrossPostPayload{PostID: postID}); err != nil {
+		slog.Error("instagram cross-post: enqueue failed", "post_id", postID, "error", err)
+		s.health.Record(healthTaskInstagramCrossPost, err)
+	}
+}
+
+func (s *PostService) runInstagramCrossPostJob(ctx context.Context, raw json.RawMessage) error {
+	var p instagramCrossPostPayload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fmt.Errorf("decode payload: %w", err)
+	}
+	// A retry after a publish that did succeed must not post twice.
+	post, err := s.repo.GetPost(ctx, p.PostID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
 		}
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+		return err
+	}
+	if post.InstagramMediaID.Valid && post.InstagramMediaID.String != "" {
+		slog.Info("instagram cross-post: already published, skipping", "post_id", p.PostID)
+		return nil
+	}
+	return s.runInstagramCrossPost(ctx, p.PostID)
+}
+
+// runInstagramCrossPost runs one cross-post with its own timeout and records
+// the outcome for the health view.
+func (s *PostService) runInstagramCrossPost(ctx context.Context, postID int64) error {
+	ctx, cancel := context.WithTimeout(ctx, 180*time.Second)
 	defer cancel()
 	err := s.CrossPostToInstagram(ctx, postID)
 	s.health.Record(healthTaskInstagramCrossPost, err)
 	if err != nil {
 		slog.Error("instagram cross-post failed", "post_id", postID, "error", err)
 	}
+	return err
 }
 
 func (s *PostService) WithdrawPost(ctx context.Context, id int64) (models.Post, error) {

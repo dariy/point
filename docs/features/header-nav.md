@@ -9,14 +9,14 @@ The public header renders four zones on a single row:
 | nav      | menu links, "More ▾" overflow              | fixed per site            |
 | tools    | search, post actions, burger               | fixed, rightmost          |
 
-A single controller — `frontend/src/utils/headerFold.js` — owns the space.
+A single controller — `frontend/src/utils/headerFold.ts` — owns the space.
 Components and plugins register ordered *fold providers*; when the row
 overflows (measured, never device-sniffed), ops apply one at a time until it
 fits:
 
 1. subtitle hidden (`fold-title`)
-2. ancestor crumbs fold left-to-right into "…" (existing crumb-pair folding)
-3. nav links fold right-to-left into "More ▾" (nav-menu plugin, order 30)
+2. nav links fold right-to-left into "More ▾" (nav-menu plugin, order 30)
+3. ancestor crumbs fold left-to-right into "…" (crumb-pair folding, order 35)
 4. the nav zone collapses into the burger (`fold-nav`)
 5. brand text folds — logo remains the home link (site crumb pair)
 6. current crumb ellipsizes; clicking it opens the full-path popover (`fold-current`)
@@ -44,7 +44,7 @@ hover-with-intent on fine pointers, tap-to-toggle on coarse. There are no
 hover-only surfaces.
 
 Which of the two a click gets is decided by `eventPointerType()`
-(`utils/pointerMode.js`), never by the click's own `pointerType`: **WebKit tags
+(`utils/pointerMode.ts`), never by the click's own `pointerType`: **WebKit tags
 the compatibility click that follows a tap as `pointerType: "mouse"`** (Chrome
 reports `"touch"`), so reading the click directly made every tap on iPad take
 the mouse branch — the dropdown never opened and the tap just followed the
@@ -67,14 +67,14 @@ back to `menu`). In `none` mode neither is offered — a menuless site stays
 menuless.
 
 The nav-menu plugin and the site crumb both load that payload through
-`frontend/src/api/nav.js`, which fetches once and publishes `navTags` (the menu)
+`frontend/src/api/nav.ts`, which fetches once and publishes `navTags` (the menu)
 and `rootTags` (the tree) to the store. The crumb reads the store at open time
 and re-renders when it lands, so neither surface depends on the other existing.
 
 ### Who renders the title
 
 The blog title is *site identity*, not page context, so the header owns it —
-`components/public/SiteCrumb.js`, mounted at the head of the context zone —
+`components/public/SiteCrumb.ts`, mounted at the head of the context zone —
 while the breadcrumbs plugin renders the trail after it. Switch breadcrumbs off
 and the title and its dropdown stay; the trail is simply gone. The two render
 into sibling `display: contents` wrappers inside `.site-breadcrumb` (each

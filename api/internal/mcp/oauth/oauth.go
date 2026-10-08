@@ -49,6 +49,10 @@ type Store interface {
 	LoadToken(ctx context.Context, tokenHash string) (clientID string, expiresAt time.Time, found bool, err error)
 	DeleteToken(ctx context.Context, tokenHash string) error
 	DeleteExpiredTokens(ctx context.Context, now time.Time) error
+	// DeleteAllTokens revokes every token of every client.
+	DeleteAllTokens(ctx context.Context) error
+	// DeleteClient removes a client and every token issued to it.
+	DeleteClient(ctx context.Context, clientID string) error
 }
 
 type clientRecord struct {
@@ -68,7 +72,19 @@ type codeRecord struct {
 type tokenRecord struct {
 	ClientID  string
 	ExpiresAt time.Time // zero = never expires
+	// CachedAt is when the memory tier last read or wrote this record. After
+	// tokenCacheTTL, lookupToken reads the Store again (see tokenCacheTTL).
+	CachedAt time.Time
+	// MemOnly marks a token whose Store write failed. The Store does not know
+	// it, so lookupToken must not read the Store again for it.
+	MemOnly bool
 }
+
+// tokenCacheTTL is how long the memory tier trusts a cached token without a
+// read of the Store. A revoke that the provider cannot see (the offline
+// reset-password CLI deletes rows in the database directly) therefore takes
+// effect in at most this time. A revoke through the provider is immediate.
+const tokenCacheTTL = time.Minute
 
 // Provider is a self-contained in-memory OAuth 2.1 authorization server.
 type Provider struct {
@@ -172,7 +188,7 @@ func (p *Provider) lookupToken(ctx context.Context, token string) (*tokenRecord,
 	p.mu.RLock()
 	rec, ok := p.tokens[token]
 	p.mu.RUnlock()
-	if ok {
+	if ok && (p.cfg.Store == nil || rec.MemOnly || time.Since(rec.CachedAt) < tokenCacheTTL) {
 		return rec, true
 	}
 	if p.cfg.Store == nil || token == "" {
@@ -184,9 +200,15 @@ func (p *Provider) lookupToken(ctx context.Context, token string) (*tokenRecord,
 		return nil, false
 	}
 	if !found {
+		// Revoked or swept in the Store: the cached copy must go too.
+		if ok {
+			p.mu.Lock()
+			delete(p.tokens, token)
+			p.mu.Unlock()
+		}
 		return nil, false
 	}
-	rec = &tokenRecord{ClientID: clientID, ExpiresAt: expiresAt}
+	rec = &tokenRecord{ClientID: clientID, ExpiresAt: expiresAt, CachedAt: time.Now()}
 	p.mu.Lock()
 	p.tokens[token] = rec
 	p.mu.Unlock()
@@ -198,15 +220,51 @@ func (p *Provider) lookupToken(ctx context.Context, token string) (*tokenRecord,
 // process, which degrades to the old in-memory-only behaviour instead of
 // failing an authorization that has otherwise succeeded.
 func (p *Provider) saveToken(ctx context.Context, token string, rec *tokenRecord) {
+	rec.CachedAt = time.Now()
+	if p.cfg.Store != nil {
+		if err := p.cfg.Store.SaveToken(ctx, hashToken(token), rec.ClientID, rec.ExpiresAt); err != nil {
+			slog.Error("mcp-oauth: persist token", "client_id", rec.ClientID, "err", err)
+			rec.MemOnly = true
+		}
+	}
 	p.mu.Lock()
 	p.tokens[token] = rec
 	p.mu.Unlock()
+}
+
+// RevokeAll revokes every issued token in both tiers. Registered clients stay,
+// so a client can authorize again. A credential change calls it.
+func (p *Provider) RevokeAll(ctx context.Context) error {
+	p.mu.Lock()
+	clear(p.tokens)
+	clear(p.codes)
+	p.mu.Unlock()
 	if p.cfg.Store == nil {
-		return
+		return nil
 	}
-	if err := p.cfg.Store.SaveToken(ctx, hashToken(token), rec.ClientID, rec.ExpiresAt); err != nil {
-		slog.Error("mcp-oauth: persist token", "client_id", rec.ClientID, "err", err)
+	return p.cfg.Store.DeleteAllTokens(ctx)
+}
+
+// RevokeClient removes one client, its codes and its tokens from both tiers.
+// The client must register again before it can authorize.
+func (p *Provider) RevokeClient(ctx context.Context, clientID string) error {
+	p.mu.Lock()
+	delete(p.clients, clientID)
+	for k, c := range p.codes {
+		if c.ClientID == clientID {
+			delete(p.codes, k)
+		}
 	}
+	for k, t := range p.tokens {
+		if t.ClientID == clientID {
+			delete(p.tokens, k)
+		}
+	}
+	p.mu.Unlock()
+	if p.cfg.Store == nil {
+		return nil
+	}
+	return p.cfg.Store.DeleteClient(ctx, clientID)
 }
 
 // dropToken removes a token from both tiers (refresh rotation, expiry).
@@ -574,8 +632,19 @@ type loginData struct {
 	CodeChallenge       string
 	CodeChallengeMethod string
 	Error               string
+	// RedirectHost and Foreign are derived from RedirectURI in renderLogin.
+	// They name where the code goes, because registration is open: anyone can
+	// register a callback on their own host and send the owner an authorize
+	// link. The page names no client, since the client picks its own name.
+	RedirectHost string
+	Foreign      bool
 }
 
+// loginTmpl asks for the owner's password and nothing else, so it carries a
+// hidden username field: without one Chrome warns that the form is not
+// accessible, and a password manager has no account to key the saved
+// credential on. The value is the username the setup wizard writes, which is
+// what the admin SPA's own forms declare too.
 var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -587,6 +656,9 @@ var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 body{background:#0d0d0d;color:#e0e0e0;font-family:'Courier New',Courier,monospace;display:flex;align-items:center;justify-content:center;min-height:100vh}
 .card{background:#161616;border:1px solid #2a2a2a;border-radius:4px;padding:2.5rem 3rem;width:100%;max-width:380px}
 h1{color:#c9a96e;font-size:1.1rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2rem;text-align:center}
+.dest{font-size:.85rem;margin-bottom:1rem;text-align:center;word-break:break-all}
+.dest strong{color:#c9a96e}
+.warn{color:#e0b36e;border:1px solid #6b5220;border-radius:2px;font-size:.8rem;line-height:1.4;padding:.6rem .8rem;margin-bottom:1.5rem}
 label{display:block;font-size:.75rem;color:#888;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.4rem}
 input[type=password]{width:100%;background:#0d0d0d;border:1px solid #333;color:#e0e0e0;font-family:inherit;font-size:.95rem;padding:.6rem .8rem;border-radius:2px;outline:none;margin-bottom:1.5rem}
 input[type=password]:focus{border-color:#c9a96e}
@@ -598,6 +670,8 @@ button:hover{background:#d4b87a}
 <body>
 <div class="card">
 <h1>MCP Access</h1>
+<p class="dest">Access goes to <strong>{{.RedirectHost}}</strong></p>
+{{if .Foreign}}<p class="warn">This host is not on this computer. Continue only if you started this connection from {{.RedirectHost}}. If a link sent you here, stop.</p>{{end}}
 <form method="POST" action="/oauth/authorize">
 <input type="hidden" name="client_id" value="{{.ClientID}}">
 <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
@@ -605,7 +679,8 @@ button:hover{background:#d4b87a}
 <input type="hidden" name="code_challenge" value="{{.CodeChallenge}}">
 <input type="hidden" name="code_challenge_method" value="{{.CodeChallengeMethod}}">
 <label for="pw">Password</label>
-<input type="password" id="pw" name="submitted_password" autofocus>
+<input type="text" name="username" value="the_owner" autocomplete="username" readonly hidden>
+<input type="password" id="pw" name="submitted_password" autocomplete="current-password" autofocus>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 <button type="submit">Authenticate</button>
 </form>
@@ -625,7 +700,23 @@ func formActionOrigin(redirectURI string) string {
 	return u.Scheme + "://" + u.Host
 }
 
+// redirectHost returns the host an already-validated redirect URI sends the
+// code to, and whether that host is off this machine. A URI with no host (a
+// custom scheme) is shown whole and counts as foreign.
+func redirectHost(redirectURI string) (host string, foreign bool) {
+	u, err := url.Parse(redirectURI)
+	if err != nil || u.Host == "" {
+		return redirectURI, true
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return u.Host, false
+	}
+	return u.Host, true
+}
+
 func renderLogin(w http.ResponseWriter, data loginData) {
+	data.RedirectHost, data.Foreign = redirectHost(data.RedirectURI)
 	// This page needs its own CSP, overriding the site-wide one. The site policy
 	// says form-action 'self', and browsers enforce form-action against every hop
 	// of the redirect chain a form submission produces — so the 302 this form's

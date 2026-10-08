@@ -1,0 +1,15 @@
+/**
+ * Entry point for the static demo build (demo/scripts/build.sh).
+ *
+ * Import order is the whole trick: the shim patches window.fetch and
+ * XMLHttpRequest as a side effect of being imported, and ES modules evaluate in
+ * order, so it is installed before app.ts runs its top-level loadThemeCss()
+ * fetch and before anything else touches the network.
+ *
+ * app.ts itself is imported unmodified — the demo runs the real application,
+ * not a copy of it.
+ */
+
+import "./shim.ts";
+import "./banner.ts";
+import "../../frontend/src/app.ts";

@@ -171,7 +171,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@v4.37.7
+        uses: github/codeql-action/upload-sarif@v4.38.2
         if: always()
         with:
           sarif_file: trivy-results-${{ matrix.flavor }}.sarif
@@ -216,7 +216,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
 
       - name: Build tarballs
         run: ./scripts/build-tarball.sh --version="${{ inputs.tag || github.ref_name }}"

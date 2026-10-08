@@ -28,12 +28,52 @@ the live WAL-mode `point.db` byte-for-byte (which can capture a torn database), 
 archive tars a `VACUUM INTO` snapshot in its place and omits the `-wal`/`-shm`
 sidecars.
 
+The archive **leaves out derived data** that the engine rebuilds: `media/variants/`
+(resized images, regenerated on the first request after a restore) and the page
+cache `cache/` (refilled as pages are served). The `backups/` directory is also left
+out. gzip runs at `BestSpeed`, because the archive is mostly JPEGs that do not
+compress. The format stays `.tar.gz`, so restore, move in and `BACKUP_HOOK` do not
+change.
+
+A file that **vanishes or cannot be read** during the walk (a cache eviction, a
+thumbnail rebuild, a log rotation) is skipped before its tar header is written, so
+the archive stays valid. Each skip is logged. A run with skips still publishes the
+archive, and the `backup archive` task in `/api/system/health` records the skipped
+count as its last error. An error while copying a file that did open fails the
+backup.
+
 Each archive gets a **SHA-256 checksum** computed in the same write pass and stored
 as a `<archive>.sha256` sidecar (`sha256sum` format). It surfaces in the backups
 list, is advertised on download via the `X-Archive-SHA256` response header, and is
 recomputed on upload. This is an **integrity** check (detects corruption/truncation),
 not an authenticity one — a bare checksum proves nothing about a hostile archive;
 password re-entry and tar-traversal hardening cover that.
+
+## Schedule and managed mode (`BACKUP_MANAGED`)
+
+A daily task at 03:00 creates a backup when one is due (`backup_interval_days`),
+then keeps the newest `backup_keep` archives (0 = keep all). Setup seeds
+`enable_backup=true`, so a new install backs up from the first night. The admin
+can turn the toggle off in the Backups settings.
+
+A host that sells backups sets `BACKUP_MANAGED=true`. Then:
+
+- The scheduler ignores `enable_backup=false`. Scheduled backups always run.
+- Retention is at least 7 archives. A lower `backup_keep` is raised to 7; 0 stays
+  "keep all".
+- The Backups settings show "managed by your host" in place of the toggle.
+
+Unset (the default), the toggle and `backup_keep` apply as written.
+
+`GET /api/system/health` has a `backup` block for a host's dead-man check. It
+accepts an API key, so no admin session is necessary:
+
+```json
+"backup": {"managed": true, "enabled": true, "last_backup": "2026-09-30T03:00:12Z"}
+```
+
+`last_backup` is the modification time of the newest archive on disk. A restart
+does not clear it. It is absent when there is no archive.
 
 ## Move out / move in
 
@@ -78,6 +118,37 @@ the backups folder; nothing is applied until the operator explicitly Restores it
     DB). No external supervisor is required, so it also works under bare
     `scripts/run.sh`. The UI offers "Restart now" right after scheduling a restore,
     plus a standalone "Restart server" button.
+
+## Off-host copy (`BACKUP_HOOK`)
+
+A created archive lands in `<data>/backups` — on the same disk it protects, so a
+disk loss takes the backups with it. `BACKUP_HOOK` is the escape hatch: a shell
+command the engine runs after **every** successful backup (scheduled or from the
+System page) to copy the archive somewhere else. Unset by default — no hook, and
+a backup behaves exactly as it did before.
+
+- The command runs via `sh -c`, once, against the just-finished archive. The
+  archive's absolute path is passed as both `$1` and `$POINT_BACKUP_FILE`;
+  `$POINT_BACKUP_NAME` (basename), `$POINT_BACKUP_SHA256` (the sidecar's hex) and
+  `$POINT_BACKUP_DIR` are also in the environment. A typical value is one line:
+  `rclone copy "$POINT_BACKUP_FILE" r2:my-bucket/point-backups/`.
+- It runs **inside the backup run guard** (`BackupRunning()` stays true, a
+  concurrent `CreateBackup` still gets `409`), so a wedged hook can't be worse
+  than blocking the *next* backup. `BACKUP_HOOK_TIMEOUT_SECONDS` (default 3600)
+  bounds one run; on overrun the hook's process group is signalled and the run
+  is recorded as a timeout. A slow-but-working uplink wants a *larger* timeout.
+- The hook is **best-effort and never fails the backup**: the local archive is
+  already complete and listed by the time it runs. Instead its outcome is
+  recorded against the `backup off-host copy` job in
+  [`/api/system/health`](../features/observability.md) and the metrics
+  exposition — a non-zero exit or a timeout shows as a degraded job (with a
+  bounded tail of the command's output as the error), a clean exit as healthy.
+  With no hook configured the job is absent, not perpetually green.
+- **Restoring from the remote is manual and unchanged:** fetch the archive from
+  wherever the hook put it, then use the System page's *upload → restore* (or
+  drop it into `<data>/backups` and restore). The engine does not pull from the
+  remote itself — the hook is a one-way copy, deliberately, so its only
+  credential need be write-only.
 
 ## Pre-migration snapshots
 

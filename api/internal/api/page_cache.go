@@ -88,6 +88,7 @@ func servePageJSON(c echo.Context, cache *services.CacheService, key string, cac
 	if cacheable {
 		data, err = cache.GetOrRender(ctx, key, pageCacheTTL, render)
 	} else {
+		cache.NoteBypass()
 		data, err = render(ctx)
 	}
 	if err != nil {

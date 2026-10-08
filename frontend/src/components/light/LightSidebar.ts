@@ -1,0 +1,182 @@
+/**
+ * LightSidebar — admin navigation sidebar.
+ */
+
+import { Component } from '../Component.ts';
+import { getAppVersion, getTheme, onAppVersion, onPluginToggled, setTheme } from '../../store.ts';
+import { html, raw } from '../../utils/helpers.ts';
+import { DEBUG } from '../../utils/debug.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
+import {
+  APP_LOGO_SVG, LOGOUT_SVG, SUN_SVG, MOON_SVG,
+  DASHBOARD_SVG, POSTS_SVG, MEDIA_SVG, TAGS_SVG, SETTINGS_SVG, SECURITY_SVG, SYSTEM_SVG,
+  THEMES_SVG, MENU_SVG, PLUS_SVG, CHEVRON_SVG, PLUGINS_SVG, COMMENTS_SVG,
+} from '../../utils/icons.ts';
+
+const WRITE_ITEMS = [
+  { href: '/light',          label: 'Home',      icon: DASHBOARD_SVG },
+  { href: '/light/posts',    label: 'Posts',     icon: POSTS_SVG     },
+  { href: '/light/media',    label: 'Media',     icon: MEDIA_SVG     },
+  { href: '/light/tags',     label: 'Tags',      icon: TAGS_SVG      },
+];
+
+const MANAGE_ITEMS = [
+  { href: '/light/menu',     label: 'Menu',      icon: MENU_SVG      },
+  { href: '/light/themes',   label: 'Themes',    icon: THEMES_SVG    },
+  { href: '/light/plugins',  label: 'Plugins',   icon: PLUGINS_SVG   },
+  { href: '/light/settings', label: 'Settings',  icon: SETTINGS_SVG  },
+  { href: '/light/security', label: 'Security',  icon: SECURITY_SVG  },
+  { href: '/light/system',   label: 'System',    icon: SYSTEM_SVG    },
+];
+
+export interface LightSidebarProps {
+  /** Active route path. */
+  currentPath?: string;
+  onLogout?: () => void;
+}
+
+export class LightSidebar extends Component<LightSidebarProps> {
+  _manageActive: boolean;
+
+  constructor(container: HTMLElement, props: LightSidebarProps = {}) {
+    super(container, props);
+    // null = never toggled, so the group follows the current page (expanded
+    // while you are on one of its items). Once toggled it is the answer, on
+    // every page — the group being open is not a fact about the route.
+    this._manageActive = false;
+    const stored = localStorage.getItem('sidebar_manage_expanded');
+    this.state = {
+      manageExpanded: stored === null ? null : stored === 'true',
+      collapsed: localStorage.getItem('sidebar_collapsed') === 'true',
+    };
+  }
+
+  render() {
+    const { currentPath = '' } = this.props;
+    const { collapsed } = this.state;
+    const version = getAppVersion() || '';
+
+    // Plugin-provided pages join the Manage group only while their plugin is
+    // enabled (the manifest is enabled-only, so a disabled plugin disappears).
+    const manageItems = [...MANAGE_ITEMS];
+    if (pluginHost.isEnabled('comments')) {
+      manageItems.splice(1, 0, { href: '/light/comments', label: 'Comments', icon: COMMENTS_SVG });
+    }
+
+    const isManageActive = manageItems.some(item =>
+       currentPath === item.href || currentPath.startsWith(item.href + '/')
+    );
+    this._manageActive = isManageActive;
+    const manageExpanded = this.state.manageExpanded ?? isManageActive;
+
+    const renderItem = (item: typeof MANAGE_ITEMS[number]) => {
+      const isActive = item.href === '/light'
+        ? currentPath === item.href
+        : currentPath === item.href || currentPath.startsWith(item.href + '/');
+      return html`
+        <li class="nav-item${isActive ? ' active' : ''}">
+          <a href="${item.href}" title="${item.label}">
+            ${raw(item.icon)}
+            <span class="nav-label">${item.label}</span>
+          </a>
+        </li>`;
+    };
+
+    const writeItems = WRITE_ITEMS.map(renderItem);
+    const manageItemsHtml = manageItems.map(renderItem);
+
+    return html`
+      <aside class="light-sidebar${collapsed ? ' is-collapsed' : ''}">
+        <div class="sidebar-header">
+          <div class="site-branding">
+            <button type="button" id="sidebar-collapse-btn" class="site-title-link" title="Toggle Sidebar" aria-label="Toggle Sidebar">
+              <span class="site-title">
+                ${raw(APP_LOGO_SVG)}
+                <span class="site-name">Point</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Admin navigation">
+          <div class="sidebar-primary-action">
+            <a href="/light/posts/new" class="btn btn-primary btn-block" title="New Post" aria-label="Create new post">
+              ${raw(PLUS_SVG)}
+              <span class="nav-label">New Post</span>
+            </a>
+          </div>
+
+          <div class="nav-group">
+            <h2 class="nav-group-title">Write</h2>
+            <ul class="nav-group-items">${writeItems}</ul>
+          </div>
+
+          <div class="nav-group ${manageExpanded ? 'is-expanded' : 'is-collapsed'}${isManageActive ? ' has-active' : ''}" id="manage-group">
+            <button class="nav-group-toggle" id="manage-toggle" type="button" aria-expanded="${manageExpanded}" title="Manage" aria-label="Toggle Manage group">
+              <span class="nav-group-title">Manage</span>
+              <span class="toggle-icon">${raw(CHEVRON_SVG)}</span>
+            </button>
+            <ul class="nav-group-items">${manageItemsHtml}</ul>
+          </div>
+        </nav>
+      </aside>
+
+      <div class="sidebar-footer${collapsed ? ' is-collapsed' : ''}">
+        <div class="sidebar-version" aria-label="Version">${version}<span class="sidebar-build sidebar-build-${DEBUG ? 'debug' : 'release'}" title="Frontend bundle">${DEBUG ? 'debug' : 'release'}</span></div>
+        <div class="sidebar-footer-actions">
+          <div class="user-info">
+            <button class="logout-btn" id="logout-btn" type="button" aria-label="Logout" title="Logout">${raw(LOGOUT_SVG)}</button>
+          </div>
+          <button class="theme-toggle" id="sidebar-theme-toggle" aria-label="Toggle theme" type="button" title="Toggle Theme">
+            <span class="icon-sun">${raw(SUN_SVG)}</span>
+            <span class="icon-moon">${raw(MOON_SVG)}</span>
+          </button>
+        </div>
+      </div>`;
+  }
+
+  afterRender() {
+    this.subscribeStore(onPluginToggled, () => this.setState({}));
+
+    const { collapsed } = this.state;
+    document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', collapsed);
+
+    this.subscribeStore(onAppVersion, (v: string) => {
+      const el = this.$('.sidebar-version');
+      if (el) el.textContent = v;
+    });
+
+    this.$('#manage-toggle')?.addEventListener('click', () => {
+      // Toggle away from what is on screen, which on an untoggled sidebar is
+      // whatever the current page implied — so the first click always moves.
+      const next = !(this.state.manageExpanded ?? this._manageActive);
+      this.setState({ manageExpanded: next });
+      localStorage.setItem('sidebar_manage_expanded', String(next));
+    });
+
+    const btn = this.$('#logout-btn');
+    if (btn && this.props.onLogout) {
+      btn.addEventListener('click', this.props.onLogout);
+    }
+
+    this.$('#sidebar-theme-toggle')?.addEventListener('click', () => {
+      const current = getTheme() || 'auto';
+      const next = current === 'dark' ? 'light' : 'dark';
+      setTheme(next);
+    });
+
+    this.$('#sidebar-collapse-btn')?.addEventListener('click', () => {
+      const next = !this.state.collapsed;
+      this.setState({ collapsed: next });
+      localStorage.setItem('sidebar_collapsed', String(next));
+      document.querySelector('.light-layout')?.classList.toggle('light-layout--collapsed', next);
+    });
+  }
+
+  beforeUnmount() {
+    const overlay = document.querySelector('.sidebar-overlay');
+    if (overlay) {
+      overlay.classList.remove('active');
+    }
+  }
+}

@@ -117,6 +117,8 @@ type mockRepository struct {
 	MockDeleteTagLocation                    func(ctx context.Context, tagID int64) error
 	MockListOrphanedMedia                    func(ctx context.Context, limit, offset int64) ([]models.Medium, error)
 	MockCountOrphanedMedia                   func(ctx context.Context) (int64, error)
+	MockSetMediaDimensions                   func(ctx context.Context, id, width, height int64) error
+	MockReplaceMediaOriginal                 func(ctx context.Context, id int64, filename, originalPath, mimeType string, fileSize int64) error
 	MockGetMediaByIDs                        func(ctx context.Context, ids []int64) ([]models.Medium, error)
 	MockDeleteMediaByIDs                     func(ctx context.Context, ids []int64) error
 	MockListOrphanedMediaByPage              func(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
@@ -776,6 +778,10 @@ func (m *mockRepository) DB() *sql.DB {
 	return nil
 }
 
+func (m *mockRepository) GetOwnerUserID(ctx context.Context) (int64, error) {
+	return 1, nil
+}
+
 func (m *mockRepository) DeleteSecret(ctx context.Context, key string) error {
 	if m.MockDeleteSecret != nil {
 		return m.MockDeleteSecret(ctx, key)
@@ -873,6 +879,20 @@ func (m *mockRepository) ListOrphanedMedia(ctx context.Context, limit, offset in
 	return nil, fmt.Errorf("ListOrphanedMedia not implemented")
 }
 
+func (m *mockRepository) SetMediaDimensions(ctx context.Context, id, width, height int64) error {
+	if m.MockSetMediaDimensions != nil {
+		return m.MockSetMediaDimensions(ctx, id, width, height)
+	}
+	return fmt.Errorf("SetMediaDimensions not implemented")
+}
+
+func (m *mockRepository) ReplaceMediaOriginal(ctx context.Context, id int64, filename, originalPath, mimeType string, fileSize int64) error {
+	if m.MockReplaceMediaOriginal != nil {
+		return m.MockReplaceMediaOriginal(ctx, id, filename, originalPath, mimeType, fileSize)
+	}
+	return fmt.Errorf("ReplaceMediaOriginal not implemented")
+}
+
 func (m *mockRepository) CountOrphanedMedia(ctx context.Context) (int64, error) {
 	if m.MockCountOrphanedMedia != nil {
 		return m.MockCountOrphanedMedia(ctx)
@@ -908,14 +928,14 @@ func (m *mockRepository) ListMediaFolders(ctx context.Context, fileType string) 
 	return nil, fmt.Errorf("ListMediaFolders not implemented")
 }
 
-func (m *mockRepository) ListMediaFiltered(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error) {
+func (m *mockRepository) ListMediaFiltered(ctx context.Context, fileType, folder, filename string, limit, offset int64) ([]models.Medium, error) {
 	if m.MockListMediaFiltered != nil {
 		return m.MockListMediaFiltered(ctx, fileType, folder, limit, offset)
 	}
 	return nil, fmt.Errorf("ListMediaFiltered not implemented")
 }
 
-func (m *mockRepository) CountMediaFiltered(ctx context.Context, fileType, folder string) (int64, error) {
+func (m *mockRepository) CountMediaFiltered(ctx context.Context, fileType, folder, filename string) (int64, error) {
 	if m.MockCountMediaFiltered != nil {
 		return m.MockCountMediaFiltered(ctx, fileType, folder)
 	}
@@ -1172,6 +1192,10 @@ func (m *mockRepository) DeleteExpiredOAuthTokens(ctx context.Context, now time.
 	return fmt.Errorf("DeleteExpiredOAuthTokens not implemented")
 }
 
+func (m *mockRepository) ExpireUnboundedOAuthTokens(ctx context.Context, expiresAt time.Time) error {
+	return fmt.Errorf("ExpireUnboundedOAuthTokens not implemented")
+}
+
 func (m *mockRepository) GetSystemStats(ctx context.Context) (repository.SystemStats, error) {
 	if m.MockGetSystemStats != nil {
 		return m.MockGetSystemStats(ctx)
@@ -1360,4 +1384,56 @@ func (m *mockRepository) SetPostMediaURL(ctx context.Context, postID int64, medi
 
 func (m *mockRepository) BackfillPostMediaURLs(ctx context.Context) error {
 	return nil
+}
+
+func (m *mockRepository) ListOAuthClients(ctx context.Context, now time.Time) ([]repository.OAuthClientSummary, error) {
+	return nil, fmt.Errorf("ListOAuthClients not implemented")
+}
+
+func (m *mockRepository) DeleteOAuthClient(ctx context.Context, clientID string) error {
+	return fmt.Errorf("DeleteOAuthClient not implemented")
+}
+
+func (m *mockRepository) DeleteAllOAuthTokens(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockRepository) InsertJob(ctx context.Context, kind, payload string, maxAttempts int64, runAt time.Time) (int64, error) {
+	return 0, fmt.Errorf("InsertJob not implemented")
+}
+
+func (m *mockRepository) ClaimDueJob(ctx context.Context, now time.Time) (*repository.Job, error) {
+	return nil, fmt.Errorf("ClaimDueJob not implemented")
+}
+
+func (m *mockRepository) FinishJob(ctx context.Context, id int64, state, lastError string, nextRunAt time.Time) error {
+	return fmt.Errorf("FinishJob not implemented")
+}
+
+func (m *mockRepository) RequeueRunningJobs(ctx context.Context) (int64, error) {
+	return 0, fmt.Errorf("RequeueRunningJobs not implemented")
+}
+
+func (m *mockRepository) GetJob(ctx context.Context, id int64) (repository.Job, error) {
+	return repository.Job{}, fmt.Errorf("GetJob not implemented")
+}
+
+func (m *mockRepository) ListJobs(ctx context.Context, states []string, limit int) ([]repository.Job, error) {
+	return nil, fmt.Errorf("ListJobs not implemented")
+}
+
+func (m *mockRepository) CountJobsByState(ctx context.Context) (map[string]int64, error) {
+	return nil, fmt.Errorf("CountJobsByState not implemented")
+}
+
+func (m *mockRepository) RetryFailedJob(ctx context.Context, id int64, runAt time.Time) (bool, error) {
+	return false, fmt.Errorf("RetryFailedJob not implemented")
+}
+
+func (m *mockRepository) DeleteDoneJobsBefore(ctx context.Context, before time.Time) (int64, error) {
+	return 0, fmt.Errorf("DeleteDoneJobsBefore not implemented")
+}
+
+func (m *mockRepository) DeleteFailedJobs(ctx context.Context) (int64, error) {
+	return 0, fmt.Errorf("DeleteFailedJobs not implemented")
 }

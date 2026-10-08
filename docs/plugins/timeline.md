@@ -3,7 +3,7 @@
 **Type:** slot · **Slot:** `timeline` · **Default:** enabled
 
 An interactive horizontal pan/zoom control over year tags (`kind='year'`)
-(`frontend/src/plugins/timeline/index.js`, ~1500 lines). Two modes: **filter mode**
+(`frontend/src/plugins/timeline/index.ts`, ~1500 lines). Two modes: **filter mode**
 (home page, map) where the centered year/range filters posts/pins live and syncs to
 the URL; **popover mode** (public post/tag pages) where clicking a year shows its
 locations.

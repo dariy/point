@@ -2,7 +2,7 @@
 # Builds the static UI demo into demo/dist/ — a self-contained copy of the Point
 # frontend that runs with no backend at all.
 #
-# The demo bundles recorded fixtures (demo/scripts/record-fixtures.mjs) and a
+# The demo bundles recorded fixtures (demo/scripts/record-fixtures.ts) and a
 # fetch/XHR shim (demo/mock/) that answers every API call from memory,
 # so the output is plain static files: no origin to attack, no database, no
 # credentials, and nothing to reset — a reload restores the pristine state.
@@ -51,7 +51,7 @@ SKIP_MEDIA=0
 
 if [ ! -f "$FIXTURES" ]; then
   echo "Missing $FIXTURES" >&2
-  echo "Record it first:  node demo/scripts/record-fixtures.mjs --session=<token>" >&2
+  echo "Record it first:  node demo/scripts/record-fixtures.ts --session=<token>" >&2
   exit 1
 fi
 
@@ -69,7 +69,7 @@ echo "==> Building JS (mock entry)"
 # JS_DEBUG_DIR is redirected into the demo tree even though the debug set is
 # skipped: build-js.sh removes that directory when skipping, and the default
 # points at frontend/js-debug — the working tree's dev bundle.
-APP_ENTRY="$DEMO_DIR/mock/entry.js" \
+APP_ENTRY="$DEMO_DIR/mock/entry.ts" \
 JS_RELEASE_DIR="$DIST/assets/js" \
 JS_DEBUG_DIR="$DIST/.js-debug-unused" \
 BUILD_DEBUG_FRONTEND=0 \
@@ -78,7 +78,7 @@ BUILD_DEBUG_FRONTEND=0 \
 # ── CSS ───────────────────────────────────────────────────────────────────
 #
 # frontend/css is copied wholesale because it carries common/theme.css, which
-# the server generates at runtime from the active theme and which themeLoader.js
+# the server generates at runtime from the active theme and which themeLoader.ts
 # fetches as text before first paint. A build that omits it renders unstyled.
 
 echo "==> Building CSS"
@@ -102,7 +102,7 @@ cp "$ROOT_DIR"/frontend/themes/*.css "$DIST/assets/themes/"
 # files on every request, so recording it into the fixture would freeze the demo
 # at the themes that existed on recording day — a theme added later would ship
 # in the bundle above and still be missing from the Themes page.
-node "$SCRIPT_DIR/build-themes.mjs" \
+node "$SCRIPT_DIR/build-themes.ts" \
   --src="$ROOT_DIR/frontend/themes" \
   --out="$DIST/assets/themes/index.json"
 
@@ -142,7 +142,7 @@ DEMO_VERSION="demo-$(
 echo "    version=$DEMO_VERSION"
 
 echo "==> Templating index.html"
-node "$SCRIPT_DIR/build-html.mjs" \
+node "$SCRIPT_DIR/build-html.ts" \
   --src="$ROOT_DIR/frontend/index.html" \
   --out="$DIST/index.html" \
   --js-dir="$DIST/assets/js" \
@@ -242,12 +242,12 @@ echo "==> Writing host config"
 # SPA fallback: every unknown path renders index.html so deep links and reloads
 # work — without it the admin UI, whose routes are entirely client-side, is one
 # large 404. `_redirects` is only consulted when no file matches, so real assets
-# are unaffected. demo/scripts/serve.mjs reads this same file, so serving the
+# are unaffected. demo/scripts/serve.ts reads this same file, so serving the
 # build locally behaves like the deployed one.
 #
 # Assets and media are excluded from the fallback and sent to a 404 instead: a
 # missing image must not resolve to the HTML shell with a 200, which would
-# defeat dropBrokenImages() (frontend/src/utils/helpers.js) and leave broken
+# defeat dropBrokenImages() (frontend/src/utils/helpers.ts) and leave broken
 # <img> elements on the page. Media lives at /YYYY/MM/<file>, which never
 # collides with an SPA route.
 cat > "$DIST/404.html" <<'EOF'
@@ -272,7 +272,7 @@ EOF
 # the rules above exist to prevent), so on Pages the routing is expressed as a
 # worker instead. `_headers` still applies to asset responses in this mode.
 #
-# `_redirects` is kept because demo/scripts/serve.mjs reads it to reproduce the
+# `_redirects` is kept because demo/scripts/serve.ts reads it to reproduce the
 # same routing locally, and because any other static host still honours it.
 cat > "$DIST/_worker.js" <<'EOF'
 export default {
@@ -328,7 +328,7 @@ EOF
 # feed.xml and sitemap.xml are rendered by the Go server in production, so a
 # static build has to emit them as files or the <link rel=alternate> in the
 # shell points at a 404.
-node "$SCRIPT_DIR/build-feeds.mjs" \
+node "$SCRIPT_DIR/build-feeds.ts" \
   --fixtures="$FIXTURES" \
   --out="$DIST"
 
@@ -338,4 +338,4 @@ du -sh "$DIST" 2>/dev/null || true
 echo
 echo "Serve locally with the backend STOPPED, then confirm zero /api/ requests:"
 echo "  demo/scripts/run.sh"
-echo "  node demo/scripts/test.mjs --base=http://localhost:8002"
+echo "  node demo/scripts/test.ts --base=http://localhost:8002"

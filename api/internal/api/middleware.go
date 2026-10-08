@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"point-api/internal/models"
@@ -41,6 +42,20 @@ func extractSessionID(v interface{}) int64 {
 	return 0
 }
 
+// lightroomAllowed reports whether a lightroom-scoped key may call the route:
+// create-only, so POST to the create endpoints for posts, tags and media.
+// c.Path() is the registered route pattern, so a lookalike URL cannot match.
+func lightroomAllowed(c echo.Context) bool {
+	if c.Request().Method != http.MethodPost {
+		return false
+	}
+	switch c.Path() {
+	case "/api/posts", "/api/tags", "/api/media/upload", "/api/media/upload/multiple":
+		return true
+	}
+	return false
+}
+
 func AuthMiddleware(authService *services.AuthService, apiKeyService *services.ApiKeyService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -51,6 +66,9 @@ func AuthMiddleware(authService *services.AuthService, apiKeyService *services.A
 					key := h[len(prefix):]
 					apiKey, err := apiKeyService.ValidateAPIKey(c.Request().Context(), key)
 					if err == nil {
+						if apiKey.Scope == services.ScopeLightroom && !lightroomAllowed(c) {
+							return echo.NewHTTPError(http.StatusForbidden, "this API key can only create posts, tags and media")
+						}
 						c.Set("user", apiKey)
 						return next(c)
 					}
@@ -87,8 +105,48 @@ const RevelioHeader = "X-Point-Revelio"
 // anonymous visitor for this read. It is a *narrowing* of what the principal
 // may see and never grants anything, so honouring an unauthenticated client's
 // header costs nothing — a guest is already a guest.
+//
+// The narrowing applies to the public site only. Revelio is the owner's view of
+// their *published* pages; the admin area always shows everything there is to
+// administer, so a read issued from it is never narrowed (see fromAdminArea).
 func guestViewRequested(c echo.Context) bool {
-	return strings.EqualFold(c.Request().Header.Get(RevelioHeader), "off")
+	if !strings.EqualFold(c.Request().Header.Get(RevelioHeader), "off") {
+		return false
+	}
+	return !fromAdminArea(c.Request())
+}
+
+// fromAdminArea reports whether this read was issued by a document in the admin
+// area rather than by a public page.
+//
+// The request path cannot answer that. Several admin screens read the very same
+// OptionalAuth endpoints the public site does — the tag manager, the post
+// editor's tag picker and the command palette all list /api/tags — so with the
+// switch off those screens were answered as a guest and lost every hidden tag,
+// off the screens that exist to edit them. The *referring document* is what
+// separates the two, and the SPA is same-origin, so under the site's
+// `Referrer-Policy: strict-origin-when-cross-origin` (middleware_stack.go) the
+// browser sends the full path here.
+//
+// Trusting a client-supplied header for this is sound because of the direction
+// it points: it only ever withholds a narrowing the client asked for in the
+// first place, and can never reveal anything on its own. Hidden items still
+// require a principal that validated — a guest forging `Referer: /light` is
+// still a guest with nothing behind c.Get("user"), and the admin area itself is
+// closed to them by AuthMiddleware. The most a forged Referer buys anyone is
+// not being shown their own guest view.
+func fromAdminArea(r *http.Request) bool {
+	ref := r.Header.Get("Referer")
+	if ref == "" {
+		return false
+	}
+	u, err := url.Parse(ref)
+	if err != nil {
+		return false
+	}
+	// "/lighthouse" is a public page like any other; only /light itself and
+	// what sits under it are the admin area.
+	return u.Path == "/light" || strings.HasPrefix(u.Path, "/light/") || u.Path == "/setup"
 }
 
 // IsGuestView reports whether this request is an authenticated principal
@@ -129,7 +187,9 @@ func OptionalAuthMiddleware(authService *services.AuthService, apiKeyService *se
 				if len(h) > len(prefix) && h[:len(prefix)] == prefix {
 					key := h[len(prefix):]
 					apiKey, err := apiKeyService.ValidateAPIKey(c.Request().Context(), key)
-					if err == nil {
+					// A lightroom key is create-only: it must not widen what a
+					// read shows, so it gets the guest view here.
+					if err == nil && apiKey.Scope != services.ScopeLightroom {
 						setUser(apiKey)
 						return next(c)
 					}

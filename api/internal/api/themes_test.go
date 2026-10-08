@@ -217,4 +217,32 @@ func TestThemeHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	})
+
+	t.Run("GetThemeCSS", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/themes/custom/css", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("name")
+		c.SetParamValues("custom")
+
+		err := handler.GetThemeCSS(c)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Header().Get(echo.HeaderContentType), "text/css")
+		assert.Contains(t, rec.Body.String(), "--color-primary: #000")
+	})
+
+	t.Run("GetThemeCSS unknown or unsafe name", func(t *testing.T) {
+		for _, name := range []string{"missing", "../default"} {
+			req := httptest.NewRequest(http.MethodGet, "/api/themes/x/css", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("name")
+			c.SetParamValues(name)
+
+			err := handler.GetThemeCSS(c)
+			assert.NoError(t, err)
+			assert.Equal(t, http.StatusNotFound, rec.Code, name)
+		}
+	})
 }

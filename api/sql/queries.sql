@@ -428,9 +428,9 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.upd
 
 -- name: CreateAPIKey :one
 INSERT INTO api_keys (
-    user_id, name, key_hash, prefix, expires_at, created_at
+    user_id, name, key_hash, prefix, expires_at, scope, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+    ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
 )
 RETURNING *;
 

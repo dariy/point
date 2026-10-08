@@ -45,9 +45,9 @@ func TestPagesPayloads(t *testing.T) {
 		target string
 		params map[string]string
 		owner  bool
-		// settings are applied before the call. The tags-route slot takes a
-		// single claimant, so the graph and the map cannot both be live at
-		// once and the cases that need each say so.
+		// settings are applied before the call. The graph (tags-route) and the
+		// map (map-route) sit in separate slots, but each plugin still ships
+		// with its own default, so the cases that need one say so.
 		settings map[string]string
 		// sortKeys names the top-level arrays whose order comes from iterating
 		// the tag snapshot's map and is therefore not stable between runs. They
@@ -158,10 +158,11 @@ func TestPagesPayloads(t *testing.T) {
 	}
 }
 
-// mapPluginOn hands the single-claim tags-route slot to the map plugin, which
-// is what the /map endpoint needs to be reachable at all.
+// mapPluginOn hands the single-claim map-route slot to the map plugin, which
+// is what the /map endpoint needs to be reachable at all. The graph plugin is
+// in the other slot and is left as the fixture set it.
 var mapPluginOn = map[string]string{
-	"plugin.tags-graph.enabled": "false",
+	"plugin.tags-atlas.enabled": "false",
 	"plugin.tags-map.enabled":   "true",
 }
 

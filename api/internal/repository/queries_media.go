@@ -40,6 +40,22 @@ LIMIT ? OFFSET ?`
 	return items, rows.Err()
 }
 
+// SetMediaDimensions stores the pixel size of a media row. It fills in rows
+// that were stored before a decoder existed for their format.
+func (r *sqliteRepository) SetMediaDimensions(ctx context.Context, id, width, height int64) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE media SET width = ?, height = ? WHERE id = ?`, width, height, id)
+	return err
+}
+
+// ReplaceMediaOriginal points a media row at a new original file. The HEIC
+// conversion uses it to swap the row to its JPEG after a deferred decode.
+func (r *sqliteRepository) ReplaceMediaOriginal(ctx context.Context, id int64, filename, originalPath, mimeType string, fileSize int64) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE media SET filename = ?, original_path = ?, mime_type = ?, file_size = ? WHERE id = ?`,
+		filename, originalPath, mimeType, fileSize, id)
+	return err
+}
+
 // CountOrphanedMedia counts media with no associated post.
 func (r *sqliteRepository) CountOrphanedMedia(ctx context.Context) (int64, error) {
 	const q = `SELECT COUNT(*) FROM media WHERE post_id IS NULL`
@@ -165,8 +181,8 @@ ORDER BY year DESC, month DESC`
 	return folders, rows.Err()
 }
 
-// ListMediaFiltered lists media with optional file_type and/or folder (YYYY/MM) filters.
-func (r *sqliteRepository) ListMediaFiltered(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error) {
+// ListMediaFiltered lists media with optional file_type, folder (YYYY/MM), and filename filters.
+func (r *sqliteRepository) ListMediaFiltered(ctx context.Context, fileType, folder, filename string, limit, offset int64) ([]models.Medium, error) {
 	folderPrefix := ""
 	if folder != "" {
 		folderPrefix = "originals/" + folder + "/"
@@ -177,10 +193,27 @@ SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
 FROM media
 WHERE (? = '' OR LOWER(file_type) = LOWER(?))
   AND (? = '' OR original_path LIKE ? || '%')
+  AND (? = '' OR (
+      filename LIKE '%' || ? || '%'
+      OR post_id IN (
+          SELECT id FROM posts WHERE title LIKE '%' || ? || '%'
+          UNION
+          SELECT pt.post_id FROM post_tags pt
+          WHERE pt.tag_id IN (
+              WITH RECURSIVE tag_tree(id) AS (
+                  SELECT id FROM tags WHERE name LIKE '%' || ? || '%'
+                  UNION
+                  SELECT tr.child_id FROM tag_relationships tr
+                  JOIN tag_tree tt ON tr.parent_id = tt.id
+              )
+              SELECT id FROM tag_tree
+          )
+      )
+  ))
 ORDER BY uploaded_at DESC
 LIMIT ? OFFSET ?`
 
-	rows, err := r.db.QueryContext(ctx, q, fileType, fileType, folderPrefix, folderPrefix, limit, offset)
+	rows, err := r.db.QueryContext(ctx, q, fileType, fileType, folderPrefix, folderPrefix, filename, filename, filename, filename, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -203,8 +236,8 @@ LIMIT ? OFFSET ?`
 	return items, rows.Err()
 }
 
-// CountMediaFiltered counts media with optional file_type and/or folder filters.
-func (r *sqliteRepository) CountMediaFiltered(ctx context.Context, fileType, folder string) (int64, error) {
+// CountMediaFiltered counts media with optional file_type, folder, and filename filters.
+func (r *sqliteRepository) CountMediaFiltered(ctx context.Context, fileType, folder, filename string) (int64, error) {
 	folderPrefix := ""
 	if folder != "" {
 		folderPrefix = "originals/" + folder + "/"
@@ -212,10 +245,27 @@ func (r *sqliteRepository) CountMediaFiltered(ctx context.Context, fileType, fol
 	const q = `
 SELECT COUNT(*) FROM media
 WHERE (? = '' OR LOWER(file_type) = LOWER(?))
-  AND (? = '' OR original_path LIKE ? || '%')`
+  AND (? = '' OR original_path LIKE ? || '%')
+  AND (? = '' OR (
+      filename LIKE '%' || ? || '%'
+      OR post_id IN (
+          SELECT id FROM posts WHERE title LIKE '%' || ? || '%'
+          UNION
+          SELECT pt.post_id FROM post_tags pt
+          WHERE pt.tag_id IN (
+              WITH RECURSIVE tag_tree(id) AS (
+                  SELECT id FROM tags WHERE name LIKE '%' || ? || '%'
+                  UNION
+                  SELECT tr.child_id FROM tag_relationships tr
+                  JOIN tag_tree tt ON tr.parent_id = tt.id
+              )
+              SELECT id FROM tag_tree
+          )
+      )
+  ))`
 
 	var count int64
-	err := r.db.QueryRowContext(ctx, q, fileType, fileType, folderPrefix, folderPrefix).Scan(&count)
+	err := r.db.QueryRowContext(ctx, q, fileType, fileType, folderPrefix, folderPrefix, filename, filename, filename, filename).Scan(&count)
 	return count, err
 }
 

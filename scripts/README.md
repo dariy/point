@@ -21,7 +21,7 @@ outside this repo — see [Production](#production) below.
 - **build-js.sh**: Bundles and minifies frontend JS with esbuild. Produces both a
   debug and a minified bundle set so the backend can serve either without a
   rebuild (`FRONTEND_DEBUG`).
-- **build-plugin-manifest.mjs**: Writes the hashed plugin manifest consumed by the
+- **build-plugin-manifest.ts**: Writes the hashed plugin manifest consumed by the
   plugin loader. Invoked by `build-js.sh`; not run directly.
 - **run-remark42-local.sh**: Runs the bundled remark42 comments engine locally
   for dev, mirroring what `build/Dockerfile` + `entrypoint.sh` do in the
@@ -35,11 +35,16 @@ outside this repo — see [Production](#production) below.
 
 ## Quality Gate
 
-- **check.sh**: The full quality gate — lint, vet, tests, vulnerability scan. Run
-  this before committing. Flags:
+- **check.sh**: The full quality gate — lint, vet, tests, vulnerability scan —
+  in three parallel lanes (Go, JS, E2E). Prints one PASS/FAIL line per step and
+  the tail of a failed step's log; full logs are in `tmp/check/<step>.log`. Every
+  CI check step calls it with `--only`. Run this before committing. Flags:
   - `--fix` — auto-fix lint issues
-  - `--short` — skip long-running integration tests
+  - `--short` — skip long-running integration tests (and the Go coverage floor and E2E)
   - `--lint` — lint only, skipping vet/tests/vuln scan (this is `npm run lint`)
+  - `--changed` — only the lanes touched by `git diff develop...HEAD` and uncommitted files
+  - `--only <step>` — only the named step(s); `--list` prints the step names
+  - `--verbose` — stream step output as well as logging it (default in GitHub Actions)
 - **run-tests.sh**: Go test runner. Runs unit + integration tests
   by default; `--unit` for unit-only, `--race` for the race
   detector, `--html` for a coverage report. See

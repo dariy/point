@@ -345,7 +345,7 @@
    Tag Graph (force-directed /tags view)
    =========================== */
 
-/* Node / edge colors — theme-aware, consumed by tagGraph.js via getComputedStyle. */
+/* Node / edge colors — theme-aware, consumed by tagGraph.ts via getComputedStyle. */
 /* Full-bleed page chrome — mirror the /map layout so the graph fills the
    viewport below the header (the more canvas, the better, especially mobile). */
 .site-wrapper--graph {

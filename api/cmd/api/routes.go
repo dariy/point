@@ -14,8 +14,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"html"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,9 +24,9 @@ import (
 	"point-api/internal/api"
 	"point-api/internal/config"
 	"point-api/internal/mcp"
+	"point-api/internal/metrics"
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
-	"point-api/internal/services"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -77,13 +75,14 @@ func registerSetupRoutes(e *echo.Echo, h *api.SetupHandler) {
 // Pass one instance to both registerAuthRoutes and registerWebAuthnRoutes:
 // giving the passkey login its own limiter would hand an attacker a second,
 // independent bucket for the same secret.
-func newCredentialLimiter() echo.MiddlewareFunc {
+func newCredentialLimiter(reg *metrics.Registry) echo.MiddlewareFunc {
 	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
 			Rate:      rate.Every(6 * time.Second),
 			Burst:     10,
 			ExpiresIn: 10 * time.Minute,
 		}),
+		DenyHandler: countRateLimited(reg, metrics.LimiterCredential),
 	})
 }
 
@@ -231,6 +230,7 @@ func registerThemeRoutes(e *echo.Echo, h *api.ThemeHandler, svcs *AppServices) {
 	themesGroup.GET("", h.ListThemes, visibilityCache)
 	themesGroup.GET("/active", h.GetActiveTheme, visibilityCache)
 	themesGroup.PUT("/active", h.SetActiveTheme, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	themesGroup.GET("/:name/css", h.GetThemeCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	themesGroup.GET("/custom-css", h.GetCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "custom-css"))
 	themesGroup.PUT("/custom-css", h.UpdateCustomCSS, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "custom-css"))
 }
@@ -239,6 +239,9 @@ func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices)
 	systemGroup := e.Group("/api/system")
 	systemGroup.GET("/stats", h.GetStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/health", h.GetHealth, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/jobs", h.ListJobs, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/jobs/:id/retry", h.RetryJob, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.POST("/jobs/clear-failed", h.ClearFailedJobs, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/disk", h.GetDiskInfo, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/logs", h.GetLogs, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/migrations", h.GetMigrations, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -258,6 +261,7 @@ func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices)
 	systemGroup.GET("/offline/stats", h.GetOfflineStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/offline/snapshot", h.GetOfflineSnapshot, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/media/scan", h.ScanMediaImport, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	systemGroup.GET("/photo-library/status", h.GetPhotoLibraryStatus, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/photo-library", h.GetPhotoLibraryContents, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.POST("/photo-library/import", h.ImportSelectedPhotos, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	systemGroup.GET("/photo-library/file", h.GetPhotoLibraryFile, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -309,6 +313,7 @@ func registerMCPRoutes(e *echo.Echo, cfg config.Config, repo repository.Reposito
 		BaseURL:         mcpBaseURL,
 		Version:         cfg.AppVersion,
 		UploadRoot:      cfg.PhotoLibraryPath,
+		Metrics:         svcs.Metrics,
 	})
 }
 
@@ -386,26 +391,18 @@ func registerTimelineRoutes(e *echo.Echo, h *api.TimelineHandler, svcs *AppServi
 // registered after every /api route (see registerMediaFileRoutes) and the `/*`
 // fallback must be registered last of all.
 
-// frontendAssets is the startup-computed frontend state these routes close
-// over: the two index.html shells, the resolved JS bundle directory, and the
-// plugin chunk/CSS maps. setupEcho builds it once; nothing here changes at
-// runtime.
+// frontendAssets is the frontend state these routes close over: the resolved
+// JS bundle directory, fixed at startup, and the index.html shells and plugin
+// chunk/CSS maps, which Assets re-reads on a rebuild under DEV_ASSET_RELOAD.
 type frontendAssets struct {
 	// Dir is cfg.FrontendDir — the root the static trees hang off.
 	Dir string
 	// JSDir is the bundle actually being served: frontend/js, or frontend/js-debug
 	// under FRONTEND_DEBUG. Empty when the frontend was never built.
 	JSDir string
-	// Shell is the public index.html, version-stamped and with the CSS bundle
-	// links rewritten to their content-addressed URLs. Empty when unbuilt, which
-	// is what makes the SPA fallback answer 503.
-	Shell string
-	// AdminShell is the same shell minus the deployment-injected <head> markup.
-	AdminShell string
-	// ChunkMap maps a plugin id to its hashed chunk filename; CSSMap is the set
-	// of plugin ids with a CSS partial on disk.
-	ChunkMap map[string]string
-	CSSMap   map[string]bool
+	// Assets holds the shells and plugin maps (see assetSnapshot). A route
+	// rendering a shell takes Assets.forShell(); anything else Assets.current().
+	Assets *liveAssets
 }
 
 // registerMediaFileRoutes serves the stored originals and thumbnails at
@@ -413,7 +410,7 @@ type frontendAssets struct {
 // non-public media. Registered after the /api routes to avoid collisions
 // (e.g. /api/settings/public would otherwise match /:year/:month/:filename).
 func registerMediaFileRoutes(e *echo.Echo, cfg config.Config, repo repository.Repository, svcs *AppServices, fe frontendAssets) {
-	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, fe.Shell, repo, svcs.Media, svcs.S3Presigner, svcs.Settings, fe.ChunkMap, fe.CSSMap), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
+	e.GET("/:year/:month/:filename", serveSimplifiedMedia(cfg.StoragePath, fe.Assets.forShell, repo, svcs.Media, svcs.S3Presigner, svcs.Settings), api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
 }
 
 // registerStaticRoutes mounts the built frontend's asset trees. Each is guarded
@@ -451,7 +448,7 @@ func registerStaticRoutes(e *echo.Echo, svcs *AppServices, fe frontendAssets) {
 			// guessed. Shared code-split chunks (chunk-*.js) are not entries —
 			// they carry common code imported by multiple plugin entries and
 			// must be served so enabled plugins can resolve their imports.
-			if id, ok := plugins.PluginForChunk(fe.ChunkMap, name); ok {
+			if id, ok := plugins.PluginForChunk(fe.Assets.current().ChunkMap, name); ok {
 				all, err := svcs.Settings.GetAllSettings(c.Request().Context())
 				if err != nil {
 					return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve plugin state")
@@ -523,7 +520,8 @@ func registerPWARoutes(e *echo.Echo, cfg config.Config) {
 // above claimed. MUST be registered last — it matches everything.
 func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, setupComplete func(context.Context) bool) {
 	e.GET("/*", func(c echo.Context) error {
-		if fe.Shell != "" {
+		assets := fe.Assets.forShell()
+		if assets.Shell != "" {
 			path := c.Request().URL.Path
 
 			// Fresh install: every document lands on the first-run wizard, not
@@ -544,98 +542,62 @@ func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, set
 			// on public pages too, so the injected script must not run there
 			// either; keeping it out of every authenticated DOM shrinks the blast
 			// radius if that origin is compromised (it can't ride the session).
-			shell := fe.Shell
+			shell := assets.Shell
 			if isAdminPath(path) || hasSession(c) {
-				shell = fe.AdminShell
+				shell = assets.AdminShell
 			}
-			if slug, ok := strings.CutPrefix(path, "/posts/"); ok {
-				post, err := svcs.Post.GetPostBySlug(c.Request().Context(), slug)
-				if err == nil && strings.EqualFold(post.Status, "published") {
-					{
-						htmlStr := shell
-						htmlStr = strings.Replace(htmlStr, "<title>Loading…</title>", "", 1)
+			// What this URL is about, resolved server side and spliced into
+			// the head: a crawler, an unfurler and the tab strip all read the
+			// document before any JS runs. seo.go returns the zero value for a
+			// route with nothing to say, which renders as the empty string and
+			// leaves the shell's own placeholder head alone.
+			//
+			// The plugin manifest goes in the same splice, so every document —
+			// described or not — still boots with __PLUGINS__ and __MEDIA__ set,
+			// and the CSP names exactly one inline script hash.
+			meta := shellMeta(c, svcs)
+			htmlStr := meta.rewriteShell(shell)
+			script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, assets.ChunkMap, assets.CSSMap)
+			htmlStr = strings.Replace(htmlStr, "</head>", meta.head()+script+"\n</head>", 1)
 
-						var sb strings.Builder
-						desc := post.MetaDescription.String
-						if !post.MetaDescription.Valid || desc == "" {
-							desc = post.Excerpt.String
-						}
+			csp := c.Response().Header().Get("Content-Security-Policy")
+			csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
+			c.Response().Header().Set("Content-Security-Policy", csp)
 
-						fmt.Fprintf(&sb, "\n  <title>%s</title>", html.EscapeString(post.Title))
-						if desc != "" {
-							fmt.Fprintf(&sb, "\n  <meta name=\"description\" content=\"%s\">", html.EscapeString(desc))
-							fmt.Fprintf(&sb, "\n  <meta property=\"og:description\" content=\"%s\">", html.EscapeString(desc))
-							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:description\" content=\"%s\">", html.EscapeString(desc))
-						}
-
-						sb.WriteString("\n  <meta property=\"og:type\" content=\"article\">")
-						fmt.Fprintf(&sb, "\n  <meta property=\"og:title\" content=\"%s\">", html.EscapeString(post.Title))
-						fmt.Fprintf(&sb, "\n  <meta name=\"twitter:title\" content=\"%s\">", html.EscapeString(post.Title))
-
-						scheme := c.Scheme()
-						if fwd := c.Request().Header.Get("X-Forwarded-Proto"); fwd != "" {
-							scheme = fwd
-						}
-						fullURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, c.Request().URL.Path)
-						fmt.Fprintf(&sb, "\n  <meta property=\"og:url\" content=\"%s\">", html.EscapeString(fullURL))
-
-						gen := svcs.Media.ThumbnailGeneration(c.Request().Context())
-						media, _ := svcs.Media.GetMediaByContent(c.Request().Context(), post.Content, post.ThumbnailPath.String)
-						// Card image = the post's first media that can actually
-						// render one. A video without a captured poster has no
-						// still behind it, so it is skipped rather than pointed
-						// at: the crawler would fetch the whole stream and show
-						// nothing.
-						cardPath := ""
-						for _, m := range media {
-							if strings.EqualFold(m.FileType, "image") || (m.ThumbnailPath.Valid && m.ThumbnailPath.String != "") {
-								cardPath = "/" + strings.TrimPrefix(m.OriginalPath, "originals/")
-								break
-							}
-						}
-						if cardPath != "" {
-							// The 1024 rung, never the original: a camera JPEG
-							// is megabytes and past every card renderer's size
-							// ceiling, which renders as no card at all.
-							variant := services.VariantURL(cardPath, services.SocialCardVariantSize, gen)
-							imgURL := fmt.Sprintf("%s://%s%s", scheme, c.Request().Host, variant)
-							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary_large_image\">")
-							fmt.Fprintf(&sb, "\n  <meta property=\"og:image\" content=\"%s\">", html.EscapeString(imgURL))
-							fmt.Fprintf(&sb, "\n  <meta name=\"twitter:image\" content=\"%s\">", html.EscapeString(imgURL))
-						} else {
-							sb.WriteString("\n  <meta name=\"twitter:card\" content=\"summary\">")
-						}
-
-						script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
-						sb.WriteString(script)
-						sb.WriteString("\n</head>")
-						htmlStr = strings.Replace(htmlStr, "</head>", sb.String(), 1)
-
-						csp := c.Response().Header().Get("Content-Security-Policy")
-						csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
-						c.Response().Header().Set("Content-Security-Policy", csp)
-
-						return c.HTML(http.StatusOK, htmlStr)
-					}
-				}
-			}
-			// Generic SPA route: serve index.html with the enabled-only plugin
-			// manifest injected so the client bootstrap always sees __PLUGINS__.
-			// shell (chosen above) already omits third-party markup for admin
-			// routes and authenticated viewers.
-			{
-				script, hash := bootstrapScript(c.Request().Context(), svcs.Settings, fe.ChunkMap, fe.CSSMap)
-				htmlStr := strings.Replace(shell, "</head>", script+"\n</head>", 1)
-
-				csp := c.Response().Header().Get("Content-Security-Policy")
-				csp = strings.Replace(csp, "script-src", "script-src 'sha256-"+hash+"'", 1)
-				c.Response().Header().Set("Content-Security-Policy", csp)
-
-				return c.HTML(http.StatusOK, htmlStr)
-			}
+			return c.HTML(shellStatus(path, meta, hasSession(c)), htmlStr)
 		}
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{
 			"detail": "Frontend not available — build the frontend first",
 		})
 	}, visibilityCache)
+}
+
+// shellStatus picks the HTTP status for a shell document. The shell renders in
+// every case (the SPA shows its own not-found view), but a path outside the
+// client route table in app.js answers 404, so crawlers, scanners and status
+// probes can tell a missing page from a live one. A post or tag slug that
+// shellMeta could not describe to a guest is missing to that guest too. A
+// signed-in viewer keeps 200 there: the SPA can still show a draft to them.
+// The 404 keeps visibilityCache's short `max-age=60`, so the edge does not
+// hold it long.
+func shellStatus(path string, meta seoMeta, signedIn bool) int {
+	p := strings.TrimRight(path, "/")
+	if p == "" || isAdminPath(p) {
+		return http.StatusOK
+	}
+	switch p {
+	case "/tags", "/map", "/search":
+		return http.StatusOK
+	}
+	for _, prefix := range []string{"/posts/", "/tags/", "/preview/"} {
+		rest, ok := strings.CutPrefix(p, prefix)
+		if !ok || rest == "" || strings.Contains(rest, "/") {
+			continue
+		}
+		if prefix == "/preview/" || signedIn || meta != (seoMeta{}) {
+			return http.StatusOK
+		}
+		return http.StatusNotFound
+	}
+	return http.StatusNotFound
 }

@@ -20,7 +20,7 @@ func TestApiKeyHandler(t *testing.T) {
 	repo := setupTestDB(t)
 	defer func() { _ = repo.Close() }()
 
-	apiKeyService := services.NewApiKeyService(repo)
+	apiKeyService := services.NewApiKeyService(repo, services.NewSettingsService(repo))
 	handler := NewApiKeyHandler(apiKeyService)
 
 	e := echo.New()

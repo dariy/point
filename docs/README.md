@@ -29,6 +29,7 @@ decisions, out-of-scope notes, and gotchas for future development.
 - [Header Navigation](./features/header-nav.md) — four zones, one fold engine
 - [Auth & Account Security](./features/auth.md) — sessions, passkeys, API keys, recovery
 - [Syndication & SEO](./features/syndication.md) — RSS, sitemap, robots, HEAD_HTML
+- [Observability](./features/observability.md) — job health, and an opt-in Prometheus endpoint
 - [Admin UX](./features/admin-ux.md) — two-layer admin design system
 - [Public UX](./features/public-ux.md) — ViewContext, tag interaction, responsive matrix
 

@@ -6,13 +6,13 @@
 # api/cmd/api/assets.go):
 #
 #   frontend/js/        release build — minified, __DEBUG__=false. Debug logging
-#                       (utils/debug.js) collapses to no-ops and is stripped.
+#                       (utils/debug.ts) collapses to no-ops and is stripped.
 #   frontend/js-debug/  debug build   — unminified, __DEBUG__=true. Plugin
 #                       mount/unmount, the manifest and chunk loads are logged
-#                       to the console (see core/pluginHost.js).
+#                       to the console (see core/pluginHost.ts).
 #
-# Each set is ONE esbuild pass with --splitting over the core entry (app.js)
-# plus every plugin entry (frontend/src/plugins/<id>/index.js):
+# Each set is ONE esbuild pass with --splitting over the core entry (app.ts)
+# plus every plugin entry (frontend/src/plugins/<id>/index.ts or index.js):
 #
 #   app.js              stable, unhashed core entry — referenced from
 #                       index.html (?v=__BUILD_VERSION__) and sw.js SHELL_URLS.
@@ -21,7 +21,7 @@
 #   chunks/*-[hash].js  code-split chunks: lazily imported pages and code
 #                       shared between the core and plugin entries.
 #
-# The single module graph means dynamic import() in app.js produces real lazy
+# The single module graph means dynamic import() in app.ts produces real lazy
 # chunks (pages parse on first navigation, not up front) and shared modules
 # (store, Component, api/client) exist exactly once — no duplication between
 # app.js and plugin chunks, and no globalThis singleton anchors needed.
@@ -46,7 +46,11 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # APP_ENTRY / JS_RELEASE_DIR are overridable so an alternate bundle can be built
 # from the same flags rather than a divergent copy of this script — see
 # demo/scripts/build.sh, which swaps in the mock entry point.
-APP_ENTRY="${APP_ENTRY:-$ROOT_DIR/frontend/src/app.js}"
+# The default entry is app.ts when it exists, else app.js.
+if [ -z "$APP_ENTRY" ]; then
+  APP_ENTRY="$ROOT_DIR/frontend/src/app.ts"
+  [ -f "$APP_ENTRY" ] || APP_ENTRY="$ROOT_DIR/frontend/src/app.js"
+fi
 JS_RELEASE_DIR="${JS_RELEASE_DIR:-$ROOT_DIR/frontend/js}"
 JS_DEBUG_DIR="${JS_DEBUG_DIR:-$ROOT_DIR/frontend/js-debug}"
 PLUGIN_SRC="$ROOT_DIR/frontend/src/plugins"
@@ -64,8 +68,9 @@ fi
 # esbuild default (esnext) across toolchain upgrades.
 ES_TARGET="es2022"
 
-# Collect "p/<id>=<entry>" args for every frontend/src/plugins/<id>/index.js
-# once; both bundle sets share the same plugin entries. The p/ alias prefix
+# Collect "p/<id>=<entry>" args for every frontend/src/plugins/<id>/index.ts
+# (or index.js) once. A plugin directory with neither fails the build: a
+# silent skip would ship a manifest without that plugin. both bundle sets share the same plugin entries. The p/ alias prefix
 # routes each plugin entry's output to <js_dir>/p/<id>.js.
 # ponytail: space-separated string + word-splitting instead of a bash array so
 # this runs under POSIX sh. Plugin ids/paths never contain spaces.
@@ -73,9 +78,13 @@ PLUGIN_ARGS=""
 PLUGIN_COUNT=0
 if [ -d "$PLUGIN_SRC" ]; then
   for dir in "$PLUGIN_SRC"/*/; do
-    entry="${dir}index.js"
-    [ -f "$entry" ] || continue
     id="$(basename "$dir")"
+    entry="${dir}index.ts"
+    [ -f "$entry" ] || entry="${dir}index.js"
+    if [ ! -f "$entry" ]; then
+      echo "  FAIL  plugin '$id' has no index.ts or index.js in $dir" >&2
+      exit 1
+    fi
     PLUGIN_ARGS="$PLUGIN_ARGS p/${id}=${entry}"
     PLUGIN_COUNT=$((PLUGIN_COUNT + 1))
   done
@@ -89,7 +98,7 @@ build_set() {
   # remaining "$@" = extra esbuild flags (e.g. --minify)
 
   manifest="$js_dir/plugin-manifest.json"
-  # The esbuild metafile is a build intermediate: build-plugin-manifest.mjs is
+  # The esbuild metafile is a build intermediate: build-plugin-manifest.ts is
   # its only consumer. It must NOT live in $js_dir — the server exposes that
   # whole directory at /assets/js (routes.go: e.Static), and the metafile spells
   # out the full module graph. Keep it outside the served tree.
@@ -100,7 +109,7 @@ build_set() {
   rm -rf "$js_dir"
   mkdir -p "$js_dir" "$meta_dir"
 
-  # One esbuild pass with --splitting over the core entry (app.js) plus every
+  # One esbuild pass with --splitting over the core entry (app.ts) plus every
   # plugin entry. Pinned binary (see $ESBUILD above) for reproducible bundles.
   # shellcheck disable=SC2086  # PLUGIN_ARGS is an intentional word-split list
   "$ESBUILD" "app=$APP_ENTRY" $PLUGIN_ARGS \
@@ -116,13 +125,36 @@ build_set() {
       --outdir="$js_dir"
 
   if [ "$PLUGIN_COUNT" -gt 0 ]; then
-    node "$SCRIPT_DIR/build-plugin-manifest.mjs" "$meta" "$manifest"
+    node "$SCRIPT_DIR/build-plugin-manifest.ts" "$meta" "$manifest"
   else
     echo '{}' > "$manifest"
     echo "No plugin entries — wrote empty $manifest"
   fi
+  # A Trusted Types policy name can be minted exactly once per document (the
+  # CSP carries no 'allow-duplicates'), so createPolicy('point') has to end up
+  # in exactly one chunk. Two chunks holding it means the second call throws,
+  # the fallback assigns a plain string, and the browser refuses the write —
+  # every page loading both of them loses its HTML write path at once. That is
+  # a property of how esbuild split the graph, not of any source file, so it is
+  # checked here, where the split happens.
+  policy_counts=$(grep -rhoE "createPolicy\((['\"])[^'\"]+" "$js_dir" 2>/dev/null |
+      sed -E "s/.*['\"]//" | sort | uniq -c || true)
+  dupes=$(echo "$policy_counts" | awk 'NF > 0 && $1 != 1 { print "  FAIL  createPolicy(\047" $2 "\047) landed in " $1 " chunks, expected 1." }')
+  if [ -n "$dupes" ]; then
+    echo "$dupes" >&2
+    echo "        Each Trusted Types policy must be registered from one shared chunk" >&2
+    echo "        of $js_dir. See trustedTypesCSP in api/cmd/api/csp.go." >&2
+    exit 1
+  fi
+
   echo "Built $js_dir: app.js ($(wc -c < "$js_dir/app.js") bytes, __DEBUG__=${debug_val}), ${PLUGIN_COUNT} plugin entrie(s), $(ls "$js_dir/chunks" 2>/dev/null | wc -l | tr -d ' ') shared/page chunk(s)"
 }
+
+# The service worker is a classic script at the frontend root, not part of the
+# module graph: one unbundled pass strips the types of frontend/sw.ts and writes
+# frontend/sw.js, which routes.go serves at /sw.js (it stamps __BUILD_VERSION__).
+"$ESBUILD" "$ROOT_DIR/frontend/sw.ts" --target="$ES_TARGET" --log-level=warning \
+    --outfile="$ROOT_DIR/frontend/sw.js"
 
 # Release set — minified, debug logging stripped.
 # Set BUILD_RELEASE_FRONTEND=0 to skip it (e.g. a debug-only local run).

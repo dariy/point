@@ -1,0 +1,185 @@
+/**
+ * MediaPickerDialog — body-mounted media picker dialog for the post editor.
+ *
+ * Wraps MediaBrowser in picker mode inside a modal overlay.
+ * Appended to document.body once and reused across open/close cycles.
+ *
+ * Usage:
+ *   const picker = new MediaPickerDialog({ onConfirm: (items) => { ... } });
+ *   picker.open();
+ *   // later:
+ *   picker.destroy();
+ */
+
+import { Component } from '../Component.ts';
+import { acquireScrollLock, releaseScrollLock } from '../../utils/scrollLock.ts';
+import { MediaBrowser } from './MediaBrowser.ts';
+import { PhotoLibraryPickerDialog } from './PhotoLibraryPickerDialog.ts';
+import { setToast } from '../../store.ts';
+import { getStats } from '../../api/system.ts';
+import { UPLOAD_SVG } from '../../utils/icons.ts';
+import { html, raw } from "../../utils/helpers.ts";
+import type { Media } from '../../api/media.ts';
+
+export interface MediaPickerDialogProps {
+  /** Called with the chosen media; open() can override it per opening. */
+  onConfirm?: (items: Media[]) => void;
+}
+
+export class MediaPickerDialog extends Component<MediaPickerDialogProps> {
+  _activeBrowser: MediaBrowser | null;
+  _libraryPicker: PhotoLibraryPickerDialog | null;
+  _keyHandler: ((e: KeyboardEvent) => void) | null;
+  _onConfirmOverride: ((items: Media[]) => void) | null;
+
+  constructor({ onConfirm }: MediaPickerDialogProps) {
+    const container = document.createElement('div');
+    container.className = 'modal-overlay media-picker-overlay';
+    container.setAttribute('aria-modal', 'true');
+    container.setAttribute('role', 'dialog');
+    container.setAttribute('aria-label', 'Insert Media');
+    document.body.appendChild(container);
+
+    super(container, { onConfirm });
+    this._activeBrowser = null;
+    this._libraryPicker = null;
+    this._onConfirmOverride = null;
+    this._keyHandler = null;
+  }
+
+  render() {
+    return html`
+      <div class="modal media-picker-modal">
+        <header class="modal-header media-picker-header">
+          <h3>Insert Media</h3>
+          <div style="margin-left: auto;"></div>
+          <button class="btn btn-sm btn-secondary" id="mpd-upload-btn" title="Upload files">${raw(UPLOAD_SVG)}<span class="btn-label">Upload</span></button>
+          <button class="modal-close" id="mpd-close-btn" aria-label="Close">\xd7</button>
+        </header>
+        <div class="modal-body media-picker-body" id="mpd-browser-mount"></div>
+        <footer class="modal-footer">
+          <button class="btn btn-secondary" id="mpd-cancel-btn">Cancel</button>
+          <button class="btn btn-primary" id="mpd-add-btn">Add selected</button>
+        </footer>
+      </div>`;
+  }
+
+  afterRender() {
+    this.$('#mpd-close-btn')?.addEventListener('click', () => this.close());
+    this.$('#mpd-cancel-btn')?.addEventListener('click', () => this.close());
+    this.$('#mpd-add-btn')?.addEventListener('click', () => this._handleAdd());
+    // The library exists only when PHOTO_LIBRARY_PATH is a readable directory.
+    // The button is added then, not hidden: .btn sets display, which wins over
+    // the hidden attribute.
+    getStats().then((s) => {
+      if (s.import_configured) this._addLibraryButton();
+    }).catch(() => {});
+
+    // Upload sits on the header line, the way MediaPage carries it in the admin
+    // header; the file input itself belongs to the browser mounted on open().
+    this.$('#mpd-upload-btn')?.addEventListener('click', () =>
+      this._activeBrowser?.openFilePicker(),
+    );
+
+    // Close on backdrop click
+    this.container.addEventListener('click', (e) => {
+      if (e.target === this.container) this.close();
+    });
+  }
+
+  _addLibraryButton() {
+    const cancel = this.$('#mpd-cancel-btn');
+    if (!cancel || this.$('#mpd-library-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-secondary';
+    btn.id = 'mpd-library-btn';
+    btn.textContent = 'From Photo Library';
+    btn.addEventListener('click', () => this._handleFromLibrary());
+    cancel.before(btn);
+  }
+
+  open(onConfirmOverride?: (items: Media[]) => void) {
+    if (this._activeBrowser) return; // already open
+    this._onConfirmOverride = onConfirmOverride || null;
+    this.container.classList.add('active');
+    acquireScrollLock(this);
+
+    const mountEl = this.$('#mpd-browser-mount');
+    if (mountEl) {
+      const browser = this.mountChild(MediaBrowser, mountEl, { pickerMode: true });
+      this._activeBrowser = browser;
+    }
+
+    this._keyHandler = (e) => { if (e.key === 'Escape') this.close(); };
+    document.addEventListener('keydown', this._keyHandler);
+  }
+
+  close() {
+    this._onConfirmOverride = null;
+    this.container.classList.remove('active');
+    releaseScrollLock(this);
+
+    // Unmount the browser child without re-rendering the whole dialog
+    if (this._activeBrowser) {
+      this._activeBrowser.unmount();
+      const idx = this._children.indexOf(this._activeBrowser);
+      if (idx !== -1) this._children.splice(idx, 1);
+      this._activeBrowser = null;
+    }
+
+    this._releaseKeyHandler();
+  }
+
+  // The dialog can be torn down while open — its owner unmounts, or a
+  // re-render replaces it — and close() never runs then. Without this the page
+  // behind it stays unscrollable (p-overlay-scroll-lock-leak) and the Escape
+  // handler lives on, calling close() on a dead component (p-dialog-keydown-leak).
+  beforeUnmount() {
+    releaseScrollLock(this);
+    this._releaseKeyHandler();
+  }
+
+  /** Drop the document-level Escape handler, from close() or from unmount(). */
+  _releaseKeyHandler() {
+    if (!this._keyHandler) return;
+    document.removeEventListener('keydown', this._keyHandler);
+    this._keyHandler = null;
+  }
+
+  destroy() {
+    this._libraryPicker?.destroy();
+    this._libraryPicker = null;
+    this.close();
+    this.unmount();
+    this.container.remove();
+  }
+
+  _handleFromLibrary() {
+    if (!this._libraryPicker) {
+      this._libraryPicker = new PhotoLibraryPickerDialog({
+        onImport: (result) => {
+          const cb = this._onConfirmOverride || this.props.onConfirm;
+          if (result.items?.length > 0 && cb) {
+            cb(result.items);
+            this.close();
+          } else if (this._activeBrowser) {
+            this._activeBrowser._load();
+          }
+        },
+      });
+    }
+    this._libraryPicker.open();
+  }
+
+  _handleAdd() {
+    if (!this._activeBrowser) return;
+    const items = this._activeBrowser.getSelectedItems();
+    if (items.length === 0) {
+      setToast({ message: 'Select at least one item.', type: 'warning' });
+      return;
+    }
+    const cb = this._onConfirmOverride || this.props.onConfirm;
+    cb?.(items);
+    this.close();
+  }
+}

@@ -1,11 +1,26 @@
-# Tags Visualization (`/tags`) — Atlas, Map, Graph
+# Tags Visualization (`/map`, `/tags`) — Atlas, Map, Graph
 
-The public `/tags` route is a **single-claim plugin slot** (`tags-route`, cardinality
-`0-1` in `SlotCardinality` — see `api/internal/plugins/registry.go`): one of three
-plugins owns it, selectable from `/light/plugins`, and with none enabled the route is
-hidden altogether.
+Three plugins visualize the tag set, across **two single-claim slots** with one public
+path each (both `0-1` in `SlotCardinality` — see `api/internal/plugins/registry.go`):
 
-## The three providers
+| Path    | Slot         | Candidates                         |
+| ------- | ------------ | ---------------------------------- |
+| `/map`  | `map-route`  | `tags-atlas` (default), `tags-map` |
+| `/tags` | `tags-route` | `tags-graph`                       |
+
+Each slot takes at most one enabled plugin, selectable from `/light/plugins`, and a slot
+with none enabled hides its own route altogether. So the two maps are alternatives to
+each other, while the graph competes with nothing: it can be enabled next to a map, and
+the header then shows two viz buttons, one per live path. `tags_visibility` is a single
+shared gate over all three (there is no per-viz visibility).
+
+`/tags` here is the visualization route; the tag archive at `/tags/:slug` is a core page
+and is unaffected by any of these plugins.
+
+## The maps (`/map`)
+
+The two are alternatives for the same path. Registry order makes the atlas the winner
+when a configuration asks for both.
 
 ### `tags-atlas` (default, Leaflet)
 
@@ -16,6 +31,11 @@ around it *on the map*, wired to it and to each other by membership and hierarch
 and staying pinned to the place across pan and zoom. Chips follow a two-click model —
 the first focuses (lighting that chip's connections and dimming the rest), the second
 opens.
+
+**The map layer.** The Atlas no longer has its own page. `/map` redirects to the home
+list in the `map` state, and every post list page carries a three-state map layer (see
+[Tags Atlas](../plugins/tags-atlas.md)). The place cloud and the `AtlasSheet` bottom
+sheet of the old page are gone.
 
 Two endpoints feed it, both year-scopable:
 
@@ -70,16 +90,22 @@ page to the owner who just flipped the switch.
 World map of geo-tags (tags with `latitude`/`longitude`): country polygon fills for
 country-type tags, proportional circle markers for cities; clicking a marker navigates
 to the tag archive. Supports year filtering via the timeline. Leaflet is vendored and
-lazy-loaded per page (`frontend/src/utils/leaflet.js`) so it never enters the core
+lazy-loaded per page (`frontend/src/utils/leaflet.ts`) so it never enters the core
 bundle. A fetch failure must render a visible error state, not a silent empty map.
 
 Hidden places are marked the same way as on the Atlas — hollow dashed marker, dashed
 country outline — alongside the lock its popups already carried (`is_hidden` /
 `hidden_via` from `GET /api/pages/map`, admin-only).
 
+## The graph (`/tags`)
+
+The graph is the "all tags" view, so it keeps `/tags` — its historical path — as
+`tags-route`'s only candidate today. The slot's rule is declared anyway, so a future
+second graph viz cannot silently double-claim the path.
+
 ### `tags-graph` (force graph)
 
-Canvas force-directed graph (`frontend/src/plugins/tags-graph/tagGraph.js`) making two
+Canvas force-directed graph (`frontend/src/plugins/tags-graph/tagGraph.ts`) making two
 relationship types explicit:
 
 1. **Parent/child** — hierarchy edges (solid/accent).
@@ -107,14 +133,27 @@ fallback; `prefers-reduced-motion` is respected.
   a supported-by-data future option, deliberately not built.
 - **Year nodes are only explicit `kind='year'` tags** — never derived from a post's
   `created_at`.
-- **Exclusivity via the plugin system** rather than a `tags_module` setting — the
-  slot's cardinality is the generic form of the old radio setting, shared with the
+- **Exclusivity via the plugin system** rather than a `tags_module` setting — slot
+  cardinality is the generic form of the old radio setting, shared with the
   `post-viewer` slot (which differs only in that it may not be left empty).
-
+- **Two slots, not one, because only the maps are alternatives** — two maps at once is
+  meaningless, a graph next to a map is not. One slot owning `/tags` for all three made
+  the graph and the maps switch each other off for no reason; splitting `map-route` out
+  lets a site run both, on `/map` and `/tags` respectively. `/map` is the only new
+  public path: the graph stays on `/tags`, so no redirect, no broken bookmarks.
+- **The Atlas is the default map, not a second path** — it is a Leaflet map with extra
+  functionality, so it takes `/map` and `tags-map` is its alternative there.
+- **Disabling a viz keeps the pre-split behavior on its path** — `RedirectHome`, per
+  route, so `/map` with no map enabled behaves exactly as `/tags` with nothing enabled
+  did.
 - **The Atlas filters places, the map filters markers** — `tags-map` scopes its markers
   with a flat per-tag count (`ListMapTagsForYearRange`), so a country tagged only through
   its cities disappears there under a year filter. The Atlas deliberately does not share
   that query.
+- **A bottom sheet at every width, not a desktop side panel** — the side panel showed
+  only on wide windows, so a phone got the cloud's few recent posts and nothing more.
+  One sheet gives every width the full list, as one row of cards that pages like the
+  home grid, and it keeps the map visible above it.
 
 ## Out of scope
 

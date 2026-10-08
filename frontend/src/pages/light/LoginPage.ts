@@ -1,0 +1,171 @@
+/**
+ * LoginPage — standalone login page mounted at /light/login.
+ *
+ * Reached by a full document load (never an in-app modal), so the credential
+ * form is isolated from the guest UI and any third-party markup injected into
+ * it. On success it navigates to `next` (or /light); dismissing returns home.
+ *
+ * Props (from the router): { query } — `query.next` is the post-login target.
+ * The legacy overlay props `next`/`onSuccess`/`onCancel` are still honoured if
+ * present.
+ */
+
+import { Component } from '../../components/Component.ts';
+import { login, loginWithPasskey } from '../../api/auth.ts';
+import { getUser, setUser } from '../../store.ts';
+import { html, navigate } from '../../utils/helpers.ts';
+import { usernameHintField } from '../../utils/passwordForm.ts';
+
+import type { PageProps } from '../../router.ts';
+import type { User } from '../../api/auth.ts';
+
+export interface LoginPageProps extends Partial<PageProps> {
+  next?: string;
+  onSuccess?: (user: User) => unknown;
+  onCancel?: () => unknown;
+}
+
+export default class LoginPage extends Component<LoginPageProps> {
+  _onKeyDown: ((e: KeyboardEvent) => void) | null = null;
+
+  constructor(container: HTMLElement, props?: LoginPageProps) {
+    super(container, props);
+    this.state = {
+      loading: false,
+      error: null,
+      passkeySupported: typeof window.PublicKeyCredential !== 'undefined',
+    };
+  }
+
+  // Post-login target: explicit prop, else ?next from the query, else /light.
+  _next() {
+    return this.props.next || this.props.query?.next || '/light';
+  }
+
+  // Called after a successful login. Honours a legacy onSuccess prop; otherwise
+  // navigates into the app. Staying in this (freshly loaded, third-party-free)
+  // document is fine — the authenticated session never shares it with injected
+  // markup.
+  _finish(user: User) {
+    if (this.props.onSuccess) return this.props.onSuccess(user);
+    navigate(this._next(), { replace: true });
+  }
+
+  // Dismiss (backdrop / Escape) — return to the public home.
+  _dismiss() {
+    if (this.props.onCancel) return this.props.onCancel();
+    navigate('/', { replace: true });
+  }
+
+  render() {
+    const { loading, error, passkeySupported } = this.state;
+
+    return html`
+      <div class="login-overlay-backdrop" id="login-backdrop">
+        <div class="login-modal-box">
+          ${error ? html`<p class="login-modal-error" role="alert">${error}</p>` : ''}
+          ${passkeySupported ? html`
+          <button id="passkey-btn" class="btn btn-secondary login-passkey-btn" ${loading ? 'disabled' : ''}>
+            Sign in with Passkey
+          </button>
+          <div class="login-divider"><span>or</span></div>` : ''}
+          <form id="login-form" class="login-modal-form" novalidate>
+            <div class="login-input-group">
+              ${usernameHintField()}
+              <input type="password" id="password-input" name="password"
+                     class="login-input" autocomplete="current-password"
+                     required placeholder="${loading ? 'Signing in…' : 'Password'}"
+                     ${loading ? 'disabled' : ''}>
+              <button type="submit" class="login-submit-btn" ${loading ? 'disabled' : ''}>
+                Go
+              </button>
+            </div>
+          </form>
+          <p class="login-forgot">
+            <a id="forgot-password-link" href="/light/pss">Forgot / Restore password?</a>
+          </p>
+        </div>
+      </div>`;
+  }
+
+  afterRender() {
+    const form = this.$('#login-form');
+    if (!form) return;
+
+    // Passkey sign-in button
+    this.$('#passkey-btn')?.addEventListener('click', async () => {
+      if (this.state.loading) return;
+      this.setState({ loading: true, error: null });
+      try {
+        const result = await loginWithPasskey();
+        setUser(result.user);
+        this._finish(result.user);
+      } catch (err) {
+        if ((err as Error)?.name !== 'NotAllowedError') {
+          this.setState({ loading: false, error: (err as Error)?.message || 'Passkey login failed.' });
+        } else {
+          this.setState({ loading: false });
+        }
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (this.state.loading) return;
+
+      const password = (this.$('#password-input') as HTMLInputElement|null)?.value || '';
+
+      if (!password) {
+        this.setState({ error: 'Password is required.' });
+        return;
+      }
+
+      this.setState({ loading: true, error: null });
+
+      try {
+        // No username: the install has a single owner, so the API resolves the
+        // credential against the first (only) user.
+        const result = await login(null, password, true);
+        setUser(result.user);
+        this._finish(result.user);
+      } catch (err) {
+        this.setState({
+          loading: false,
+          error: (err as Error).message || 'Login failed. Check your credentials.',
+        });
+      }
+    });
+
+    // Forgot / restore password → the public reset-request page. Uses in-app
+    // navigate (consistent with _finish/_dismiss) rather than a full document
+    // load, so the anchor's href is only a fallback for middle-click / crawlers.
+    this.$('#forgot-password-link')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      navigate('/light/pss');
+    });
+
+    // Backdrop click cancels.
+    const backdrop = this.$('#login-backdrop');
+    backdrop?.addEventListener('click', (e) => {
+      if (e.target === backdrop) this._dismiss();
+    });
+
+    // Escape key cancels.
+    this._onKeyDown = (e) => {
+      if (e.key === 'Escape') this._dismiss();
+    };
+    window.addEventListener('keydown', this._onKeyDown);
+
+    // Auto-focus the password field after animation settles.
+    const pwField = this.$('#password-input');
+    setTimeout(() => pwField?.focus(), 80);
+
+    // Auto-redirect if already logged in.
+    const current = getUser();
+    if (current) this._finish(current);
+  }
+
+  beforeUnmount() {
+    if (this._onKeyDown) window.removeEventListener('keydown', this._onKeyDown);
+  }
+}

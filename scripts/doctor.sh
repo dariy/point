@@ -4,8 +4,8 @@
 # The alternative to this script is discovering the answer through a failing
 # build — `check.sh` has always required `golangci-lint` and `govulncheck`
 # without anything saying so. Every version below is read from the file that
-# already decides it (api/go.mod for Go, .github/workflows/test.yml for Node
-# and the two tool pins), so this report cannot drift from what CI enforces.
+# already decides it (api/go.mod for Go, .nvmrc for Node, .github/workflows/test.yml
+# for the two tool pins), so this report cannot drift from what CI enforces.
 #
 # Usage: ./scripts/doctor.sh [--json]
 #   --json   the same report as one JSON object on stdout, nothing else
@@ -76,8 +76,13 @@ version_ge() {
 
 # ── What the repo asks for ───────────────────────────────────────────────────
 GO_WANT="$(awk '$1 == "go" { print $2; exit }' "$ROOT_DIR/api/go.mod" 2>/dev/null)"
-NODE_WANT="$(sed -n 's/.*node-version: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' "$WORKFLOW" 2>/dev/null | head -1)"
-LINT_WANT="$(sed -n 's|.*golangci-lint@v\([0-9][0-9.]*\).*|\1|p' "$WORKFLOW" 2>/dev/null | head -1)"
+# CI reads the same file through setup-node's node-version-file.
+NODE_WANT="$(tr -d ' \tv\r' <"$ROOT_DIR/.nvmrc" 2>/dev/null | head -1)"
+# CI installs golangci-lint with golangci-lint-action, pinned by the first
+# `version:` input after the `uses:` line.
+LINT_WANT="$(awk '/golangci-lint-action@/ { f = 1 }
+    f && /version:/ { sub(/.*version:[ \t]*v?/, ""); sub(/[^0-9.].*/, ""); print; exit }' \
+    "$WORKFLOW" 2>/dev/null)"
 VULN_WANT="$(sed -n 's|.*govulncheck@v\([0-9][0-9.]*\).*|\1|p' "$WORKFLOW" 2>/dev/null | head -1)"
 
 # ── Go ───────────────────────────────────────────────────────────────────────
@@ -120,11 +125,17 @@ if ! command -v node >/dev/null 2>&1; then
         "install Node $NODE_WANT — https://nodejs.org/"
 else
     node_found="$(node -v 2>/dev/null)"; node_found="${node_found#v}"
-    if version_ge "$node_found" "$NODE_WANT"; then
-        row pass node "Node" "$node_found" "$NODE_WANT" "CI builds on Node $NODE_WANT"
-    else
+    if ! version_ge "$node_found" "$NODE_WANT"; then
         row fail node "Node" "$node_found" "$NODE_WANT" \
             "older than the Node CI builds on" "install Node $NODE_WANT or newer"
+    elif ! case "$(node -p process.features.typescript 2>/dev/null)" in strip|transform) true ;; *) false ;; esac; then
+        # Distro builds (Debian, Ubuntu) leave out amaro, so the frontend
+        # tests cannot import .ts files under them.
+        row fail node "Node" "$node_found" "$NODE_WANT" \
+            "this build cannot remove TypeScript types (process.features.typescript is false)" \
+            "install an official Node $NODE_WANT build — https://nodejs.org/"
+    else
+        row pass node "Node" "$node_found" "$NODE_WANT" "CI builds on Node $NODE_WANT"
     fi
 fi
 
@@ -132,18 +143,18 @@ if command -v npm >/dev/null 2>&1; then
     row pass npm "npm" "$(npm -v 2>/dev/null)" "" "installs the build-time dependencies"
 else
     row fail npm "npm" "not installed" "" \
-        "no way to install esbuild and eslint" "it ships with Node — reinstall Node"
+        "no way to install esbuild and oxlint" "it ships with Node — reinstall Node"
 fi
 
 # ── JS dependencies ──────────────────────────────────────────────────────────
 # run.sh installs these itself when esbuild is missing, and check.sh when
-# eslint is; a warning here only tells you the first build will be slower.
+# oxlint is; a warning here only tells you the first build will be slower.
 missing_dep=""
-for dep in esbuild eslint; do
+for dep in esbuild oxlint; do
     [ -x "$ROOT_DIR/node_modules/.bin/$dep" ] || missing_dep="${missing_dep:+$missing_dep, }$dep"
 done
 if [ -z "$missing_dep" ]; then
-    row pass npm-deps "JS deps" "installed" "" "node_modules/ has esbuild and eslint"
+    row pass npm-deps "JS deps" "installed" "" "node_modules/ has esbuild and oxlint"
 else
     row warn npm-deps "JS deps" "missing" "" \
         "$missing_dep not in node_modules/ — run.sh and check.sh install them on demand" \

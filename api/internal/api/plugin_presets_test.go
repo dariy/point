@@ -111,8 +111,8 @@ func TestUpdatePreset_UnknownPlugin400(t *testing.T) {
 
 // TestApplyPreset_SingleClaimSlotKeepsFirst applies "fully-featured" (which
 // enables every plugin, including all candidates for the single-claim slots) and
-// verifies each such slot is trimmed to its first candidate: tags-atlas for
-// /tags, and the standard viewer for post-viewer.
+// verifies each such slot is trimmed to its first candidate: tags-graph for
+// /tags, tags-atlas for /map, and the standard viewer for post-viewer.
 func TestApplyPreset_SingleClaimSlotKeepsFirst(t *testing.T) {
 	h, svc, e := newPluginsHandler(t)
 	ctx := context.Background()
@@ -130,8 +130,11 @@ func TestApplyPreset_SingleClaimSlotKeepsFirst(t *testing.T) {
 	}
 
 	all, _ := svc.GetAllSettings(ctx)
-	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 1 || got[0] != "tags-atlas" {
-		t.Errorf("tags-route should keep only tags-atlas, got %v", got)
+	if got := plugins.EnabledInSlot("tags-route", all); len(got) != 1 || got[0] != "tags-graph" {
+		t.Errorf("tags-route should keep only tags-graph, got %v", got)
+	}
+	if got := plugins.EnabledInSlot("map-route", all); len(got) != 1 || got[0] != "tags-atlas" {
+		t.Errorf("map-route should keep only tags-atlas, got %v", got)
 	}
 	if got := plugins.EnabledInSlot("post-viewer", all); len(got) != 1 || got[0] != "immersive" {
 		t.Errorf("post-viewer should keep only immersive, got %v", got)

@@ -139,10 +139,10 @@ func TestSettingHelpers(t *testing.T) {
 	}
 }
 
-func TestTagsModuleAccessible(t *testing.T) {
-	// The tags-route slot takes a single claimant, and the peers carry their own
-	// defaults, so a test that wants the graph active has to say so about all
-	// three.
+func TestTagVizAccessible(t *testing.T) {
+	// The vizzes now sit in two independent slots, and each carries its own
+	// default, so a test that wants a precise configuration has to say so about
+	// all three plugins.
 	graphOn := map[string]string{
 		"plugin.tags-graph.enabled": "true",
 		"plugin.tags-atlas.enabled": "false",
@@ -151,6 +151,17 @@ func TestTagsModuleAccessible(t *testing.T) {
 	graphOnPublic := map[string]string{"tags_visibility": "all"}
 	for k, v := range graphOn {
 		graphOnPublic[k] = v
+	}
+	mapOn := map[string]string{
+		"plugin.tags-graph.enabled": "false",
+		"plugin.tags-atlas.enabled": "false",
+		"plugin.tags-map.enabled":   "true",
+	}
+	// The point of the split: a graph on /tags and a map on /map at once.
+	graphAndMapOn := map[string]string{
+		"plugin.tags-graph.enabled": "true",
+		"plugin.tags-atlas.enabled": "false",
+		"plugin.tags-map.enabled":   "true",
 	}
 	nothingOn := map[string]string{
 		"plugin.tags-graph.enabled": "false",
@@ -169,10 +180,14 @@ func TestTagsModuleAccessible(t *testing.T) {
 		{"the owner sees an enabled viz whatever tags_visibility says", graphOn, []string{"tags-graph"}, false, true},
 		{"the public does not, by default", graphOn, []string{"tags-graph"}, true, false},
 		{"the public does when tags_visibility is all", graphOnPublic, []string{"tags-graph"}, true, true},
-		{"an endpoint that cannot render the active viz declines", graphOn, []string{"tags-map"}, false, false},
+		{"an endpoint whose plugins are all off declines", graphOn, []string{"tags-map"}, false, false},
 		{"an endpoint backing either viz accepts", graphOn, []string{"tags-atlas", "tags-graph"}, false, true},
+		{"the map endpoint opens on its own slot", mapOn, []string{"tags-map"}, false, true},
+		{"a map alone does not open the graph endpoint", mapOn, []string{"tags-atlas", "tags-graph"}, false, false},
+		{"graph and map coexist: graph endpoint", graphAndMapOn, []string{"tags-atlas", "tags-graph"}, false, true},
+		{"graph and map coexist: map endpoint", graphAndMapOn, []string{"tags-map"}, false, true},
 	} {
-		if got := TagsModuleAccessible(tc.settings, tc.want, tc.publicOnly); got != tc.accessible {
+		if got := TagVizAccessible(tc.settings, tc.want, tc.publicOnly); got != tc.accessible {
 			t.Errorf("%s: got %v, want %v", tc.name, got, tc.accessible)
 		}
 	}

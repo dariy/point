@@ -95,8 +95,9 @@ type GraphView struct {
 // It returns ErrNotVisible when no tag-visualization module is available to this
 // viewer.
 func (b *Builder) BuildGraphView(ctx context.Context, settings map[string]string, p GraphParams) (*GraphView, error) {
-	// The graph backs both the "tag cloud" and "atlas" modules served at /tags.
-	if !TagsModuleAccessible(settings, []string{"tags-atlas", "tags-graph"}, p.PublicOnly) {
+	// One payload, two consumers: the force graph on /tags and the atlas on
+	// /map, so either plugin being enabled opens this endpoint.
+	if !TagVizAccessible(settings, []string{"tags-atlas", "tags-graph"}, p.PublicOnly) {
 		return nil, ErrNotVisible
 	}
 

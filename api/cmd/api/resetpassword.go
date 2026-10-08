@@ -24,7 +24,7 @@ import (
 // PLAINTEXT password and applies the same sha256-hex pre-hash the web login does
 // before Argon2id, so the stored value is Argon2id(sha256hex(plaintext)) and the
 // new password verifies through the normal login path (see auth_service.go
-// Authenticate / AuthenticatePassword). It also clears the user's sessions,
+// Authenticate / AuthenticatePassword). It also clears the user's sessions and every MCP OAuth token,
 // matching the recovery semantics of the web ResetPassword flow.
 func runResetPasswordCLI(repo repository.Repository) {
 	var username, password string
@@ -96,6 +96,11 @@ func runResetPasswordCLI(repo repository.Repository) {
 	// Recovery semantics: kill every existing session (ID 0 matches none), so any
 	// stale or compromised session can't survive the reset.
 	_ = repo.DeleteUserSessions(ctx, models.DeleteUserSessionsParams{UserID: user.ID, ID: 0})
+	// The same holds for MCP OAuth tokens. The running server cannot be reached
+	// from here, so its memory tier drops them within oauth.tokenCacheTTL.
+	if err := repo.DeleteAllOAuthTokens(ctx); err != nil {
+		slog.Error("reset-password: failed to revoke OAuth tokens", "error", err)
+	}
 
-	fmt.Printf("Password reset for user %q (id %d). All sessions cleared.\n", user.Username, user.ID)
+	fmt.Printf("Password reset for user %q (id %d). All sessions and OAuth tokens cleared.\n", user.Username, user.ID)
 }

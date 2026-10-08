@@ -19,19 +19,30 @@ is meant to be true and runnable; if a command here does not work, that is a bug
 `esbuild` is missing), compiles the Go binary, creates `data/`, initializes the SQLite schema, and
 serves. First run opens a setup wizard at the root URL.
 
-`check.sh` is the same set of checks CI runs. Run it before you open a PR — it keeps going after a
-failure and prints a PASS/FAIL summary, so one red step still tells you about the rest.
+`check.sh` is the same set of checks CI runs — every CI step is a `check.sh --only <step>` call. Run
+it before you open a PR. It runs its Go, JS and E2E lanes in parallel and keeps going after a
+failure: one `PASS`/`FAIL` line per step, and for a failed step the tail of its log
+(`tmp/check/<step>.log` holds the whole of it), so one red step still tells you about the rest.
+
+## Reading the codebase
+
+828 files, ~168k lines, two languages. A `grep -r` for anything interesting here returns hundreds of
+hits, and reading files to find out whether they matter spends the context you need for the actual
+change. Start from the "Where things live" table below or from `docs/architecture/map.md` (the same
+map written out longhand), then search with `rg` scoped to the directory they name, not repo-wide.
+Read a file before you edit it — always.
 
 ## Commands
 
 | Task | Command |
 |---|---|
 | Environment check | `./scripts/doctor.sh` — PASS/WARN/FAIL per tool, `--json` for machine use; exits non-zero only when a build is impossible |
-| Dev server (no Docker) | `./scripts/run.sh` — port 8001; `-d`/`--debug` serves the debug bundle <!-- verify:skip serves until interrupted; CI starts it and curls /health instead --> |
+| Dev server (no Docker) | `./scripts/run.sh` — port 8001; `-d`/`--debug` serves the debug bundle; `-w`/`--watch` rebuilds on save, no restart for CSS/JS <!-- verify:skip serves until interrupted; CI starts it and curls /health instead --> |
 | Dev server (Docker) | `./scripts/rebuild.sh` — port 8000 <!-- verify:skip needs Docker; the image is built by the docker-smoke job --> |
-| Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only) <!-- verify:skip the gate CI already runs, one job per step --> |
+| Full quality gate | `./scripts/check.sh` (`--fix` autofixes lint, `--short` skips slow tests, `--lint` lints only, `--changed` only the lanes your branch touches, `--only <step>` one step — `--list` names them) <!-- verify:skip the gate CI already runs, one step per `--only` call --> |
 | Go tests | `./scripts/run-tests.sh` (`--unit`, `--verbose`, `--race`, `--short`, `--bench`, `--html`) |
-| Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.js` |
+| Frontend tests | `npm run test:frontend` — `node --test frontend/test/*.test.ts` |
+| Frontend typecheck | `npm run typecheck` — `tsc -p tsconfig.json` over `frontend/src` (TypeScript only) and `frontend/sw.ts`; no emit, erasable syntax only |
 | Browser automation | `npx --no-install playwright-cli --version` — drives a real Chromium from the shell, so a UI change can be looked at; see [Verifying your change](#verifying-your-change) |
 | Rebuild CSS | `./scripts/build-css.sh` |
 | Rebuild JS | `./scripts/build-js.sh` |
@@ -63,6 +74,31 @@ command you add cannot run unattended, mark it in the source with
   `api/sqlc.yaml`. `extra.go` in the same package is hand-written. Keep `queries.sql` ASCII: sqlc
   expands `SELECT *` by byte offset, so one em dash in a comment breaks every query after it.
 
+**First-party code is TypeScript, and only TypeScript.** This includes `frontend/src`, the tests
+in `frontend/test/` and `frontend/e2e/`, `frontend/sw.ts`, `scripts/*.ts` and `demo/`.
+`scripts/check.sh` fails on a tracked `.js`, `.mjs` or `.cjs` file outside `frontend/vendor/`.
+Generated bundles (for example `frontend/sw.js`) are gitignored. Node and the bundler remove the types, so there is no emit and the rules follow from that:
+
+- Erasable syntax only: no `enum`, no `namespace`, no parameter properties. Type-only imports use
+  `import type`.
+- An import names the real file: `./x.ts` for a TS module, `./x.js` for a JS module.
+- Object shapes are `interface`. Unions, aliases and mapped types are `type`.
+- Doc comments keep their prose and have no `{Type}`: `@param name - text`, `@returns text`.
+- Casts use `as`, never `<T>expr`. `strict` is on: use `!` only for a DOM element that is certain to exist
+  (for example, a query of the component's own template). Do not add `any`, `@ts-ignore`
+  or `@ts-nocheck` to make an error go away.
+- A class declares every `this.<prop>` it assigns as a typed field.
+
+**Two vendored files carry a Point patch.** `frontend/vendor/leaflet/leaflet.js`
+and `frontend/vendor/codejar/codejar.js` route their own HTML writes through a
+Trusted Types policy, because the CSP enforces
+`require-trusted-types-for 'script'` and a plain string at `.innerHTML` is
+refused — leaflet would die at import time, codejar would corrupt the buffer on
+Ctrl+Z. A version bump that drops a fresh upstream build over either file
+reverts the patch; re-apply the block marked `/* Point patch — Trusted Types */`
+at the top of the file. `scripts/check-vendor-sinks.sh` fails when that has not
+happened, and [docs/vendors.md](docs/vendors.md) has the detail.
+
 **Do not add a query whose name is already a method on `*sqliteRepository`.** The repository embeds
 `*models.Queries`, and a hand-written method shadows the promoted one — the generated query
 compiles and never runs, with nothing to catch it. `scripts/check-sql-layer.sh` (part of
@@ -91,10 +127,15 @@ you need to reach the dev server from another device.
 
 ## Where things live
 
+The shortcut for the destinations people ask for most. It is not a directory listing — for anything
+not on it, `get_answer` or `search_codebase` will place you faster than a search will.
+
 | To change… | Start at |
 |---|---|
 | An HTTP route | `api/cmd/api/routes.go` — one `register*Routes` function per domain, called from `setupEcho` in registration order. New routes go here; `/mcp` and `/comments` mount their own subtrees from their packages, but still only via this file |
-| Global middleware, CSP, the HTML shells | `api/cmd/api/server.go` — `setupEcho`: Echo's own config, the `e.Use`/`e.Pre` chain, handler construction |
+| Global middleware | `api/cmd/api/middleware_stack.go` — `installMiddleware`: Echo's own config, the `e.Use`/`e.Pre` chain, the public rate limiter |
+| CSP | `api/cmd/api/csp.go` — `buildContentSecurityPolicy` and the `trusted-types` tail |
+| The HTML shells, handler construction | `api/cmd/api/assets.go` (`loadHTMLShells`) and `api/cmd/api/wiring.go` (`initHandlers`); `setupEcho` in `server.go` wires the pieces together |
 | Startup, shutdown, migrations | `api/cmd/api/main.go` — process lifecycle only; services are wired in `wiring.go`, subcommands dispatched in `cli.go` |
 | A CLI subcommand (`setup`, `reset-password`, …) | `api/cmd/api/cli.go` decides which one the args name; the command itself gets its own file |
 | Serving media bytes / frontend assets | `api/cmd/api/media.go`, `api/cmd/api/assets.go`; cache headers for HTML and API responses in `api/cmd/api/cache.go` |
@@ -115,7 +156,23 @@ attach, and which files are generated — is [docs/architecture/map.md](docs/arc
 Architecture in depth: [docs/architecture/backend.md](docs/architecture/backend.md),
 [docs/architecture/frontend.md](docs/architecture/frontend.md). Every significant feature has a doc
 under [docs/features/](docs/features/) that records what was built **and what was considered and
-rejected** — read the relevant one before redesigning something.
+rejected** — `get_why` surfaces the relevant one, and reading it before redesigning something is
+cheaper than rediscovering why the obvious approach was dropped.
+
+## Before you touch a file
+
+Two calls, and they take seconds:
+
+- `get_context(targets=[…])` on what you are about to edit — it reports the fix history and hotspot
+  score. Some files here are bug magnets (`api/cmd/api/main.go`,
+  `frontend/src/pages/light/PostEditPage.ts`), and knowing that before you start changes how much
+  test you write.
+- `get_risk(targets=[…])` when the file is shared — a repository method, a `frontend/src/core/`
+  module, a plugin registry entry. It names the callers that a signature change will break.
+
+`get_why` first if you are about to diverge from an established pattern. This codebase has made
+deliberate, unobvious choices — the `Repository` interface, plugin gating, Trusted Types on two
+vendored files — and each has a reason that is written down somewhere.
 
 ## Git & PRs
 
@@ -123,6 +180,10 @@ rejected** — read the relevant one before redesigning something.
 - Tests accompany new or changed behaviour; coverage floors are enforced in CI and will fail the
   build if you lower them.
 - Run `./scripts/check.sh` before pushing.
+- Then `get_change_risk()` over the diff and `get_health(targets=[…])` on the files you touched.
+  Both are cheap, and both catch the class of thing a green test run does not: a change that is
+  structurally larger than it looks, a function that just became the worst-scoring one in its
+  package. Say in the PR what they told you if it was interesting.
 
 ## Verifying your change
 
@@ -170,9 +231,12 @@ sending, and both endpoints expect what the browser would send. For the admin UI
 that session instead of driving the login form:
 `npx playwright-cli cookie-set session "$(awk '/session/{print $7}' cookies.txt)" --domain=localhost`.
 
-**After editing CSS or JS, re-run `./scripts/run.sh` before reloading.** Assets are served at
-content-hashed URLs read from `asset-manifest.json` at startup, so a rebuild alone leaves the page
-pointing at the old hash it has already cached, and your change appears to have done nothing.
+**Start the server with `./scripts/run.sh --watch` when you will be editing CSS or JS.** It rebuilds
+on every save and the running server picks the new bundles up, so reloading the page is enough; a Go
+edit rebuilds and restarts only the Go binary. Without `--watch`, re-run `./scripts/run.sh` after
+each CSS or JS edit: assets are served at content-hashed URLs read from `asset-manifest.json` at
+startup, so a rebuild alone leaves the page pointing at the old hash it has already cached, and your
+change appears to have done nothing.
 
 The full recipe — seeding media, which console errors are normal, and how to tell "my CSS did not
 apply" from "that text comes from a different element" — is in

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"point-api/internal/models"
@@ -867,5 +868,138 @@ func TestListPostNodesForGraph(t *testing.T) {
 	// The owner's graph keeps both, and still reads newest first.
 	if got, want := slugs(false), []string{"newest", "vaulted", "draft", "oldest"}; !slices.Equal(got, want) {
 		t.Errorf("ListPostNodesForGraph(false) = %v, want %v", got, want)
+	}
+}
+
+// The search path is an FTS5 index now, which brings two things the LIKE scan
+// it replaced did not have: a query language the user can trip over, and an
+// index that has to be kept in step with the posts table by triggers.
+func TestRepository_ListPostsWithSearchFullText(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	insertUserAndPost(t, repo, "cold-mountain", "published")
+	if _, err := repo.DB().Exec(
+		`UPDATE posts SET title = 'A Cold Mountain', content = 'snow above the treeline' WHERE slug = 'cold-mountain'`,
+	); err != nil {
+		t.Fatalf("update post: %v", err)
+	}
+
+	search := func(term string) int {
+		t.Helper()
+		rows, err := repo.ListPostsWithSearch(ctx, false, "", false, false, false, term, "", false, 10, 0)
+		if err != nil {
+			t.Fatalf("ListPostsWithSearch(%q): %v", term, err)
+		}
+		count, err := repo.CountPostsWithSearch(ctx, false, "", false, false, false, term, "", false)
+		if err != nil {
+			t.Fatalf("CountPostsWithSearch(%q): %v", term, err)
+		}
+		if int(count) != len(rows) {
+			t.Errorf("search %q: count %d but %d rows", term, count, len(rows))
+		}
+		return len(rows)
+	}
+
+	// The AFTER UPDATE trigger reindexed the row the UPDATE above rewrote:
+	// title, content and slug are all searchable, and a half-typed word
+	// matches by prefix because the admin box searches as you type.
+	for _, term := range []string{"mountain", "treeline", "snow above", "moun", "cold mou"} {
+		if n := search(term); n != 1 {
+			t.Errorf("search %q = %d results, want 1", term, n)
+		}
+	}
+	if n := search("zzznomatch"); n != 0 {
+		t.Errorf("search for a term in no post = %d results, want 0", n)
+	}
+
+	// FTS5 query syntax typed into the search box is data, not syntax: none of
+	// these may reach MATCH as an operator, and none may fail the query.
+	for _, term := range []string{`"`, `*`, `OR`, `NEAR`, `mountain OR ""`, `snow*`, `NEAR(a b)`, `!!!`, `^`} {
+		_ = search(term)
+	}
+
+	// A tag match is still a substring one — tags are small enough to scan.
+	if _, err := repo.DB().Exec(`INSERT INTO tags (name, slug) VALUES ('Hiking', 'hiking')`); err != nil {
+		t.Fatalf("insert tag: %v", err)
+	}
+	if _, err := repo.DB().Exec(
+		`INSERT INTO post_tags (post_id, tag_id) SELECT p.id, t.id FROM posts p, tags t WHERE p.slug='cold-mountain' AND t.slug='hiking'`,
+	); err != nil {
+		t.Fatalf("link tag: %v", err)
+	}
+	if n := search("ikin"); n != 1 {
+		t.Errorf("substring search of a tag name = %d results, want 1", n)
+	}
+
+	// The delete trigger has to retract the row, or a deleted post keeps
+	// answering searches.
+	if _, err := repo.DB().Exec(`DELETE FROM posts WHERE slug = 'cold-mountain'`); err != nil {
+		t.Fatalf("delete post: %v", err)
+	}
+	if n := search("mountain"); n != 0 {
+		t.Errorf("search after deleting the only match = %d results, want 0", n)
+	}
+}
+
+// The point of the index: the search query must not read the posts table
+// end to end any more.
+func TestRepository_SearchQueryIsIndexed(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+
+	q, args := buildPostsQuery("SELECT COUNT(*) FROM posts p", "", "", "post",
+		false, "", false, false, false, "", "mountain", 0, 0)
+
+	rows, err := repo.DB().Query("EXPLAIN QUERY PLAN "+q, args...)
+	if err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var plan []string
+	for rows.Next() {
+		var id, parent, notUsed int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+			t.Fatalf("scan plan: %v", err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("plan rows: %v", err)
+	}
+
+	// "SCAN p" or "SCAN posts" — with or without a trailing "USING INDEX ..."
+	// — is the whole table or index read end to end, which is what the FTS
+	// index exists to remove. posts_fts scanning itself is the index lookup.
+	for _, detail := range plan {
+		if f := strings.Fields(detail); len(f) >= 2 && f[0] == "SCAN" && (f[1] == "p" || f[1] == "posts") {
+			t.Errorf("search still reads every post (%q):\n%s", detail, strings.Join(plan, "\n"))
+		}
+	}
+	if !strings.Contains(strings.Join(plan, "\n"), "posts_fts") {
+		t.Errorf("search does not go through posts_fts:\n%s", strings.Join(plan, "\n"))
+	}
+}
+
+func TestFTSMatchQuery(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"mountain", `"mountain"*`},
+		{"cold mou", `"cold"* "mou"*`},
+		{`"quoted"`, `"quoted"*`},
+		{"a OR b", `"a"* "OR"* "b"*`},
+		{"NEAR(a b)", `"NEAR"* "a"* "b"*`},
+		{"hello-world", `"hello"* "world"*`},
+		{"2024", `"2024"*`},
+		{"", ""},
+		{`"`, ""},
+		{"!!! ***", ""},
+	}
+	for _, c := range cases {
+		if got := ftsMatchQuery(c.in); got != c.want {
+			t.Errorf("ftsMatchQuery(%q) = %q, want %q", c.in, got, c.want)
+		}
 	}
 }

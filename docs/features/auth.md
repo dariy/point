@@ -6,6 +6,12 @@ Single-admin authentication with several credential surfaces. Services:
 
 ## What is implemented
 
+- **First-run setup**: `POST /api/setup` creates the owner while no user exists.
+  When `SETUP_TOKEN` is set, the request must carry the same value in `token`
+  (the wizard reads it from `/setup?token=…`); a missing or wrong token gets 403.
+  The compare is constant-time. The token needs no revocation: after the owner
+  exists, every request gets 409. With `SETUP_TOKEN` unset, the first visitor
+  completes setup, as before. The `point setup` CLI never needs the token.
 - **Password auth** with modern hashing: passwords hash with Argon2id (legacy bcrypt
   hashes are transparently rehashed on successful login — there's a known logging gap
   on rehash failures).
@@ -18,14 +24,18 @@ Single-admin authentication with several credential surfaces. Services:
 - **API keys** (plugin `api-keys`, routes `/api/api-keys`): long-lived revocable keys
   for programmatic access via `Authorization: Bearer` — used by scripts, the MCP
   sidecar deployments, and any REST client. Keys are hashed at rest and never
-  redisplayed.
+  redisplayed. Each key has a scope. `general` keys have full admin access.
+  `lightroom` keys can only `POST` new posts, tags and media; every other route
+  answers 403, and they get the guest view on public reads and no MCP access.
 - **Password recovery**, two paths:
   - **SMTP reset emails** (`email_service.go`): configured via `SMTP_HOST/PORT/
     USERNAME/PASSWORD/FROM`; reset tokens are hashed, single-use, 1-hour expiry.
   - **Offline CLI**: `point reset-password` (`api/cmd/api/resetpassword.go`) for
     operators locked out without SMTP — runs against the DB directly.
 - **MCP OAuth 2.1** is a separate surface with its own provider but validates the same
-  admin credential (see [mcp.md](mcp.md)).
+  admin credential (see [mcp.md](mcp.md)). A password change, a password reset (web or
+  CLI) and "log out all other devices" revoke every OAuth token too. The API Keys panel
+  lists the connected OAuth apps and revokes one at a time.
 - **Guest filtering is server-side everywhere** — see
   [hidden-visibility.md](hidden-visibility.md); admin routes sit behind
   `AuthMiddleware`, public reads behind `OptionalAuthMiddleware`.
@@ -35,9 +45,17 @@ Single-admin authentication with several credential surfaces. Services:
 - One admin identity; all auth mechanisms (password, passkey, API key, OAuth bearer)
   resolve to the same principal — authorization stays trivial.
 - Auth mechanisms are plugins where they're optional attack surface (passkeys,
-  api-keys, mcp): disabled → routes 404.
+  api-keys, mcp): disabled → routes 404. For `api-keys` the toggle also closes
+  authentication itself — `ValidateAPIKey` checks it before the key lookup, so
+  disabling the plugin makes existing keys stop working everywhere they are
+  accepted (admin API, public reads, MCP), not just on `/api/api-keys`.
 - Secrets (API keys, reset tokens, Instagram/Gemini credentials) are never returned by
   any endpoint; `*_is_set` booleans drive the UI.
+
+- `SETUP_TOKEN` is opt-in. Managed hosting sets it because the hostname is in
+  Certificate Transparency logs before the owner visits, and bots race open
+  install wizards. A self-hoster who opens the site right after install does not
+  get an extra step.
 
 ## Session tokens
 

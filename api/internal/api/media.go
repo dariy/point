@@ -35,7 +35,16 @@ func NewMediaHandler(mediaService *services.MediaService, settingsService *servi
 // mediaResponse is mediaToResponse with the request's thumbnail generation
 // token already read off the settings cache.
 func (h *MediaHandler) mediaResponse(c echo.Context, m models.Medium) map[string]interface{} {
-	return mediaToResponse(m, h.mediaService.ThumbnailGeneration(c.Request().Context()))
+	return h.withVideoNote(mediaToResponse(m, h.mediaService.ThumbnailGeneration(c.Request().Context())), m)
+}
+
+// withVideoNote sets hevc_note on an admin response when the video is HEVC
+// with no transcode, so the media library can warn that it may not play.
+func (h *MediaHandler) withVideoNote(resp map[string]interface{}, m models.Medium) map[string]interface{} {
+	if h.mediaService.HEVCNeedsNote(m) {
+		resp["hevc_note"] = true
+	}
+	return resp
 }
 
 func (h *MediaHandler) UploadFile(c echo.Context) error {
@@ -158,16 +167,31 @@ func (h *MediaHandler) SetVideoPoster(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
+// ListMedia lists the media library a page at a time, or — when the request
+// carries one or more paths= parameters — resolves exactly those content paths
+// and nothing else.
+//
+// The path form exists because "the media this post references" is not a
+// question the paged listing can answer. media.post_id is only set for files
+// uploaded from the editor, so it misses anything picked out of the library,
+// and a page of the listing is ordered by upload time, which has nothing to do
+// with what a given post uses.
 func (h *MediaHandler) ListMedia(c echo.Context) error {
+	if paths := c.QueryParams()["paths"]; len(paths) > 0 {
+		return h.listMediaByPaths(c, paths)
+	}
+
 	page, perPage := ParsePaginationParams(c, 20)
 	fileType := c.QueryParam("file_type")
 	folder := c.QueryParam("folder")
+	filename := c.QueryParam("filename")
 
 	media, total, err := h.mediaService.ListMedia(c.Request().Context(), services.ListMediaParams{
 		Page:     page,
 		PerPage:  perPage,
 		FileType: fileType,
 		Folder:   folder,
+		Filename: filename,
 	})
 	if err != nil {
 		return MapError(err)
@@ -178,18 +202,46 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 		pages = 1
 	}
 
+	return c.JSON(http.StatusOK, h.mediaListEnvelope(c, media, total, page, perPage, pages))
+}
+
+// maxMediaPathLookup bounds a paths= request. The number of images in a post is
+// the real bound; this only keeps an absurd URL from becoming an absurd query.
+const maxMediaPathLookup = 500
+
+func (h *MediaHandler) listMediaByPaths(c echo.Context, paths []string) error {
+	if len(paths) > maxMediaPathLookup {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			fmt.Sprintf("at most %d paths per request", maxMediaPathLookup))
+	}
+
+	media, err := h.mediaService.GetMediaByContentPaths(c.Request().Context(), paths)
+	if err != nil {
+		return MapError(err)
+	}
+
+	// A path lookup is not paginated: the caller already named the whole set it
+	// wants. The envelope keeps the listing's shape so one client-side type
+	// describes both.
+	total := int64(len(media))
+	return c.JSON(http.StatusOK, h.mediaListEnvelope(c, media, total, 1, int32(len(media)), 1))
+}
+
+// mediaListEnvelope renders media rows into the paged list response both
+// ListMedia branches return.
+func (h *MediaHandler) mediaListEnvelope(c echo.Context, media []models.Medium, total int64, page, perPage int32, pages int) map[string]interface{} {
 	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	items := make([]map[string]interface{}, len(media))
 	for i, m := range media {
-		items[i] = mediaToResponse(m, gen)
+		items[i] = h.withVideoNote(mediaToResponse(m, gen), m)
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return map[string]interface{}{
 		"media":    items,
 		"total":    total,
 		"page":     page,
 		"per_page": perPage,
 		"pages":    pages,
-	})
+	}
 }
 
 func (h *MediaHandler) GetMediaFolders(c echo.Context) error {
@@ -496,8 +548,8 @@ func (h *MediaHandler) RebuildThumbnails(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": fmt.Sprintf(
-			"Thumbnails invalidated. Removed %d cached images; regenerating the %d most recent in the background.",
-			res.Purged+res.Legacy, res.Prewarming),
+			"Thumbnails invalidated. Removed %d cached images; regenerating the %d most recent in the background. Queued %d video jobs.",
+			res.Purged+res.Legacy, res.Prewarming, res.VideoJobs),
 		"stats": res,
 	})
 }

@@ -1,0 +1,95 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { beforeEach, afterEach } from "node:test";
+import { setupDOM, must } from "./helpers/dom.ts";
+import { BackupsSection } from "../src/components/light/sections/BackupsSection.ts";
+import * as gestures from "../src/core/gestures.ts";
+
+test("BackupsSection", async (t) => {
+  let dom: ReturnType<typeof setupDOM> | undefined;
+  beforeEach(() => { dom = setupDOM(); });
+  afterEach(() => { dom?.cleanup(); });
+
+  await t.test("renders and handles basic UI", async () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+
+    const section = new BackupsSection(root);
+    section.state = {
+      backups: [{ filename: "backup.zip", size: 1024, created_at: "2024-01-01T00:00:00Z" }],
+      loading: false,
+      uploading: false,
+      uploadPct: 0
+    };
+
+    const html = String(section.render());
+    assert.ok(html.includes("backup.zip"));
+    
+    section._load = async () => {};
+    section._syncPoll = () => {};
+    root.innerHTML = html;
+    section.afterRender();
+
+    const dlBtn = root.querySelector(".download-backup-btn");
+    assert.ok(dlBtn);
+    
+    // click upload btn
+    const uploadInput = must(root.querySelector<HTMLInputElement>("#upload-backup-input"));
+    let clickFired = false;
+    uploadInput.addEventListener('click', () => { clickFired = true; });
+    const uploadBtn = must(root.querySelector<HTMLElement>("#upload-backup-btn"));
+    uploadBtn.click();
+    assert.ok(clickFired);
+    
+    const file = new File([''], "test.zip", { type: "application/zip" });
+    // mock files array
+    Object.defineProperty(uploadInput, 'files', { value: [file] });
+    uploadInput.dispatchEvent(new Event('change'));
+
+    root.remove();
+  });
+});
+
+test("BackupsSection actions", async (t) => {
+  let dom = setupDOM();
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+
+  const section = new BackupsSection(root);
+  section.state = {
+    backups: [{ filename: "backup.zip", size: 1024, created_at: "2024-01-01T00:00:00Z" }],
+    loading: false,
+    uploading: false,
+    uploadPct: 0
+  };
+
+  root.innerHTML = String(section.render());
+  section._load = async () => {};
+  section._syncPoll = () => {};
+  
+  // mock methods
+  section._handleRestore = async () => {};
+  section._handleDelete = async () => {};
+  section._handleDownload = () => {};
+  section.afterRender();
+
+  // Test click handlers
+  must(root.querySelector<HTMLElement>(".restore-backup-btn")).click();
+  must(root.querySelector<HTMLElement>(".delete-backup-btn")).click();
+  must(root.querySelector<HTMLElement>(".download-backup-btn")).click();
+  must(root.querySelector<HTMLElement>("#create-backup-btn")).click();
+  must(root.querySelector<HTMLElement>("#restart-server-btn")).click();
+
+  // A change to any cadence control saves the settings. Stub the save and
+  // assert it ran: the control has to be one that render() emits, or the
+  // dispatch below goes nowhere and the assertion is the only thing that says so.
+  let saved = 0;
+  section._saveSettings = async () => { saved++; };
+  const keepInput = root.querySelector("#bk-keep");
+  assert.ok(keepInput, "render() should emit the 'keep last' control");
+  keepInput.dispatchEvent(new Event('change'));
+  assert.strictEqual(saved, 1, "changing a cadence control should save the settings");
+
+  root.remove();
+  dom.cleanup();
+});

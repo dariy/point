@@ -42,7 +42,11 @@ func TestCommentsProxy(t *testing.T) {
 	// X-Frame-Options and block the widget iframe).
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			c.Response().Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+			c.Response().Header().Set("Content-Security-Policy", "frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types point point-leaflet point-codejar")
+			// Nothing sets a report-only header today, but the Del is kept and
+			// so is this: an operator who adds one must not have it survive
+			// onto the widget either.
+			c.Response().Header().Set("Content-Security-Policy-Report-Only", "require-trusted-types-for 'script'; trusted-types point")
 			c.Response().Header().Set("X-Frame-Options", "DENY")
 			c.Response().Header().Set("X-Content-Type-Options", "nosniff")
 			return next(c)
@@ -62,7 +66,11 @@ func TestCommentsProxy(t *testing.T) {
 		return rec.Code
 	}
 
-	// Enabled by default → proxied with /comments prefix stripped.
+	// Enabled → proxied with /comments prefix stripped. Comments default to
+	// off, so turn the plugin on first.
+	if err := svc.SetSetting(context.Background(), plugins.EnabledKey("comments"), "true", "boolean"); err != nil {
+		t.Fatal(err)
+	}
 	if code := call("/comments/web/embed.mjs", nil); code != http.StatusOK || hits != 1 {
 		t.Errorf("enabled plugin: want 200 and backend hit, got code=%d hits=%d", code, hits)
 	}
@@ -72,6 +80,13 @@ func TestCommentsProxy(t *testing.T) {
 	if lastResp.Get("Content-Security-Policy") != "" || lastResp.Get("X-Frame-Options") != "" {
 		t.Errorf("Point's CSP/X-Frame-Options must be dropped on proxied responses, got CSP=%q XFO=%q",
 			lastResp.Get("Content-Security-Policy"), lastResp.Get("X-Frame-Options"))
+	}
+	// The widget is third-party code served through this origin: it writes
+	// script.src from a plain string, so Point's Trusted Types directives —
+	// which now ride on the enforcing header asserted above — have to come off
+	// with the rest, in either header.
+	if got := lastResp.Get("Content-Security-Policy-Report-Only"); got != "" {
+		t.Errorf("Point's report-only CSP must be dropped on proxied responses, got %q", got)
 	}
 	if lastResp.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("non-conflicting security headers must survive, X-Content-Type-Options=%q",
@@ -129,6 +144,9 @@ func TestCommentsProxy_StripsPointProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := svc.SetSetting(context.Background(), plugins.EnabledKey("comments"), "true", "boolean"); err != nil {
+		t.Fatal(err)
+	}
 	e := echo.New()
 	RegisterCommentsProxy(e, svc, target)
 

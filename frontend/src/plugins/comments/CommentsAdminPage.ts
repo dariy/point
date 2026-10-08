@@ -1,0 +1,699 @@
+/**
+ * CommentsAdminPage — /light/comments moderation for the remark42 plugin.
+ */
+
+import { Component } from "../../components/Component.ts";
+import {
+  adminLayoutTemplate,
+  setupAdminLayout,
+} from "../../components/light/AdminLayout.ts";
+import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
+import { api } from "../../api/client.ts";
+import { setToast } from "../../store.ts";
+import type { Slot } from "../../utils/helpers.ts";
+import { html, parseMarkup, raw } from "../../utils/helpers.ts";
+import { formatDate } from "../../utils/formatters.ts";
+import {
+  MINUS_SVG,
+  TRASH_SVG,
+  EXTERNAL_LINK_SVG,
+  RESTORE_SVG,
+  SELECT_SVG,
+  X_SVG,
+} from "../../utils/icons.ts";
+
+interface RemarkUser {
+  id: string;
+  name?: string;
+  time?: string;
+}
+
+interface RemarkComment {
+  id: string;
+  text?: string;
+  title?: string;
+  time?: string;
+  user?: RemarkUser;
+  locator?: { url?: string; title?: string };
+}
+
+interface ConfirmOpts {
+  title: string;
+  message: string;
+  confirmText: string;
+  onConfirm: () => void;
+}
+
+function errMessage(err: unknown) {
+  return (err as { message?: string }).message;
+}
+
+function textOf(html: string | undefined) {
+  return parseMarkup(html || "", "text/html").body.textContent.trim();
+}
+
+export default class CommentsAdminPage extends Component {
+  _swipeCleanup: (() => void) | null = null;
+  constructor(container: HTMLElement, props = {}) {
+    super(container, props);
+    this.state = {
+      loading: true,
+      error: null,
+      tab: "recent",
+      comments: [],
+      blocked: [],
+      selectMode: false,
+      selectedIds: new Set<number>(),
+    };
+  }
+
+  /**
+   * Delegated row actions. The buttons are re-rendered on every state change —
+   * a tab switch, a selection, a delete — so binding them individually meant
+   * re-binding the whole table each time; the container this is bound to
+   * outlives all of it.
+   */
+  actions = {
+    delete(this: CommentsAdminPage, _e: Event, el: Element) { this._deleteComment(this.state.comments[Number((el as HTMLElement).dataset.i)]); },
+    block(this: CommentsAdminPage, _e: Event, el: Element) { this._blockUser(this.state.comments[Number((el as HTMLElement).dataset.i)]?.user); },
+    unblock(this: CommentsAdminPage, _e: Event, el: Element) { this._unblock(this.state.blocked[Number((el as HTMLElement).dataset.i)]); },
+  };
+
+  render() {
+    const { selectMode } = this.state;
+    const actions = html`<button id="select-mode-btn" class="btn" title="${selectMode ? "Cancel selection" : "Select comments"}">${raw(selectMode ? X_SVG : SELECT_SVG)}<span class="btn-label">${selectMode ? "Cancel" : "Select"}</span></button>`;
+    return adminLayoutTemplate({
+      title: "Comments",
+      actions,
+      content: this._renderContent(),
+    });
+  }
+
+  _renderContent() {
+    const { loading, error, tab, comments, blocked, selectMode, selectedIds } =
+      this.state;
+    if (loading)
+      return html`<div class="loading-spinner" aria-label="Loading comments…"></div>`;
+    if (error)
+      return html`<p class="error-state" role="alert">${error}</p>`;
+
+    const tabs = html`
+      <div class="menu-editor-tabs" role="tablist">
+        <button id="tab-recent" role="tab" aria-selected="${tab === "recent"}" class="btn btn-sm ${tab === "recent" ? "btn-primary" : "btn-secondary"}">Recent</button>
+        <button id="tab-blocked" role="tab" aria-selected="${tab === "blocked"}" class="btn btn-sm ${tab === "blocked" ? "btn-primary" : "btn-secondary"}">Blocked users${blocked.length ? ` (${blocked.length})` : ""}</button>
+      </div>`;
+
+    let bulkToolbar: Slot = "";
+    if (selectMode) {
+      const isRecent = tab === "recent";
+      bulkToolbar = html`
+        <div class="posts-toolbar" style="margin-bottom: var(--spacing-sm);">
+          <div class="bulk-toolbar" style="display: flex;">
+            <div class="bulk-actions">
+              <span id="bulk-count">${selectedIds.size} selected</span>
+              ${
+                isRecent
+                  ? html`
+                <button id="bulk-block-btn" class="btn btn-sm btn-secondary" ${selectedIds.size ? "" : "disabled"}>${raw(MINUS_SVG)}<span class="btn-label">Block Authors</span></button>
+                <button id="bulk-delete-btn" class="btn btn-sm btn-danger" ${selectedIds.size ? "" : "disabled"}>${raw(TRASH_SVG)}<span class="btn-label">Delete</span></button>
+              `
+                  : html`
+                <button id="bulk-unblock-btn" class="btn btn-sm btn-secondary" ${selectedIds.size ? "" : "disabled"}>${raw(RESTORE_SVG)}<span class="btn-label">Unblock</span></button>
+              `
+              }
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return html`
+      ${bulkToolbar}
+      <div class="card">
+        <div class="card-header">${tabs}</div>
+        <div class="card-body">
+          ${tab === "recent" ? this._renderRecent(comments) : this._renderBlocked(blocked)}
+        </div>
+      </div>`;
+  }
+
+  _renderRecent(comments: RemarkComment[]) {
+    const { selectMode, selectedIds } = this.state;
+    if (!comments.length) return html`<p class="empty-state">No comments yet.</p>`;
+
+    const tableRows = comments
+      .map((c: RemarkComment, i: number) => {
+        const url = c.locator?.url || "";
+        const name = c.user?.name || c.user?.id || "unknown";
+        const isChecked = selectedIds.has(i);
+        return html`
+        <tr data-i="${i}" class="post-row-main">
+          ${selectMode ? html`<td class="check-col" rowspan="2"><input type="checkbox" class="select-row-cb" data-i="${i}" ${isChecked ? "checked" : ""}></td>` : ""}
+          <td class="meta-col"><strong>${name}</strong></td>
+          <td class="title-col">${url ? html`<a href="${url}" class="table-link muted">${c.title || c.locator?.title || "post"} ${raw(EXTERNAL_LINK_SVG)}</a>` : html`<span class="text-muted">—</span>`}</td>
+          <td class="updated-col"><time datetime="${c.time || ""}">${formatDate(c.time)}</time></td>
+          <td class="actions-col" rowspan="2">
+            <div class="actions">
+              <button class="btn btn-sm btn-secondary btn-block-user" data-action="block" data-i="${i}" title="Block the author">${raw(MINUS_SVG)}</button>
+              <button class="btn btn-sm btn-danger btn-delete-comment" data-action="delete" data-i="${i}" title="Delete">${raw(TRASH_SVG)}</button>
+            </div>
+          </td>
+        </tr>
+        <tr data-i="${i}" class="post-row-tags">
+          <td colspan="3" class="tags-col" style="white-space: normal;">${textOf(c.text)}</td>
+        </tr>`;
+      });
+
+    const tableHTML = html`
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              ${selectMode ? html`<th class="check-col" style="width: 1%;"><input type="checkbox" id="select-all-cb" ${comments.length > 0 && selectedIds.size === comments.length ? "checked" : ""}></th>` : ""}
+              <th style="width: 20%;">Author</th>
+              <th style="width: 50%;">Post</th>
+              <th style="width: 20%;">Date</th>
+              <th style="width: 10%;"></th>
+            </tr>
+          </thead>
+          <tbody id="posts-tbody">${tableRows}</tbody>
+        </table>
+      </div>`;
+
+    const cardRows = comments
+      .map((c: RemarkComment, i: number) => {
+        const url = c.locator?.url || "";
+        const name = c.user?.name || c.user?.id || "unknown";
+        const isChecked = selectedIds.has(i);
+        return html`
+        <div class="post-card${isChecked ? " is-selected" : ""}" data-i="${i}">
+          <div class="post-card-body">
+            <div class="post-card-top" style="align-items: baseline; flex-wrap: wrap;">
+              <span class="post-card-title" style="flex: 1;">
+                <strong>${name}</strong>
+                <span class="text-muted" style="font-weight: normal; font-size: var(--font-size-xs); margin-left: var(--spacing-sm);">
+                  ${url ? html`on <a href="${url}" style="color: inherit;">${c.title || c.locator?.title || "post"}</a> · ` : ""}
+                  <time datetime="${c.time || ""}">${formatDate(c.time)}</time>
+                </span>
+              </span>
+            </div>
+            <div class="post-card-chips" style="white-space: normal; color: var(--text-primary); font-size: var(--font-size-sm); margin-bottom: var(--spacing-xs);">
+              ${textOf(c.text)}
+            </div>
+          </div>
+          <div class="post-card-swipe-actions">
+            <button class="btn btn-sm swipe-block-btn btn-block-user" data-action="block" data-i="${i}">${raw(MINUS_SVG)}<span>Block</span></button>
+            <button class="btn btn-sm btn-danger swipe-delete-btn btn-delete-comment" data-action="delete" data-i="${i}">${raw(TRASH_SVG)}<span>Delete</span></button>
+          </div>
+        </div>`;
+      });
+
+    const selectClass = selectMode ? " select-mode" : "";
+    const cardHTML = html`<div class="posts-card-list${selectClass}" id="posts-card-list">${cardRows}</div>`;
+    return html`${tableHTML}${cardHTML}`;
+  }
+
+  _renderBlocked(blocked: RemarkUser[]) {
+    const { selectMode, selectedIds } = this.state;
+    if (!blocked.length) return html`<p class="empty-state">No blocked users.</p>`;
+
+    const tableRows = blocked
+      .map((u: RemarkUser, i: number) => {
+        const isChecked = selectedIds.has(i);
+        return html`
+        <tr data-i="${i}" class="post-row-main">
+          ${selectMode ? html`<td class="check-col"><input type="checkbox" class="select-row-cb" data-i="${i}" ${isChecked ? "checked" : ""}></td>` : ""}
+          <td><strong>${u.name || u.id}</strong></td>
+          <td>blocked until ${formatDate(u.time)}</td>
+          <td class="actions-col">
+            <div class="actions">
+              <button class="btn btn-sm btn-secondary btn-unblock-user" data-action="unblock" data-i="${i}" title="Unblock">${raw(RESTORE_SVG)}</button>
+            </div>
+          </td>
+        </tr>`;
+      });
+
+    const tableHTML = html`
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              ${selectMode ? html`<th class="check-col" style="width: 1%;"><input type="checkbox" id="select-all-cb" ${blocked.length > 0 && selectedIds.size === blocked.length ? "checked" : ""}></th>` : ""}
+              <th>User</th>
+              <th>Status</th>
+              <th style="width: 1%;"></th>
+            </tr>
+          </thead>
+          <tbody id="posts-tbody">${tableRows}</tbody>
+        </table>
+      </div>`;
+
+    const cardRows = blocked
+      .map((u: RemarkUser, i: number) => {
+        const isChecked = selectedIds.has(i);
+        return html`
+        <div class="post-card${isChecked ? " is-selected" : ""}" data-i="${i}">
+          <div class="post-card-body">
+            <div class="post-card-top" style="align-items: baseline;">
+              <span class="post-card-title">
+                <strong>${u.name || u.id}</strong>
+                <span class="text-muted" style="font-weight: normal; font-size: var(--font-size-xs); margin-left: var(--spacing-sm);">
+                  blocked until ${formatDate(u.time)}
+                </span>
+              </span>
+            </div>
+          </div>
+          <div class="post-card-swipe-actions">
+            <button class="btn btn-sm btn-secondary swipe-unblock-btn btn-unblock-user" data-action="unblock" data-i="${i}">${raw(RESTORE_SVG)}<span>Unblock</span></button>
+          </div>
+        </div>`;
+      });
+
+    const selectClass = selectMode ? " select-mode" : "";
+    const cardHTML = html`<div class="posts-card-list${selectClass}" id="posts-card-list">${cardRows}</div>`;
+    return html`${tableHTML}${cardHTML}`;
+  }
+
+  afterRender() {
+    setupAdminLayout(this, {
+      currentPath: "/light/comments",
+    });
+
+    this.container
+      .querySelector("#tab-recent")
+      ?.addEventListener("click", () =>
+        this.setState({
+          tab: "recent",
+          selectMode: false,
+          selectedIds: new Set(),
+        }),
+      );
+    this.container
+      .querySelector("#tab-blocked")
+      ?.addEventListener("click", () =>
+        this.setState({
+          tab: "blocked",
+          selectMode: false,
+          selectedIds: new Set(),
+        }),
+      );
+
+    this.container
+      .querySelector("#select-mode-btn")
+      ?.addEventListener("click", () => {
+        this.setState({
+          selectMode: !this.state.selectMode,
+          selectedIds: new Set(),
+        });
+      });
+
+    this.container
+      .querySelector("#select-all-cb")
+      ?.addEventListener("change", (e) => {
+        const items =
+          this.state.tab === "recent"
+            ? this.state.comments
+            : this.state.blocked;
+        const selectedIds = new Set<number>();
+        if ((e.target as HTMLInputElement).checked) items.forEach((_: unknown, i: number) => selectedIds.add(i));
+        this.setState({ selectMode: selectedIds.size > 0, selectedIds });
+      });
+
+    this.container.querySelectorAll(".select-row-cb").forEach((cb) => {
+      cb.addEventListener("change", (e) => {
+        const target = e.target as HTMLInputElement;
+        const i = Number(target.dataset.i);
+        const selectedIds = new Set(this.state.selectedIds);
+        if (target.checked) selectedIds.add(i);
+        else selectedIds.delete(i);
+        this.setState({ selectedIds });
+      });
+    });
+
+    this.container
+      .querySelector("#bulk-delete-btn")
+      ?.addEventListener("click", () => this._handleBulkDelete());
+    this.container
+      .querySelector("#bulk-block-btn")
+      ?.addEventListener("click", () => this._handleBulkBlock());
+    this.container
+      .querySelector("#bulk-unblock-btn")
+      ?.addEventListener("click", () => this._handleBulkUnblock());
+
+    this._bindSwipeToReveal();
+  }
+
+  _bindSwipeToReveal() {
+    this._swipeCleanup?.();
+    this._swipeCleanup = null;
+    if (!window.matchMedia) return;
+    if (!window.matchMedia("(max-width: 48em)").matches) return;
+
+    let startX = 0;
+    let startY = 0;
+    let dragging = false;
+    let decided = false;
+    let openCard: HTMLElement | null = null;
+    let actionsWidth = 0;
+    let dx = 0;
+    const THRESHOLD_PX = 30;
+
+    const abortControllers: AbortController[] = [];
+
+    const closeOpen = () => {
+      if (!openCard) return;
+      openCard.style.transition =
+        "transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)";
+      openCard.style.transform = "translateX(0)";
+      openCard.classList.remove("post-card--revealed");
+      openCard = null;
+    };
+
+    this.$$(".post-card").forEach((card) => {
+      if (!card.querySelector(".post-card-swipe-actions")) return;
+      const ac = new AbortController();
+      abortControllers.push(ac);
+      const sig = { signal: ac.signal };
+
+      card.addEventListener(
+        "touchstart",
+        (e) => {
+          if (e.touches.length !== 1) return;
+          if (
+            card === openCard &&
+            (e.target as HTMLElement).closest(
+              ".post-card-swipe-actions",
+            )
+          )
+            return;
+          const t = e.touches[0];
+          startX = t.clientX;
+          startY = t.clientY;
+          dragging = false;
+          decided = false;
+          dx = 0;
+          const actions = (card.querySelector(".post-card-swipe-actions") as HTMLElement|null);
+          actionsWidth = actions ? actions.offsetWidth : 0;
+          card.style.transition = "none";
+        },
+        { ...sig, passive: true },
+      );
+
+      card.addEventListener(
+        "touchmove",
+        (e) => {
+          if (e.touches.length !== 1) return;
+          const t = e.touches[0];
+          dx = t.clientX - startX;
+          const dy = t.clientY - startY;
+
+          if (!decided) {
+            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+              decided = true;
+              dragging = Math.abs(dx) > Math.abs(dy);
+            }
+          }
+          if (dragging) {
+            const isOpen = card === openCard;
+            let tx = dx;
+            if (isOpen) tx = dx - actionsWidth;
+            if (tx > 0) tx = Math.pow(tx, 0.7);
+            else if (tx < -actionsWidth)
+              tx = -actionsWidth - Math.pow(-tx - actionsWidth, 0.7);
+            card.style.transform = `translateX(${tx}px)`;
+          }
+        },
+        { ...sig, passive: true },
+      );
+
+      card.addEventListener(
+        "touchend",
+        (_) => {
+          if (!dragging) return;
+          card.style.transition =
+            "transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)";
+          const isOpen = card === openCard;
+          if (isOpen) {
+            if (dx > THRESHOLD_PX) closeOpen();
+            else card.style.transform = `translateX(${-actionsWidth}px)`;
+          } else if (dx < -THRESHOLD_PX && actionsWidth > 0) {
+            closeOpen();
+            card.style.transform = `translateX(${-actionsWidth}px)`;
+            card.classList.add("post-card--revealed");
+            openCard = card;
+          } else if (dx > THRESHOLD_PX) {
+            card.style.transform = "";
+            const i = Number(card.dataset.i);
+            const selectedIds = new Set(this.state.selectedIds);
+            if (selectedIds.has(i)) selectedIds.delete(i);
+            else selectedIds.add(i);
+            this.setState({ selectMode: selectedIds.size > 0, selectedIds });
+          } else {
+            card.style.transform = "";
+          }
+        },
+        { ...sig, passive: true },
+      );
+
+      card.addEventListener(
+        "touchcancel",
+        () => {
+          card.style.transition = "";
+          card.style.transform =
+            card === openCard ? `translateX(${-actionsWidth}px)` : "";
+        },
+        { ...sig, passive: true },
+      );
+    });
+
+    const containerAc = new AbortController();
+    abortControllers.push(containerAc);
+    this.container.addEventListener(
+      "click",
+      (e) => {
+        if (!openCard) return;
+        if (openCard.contains(e.target as Node)) return;
+        closeOpen();
+      },
+      { signal: containerAc.signal },
+    );
+
+    this._swipeCleanup = () => {
+      abortControllers.forEach((ac) => ac.abort());
+      closeOpen();
+    };
+  }
+
+  mount() {
+    super.mount();
+    this._load();
+  }
+
+  async _load() {
+    try {
+      const [comments, blocked] = await Promise.all([
+        api.get("/api/admin/comments/recent?limit=50"),
+        api.get("/api/admin/comments/blocked"),
+      ]);
+      if (this._unmounted) return;
+      this.setState({
+        loading: false,
+        error: null,
+        comments: comments || [],
+        blocked: blocked || [],
+      });
+    } catch (e) {
+      if (this._unmounted) return;
+      const err = e as { status?: number; message?: string };
+      const msg =
+        err.status === 503 || err.status === 502
+          ? "The comments engine is not reachable. Is remark42 configured (REMARK_SECRET/REMARK_URL)?"
+          : err.message || "Failed to load comments.";
+      this.setState({ loading: false, error: msg });
+    }
+  }
+
+  _confirm({ title, message, confirmText, onConfirm }: ConfirmOpts) {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const dialog = new ConfirmDialog(mount, {
+      title,
+      message,
+      confirmText,
+      variant: "danger",
+      onConfirm: () => {
+        dialog.unmount();
+        mount.remove();
+        onConfirm();
+      },
+      onCancel: () => {
+        dialog.unmount();
+        mount.remove();
+      },
+    });
+    dialog.mount();
+  }
+
+  async _run(fn: () => Promise<unknown>, okMsg: string) {
+    try {
+      await fn();
+      setToast({ message: okMsg, type: "success" });
+      this._load();
+    } catch (err) {
+      setToast({
+        message: errMessage(err) || "Action failed.",
+        type: "error",
+      });
+    }
+  }
+
+  _deleteComment(c: RemarkComment | undefined) {
+    if (!c) return;
+    this._confirm({
+      title: "Delete comment",
+      message: `Delete this comment by ${c.user?.name || "unknown"}? This cannot be undone.`,
+      confirmText: "Delete",
+      onConfirm: () =>
+        this._run(
+          () =>
+            api.delete(
+              `/api/admin/comments/comment/${encodeURIComponent(c.id)}?url=${encodeURIComponent(c.locator?.url || "")}`,
+            ),
+          "Comment deleted.",
+        ),
+    });
+  }
+
+  _blockUser(user: RemarkUser | undefined) {
+    if (!user?.id) return;
+    this._confirm({
+      title: "Block user",
+      message: `Block ${user.name || user.id} permanently? Their existing comments will be deleted by remark42.`,
+      confirmText: "Block",
+      onConfirm: () =>
+        this._run(
+          () =>
+            api.put(
+              `/api/admin/comments/user/${encodeURIComponent(user.id)}/block?block=1`,
+            ),
+          "User blocked.",
+        ),
+    });
+  }
+
+  _unblock(user: RemarkUser | undefined) {
+    if (!user?.id) return;
+    this._run(
+      () =>
+        api.put(
+          `/api/admin/comments/user/${encodeURIComponent(user.id)}/block?block=0`,
+        ),
+      "User unblocked.",
+    );
+  }
+
+  _handleBulkDelete() {
+    const { comments, selectedIds } = this.state;
+    const toDelete = Array.from(selectedIds as Set<number>)
+      .map((i) => comments[i])
+      .filter(Boolean);
+    if (!toDelete.length) return;
+    this._confirm({
+      title: "Delete selected",
+      message: `Delete ${toDelete.length} selected comment(s)? This cannot be undone.`,
+      confirmText: "Delete All",
+      onConfirm: async () => {
+        try {
+          await Promise.all(
+            toDelete.map((c) =>
+              api.delete(
+                `/api/admin/comments/comment/${encodeURIComponent(c.id)}?url=${encodeURIComponent(c.locator?.url || "")}`,
+              ),
+            ),
+          );
+          setToast({ message: "Comments deleted.", type: "success" });
+          this.setState({ selectMode: false, selectedIds: new Set() });
+          this._load();
+        } catch (err) {
+          setToast({
+            message: errMessage(err) || "Delete failed.",
+            type: "error",
+          });
+        }
+      },
+    });
+  }
+
+  _handleBulkBlock() {
+    const { comments, selectedIds } = this.state;
+    const users = Array.from(selectedIds as Set<number>)
+      .map((i) => comments[i]?.user)
+      .filter(Boolean);
+    // filter unique users to prevent multiple requests for the same user
+    const uniqueUsers = Array.from(
+      new Map(users.map((u) => [u.id, u])).values(),
+    );
+    if (!uniqueUsers.length) return;
+    this._confirm({
+      title: "Block selected authors",
+      message: `Block ${uniqueUsers.length} author(s) permanently? Their existing comments will also be deleted by remark42.`,
+      confirmText: "Block All",
+      onConfirm: async () => {
+        try {
+          await Promise.all(
+            uniqueUsers.map((user) =>
+              api.put(
+                `/api/admin/comments/user/${encodeURIComponent(user.id)}/block?block=1`,
+              ),
+            ),
+          );
+          setToast({ message: "Authors blocked.", type: "success" });
+          this.setState({ selectMode: false, selectedIds: new Set() });
+          this._load();
+        } catch (err) {
+          setToast({
+            message: errMessage(err) || "Block failed.",
+            type: "error",
+          });
+        }
+      },
+    });
+  }
+
+  _handleBulkUnblock() {
+    const { blocked, selectedIds } = this.state;
+    const toUnblock = Array.from(selectedIds as Set<number>)
+      .map((i) => blocked[i])
+      .filter(Boolean);
+    if (!toUnblock.length) return;
+    this._confirm({
+      title: "Unblock selected users",
+      message: `Unblock ${toUnblock.length} selected user(s)?`,
+      confirmText: "Unblock All",
+      onConfirm: async () => {
+        try {
+          await Promise.all(
+            toUnblock.map((user) =>
+              api.put(
+                `/api/admin/comments/user/${encodeURIComponent(user.id)}/block?block=0`,
+              ),
+            ),
+          );
+          setToast({ message: "Users unblocked.", type: "success" });
+          this.setState({ selectMode: false, selectedIds: new Set() });
+          this._load();
+        } catch (err) {
+          setToast({
+            message: errMessage(err) || "Unblock failed.",
+            type: "error",
+          });
+        }
+      },
+    });
+  }
+
+  beforeUnmount() {
+    this._swipeCleanup?.();
+    super.beforeUnmount?.();
+  }
+}

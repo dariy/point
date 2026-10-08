@@ -46,6 +46,8 @@ credentials.json
 deployment-*.log
 api/coverage.html
 coverage-frontend.lcov
+# scripts/check.sh step logs
+/tmp/check/
 api/api*
 # Binaries a bare `go build` drops in api/ (run.sh builds to ./point instead)
 api/point
@@ -74,7 +76,7 @@ demo/dist/
 demo/.scratch/
 # Transcoded demo media, reused across builds (demo/scripts/build.sh).
 demo/.media-cache/
-# Recorded demo fixtures. Regenerate with demo/scripts/record-fixtures.mjs
+# Recorded demo fixtures. Regenerate with demo/scripts/record-fixtures.ts
 # against an instance whose content you intend to publish: the recording is a
 # copy of that instance's posts, tags and media metadata.
 demo/mock/fixtures/fixtures.json
@@ -91,3 +93,5 @@ demo/mock/fixtures/fixtures.json
 # br doctor per-run artifacts
 .doctor/
 *.bak
+# Built from frontend/sw.ts by scripts/build-js.sh; served at /sw.js.
+frontend/sw.js

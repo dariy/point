@@ -5,11 +5,13 @@ it does and how it's wired (type, slot, routes, area). For how the plugin *syste
 itself works (enabled-only manifest, build pipeline, admin toggling), see
 [Plugin System](../features/plugin-system.md).
 
-## Tag visualizations — exclusive claim on `/tags`
+## Tag visualizations — two slots, `/map` and `/tags`
 
-- [tags-atlas](tags-atlas.md) — hierarchical tags directory (default)
-- [tags-map](tags-map.md) — Leaflet world map of geo-tags
-- [tags-graph](tags-graph.md) — force-directed graph of tag/post relationships
+- [tags-atlas](tags-atlas.md) — geo-tags on a Leaflet map with per-place clouds; claims
+  `/map` (default)
+- [tags-map](tags-map.md) — plain Leaflet world map of geo-tags; the alternative on `/map`
+- [tags-graph](tags-graph.md) — force-directed graph of tag/post relationships; claims
+  `/tags`
 
 ## Shell slots
 

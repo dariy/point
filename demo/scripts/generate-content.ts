@@ -1,0 +1,661 @@
+#!/usr/bin/env node
+/**
+ * Generates demo blog content into a running Point instance.
+ *
+ * Photos come from picsum.photos (Unsplash-sourced, freely usable); the text is
+ * written by Gemini from the image itself, so titles, excerpts and tags actually
+ * describe the picture instead of reading as filler. Each post is assigned a
+ * year in [2020, 2026] and one of four locations, giving the timeline, the map
+ * and the tag hierarchy real data to render.
+ *
+ * Everything is created through the REST API rather than written to SQLite, so
+ * slugs, tag counts, media linking and visibility all go through the same code
+ * paths as a real edit. The one exception is `published_at`: the API sets it
+ * server-side at publish time and a past `scheduled_at` publishes immediately,
+ * so backdating is applied directly to the database at the end.
+ *
+ * Not every post comes out published. `visibilityPlan` (demo/world.ts) deals
+ * the batch across the four states an archive can hold — published, scheduled,
+ * hidden, and hidden by its tag — so the demo has something to conceal when the
+ * revelio switch is thrown.
+ *
+ * Usage:
+ *   node demo/scripts/generate-content.ts \
+ *     --base=http://localhost:8002 --session=<token> \
+ *     --db=/path/to/scratch/point.db --gemini-key=<key> [--count=28]
+ *
+ *   --add=20   append to an instance that already holds posts, rather than
+ *              filling an empty one: photographs already used are skipped, the
+ *              placement round-robin carries on where the archive left off, and
+ *              nothing existing is touched. See make-content.sh --add.
+ *
+ * Intended to run against a SCRATCH instance — see demo/scripts/make-content.sh.
+ */
+
+import { DatabaseSync } from "node:sqlite";
+import { Buffer } from "node:buffer";
+
+import type { Media } from "../../frontend/src/api/media.ts";
+import type { Post } from "../../frontend/src/api/posts.ts";
+import type { Tag } from "../../frontend/src/api/tags.ts";
+
+import {
+  YEARS,
+  TOPICS,
+  buildTagScaffold,
+  placementForRole,
+  postTags,
+  toTopic,
+  visibilityPlan,
+} from "../world.ts";
+import type { Location, Role } from "../world.ts";
+
+const args: Record<string, string | true> = Object.fromEntries(
+  process.argv.slice(2).map((a) => {
+    const [k, ...v] = a.replace(/^--/, "").split("=");
+    return [k, v.join("=") || true];
+  }),
+);
+
+const BASE = String(args.base || "http://localhost:8002");
+const SESSION = String(args.session || "");
+const DB_PATH = String(args.db || "");
+const GEMINI_KEY = String(args["gemini-key"] || process.env.GEMINI_API_KEY || "");
+const ADD = Number(args.add) || 0;
+const COUNT = ADD || Number(args.count) || 28;
+const MODEL = String(args.model || "gemini-2.5-flash");
+const CONCURRENCY = Number(args.concurrency) || 4;
+
+for (const [name, value] of [
+  ["--session", SESSION],
+  ["--db", DB_PATH],
+  ["--gemini-key", GEMINI_KEY],
+]) {
+  if (!value) {
+    console.error(`Missing ${name}`);
+    process.exit(1);
+  }
+}
+
+// ── Demo world ────────────────────────────────────────────────────────────
+//
+// Locations, years and the topical vocabulary live in demo/world.ts,
+// shared with retag-content.ts so the two cannot describe different
+// worlds.
+
+/**
+ * Deterministic PRNG (mulberry32) so a re-run reproduces the same year and
+ * location assignment. A demo that reshuffles itself on every rebuild makes
+ * screenshots and bug reports impossible to compare.
+ */
+function makeRandom(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const random = makeRandom(20260803);
+
+// ── HTTP ──────────────────────────────────────────────────────────────────
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function api<T = unknown>(
+  method: string,
+  path: string,
+  body?: unknown,
+  { raw = false } = {},
+): Promise<T> {
+  const headers: Record<string, string> = {
+    Cookie: `session=${SESSION}`,
+    Accept: "application/json",
+  };
+  const init: RequestInit = { method, headers };
+  if (body instanceof FormData) {
+    init.body = body;
+  } else if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(body);
+  }
+
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(BASE + path, init);
+    // The server's publicLimiter allows ~10 req/s; back off rather than fail.
+    if (res.status === 429 && attempt < 4) {
+      await sleep(1500 * (attempt + 1));
+      continue;
+    }
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 300)}`);
+    }
+    if (raw) return text as T;
+    return (text ? JSON.parse(text) : null) as T;
+  }
+}
+
+// ── Gemini ────────────────────────────────────────────────────────────────
+
+const SCHEMA = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    excerpt: { type: "string" },
+    body: { type: "string" },
+    // Constrained to the shared vocabulary. Left free-form, 28 posts invent
+    // ~100 keywords of which 80 name exactly one post, and the tag tree becomes
+    // a list of dead ends.
+    tags: { type: "array", items: { type: "string", enum: TOPICS } },
+  },
+  required: ["title", "excerpt", "body", "tags"],
+};
+
+/** One entry of the picsum catalogue (picsum.photos/v2/list). */
+interface Photo {
+  id: string;
+  author: string;
+  width: number;
+  height: number;
+}
+
+/** What Gemini returns, per SCHEMA. */
+interface Generated {
+  title: string;
+  excerpt: string;
+  body: string;
+  tags?: string[];
+}
+
+function promptFor(photo: Photo, location: Location, year: number): string {
+  return `You are writing a short entry for a personal photography blog.
+
+Look at the attached photograph and write about it as if you took it yourself,
+in ${location.name}, ${location.country}, in ${year}.
+
+Return JSON with:
+- "title": 2-5 words, evocative, no quotes, no trailing punctuation. Do not put
+  the place name in the title.
+- "excerpt": one sentence, max 140 characters, describing the scene.
+- "body": 2-3 short paragraphs of plain Markdown (no headings, no images, no
+  links). Write about what is in the frame, the light, and the moment. Weave in
+  a sense of being in ${location.name}, but only as far as the image supports —
+  if the subject is a close-up or an interior, keep the place incidental rather
+  than inventing scenery that is not visible. Keep it under 130 words. Do not
+  mention cameras, settings, or the word "photo".
+- "tags": 3-4 terms chosen ONLY from this list, describing what is actually
+  visible in the frame. Do not invent terms and do not include place names or
+  years — those are added separately.
+  ${TOPICS.join(", ")}
+
+The photograph is credited to ${photo.author}.`;
+}
+
+async function generateText(
+  photo: Photo,
+  imageBase64: string,
+  location: Location,
+  year: number,
+): Promise<Generated> {
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent` +
+    `?key=${GEMINI_KEY}`;
+
+  const payload = {
+    contents: [
+      {
+        parts: [
+          { text: promptFor(photo, location, year) },
+          { inline_data: { mime_type: "image/jpeg", data: imageBase64 } },
+        ],
+      },
+    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: SCHEMA,
+      temperature: 1.0,
+    },
+  };
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 429 || res.status >= 500) {
+      await sleep(3000 * (attempt + 1));
+      continue;
+    }
+    if (!res.ok) {
+      throw new Error(`gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    }
+    const data = (await res.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    } | null;
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("gemini returned no text");
+    return JSON.parse(text) as Generated;
+  }
+  throw new Error("gemini: retries exhausted");
+}
+
+// ── Picsum ────────────────────────────────────────────────────────────────
+
+/**
+ * The picsum ids the instance already holds.
+ *
+ * Uploads keep the generator's `demo-<picsum id>.jpg` filename under the
+ * server's own timestamp prefix, so the archive itself records which
+ * photographs have been used. Without this an `--add` run re-picks from the
+ * same shuffled catalogue and the demo gains a second copy of a photo it
+ * already shows — with different prose, which reads as a bug rather than a
+ * repetition.
+ */
+async function usedPhotoIds(): Promise<Set<string>> {
+  const res = await api<{ media?: Media[] } | null>("GET", "/api/media?per_page=500");
+  const ids = new Set<string>();
+  for (const item of res?.media || []) {
+    const hit = /demo-(\d+)\./.exec(item.filename || "");
+    if (hit?.[1]) ids.add(hit[1]);
+  }
+  return ids;
+}
+
+async function fetchPhotoList(count: number, exclude = new Set<string>()): Promise<Photo[]> {
+  const candidates: Photo[] = [];
+  for (let page = 1; page <= 6; page++) {
+    const res = await fetch(`https://picsum.photos/v2/list?page=${page}&limit=100`);
+    if (!res.ok) throw new Error(`picsum list ${res.status}`);
+    const batch = (await res.json()) as Photo[];
+    if (!batch.length) break;
+    // Landscape only: the grid and immersive viewer are built around wide
+    // images, and portrait originals make the demo look inconsistent.
+    candidates.push(...batch.filter((p) => p.width / p.height >= 1.3));
+  }
+
+  // Sample across the whole catalogue rather than taking the first N. Picsum's
+  // opening run is a single photographer's desk-and-laptop series, so the head
+  // of the list yields a demo where every post looks the same.
+  const shuffled = candidates
+    .map((photo) => ({ photo, sort: random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .map((entry) => entry.photo);
+
+  // One photo per author where possible — the catalogue repeats contributors,
+  // and near-duplicate scenes read as padding. On an `--add` run the authors
+  // already in the archive count as seen: the point of adding is a wider
+  // archive, not a second visit to the same photographer's afternoon.
+  const seenAuthors = new Set(
+    candidates.filter((p) => exclude.has(String(p.id))).map((p) => p.author),
+  );
+  const fresh = shuffled.filter((p) => !exclude.has(String(p.id)));
+  const varied = fresh.filter((p) => {
+    if (seenAuthors.has(p.author)) return false;
+    seenAuthors.add(p.author);
+    return true;
+  });
+
+  return (varied.length >= count ? varied : fresh).slice(0, count);
+}
+
+async function download(url: string): Promise<Buffer> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, { redirect: "follow" });
+    if (res.ok) return Buffer.from(await res.arrayBuffer());
+    await sleep(1500 * (attempt + 1));
+  }
+  throw new Error(`download failed: ${url}`);
+}
+
+/** One post to create: its photograph and the place, year and role dealt to it. */
+interface Job {
+  photo: Photo;
+  index: number;
+  role: Role;
+  location: Location;
+  year: number;
+  scheduledAt: string | null;
+  featured: boolean;
+}
+
+/** A post createOne made. */
+interface Created {
+  post: Post;
+  index: number;
+  role: Role;
+  year: number;
+  location: Location;
+  topics: string[];
+  title: string;
+}
+
+/** A job that threw (see pool). */
+interface Failure {
+  error: unknown;
+}
+
+// ── Post creation ─────────────────────────────────────────────────────────
+
+/**
+ * When a scheduled post goes live.
+ *
+ * Spread over the coming three weeks rather than clustered: the queue is
+ * ordered by this column and dated by it on the card, so identical timestamps
+ * would leave the reader looking at a page of posts all going live at once.
+ * Deterministic, like everything else the generator lays out.
+ */
+function scheduleAt(nth: number, now = new Date()): string {
+  const when = new Date(now.getTime());
+  when.setUTCDate(when.getUTCDate() + 2 + nth * 3);
+  when.setUTCHours(9 + (nth % 3) * 4, 0, 0, 0);
+  return when.toISOString();
+}
+
+async function createOne(photo: Photo, job: Job): Promise<Created> {
+  const { index, role, location, year, scheduledAt, featured } = job;
+
+  // Two sizes: a wide one for the blog, and a small one for Gemini — sending a
+  // 1600px image would cost tokens and latency for no gain in description
+  // quality.
+  const blogHeight = Math.round((1600 * photo.height) / photo.width);
+  const [full, small] = await Promise.all([
+    download(`https://picsum.photos/id/${photo.id}/1600/${blogHeight}`),
+    download(`https://picsum.photos/id/${photo.id}/640/${Math.round((640 * photo.height) / photo.width)}`),
+  ]);
+
+  const text = await generateText(photo, small.toString("base64"), location, year);
+
+  // Upload the image, then embed its returned path in the post body so the
+  // server links the media record to the post the same way the editor does.
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(full)], { type: "image/jpeg" }), `demo-${photo.id}.jpg`);
+  const uploaded = await api<Media & { url?: string; media?: { path?: string } }>(
+    "POST",
+    "/api/media/upload",
+    form,
+  );
+  const mediaPath = uploaded.path || uploaded.url || uploaded.media?.path;
+  if (!mediaPath) {
+    throw new Error(`upload returned no path: ${JSON.stringify(uploaded).slice(0, 200)}`);
+  }
+
+  // The body is the photograph and nothing else; the writing goes into
+  // `excerpt`, which is what the Sheet immersive viewer renders and what the
+  // post cards preview. A demo whose prose only appears below the fold of the
+  // article page is prose nobody in the demo reads.
+  const topics = [
+    ...new Set((text.tags || []).map(toTopic).filter((t): t is string => Boolean(t))),
+  ].slice(0, 4);
+
+  // `private` is not a status — the post is published like any other and is
+  // withheld by the place it was taken in, whose tag carries `hides_posts`.
+  // That is the distinction worth demonstrating: the same post is public or not
+  // depending on a tag someone else can flip.
+  const status = role === "scheduled" || role === "hidden" ? role : "published";
+
+  const post = await api<Post>("POST", "/api/posts", {
+    title: text.title,
+    content: `${mediaPath}`,
+    excerpt: [text.excerpt.trim(), text.body.trim().replace(/\s*\n+\s*/g, " ")]
+      .filter(Boolean)
+      .join(" "),
+    status,
+    formatter: "markdown",
+    thumbnail_path: mediaPath,
+    // Country, city and year are tags, which is how Point models all three —
+    // the timeline reads `kind: "year"` tags and the map reads coordinates off
+    // the city tags.
+    tags: postTags(location.name, year, topics),
+    is_featured: featured,
+    ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+  });
+
+  return { post, index, role, year, location, topics, title: text.title };
+}
+
+/** Run `worker` over `items` with a bounded number in flight. */
+async function pool<I, R>(
+  items: I[],
+  limit: number,
+  worker: (item: I, index: number) => Promise<R>,
+): Promise<(R | Failure)[]> {
+  const results: (R | Failure)[] = [];
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      try {
+        results[index] = await worker(items[index] as I, index);
+      } catch (err) {
+        results[index] = { error: err };
+      }
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
+// ── Backdating ────────────────────────────────────────────────────────────
+
+/**
+ * Spread posts across their assigned years.
+ *
+ * Done in SQL because the API deliberately owns `published_at`: it is set at
+ * publish time, and a past `scheduled_at` publishes immediately rather than
+ * backdating. Writing it directly is the only way to build a multi-year archive.
+ */
+function backdate(assignments: { postId: number; year: number }[]): void {
+  const db = new DatabaseSync(DB_PATH);
+  const update = db.prepare(
+    "UPDATE posts SET published_at = ?, created_at = ?, updated_at = ? WHERE id = ?",
+  );
+
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  // Ceiling of an hour ago: the current year is only partly elapsed, so an
+  // unbounded date publishes posts in the future, where they sort above
+  // everything else and read as a bug. Clamping the whole timestamp (rather
+  // than just the month) also covers "today, but later this afternoon".
+  const ceiling = new Date(now.getTime() - 3600_000);
+
+  for (const { postId, year } of assignments) {
+    const month = 1 + Math.floor(random() * 12);
+    const day = 1 + Math.floor(random() * 28);
+    const hour = 7 + Math.floor(random() * 12);
+    const minute = Math.floor(random() * 60);
+
+    let when = new Date(Date.UTC(year, month - 1, day, hour, minute));
+    if (when > ceiling) when = ceiling;
+
+    const stamp =
+      `${when.getUTCFullYear()}-${pad(when.getUTCMonth() + 1)}-${pad(when.getUTCDate())} ` +
+      `${pad(when.getUTCHours())}:${pad(when.getUTCMinutes())}:00`;
+    update.run(stamp, stamp, stamp, postId);
+  }
+
+  db.close();
+}
+
+// ── Topic balance ─────────────────────────────────────────────────────────
+
+/**
+ * Drops any topic the model only reached for once.
+ *
+ * A tag on a single post is a label, not a facet: clicking it lands on an
+ * archive page holding the post you came from. The vocabulary is closed, so
+ * this is rare, but a demo is judged on the click that goes nowhere.
+ *
+ * Removal rather than invention — padding an unrelated post to make the count
+ * would put a tag on a photograph that does not show it. Mutates `results` so
+ * the caller's topic set matches what the instance now holds.
+ *
+ * `baseline` is how many posts already carry each topic, which is what makes
+ * this safe on an `--add` run: a topic used once in the new batch and four
+ * times in the archive is a facet, not a dead end, and stripping it would edit
+ * posts the run was told not to touch.
+ */
+async function balanceTopics(results: Created[], baseline = new Map<string, number>()): Promise<void> {
+  const holders = new Map<string, Created[]>();
+  for (const r of results) {
+    for (const topic of r.topics) {
+      if (!holders.has(topic)) holders.set(topic, []);
+      holders.get(topic)?.push(r);
+    }
+  }
+
+  const singletons = [...holders]
+    .filter(([topic, rs]) => rs.length + (baseline.get(topic) || 0) < 2)
+    .map(([t]) => t);
+  if (!singletons.length) return;
+
+  const touched = new Set(singletons.flatMap((t) => holders.get(t) ?? []));
+  for (const r of touched) {
+    r.topics = r.topics.filter((t) => !singletons.includes(t));
+    await api("PATCH", `/api/posts/${r.post.id}/tags`, {
+      tags: postTags(r.location.name, r.year, r.topics),
+    });
+    if (r.topics.length < 2) {
+      console.warn(`  ! post ${r.post.id} is down to ${r.topics.length} topic(s)`);
+    }
+  }
+  console.log(`· dropped ${singletons.length} single-use topic(s): ${singletons.join(", ")}`);
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────
+
+/** Topic → how many posts already carry it, for the topic balance. */
+async function existingTopicCounts(): Promise<Map<string, number>> {
+  const listed = await api<{ tags?: Tag[] } | null>("GET", "/api/tags");
+  const counts = new Map<string, number>();
+  for (const tag of listed?.tags || []) {
+    if (TOPICS.includes(tag.name)) counts.set(tag.name, tag.post_count || 0);
+  }
+  return counts;
+}
+
+/**
+ * Zip the photographs with the roles the visibility plan dealt.
+ *
+ * The index each placement is drawn from depends on the role: an ordinary post
+ * carries on the archive's own round-robin (so an `--add` run does not restart
+ * at Lisbon and pile the new posts onto one city), while the private and
+ * scheduled posts count within themselves — they draw from pools of their own
+ * and know nothing about how long the archive already is.
+ */
+function planJobs(photos: Photo[], offset: number): Job[] {
+  const roles = visibilityPlan(photos.length);
+  const nth = new Map<Role, number>();
+
+  return photos.map((photo, i) => {
+    const role = roles[i] as Role;
+    const seen = nth.get(role) || 0;
+    nth.set(role, seen + 1);
+
+    const ordinary = role === "published" || role === "hidden";
+    const { location, year } = placementForRole(role, ordinary ? offset + i : seen);
+
+    return {
+      photo,
+      index: offset + i,
+      role,
+      location,
+      year,
+      scheduledAt: role === "scheduled" ? scheduleAt(seen) : null,
+      // The archive's one featured post is its first; an `--add` run inherits
+      // whichever post already holds the flag rather than moving it.
+      featured: !ADD && i === 0,
+    };
+  });
+}
+
+async function main() {
+  console.log(
+    ADD
+      ? `Adding ${ADD} demo post(s) to ${BASE}`
+      : `Generating ${COUNT} demo posts into ${BASE}`,
+  );
+
+  // Geography and dates first, so the city tags carry their coordinates before
+  // any post references them. The subject tree is built afterwards, once the
+  // surviving vocabulary is known.
+  console.log("· tag scaffold (geography, dates)");
+  await buildTagScaffold(api, { topics: [] });
+
+  // What the instance already holds. All three are empty on a fresh run, which
+  // is what makes the rest of this function one code path rather than two.
+  const listed = ADD ? await api<{ total?: number } | null>("GET", "/api/posts?per_page=1") : null;
+  const offset = listed?.total || 0;
+  const used = ADD ? await usedPhotoIds() : new Set<string>();
+  const baseline = ADD ? await existingTopicCounts() : new Map<string, number>();
+  if (ADD) console.log(`  ${offset} existing post(s), ${used.size} photograph(s) already used`);
+
+  console.log("· fetching picsum catalogue");
+  const photos = await fetchPhotoList(COUNT, used);
+  console.log(`  ${photos.length} landscape photo(s)`);
+  if (photos.length < COUNT) {
+    console.warn(`  ! only ${photos.length} unused photo(s) available for ${COUNT} post(s)`);
+  }
+
+  const jobs = planJobs(photos, offset);
+  const mix = jobs.reduce<Record<string, number>>(
+    (acc, j) => ({ ...acc, [j.role]: (acc[j.role] || 0) + 1 }),
+    {},
+  );
+  console.log(`  mix: ${Object.entries(mix).map(([k, v]) => `${v} ${k}`).join(", ")}`);
+
+  console.log(`· generating posts (Gemini ${MODEL}, ${CONCURRENCY} at a time)`);
+  const results = await pool(jobs, CONCURRENCY, async (job, i) => {
+    const out = await createOne(job.photo, job);
+    console.log(
+      `  [${String(i + 1).padStart(2)}/${jobs.length}] ${out.year} ` +
+        `${out.location.name.padEnd(11)} ${out.role.padEnd(9)} ${out.title}`,
+    );
+    return out;
+  });
+
+  const ok = results.filter((r): r is Created => Boolean(r) && !("error" in r));
+  const failed = results.filter((r): r is Failure => Boolean(r) && "error" in r);
+  for (const f of failed) {
+    console.warn(`  ! ${f.error instanceof Error ? f.error.message : String(f.error)}`);
+  }
+
+  await balanceTopics(ok, baseline);
+
+  console.log("· tag scaffold (subjects)");
+  await buildTagScaffold(api, {
+    topics: [
+      ...new Set([
+        ...ok.flatMap((r) => r.topics),
+        ...[...baseline].filter(([, n]) => n > 0).map(([topic]) => topic),
+      ]),
+    ],
+  });
+
+  // Scheduled posts are excluded: they are dated by `scheduled_at`, in the
+  // future, and backdating one would drop it out of the queue it exists to
+  // fill — the queue reads `status = 'scheduled'`, but the card is dated and
+  // the feed's left half ordered by that column.
+  const dated = ok.filter((r) => r.role !== "scheduled");
+  console.log(`· backdating ${dated.length} post(s) across ${YEARS[0]}–${YEARS.at(-1)}`);
+  backdate(dated.map((r) => ({ postId: r.post.id, year: r.year })));
+
+  // Recompute what the backdating invalidated: cached page payloads hold the
+  // old ordering, and media visibility is derived from post state.
+  console.log("· clearing caches");
+  await api("POST", "/api/system/cache/clear").catch(() => {});
+  await api("POST", "/api/system/media/recalculate-visibility").catch(() => {});
+  await api("POST", "/api/tags/recalculate-counts").catch(() => {});
+
+  console.log(`\nDone: ${ok.length} post(s), ${failed.length} failure(s)`);
+  if (failed.length) process.exitCode = 1;
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

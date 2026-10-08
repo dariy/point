@@ -198,6 +198,7 @@ func apiKeyToResponse(k models.ApiKey) map[string]interface{} {
 		"last_used_at": nullTime(k.LastUsedAt),
 		"expires_at":   nullTime(k.ExpiresAt),
 		"revoked_at":   nullTime(k.RevokedAt),
+		"scope":        k.Scope,
 	}
 }
 

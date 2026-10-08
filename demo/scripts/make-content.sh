@@ -15,7 +15,7 @@
 #   GEMINI_API_KEY=... demo/scripts/make-content.sh --add=20
 #
 # --add grows the archive instead of replacing it. The scratch instance is
-# rebuilt from the recorded fixtures first (import-fixtures.mjs) when it is
+# rebuilt from the recorded fixtures first (import-fixtures.ts) when it is
 # missing, so the posts already in demo/mock/fixtures/fixtures.json come back
 # with their own photographs and prose, and only the new ones are generated.
 # That is what makes the scratch directory disposable: the fixture bundle plus
@@ -47,7 +47,7 @@ for arg in "$@"; do
     # Append N posts to the archive already in the fixtures, leaving every
     # existing post exactly as it was recorded.
     --add=*) ADD="${arg#*=}" ;;
-    # Where import-fixtures.mjs reads the recorded photographs from. Defaults to
+    # Where import-fixtures.ts reads the recorded photographs from. Defaults to
     # the scratch instance's own originals, which survive its database.
     --media=*) MEDIA_SRC_DEFAULT="${arg#*=}" ;;
     *) echo "unknown argument: $arg" >&2; exit 1 ;;
@@ -167,7 +167,7 @@ PY
 
 if [ "$IMPORT" = "1" ]; then
   echo "==> Restoring the recorded archive"
-  node "$SCRIPT_DIR/import-fixtures.mjs" \
+  node "$SCRIPT_DIR/import-fixtures.ts" \
     --base="$BASE" \
     --session="$SESSION" \
     --db="$SCRATCH/point.db" \
@@ -178,13 +178,13 @@ fi
 
 if [ "$RETAG" = "1" ]; then
   echo "==> Restructuring tags"
-  node "$SCRIPT_DIR/retag-content.mjs" \
+  node "$SCRIPT_DIR/retag-content.ts" \
     --base="$BASE" \
     --session="$SESSION" \
     --db="$SCRATCH/point.db"
 elif [ "$ADD" != "0" ]; then
   echo "==> Adding $ADD posts"
-  node "$SCRIPT_DIR/generate-content.mjs" \
+  node "$SCRIPT_DIR/generate-content.ts" \
     --base="$BASE" \
     --session="$SESSION" \
     --db="$SCRATCH/point.db" \
@@ -192,7 +192,7 @@ elif [ "$ADD" != "0" ]; then
     --add="$ADD"
 else
   echo "==> Generating $COUNT posts"
-  node "$SCRIPT_DIR/generate-content.mjs" \
+  node "$SCRIPT_DIR/generate-content.ts" \
     --base="$BASE" \
     --session="$SESSION" \
     --db="$SCRATCH/point.db" \
@@ -203,7 +203,7 @@ fi
 # ── Record ────────────────────────────────────────────────────────────────
 
 echo "==> Recording fixtures"
-node "$SCRIPT_DIR/record-fixtures.mjs" \
+node "$SCRIPT_DIR/record-fixtures.ts" \
   --base="$BASE" \
   --session="$SESSION"
 

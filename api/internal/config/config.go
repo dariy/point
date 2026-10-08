@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,11 +15,14 @@ type Config struct {
 	AppName     string `mapstructure:"APP_NAME"`
 	AppVersion  string `mapstructure:"APP_VERSION"`
 	AppEnv      string `mapstructure:"APP_ENV"`
-	Debug       bool   `mapstructure:"DEBUG"`
 	Host        string `mapstructure:"HOST"`
 	Port        int    `mapstructure:"PORT"`
 	DatabaseURL string `mapstructure:"DATABASE_URL"`
 	StoragePath string `mapstructure:"STORAGE_PATH"`
+
+	// LogLevel sets the minimum slog level: "debug", "info", "warn" or "error"
+	// (case-insensitive). Anything unrecognised falls back to "info".
+	LogLevel string `mapstructure:"LOG_LEVEL"`
 
 	// MigrationBackup snapshots the database before a boot applies pending
 	// migrations, and puts the snapshot back if they fail. Turning it off means
@@ -53,13 +58,24 @@ type Config struct {
 	// eviction.
 	PageCacheBudgetMB int `mapstructure:"PAGE_CACHE_BUDGET_MB"`
 
+	// SetupToken, when set, is required by POST /api/setup: the first-run
+	// wizard only creates the owner for a request that carries it. Managed
+	// hosting sets it so a stranger who finds the hostname first cannot claim
+	// the install. Unset keeps the open wizard for self-hosters.
+	SetupToken string `mapstructure:"SETUP_TOKEN"`
+
 	SessionExpiryHours       int    `mapstructure:"SESSION_EXPIRY_HOURS"`
 	SessionExpiryPublicHours int    `mapstructure:"SESSION_EXPIRY_PUBLIC_HOURS"`
 	FrontendDir              string `mapstructure:"FRONTEND_DIR"`
 	// FrontendDebug serves the debug frontend bundle (frontend/js-debug, with
 	// plugin/console debug logging) instead of the minified release bundle when
 	// that bundle exists. Off by default so production serves the release build.
-	FrontendDebug    bool   `mapstructure:"FRONTEND_DEBUG"`
+	FrontendDebug bool `mapstructure:"FRONTEND_DEBUG"`
+	// DevAssetReload makes the server notice a frontend rebuild without a
+	// restart: each HTML shell serve stats the build manifests and re-reads
+	// them when they changed. Set only by `scripts/run.sh --watch`; off, the
+	// build outputs are read once at startup.
+	DevAssetReload   bool   `mapstructure:"DEV_ASSET_RELOAD"`
 	ThemesPath       string `mapstructure:"THEMES_PATH"`
 	UserThemesPath   string `mapstructure:"USER_THEMES_PATH"`
 	GeminiAPIKey     string `mapstructure:"GEMINI_API_KEY"`
@@ -85,6 +101,90 @@ type Config struct {
 	HeadHTML      string `mapstructure:"HEAD_HTML"`
 	CSPScriptSrc  string `mapstructure:"CSP_SCRIPT_SRC"`
 	CSPConnectSrc string `mapstructure:"CSP_CONNECT_SRC"`
+
+	// MetricsEnabled starts a second HTTP listener serving Prometheus text
+	// exposition at /metrics. Off by default, and off means off: no listener,
+	// no goroutine, no instrumentation on the request path — a self-hoster who
+	// sets nothing gets exactly the behaviour of a build without this feature.
+	//
+	// It is a separate listener rather than a route on the main port so there
+	// is no auth decision to get wrong, no interaction with the gzip/CORS/CSP
+	// chain, and no exemption to add to the public rate limiter. MetricsBind
+	// therefore carries the whole access decision: it defaults to loopback, and
+	// widening it publishes post counts, storage usage and error rates to
+	// anything that can reach the port.
+	MetricsEnabled bool   `mapstructure:"METRICS_ENABLED"`
+	MetricsBind    string `mapstructure:"METRICS_BIND"`
+	MetricsPort    int    `mapstructure:"METRICS_PORT"`
+	// TrustedProxies extends the set of hops c.RealIP() will walk past when it
+	// reads X-Forwarded-For: a comma-separated list of CIDR ranges, empty by
+	// default. Loopback and private networks are always trusted, which covers
+	// the usual deployment (a reverse proxy on the same host or the same
+	// container network — its address is private, the walk skips it, and the
+	// real client comes out). It does not cover a proxy or CDN whose address is
+	// public: the walk stops at the edge address, so every visitor arriving
+	// through one edge shares a rate-limit bucket and the session audit trail
+	// records the edge instead of the visitor. An operator in that shape lists
+	// their provider's ranges here.
+	//
+	// This is the trust boundary, so a too-wide value is the whole risk:
+	// 0.0.0.0/0 trusts every peer and makes c.RealIP() entirely
+	// client-controlled. Parsed by ParseTrustedProxies; LoadConfig rejects a
+	// malformed list rather than starting with it half-applied.
+	TrustedProxies string `mapstructure:"TRUSTED_PROXIES"`
+
+	// BackupHook is a shell command run after each successful backup (scheduled
+	// or manual) to copy the archive off-host. The engine's own backups land in
+	// STORAGE_PATH/backups — on the same disk they protect — so without this a
+	// disk loss takes them with it. Empty by default: no hook, and a backup
+	// behaves exactly as it did before this existed.
+	//
+	// The command runs via `sh -c`. The archive's absolute path arrives both as
+	// $1 and as $POINT_BACKUP_FILE; $POINT_BACKUP_NAME, $POINT_BACKUP_SHA256 and
+	// $POINT_BACKUP_DIR are also set. Example:
+	//   BACKUP_HOOK=rclone copy "$POINT_BACKUP_FILE" r2:my-bucket/point-backups/
+	//
+	// A non-zero exit — or a run longer than BackupHookTimeoutSeconds — is
+	// recorded against the "backup off-host copy" job in /api/system/health and
+	// the metrics exposition (a silently failing off-host copy is worse than
+	// none) but does NOT fail the backup: the local archive is already complete.
+	BackupHook string `mapstructure:"BACKUP_HOOK"`
+	// BackupHookTimeoutSeconds bounds a single BackupHook run so a wedged
+	// command cannot block backups indefinitely (the run guard is held for its
+	// duration). Default 3600. A legitimately slow upload that trips this is
+	// reported as a failure — raise it rather than leave the alert firing.
+	BackupHookTimeoutSeconds int `mapstructure:"BACKUP_HOOK_TIMEOUT_SECONDS"`
+	// BackupManaged pins scheduled backups on for a host that sells them.
+	// When true, the scheduler ignores enable_backup=false, retention never
+	// drops below services.ManagedMinBackupKeep, and the Backups settings show
+	// the schedule as managed by the host. Default false: a self-hoster keeps
+	// full control of the toggle.
+	BackupManaged bool `mapstructure:"BACKUP_MANAGED"`
+}
+
+// ParseTrustedProxies turns a TRUSTED_PROXIES value — a comma-separated list of
+// CIDR ranges, with blanks tolerated — into the networks to trust. An empty
+// string yields no networks and no error, which is the default and reproduces
+// the loopback+private-only behaviour.
+//
+// Bare addresses are rejected along with everything else malformed: silently
+// widening "203.0.113.7" to a /32 would be a guess about a trust boundary, and
+// the error says what to write instead.
+func ParseTrustedProxies(s string) ([]*net.IPNet, error) {
+	var nets []*net.IPNet
+	for _, entry := range strings.Split(s, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		_, ipNet, err := net.ParseCIDR(entry)
+		if err != nil {
+			return nil, fmt.Errorf("TRUSTED_PROXIES: %q is not a CIDR range "+
+				"(a single address needs a prefix, e.g. 203.0.113.7/32)", entry)
+		}
+		nets = append(nets, ipNet)
+	}
+	return nets, nil
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -98,7 +198,7 @@ func LoadConfig(path string) (config Config, err error) {
 	// Defaults
 	v.SetDefault("APP_NAME", "Point")
 	v.SetDefault("APP_ENV", "development")
-	v.SetDefault("DEBUG", true)
+	v.SetDefault("LOG_LEVEL", "info")
 	v.SetDefault("HOST", "0.0.0.0")
 	v.SetDefault("PORT", 8000)
 	v.SetDefault("DATABASE_URL", "sqlite:./data/point.db")
@@ -107,6 +207,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("MIGRATION_BACKUP_KEEP", 3)
 	v.SetDefault("FRONTEND_DIR", "../frontend")
 	v.SetDefault("FRONTEND_DEBUG", false)
+	v.SetDefault("DEV_ASSET_RELOAD", false)
 	v.SetDefault("THEMES_PATH", "")
 	v.SetDefault("USER_THEMES_PATH", "")
 	v.SetDefault("APP_VERSION", "")
@@ -124,6 +225,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("PAGE_CACHE_BUDGET_MB", 64)
 	v.SetDefault("GEMINI_API_KEY", "")
 	v.SetDefault("PHOTO_LIBRARY_PATH", "")
+	v.SetDefault("SETUP_TOKEN", "")
 	v.SetDefault("SMTP_HOST", "")
 	v.SetDefault("SMTP_PORT", 587)
 	v.SetDefault("SMTP_USERNAME", "")
@@ -134,6 +236,18 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("HEAD_HTML", "")
 	v.SetDefault("CSP_SCRIPT_SRC", "")
 	v.SetDefault("CSP_CONNECT_SRC", "")
+	v.SetDefault("METRICS_ENABLED", false)
+	// Loopback, so enabling metrics never publishes them by accident: a scraper
+	// on another host needs either a reverse proxy in front of this port or an
+	// explicit widening here.
+	v.SetDefault("METRICS_BIND", "127.0.0.1")
+	// 9101 rather than 9090, which belongs to the Prometheus server itself and
+	// is the port an operator is most likely to already have in use.
+	v.SetDefault("METRICS_PORT", 9101)
+	v.SetDefault("TRUSTED_PROXIES", "")
+	v.SetDefault("BACKUP_HOOK", "")
+	v.SetDefault("BACKUP_HOOK_TIMEOUT_SECONDS", 3600)
+	v.SetDefault("BACKUP_MANAGED", false)
 
 	err = v.ReadInConfig()
 	if err != nil {
@@ -145,6 +259,17 @@ func LoadConfig(path string) (config Config, err error) {
 	}
 
 	err = v.Unmarshal(&config)
+	if err != nil {
+		return
+	}
+
+	// Fail on a malformed proxy list here rather than dropping the bad entry at
+	// server start: a trust boundary that silently ends up narrower than the
+	// operator wrote is how everyone behind a CDN edge lands in one rate-limit
+	// bucket, with nothing in the log to say why.
+	if _, err = ParseTrustedProxies(config.TrustedProxies); err != nil {
+		return
+	}
 
 	// Smart path detection: if running from repo root, frontend and data dirs
 	// are local, but defaults assume we are in 'api' directory.

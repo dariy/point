@@ -15,7 +15,7 @@ RUN mkdir -p /srv
 FROM remark42-${IS_SLIM} AS remark42
 
 # Build stage
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27rc3-alpine3.23 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27-alpine3.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_VERSION=dev
@@ -55,7 +55,7 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 # Bundle and minify frontend JS (release build — __DEBUG__=false strips the
-# debug logging in utils/debug.js). The debug bundle (frontend/js-debug) is a
+# debug logging in utils/debug.ts). The debug bundle (frontend/js-debug) is a
 # dev convenience; BUILD_DEBUG_FRONTEND=0 keeps it out of the production image.
 COPY scripts/ ./scripts/
 COPY frontend/ ./frontend/
@@ -68,6 +68,11 @@ RUN sh ./scripts/build-css.sh
 FROM docker.io/library/alpine:3.24
 
 WORKDIR /app
+ARG IS_SLIM=false
+
+# The full flavour ships ffmpeg for the server video path (transcode, posters).
+# The slim flavour leaves it out and serves video originals as uploaded.
+RUN if [ "$IS_SLIM" != "true" ]; then apk add --no-cache ffmpeg; fi
 
 # Install only necessary runtime dependencies and create user in one layer
 RUN apk add --no-cache \
@@ -94,7 +99,6 @@ COPY --chown=appuser:appuser --from=remark42 /srv /app/remark42
 # __BUILD_VERSION__ placeholder; the server substitutes APP_VERSION into it at
 # serve time (see cmd/api/main.go), so the shipped file is never mutated.
 ARG BUILD_VERSION=dev
-ARG IS_SLIM=false
 ENV IS_SLIM=${IS_SLIM}
 ENV APP_VERSION=${BUILD_VERSION}
 ENV DATABASE_URL=/data/point.db

@@ -327,7 +327,7 @@
     min-height: 56px;
 }
 
-/* Exclusive-area chooser (tag viz trio, immersive pair): chips side by side. */
+/* Exclusive-area chooser (map pair, immersive pair): chips side by side. */
 .pmap-choice {
     padding: var(--spacing-sm);
     border: 1px dashed var(--border-primary);

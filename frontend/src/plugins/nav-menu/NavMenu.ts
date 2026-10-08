@@ -1,0 +1,396 @@
+import { raw } from "../../utils/helpers.ts";
+import { html, setHTML } from "../../utils/helpers.ts";
+import { getNavTags, getSettings, getUser, onNavTags, onSettingsSelector } from '../../store.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
+import type { NavTagNode } from '../../api/nav.ts';
+import { navigate } from '../../utils/helpers.ts';
+import { hideFlyout, hideFlyoutWithin, attachFlyoutTrigger, createHotZone, flyoutEl, HOVER_OPEN_MS } from '../../utils/tagFlyout.ts';
+import { TAGS_SVG, MAP_SVG, GLOBE_SVG } from '../../utils/icons.ts';
+import type { StoreSettings } from '../../utils/helpers.ts';
+import type { HeaderFold } from '../../utils/headerFold.ts';
+import type { PublicHeaderProps } from '../public-header/PublicHeader.ts';
+const DEFAULT_INLINE_MAX = 4;
+
+/** The ctx the header's nav-menu slot passes: its props plus its fold controller. */
+export interface NavMenuCtx extends PublicHeaderProps {
+  fold?: HeaderFold | null;
+}
+
+/** A menu item, normalized from a nav tag. */
+interface NavItem {
+  name: string;
+  slug: string;
+  count: number;
+  href: string | null;
+  children: NavItem[];
+}
+
+/** Icon and label per tags-viz plugin, keyed by plugin id. */
+// Each icon is a constant SVG from utils/icons.ts, so raw(b.icon) is safe.
+const VIZ_META: Record<string, { icon: string; label: string }> = {
+  'tags-graph': {
+    icon: TAGS_SVG,
+    label: 'All tags'
+  },
+  'tags-atlas': {
+    icon: GLOBE_SVG,
+    label: 'Atlas'
+  },
+  'tags-map': {
+    icon: MAP_SVG,
+    label: 'Map'
+  }
+};
+
+/**
+ * The two single-claim viz slots and the public path each one owns, listing
+ * candidates in the same order app.ts resolves them (see resolveVizModule) —
+ * so a button's icon names the plugin its path will actually load.
+ */
+const VIZ_SLOTS = [{
+  href: '/tags',
+  candidates: ['tags-graph']
+}, {
+  href: '/map',
+  candidates: ['tags-atlas', 'tags-map']
+}];
+
+/**
+ * The settings this menu actually renders from, as one comparable string.
+ * A primitive, because subscribeSelector compares with Object.is.
+ */
+const navSlice = (settings: StoreSettings = {}) => [
+  settings?.nav_menu_mode,
+  settings?.nav_inline_max,
+  settings?.nav_more_title,
+  settings?.tags_visibility,
+].join('\u0000');
+
+/**
+ * NavMenu — the header's nav zone plus the burger's menu section.
+ *
+ * Renders the menu (custom links or nav tags — one model, see /api/pages/nav)
+ * as visible inline links in `.site-nav-items`, with two overflow surfaces:
+ *   - More ▾ — items past the configured inline cap (nav_inline_max), plus
+ *     items folded right-to-left by the header fold controller (order 30).
+ *     Opens on hover with a mouse, on tap with a finger.
+ *   - burger — the full list, shown when the whole nav zone folds (order 40).
+ *
+ * Items with children get a dropdown: hover (with intent delay) on fine
+ * pointers, tap-to-toggle on coarse — same interaction as breadcrumb crumbs.
+ */
+export class NavMenu {
+  navItemsEl: HTMLElement;
+  burgerTagsEl: HTMLElement;
+  burgerSitemapEl: HTMLElement;
+  burgerButtonsEl: HTMLElement | null;
+  ctx: NavMenuCtx;
+  fold: HeaderFold | null;
+  _unsubscribeNav: Function | null;
+  _unsubscribeSettings: Function | null;
+  _unregisterFold: (() => void) | null;
+  _onDocClick: ((e: Event) => void) | null;
+  _moreOpenTimer: ReturnType<typeof setTimeout> | undefined;
+  _moreZone: ReturnType<typeof createHotZone> | null;
+  _inline: NavItem[] = [];
+  _configOverflow: NavItem[] = [];
+  constructor({
+    navItemsEl,
+    burgerTagsEl,
+    burgerSitemapEl,
+    burgerButtonsEl = null,
+    ctx
+  }: {
+    navItemsEl: HTMLElement;
+    burgerTagsEl: HTMLElement;
+    burgerSitemapEl: HTMLElement;
+    burgerButtonsEl?: HTMLElement | null;
+    ctx: NavMenuCtx;
+  }) {
+    this.navItemsEl = navItemsEl;
+    this.burgerTagsEl = burgerTagsEl;
+    this.burgerSitemapEl = burgerSitemapEl;
+    this.burgerButtonsEl = burgerButtonsEl;
+    this.ctx = ctx;
+    this.fold = ctx.fold || null;
+    this._unsubscribeNav = null;
+    this._unsubscribeSettings = null;
+    this._unregisterFold = null;
+    this._onDocClick = null;
+    this._moreOpenTimer = undefined;
+    this._moreZone = null;
+  }
+  mount() {
+    this._unsubscribeNav = onNavTags(() => this.render());
+    // 'settings' is every public setting in one object and is rewritten by
+    // every page fetch; this menu reads four of them. Watching the joined
+    // slice keeps an unrelated save — a changed blog title, a new posts count
+    // — from rebuilding the nav and closing whatever dropdown is open in it.
+    this._unsubscribeSettings = onSettingsSelector(navSlice, () => this.render());
+
+    // Fold stage 30: inline links fold right-to-left into More ▾ before the
+    // whole nav zone collapses into the burger (stage 40, PublicHeader).
+    if (this.fold) {
+      this._unregisterFold = this.fold.register(30, {
+        reset: () => this._resetFoldedLinks(),
+        ops: () => this._foldOps()
+      });
+    }
+
+    // One document-level listener closes the More panel on outside clicks.
+    // It must be inert unless the panel is actually open: on touch, opening any
+    // header dropdown *is* a document click, and an unconditional close here
+    // would shut the panel the same tap just opened.
+    // Capture phase, because content below stops propagation on its own taps
+    // (a photo card's first tap reveals its overlay) — the panel must still
+    // close when the tap lands there.
+    this._onDocClick = e => {
+      if (!this.navItemsEl.isConnected) return;
+      const more = this.navItemsEl.querySelector('.nav-more.open');
+      if (more && !more.contains(e.target as Node)) this._closeMore();
+    };
+    document.addEventListener('click', this._onDocClick, true);
+    this.render();
+  }
+  unmount() {
+    if (this._unsubscribeNav) this._unsubscribeNav();
+    if (this._unsubscribeSettings) this._unsubscribeSettings();
+    if (this._unregisterFold) this._unregisterFold();
+    if (this._onDocClick) document.removeEventListener('click', this._onDocClick, true);
+    clearTimeout(this._moreOpenTimer);
+    this._moreZone?.stop();
+    this._moreZone = null;
+    hideFlyout();
+  }
+
+  /** Menu items normalized from the store: {name, href, slug, count, children[]}. */
+  _items(): NavItem[] {
+    const navTags = getNavTags() || [];
+    const settings = getSettings() || {};
+    if (settings.nav_menu_mode === 'none') return [];
+    const toItem = (t: NavTagNode): NavItem => ({
+      name: t.name,
+      slug: t.slug || '',
+      count: t.post_count || 0,
+      href: t.url || (t.slug ? `/tags/${t.slug}` : null),
+      children: (t.children || []).map(toItem)
+    });
+    return navTags.map(toItem).filter(i => i.href || i.children.length);
+  }
+  render() {
+    const settings = getSettings() || {};
+    const user = getUser();
+    const {
+      currentPath
+    } = this.ctx;
+    const items = this._items();
+    const inlineMax = parseInt(settings.nav_inline_max, 10) || DEFAULT_INLINE_MAX;
+    // nav_inline_max caps the number of *visible* nav slots, and the "More ▾"
+    // button takes one of those slots whenever it's shown. So if every item
+    // fits (items <= max) show them all with no More; otherwise reserve a slot
+    // for More and show max-1 links inline, folding the rest into the panel.
+    // This avoids burying a single link under a More button that costs the same
+    // room. (The fold controller still collapses more links into More when the
+    // header actually runs out of horizontal space.)
+    const cap = items.length <= inlineMax ? items.length : inlineMax - 1;
+    this._inline = items.slice(0, cap);
+    this._configOverflow = items.slice(cap);
+
+    // Viz buttons — one per single-claim viz slot, each rendered only when its
+    // own slot has an enabled member: the graph on /tags, a map on /map. So
+    // graph-and-map enabled together shows two buttons, either alone shows
+    // one, neither shows none. Both maps share one slot, so "Map" and "Atlas"
+    // can never stand side by side and each icon stays unambiguous.
+    const tagsVisibility = settings.tags_visibility || 'hidden';
+    const vizVisible = tagsVisibility === 'all' || !!user;
+    const vizButtons = vizVisible ? VIZ_SLOTS.flatMap(({
+      href,
+      candidates
+    }) => {
+      const active = candidates.find(id => pluginHost.isEnabled(id));
+      return active ? [{
+        href,
+        ...VIZ_META[active]
+      }] : [];
+    }) : [];
+    const isActive = (href: string | null | undefined) => !!href && href === currentPath;
+
+    // Inline links + More shell + viz icons.
+    setHTML(this.navItemsEl, html`
+      ${this._inline.map((it, i) => html`
+        <a href="${it.href || '#'}"
+           class="nav-menu-link${isActive(it.href) ? ' active' : ''}${it.children.length ? ' has-children' : ''}"
+           data-nav-i="${i}">${it.name}</a>`)}
+      <span class="nav-more is-empty">
+        <button type="button" class="nav-menu-link nav-more-btn"
+                aria-haspopup="true" aria-expanded="false">${settings.nav_more_title || 'More'}<span class="nav-more-caret" aria-hidden="true">▾</span></button>
+        <div class="nav-more-panel"></div>
+      </span>
+      ${vizButtons.map(b => html`<a href="${b.href}" class="header-action-btn${isActive(b.href) ? ' active' : ''}"
+                  aria-label="${b.label}" title="${b.label}">
+                 ${raw(b.icon)}
+               </a>`)}
+    `);
+    this._wireInline();
+    this._syncMore();
+
+    // Burger: the header's viz buttons, under the search field.
+    if (this.burgerButtonsEl) {
+      setHTML(this.burgerButtonsEl, html`${vizButtons.map(b => html`<a href="${b.href}" class="header-action-btn${isActive(b.href) ? ' active' : ''}"
+                  aria-label="${b.label}" title="${b.label}">
+                 ${raw(b.icon)}
+               </a>`)}`);
+    }
+
+    // Burger: the full menu (the quick links), children indented.
+    setHTML(this.burgerTagsEl, html`${items.length ? items.map(it => [
+      html`<a href="${it.href || '#'}" class="burger-link burger-tag-link">${it.name}</a>`,
+      ...it.children.filter(c => c.href).map(c => html`<a href="${c.href}" class="burger-link burger-sub-link">${c.name}</a>`)
+    ]) : ''}`);
+
+    // Burger sitemap.
+    setHTML(this.burgerSitemapEl, html`
+      ${vizButtons.map(b => html`<a href="${b.href}" class="burger-link">${b.label}</a>`)}
+      <a href="/light" class="burger-link">${user ? 'Admin' : 'About'}</a>
+    `);
+
+    // New content, new widths — let the fold controller re-measure.
+    this.fold?.relayout();
+  }
+
+  /** The child links (href-bearing) of a menu item, shaped for the dropdown. */
+  _childItems(it: NavItem) {
+    return it.children.filter(c => c.href).map(c => ({
+      name: c.name,
+      slug: c.slug,
+      count: c.count,
+      href: c.href
+    }));
+  }
+
+  /**
+   * Wire a menu link that stands for an item with children so it reveals those
+   * children in the shared header dropdown — hover-intent on fine pointers,
+   * tap-to-open (then tap-again-to-navigate) on coarse. Used for both inline
+   * links and the parent rows inside the More ▾ panel, so both surfaces behave
+   * identically instead of More dumping the whole subtree inline.
+   */
+  _wireChildFlyout(el: HTMLElement, childItems: ReturnType<NavMenu['_childItems']>) {
+    const group = this.navItemsEl.closest<HTMLElement>('.site-header-group');
+    attachFlyoutTrigger(el, () => childItems, navigate, group);
+  }
+
+  /** Dropdowns for inline items with children (hover-intent / tap-toggle). */
+  _wireInline() {
+    // A re-render replaced the elements the old hot zone was watching.
+    clearTimeout(this._moreOpenTimer);
+    this._moreZone?.stop();
+    this._moreZone = null;
+    this.navItemsEl.querySelectorAll<HTMLElement>('.nav-menu-link.has-children').forEach(el => {
+      const it = this._inline[Number(el.dataset.navI)];
+      if (!it) return;
+      const childItems = this._childItems(it);
+      if (childItems.length) this._wireChildFlyout(el, childItems);
+    });
+    const moreBtn = this.navItemsEl.querySelector<HTMLElement>('.nav-more-btn');
+    if (!moreBtn) return;
+    const more = moreBtn.closest<HTMLElement>('.nav-more');
+    if (!more) return;
+    moreBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      clearTimeout(this._moreOpenTimer);
+      if (more.classList.contains('open')) this._closeMore();else this._openMore();
+    });
+
+    // Mouse: hover-intent opens the panel, no click needed. Gated on
+    // `pointerType === 'mouse'` so a tap's compatibility mouse events can't
+    // trip it — touch keeps tap-to-toggle.
+    more.addEventListener('pointerenter', e => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(this._moreOpenTimer);
+      this._moreOpenTimer = setTimeout(() => this._openMore(true), HOVER_OPEN_MS);
+    });
+    more.addEventListener('pointerleave', () => clearTimeout(this._moreOpenTimer));
+  }
+
+  /**
+   * @param track - arm a hot zone that closes the panel when the
+   *   cursor leaves it — for hover-opened panels only, so a click-opened one
+   *   stays put until it's clicked away.
+   */
+  _openMore(track = false) {
+    const more = this.navItemsEl.querySelector('.nav-more');
+    if (!more) return;
+    more.classList.add('open');
+    more.querySelector('.nav-more-btn')?.setAttribute('aria-expanded', 'true');
+    this._moreZone?.stop();
+    this._moreZone = null;
+    if (!track) return;
+    // The panel is absolutely positioned, so it's outside `.nav-more`'s own box
+    // — track it explicitly or the cursor "leaves" the moment it reaches the
+    // menu it just opened. A row's child dropdown lands outside both, hence the
+    // flyout. The pad bridges the button→panel gap.
+    this._moreZone = createHotZone(() => [more, more.querySelector('.nav-more-panel'), flyoutEl()], () => this._closeMore(), 12);
+  }
+  _closeMore() {
+    clearTimeout(this._moreOpenTimer);
+    this._moreZone?.stop();
+    this._moreZone = null;
+    const more = this.navItemsEl.querySelector('.nav-more');
+    if (!more) return;
+    more.classList.remove('open');
+    more.querySelector('.nav-more-btn')?.setAttribute('aria-expanded', 'false');
+    // Only the child dropdown this panel owns — the flyout is a singleton, and
+    // a breadcrumb may have just opened its own in the same click.
+    hideFlyoutWithin(more);
+  }
+
+  /** Inline links currently visible (not folded into More), left to right. */
+  _visibleLinks() {
+    return [...this.navItemsEl.querySelectorAll<HTMLElement>('.nav-menu-link[data-nav-i]:not(.in-more)')];
+  }
+  _resetFoldedLinks() {
+    this.navItemsEl.querySelectorAll('.nav-menu-link.in-more').forEach(a => {
+      a.classList.remove('in-more');
+    });
+    this._syncMore();
+  }
+  _foldOps() {
+    return this._visibleLinks().reverse().map(el => () => {
+      el.classList.add('in-more');
+      this._syncMore();
+    });
+  }
+
+  /** Rebuild the More ▾ panel: config-overflow items + fold-folded links. */
+  _syncMore() {
+    const more = this.navItemsEl.querySelector('.nav-more');
+    if (!more) return;
+    const foldedIdx = [...this.navItemsEl.querySelectorAll<HTMLElement>('.nav-menu-link.in-more')].map(a => Number(a.dataset.navI)).sort((a, b) => a - b);
+    const panelItems = [...foldedIdx.map(i => this._inline[i]).filter(Boolean), ...this._configOverflow];
+    if (!panelItems.length) {
+      // Transient: a fold relayout unfolds every link before re-folding, so
+      // the panel empties mid-cycle. Hide the shell (CSS also hides an empty
+      // `.open` panel) but keep the open state — closing here would clobber a
+      // menu the user just opened whenever any ResizeObserver relayout fires.
+      more.classList.add('is-empty');
+      return;
+    }
+    more.classList.remove('is-empty');
+    // Parents only — a parent with children reveals them in the shared
+    // dropdown (like inline links) rather than flattening the whole subtree.
+    const panel = more.querySelector<HTMLElement>('.nav-more-panel');
+    if (!panel) return;
+    setHTML(panel, html`${panelItems.map((it, i) => {
+      const hasChildren = this._childItems(it).length > 0;
+      const caret = hasChildren ? html`<span class="nav-more-item-caret" aria-hidden="true">›</span>` : '';
+      return html`<a href="${it.href || '#'}"
+         class="nav-more-item${hasChildren ? ' has-children' : ''}"
+         data-more-i="${i}">${it.name}${caret}</a>`;
+    })}`);
+    panel.querySelectorAll<HTMLElement>('.nav-more-item.has-children').forEach(el => {
+      const childItems = this._childItems(panelItems[Number(el.dataset.moreI)]);
+      if (childItems.length) this._wireChildFlyout(el, childItems);
+    });
+  }
+}

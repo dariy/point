@@ -265,6 +265,90 @@ func TestPostService_CrossPostToInstagram(t *testing.T) {
 		}
 	})
 
+	// A carousel holds 10 children at most. The post has 12 images: the first
+	// 10 in content order go, the last 2 do not.
+	t.Run("Carousel Caps At Ten Images", func(t *testing.T) {
+		data := map[string]string{
+			"instagram_access_token": "test-token",
+			"instagram_user_id":      "ig-user-id",
+			"app_url":                "https://example.com",
+		}
+
+		var childURLs []string
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost {
+				_ = r.ParseForm()
+				if r.URL.Path == "/ig-user-id/media" {
+					if r.Form.Get("is_carousel_item") == "true" {
+						childURLs = append(childURLs, r.Form.Get("image_url"))
+						_, _ = fmt.Fprintf(w, `{"id": "child-id-%d"}`, len(childURLs))
+						return
+					}
+					_, _ = w.Write([]byte(`{"id": "carousel-creation-id"}`))
+					return
+				}
+				if r.URL.Path == "/ig-user-id/media_publish" {
+					_, _ = w.Write([]byte(`{"id": "media-id"}`))
+					return
+				}
+			}
+			if r.Method == http.MethodGet && r.URL.Query().Get("fields") != "" {
+				_, _ = w.Write([]byte(`{"status_code":"FINISHED"}`))
+				return
+			}
+			http.Error(w, "not found", http.StatusNotFound)
+		})
+
+		ts := httptest.NewServer(handler)
+		defer ts.Close()
+
+		settingsSvc := mockSettings(data)
+		igSvc := NewInstagramService(settingsSvc).withBaseURL(ts.URL)
+
+		var content []string
+		var media []models.Medium
+		for i := 1; i <= 12; i++ {
+			content = append(content, fmt.Sprintf("![p%d](/2026/06/p%02d.jpg)", i, i))
+			media = append(media, models.Medium{OriginalPath: fmt.Sprintf("originals/2026/06/p%02d.jpg", i)})
+		}
+
+		repo := &mockRepository{
+			MockGetPost: func(_ context.Context, id int64) (models.Post, error) {
+				return models.Post{
+					ID:             id,
+					Title:          "Twelve Photos",
+					Slug:           "twelve-photos",
+					InstagramShare: true,
+					Content:        strings.Join(content, "\n"),
+				}, nil
+			},
+			MockGetMediaByPaths: func(_ context.Context, _ []string) ([]models.Medium, error) {
+				return media, nil
+			},
+			MockGetTagsForPost: func(_ context.Context, postID int64) ([]models.Tag, error) {
+				return nil, nil
+			},
+			MockUpdatePostInstagramStatus: func(_ context.Context, arg models.UpdatePostInstagramStatusParams) error {
+				if arg.InstagramStatus != "published" {
+					t.Errorf("expected status published, got %s", arg.InstagramStatus)
+				}
+				return nil
+			},
+		}
+
+		postSvc := NewPostService(repo, settingsSvc, igSvc, nil, ts.URL)
+		if err := postSvc.CrossPostToInstagram(ctx, 1); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(childURLs) != 10 {
+			t.Fatalf("expected 10 carousel children, got %d (%v)", len(childURLs), childURLs)
+		}
+		if first, last := childURLs[0], childURLs[9]; first != ts.URL+"/2026/06/p01.jpg" || last != ts.URL+"/2026/06/p10.jpg" {
+			t.Errorf("expected p01..p10, got first %s, last %s", first, last)
+		}
+	})
+
 	t.Run("Container ERROR marks post error", func(t *testing.T) {
 		data := map[string]string{
 			"instagram_access_token": "test-token",

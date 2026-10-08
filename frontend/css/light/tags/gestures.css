@@ -1,7 +1,7 @@
 /* ===========================
    Tags manager — drag and drop
    Drag handles and drop indicators driven by
-   frontend/src/components/light/tags/tagGestures.js.
+   frontend/src/components/light/tags/tagGestures.ts.
    =========================== */
 
 .tm-drag-handle {

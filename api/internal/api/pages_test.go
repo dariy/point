@@ -626,9 +626,9 @@ func TestPagesHandler_GetMapPage_YearFilter(t *testing.T) {
 	}
 }
 
-// TestPagesHandler_TagsModuleDisabled404 verifies that when no tag-viz plugin is
-// enabled the /tags endpoints (graph, cloud, map) all report 404 — the
-// not-accessible branch of tagsModuleAccessible.
+// TestPagesHandler_TagsModuleDisabled404 verifies that with every tag-viz plugin
+// disabled the endpoints behind /tags and /map (graph, cloud, map) all report
+// 404 — the not-accessible branch of TagVizAccessible.
 func TestPagesHandler_TagsModuleDisabled404(t *testing.T) {
 	ph, h := setupPagesHandler(t)
 	defer h.close()

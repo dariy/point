@@ -9,10 +9,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -158,9 +160,15 @@ func TestSecurityHeaders(t *testing.T) {
 		{"X-Content-Type-Options", "nosniff"},
 		{"X-Frame-Options", "DENY"},
 		{"X-Xss-Protection", "1; mode=block"},
-		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://server.arcgisonline.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"},
+		// Trusted Types is the tail of the enforcing policy, not a second
+		// Report-Only header — see trustedTypesCSP.
+		{"Content-Security-Policy", "default-src 'self'; script-src 'self' " + inlineHash + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; connect-src 'self' https://server.arcgisonline.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; " + trustedTypesCSP},
 		{"Referrer-Policy", "strict-origin-when-cross-origin"},
 		{"Permissions-Policy", "geolocation=(), microphone=(), camera=()"},
+		// The report-only header is gone. A browser that got both would
+		// report every violation twice, and an operator reading the response
+		// could not tell which of the two policies was the live one.
+		{"Content-Security-Policy-Report-Only", ""},
 	}
 
 	for _, tt := range tests {
@@ -191,6 +199,7 @@ func TestHSTS(t *testing.T) {
 	const want = "max-age=31536000; includeSubdomains"
 
 	httpsReq := httptest.NewRequest(http.MethodGet, "/health", nil)
+	httpsReq.RemoteAddr = "10.0.0.1:1234" // a private-network proxy; its X-Forwarded-Proto is trusted
 	httpsReq.Header.Set("X-Forwarded-Proto", "https")
 	httpsRec := httptest.NewRecorder()
 	e.ServeHTTP(httpsRec, httpsReq)
@@ -232,7 +241,7 @@ func TestDeploymentHeadInjection(t *testing.T) {
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
 
-	req := httptest.NewRequest(http.MethodGet, "/some-spa-route", nil)
+	req := httptest.NewRequest(http.MethodGet, "/search", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -275,7 +284,7 @@ func TestDeploymentHeadInjection(t *testing.T) {
 	// A logged-in admin viewing a PUBLIC page (admin controls are present there
 	// too) must also get the injection-free shell — the session cookie is the
 	// signal, so the third-party script never runs in an authenticated DOM.
-	authReq := httptest.NewRequest(http.MethodGet, "/some-spa-route", nil)
+	authReq := httptest.NewRequest(http.MethodGet, "/search", nil)
 	authReq.AddCookie(&http.Cookie{Name: "session", Value: "tok"})
 	authRec := httptest.NewRecorder()
 	e.ServeHTTP(authRec, authReq)
@@ -284,37 +293,6 @@ func TestDeploymentHeadInjection(t *testing.T) {
 	}
 	if strings.Contains(authRec.Body.String(), "analytics.example") {
 		t.Errorf("authenticated viewer must not receive injected HEAD_HTML on a public page")
-	}
-}
-
-func TestSanitizeCSPSources(t *testing.T) {
-	// Normal inputs pass through, whitespace-normalized.
-	exact := []struct{ in, want string }{
-		{"", ""},
-		{"   ", ""},
-		{"https://a.example", "https://a.example"},
-		{"https://a.example https://b.example", "https://a.example https://b.example"},
-		{"  https://a.example   https://b.example  ", "https://a.example https://b.example"},
-		{"https://*.cdn.example", "https://*.cdn.example"},
-		{"https://a.example;object-src", ""},   // ';'-fused token dropped whole
-		{"https://a.example,https://evil", ""}, // ','-fused token dropped whole
-	}
-	for _, c := range exact {
-		if got := sanitizeCSPSources(c.in); got != c.want {
-			t.Errorf("sanitizeCSPSources(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-	// A breakout character (new directive ';', new policy ',', header split
-	// CR/LF) must never survive into the output, whatever the arrangement.
-	for _, in := range []string{
-		"https://a; object-src *",
-		"https://a, default-src *",
-		"https://a.example\r\nX-Injected: 1",
-		"a;b,c\r\nd",
-	} {
-		if got := sanitizeCSPSources(in); strings.ContainsAny(got, ";,\r\n") {
-			t.Errorf("sanitizeCSPSources(%q) = %q still contains a breakout char", in, got)
-		}
 	}
 }
 
@@ -496,6 +474,45 @@ func TestSetupEcho_RealIPIgnoresSpoofedXFF(t *testing.T) {
 	proxiedReq.Header.Set(echo.HeaderXForwardedFor, "9.9.9.9, 203.0.113.7")
 	if got := e.IPExtractor(proxiedReq); got != "203.0.113.7" {
 		t.Errorf("proxied request: got RealIP %q, want real client 203.0.113.7", got)
+	}
+}
+
+// A deployment whose proxy answers from a *public* address (a CDN edge pointed
+// straight at the container) gets no help from the loopback+private defaults:
+// the walk stops at the edge, so every visitor through that colo shares one
+// rate-limit bucket and one audit-trail address. TRUSTED_PROXIES adds the
+// operator's ranges to the trust list. See p-trusted-proxies-kz8c.
+func TestSetupEcho_RealIPTrustsConfiguredProxyRange(t *testing.T) {
+	repo, cfg := newEchoWithRepo(t)
+	cfg.TrustedProxies = "198.51.100.0/24, 2001:db8::/32"
+	svcs := initServices(&cfg, repo)
+	e := setupEcho(cfg, repo, svcs)
+
+	// Peer inside a configured range: walk past it to the rightmost entry that
+	// is outside every trusted set — the real client.
+	edgeReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	edgeReq.RemoteAddr = "198.51.100.42:5555"
+	edgeReq.Header.Set(echo.HeaderXForwardedFor, "9.9.9.9, 203.0.113.7")
+	if got := e.IPExtractor(edgeReq); got != "203.0.113.7" {
+		t.Errorf("trusted edge: got RealIP %q, want real client 203.0.113.7", got)
+	}
+
+	// Same for the IPv6 range, and the trusted hop may also appear in the header
+	// itself — a CDN typically appends its own address as it forwards.
+	v6Req := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	v6Req.RemoteAddr = "[2001:db8::1]:5555"
+	v6Req.Header.Set(echo.HeaderXForwardedFor, "203.0.113.7, 2001:db8::2")
+	if got := e.IPExtractor(v6Req); got != "203.0.113.7" {
+		t.Errorf("trusted v6 edge: got RealIP %q, want real client 203.0.113.7", got)
+	}
+
+	// A public peer *outside* the configured ranges is still untrusted: XFF is
+	// ignored entirely and RealIP falls back to the socket address.
+	strangerReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	strangerReq.RemoteAddr = "192.0.2.9:5555"
+	strangerReq.Header.Set(echo.HeaderXForwardedFor, "203.0.113.7")
+	if got := e.IPExtractor(strangerReq); got != "192.0.2.9" {
+		t.Errorf("untrusted peer: got RealIP %q, want socket address 192.0.2.9", got)
 	}
 }
 
@@ -1019,9 +1036,10 @@ func TestSetupEcho_CSSSubdirectoriesStillServed(t *testing.T) {
 	if rec.Body.String() != string(theme) {
 		t.Errorf("common/theme.css served %q, want %q", rec.Body.String(), theme)
 	}
-	// It changes at runtime under a fixed URL, so it must never go immutable.
-	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
-		t.Errorf("common/theme.css Cache-Control = %q, want no-cache", cc)
+	// It changes at runtime under a fixed URL, and two changes can fall in
+	// the same Last-Modified second, so it must not be cached at all.
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("common/theme.css Cache-Control = %q, want no-store", cc)
 	}
 
 	// A subdirectory path must resolve within that subdirectory, not collapse
@@ -1056,6 +1074,110 @@ func TestSetupEcho_NoCSSManifestFallsBackToVersionedURLs(t *testing.T) {
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !strings.Contains(rec.Body.String(), "/assets/css/light.css?v="+cfg.AppVersion) {
 		t.Errorf("shell lost its stylesheet link without a manifest:\n%s", rec.Body.String())
+	}
+}
+
+// reloadFixture builds a frontend with a hashed CSS manifest and a JS bundle
+// dir, returning the echo instance and a function that rewrites a build output
+// the way a rebuild would: new bytes, and an mtime that has visibly moved.
+func reloadFixture(t *testing.T, reload bool) (*echo.Echo, func(rel, body string)) {
+	t.Helper()
+	repo, cfg := newEchoWithRepo(t)
+	cfg.DevAssetReload = reload
+	seedOwner(t, repo)
+	bump := time.Now()
+	write := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(cfg.FrontendDir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		bump = bump.Add(time.Second)
+		if err := os.Chtimes(p, bump, bump); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("index.html", `<html><head><link href="/assets/css/light.css?v=__BUILD_VERSION__"></head>`+
+		`<body><script type="module" src="/assets/js/app.js?v=__BUILD_VERSION__"></script></body></html>`)
+	write("css/light.css", "body{}")
+	write("css/asset-manifest.json", `{"light.css":"81e2e81c"}`)
+	write("js/app.js", "")
+	write("js/plugin-manifest.json", `{}`)
+	return setupEcho(cfg, repo, initServices(&cfg, repo)), write
+}
+
+var appJSVersionRe = regexp.MustCompile(`/assets/js/app\.js\?v=([^"]+)`)
+
+// Under DEV_ASSET_RELOAD (run.sh --watch) a rebuild must reach the browser on
+// the next page load, with no restart: the shell links the new CSS hash, the
+// Pre filter treats that hash as current, and app.js gets a new ?v= so the
+// service worker's cached copy is not served first.
+func TestSetupEcho_DevAssetReload(t *testing.T) {
+	e, write := reloadFixture(t, true)
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+
+	first := get("/").Body.String()
+	if !strings.Contains(first, "/assets/css/light.81e2e81c.css") {
+		t.Fatalf("shell does not link the startup hash:\n%s", first)
+	}
+	m := appJSVersionRe.FindStringSubmatch(first)
+	if m == nil {
+		t.Fatalf("shell has no app.js ?v=:\n%s", first)
+	}
+	if again := get("/").Body.String(); again != first {
+		t.Errorf("shell changed with nothing rebuilt:\n%s\nthen\n%s", first, again)
+	}
+
+	write("css/asset-manifest.json", `{"light.css":"0badc0de"}`)
+	second := get("/").Body.String()
+	if !strings.Contains(second, "/assets/css/light.0badc0de.css") {
+		t.Fatalf("shell did not pick up the rebuilt CSS hash:\n%s", second)
+	}
+	if cc := get("/assets/css/light.0badc0de.css").Header().Get("Cache-Control"); cc != immutableCacheControl {
+		t.Errorf("new hash Cache-Control = %q, want %q", cc, immutableCacheControl)
+	}
+	if cc := get("/assets/css/light.81e2e81c.css").Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("superseded hash Cache-Control = %q, want no-cache", cc)
+	}
+
+	// A JS rebuild rewrites plugin-manifest.json; app.js keeps its name, so the
+	// ?v= is what tells the browser (and the service worker) it is new.
+	write("js/plugin-manifest.json", `{ }`)
+	third := get("/").Body.String()
+	m3 := appJSVersionRe.FindStringSubmatch(third)
+	if m3 == nil || m3[1] == m[1] {
+		t.Errorf("app.js ?v= did not change after a JS rebuild: %v then %v", m, m3)
+	}
+
+	// The shell a /YYYY/<non-numeric>/x SPA route serves reloads too.
+	if body := get("/2024/drafts/x").Body.String(); !strings.Contains(body, "/assets/css/light.0badc0de.css") {
+		t.Errorf("media-route shell is stale:\n%s", body)
+	}
+}
+
+// Without DEV_ASSET_RELOAD the build outputs are read once: production never
+// stats them per request, and a rewritten manifest changes nothing.
+func TestSetupEcho_NoDevAssetReloadWithoutEnv(t *testing.T) {
+	e, write := reloadFixture(t, false)
+	get := func(path string) string {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec.Body.String()
+	}
+	before := get("/")
+	if !strings.Contains(before, "/assets/js/app.js?v=1.0.0\"") {
+		t.Errorf("app.js ?v= is not the plain build version:\n%s", before)
+	}
+	write("css/asset-manifest.json", `{"light.css":"0badc0de"}`)
+	if after := get("/"); after != before {
+		t.Errorf("shell changed without DEV_ASSET_RELOAD:\n%s\nthen\n%s", before, after)
 	}
 }
 
@@ -1150,5 +1272,23 @@ func TestInitServices_HealthRegistryIsShared(t *testing.T) {
 	snap := svcs.Health.Snapshot()
 	if len(snap) != 1 || snap[0].Name != "probe" {
 		t.Fatalf("scheduler outcomes did not reach the shared registry: %+v", snap)
+	}
+}
+
+func TestParseLogLevel(t *testing.T) {
+	cases := map[string]slog.Level{
+		"debug":    slog.LevelDebug,
+		"DEBUG":    slog.LevelDebug,
+		"info":     slog.LevelInfo,
+		"":         slog.LevelInfo,
+		"nonsense": slog.LevelInfo,
+		"warn":     slog.LevelWarn,
+		"warning":  slog.LevelWarn,
+		" ERROR ":  slog.LevelError,
+	}
+	for in, want := range cases {
+		if got := parseLogLevel(in); got != want {
+			t.Errorf("parseLogLevel(%q) = %v, want %v", in, got, want)
+		}
 	}
 }

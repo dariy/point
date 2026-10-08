@@ -44,7 +44,7 @@ func assertBootstrap(t *testing.T, rec *httptest.ResponseRecorder, wantGen strin
 	}
 	// The ladder ships too, so the client picks rungs from the server's list
 	// instead of a copy that can drift.
-	if !strings.Contains(script, `"sizes":[128,256,512,1024]`) {
+	if !strings.Contains(script, `"sizes":[128,256,512,1024,1600,2048]`) {
 		t.Errorf("bootstrap script has no ladder: %s", script)
 	}
 	if n := strings.Count(body, "window.__MEDIA__="); n != 1 {
@@ -56,6 +56,16 @@ func assertBootstrap(t *testing.T, rec *httptest.ResponseRecorder, wantGen strin
 	csp := rec.Header().Get("Content-Security-Policy")
 	if !strings.Contains(csp, want) {
 		t.Errorf("CSP does not carry the served script's hash %s:\nCSP: %s", want, csp)
+	}
+	// Both injection sites splice the bootstrap hash in by string-replacing
+	// "script-src" in the enforcing header, which now also carries the Trusted
+	// Types directives. A splice that widened its match, or replaced more than
+	// the first occurrence, would show up here as a mangled tail.
+	if !strings.HasSuffix(csp, "; "+trustedTypesCSP) {
+		t.Errorf("script-src splice damaged the trusted-types tail:\nCSP: %s", csp)
+	}
+	if got := rec.Header().Get("Content-Security-Policy-Report-Only"); got != "" {
+		t.Errorf("a Report-Only policy is still being served: %q", got)
 	}
 }
 
@@ -87,19 +97,23 @@ func TestBootstrapScriptOnEveryInjectionSite(t *testing.T) {
 	svcs := initServices(&cfg, repo)
 	e := setupEcho(cfg, repo, svcs)
 
-	sites := map[string]string{
-		"SPA fallback":      "/",
-		"crawler prerender": "/posts/prerendered",
-		"admin shell":       "/light/media",
-		"media-route SPA":   "/notayear/nn/thing",
+	sites := map[string]struct {
+		path string
+		code int
+	}{
+		"SPA fallback":      {"/", http.StatusOK},
+		"crawler prerender": {"/posts/prerendered", http.StatusOK},
+		"admin shell":       {"/light/media", http.StatusOK},
+		"media-route SPA":   {"/light/tags/travel", http.StatusOK},
+		"unknown path":      {"/notayear/nn/thing", http.StatusNotFound},
 	}
-	for name, path := range sites {
+	for name, site := range sites {
 		t.Run(name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req := httptest.NewRequest(http.MethodGet, site.path, nil)
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("GET %s = %d, want 200", path, rec.Code)
+			if rec.Code != site.code {
+				t.Fatalf("GET %s = %d, want %d", site.path, rec.Code, site.code)
 			}
 			assertBootstrap(t, rec, services.DefaultThumbnailGeneration)
 		})

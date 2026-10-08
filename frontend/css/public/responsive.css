@@ -42,7 +42,7 @@
        stacked paddings — the paginator's top margin, main's bottom padding,
        the footer's top padding and the stack's row gap. At desktop values that
        is ~96px of a 667px phone viewport spent on nothing, so the grid (which
-       is sized to whatever is left over, see utils/gridFit.js) gets that much
+       is sized to whatever is left over, see utils/gridFit.ts) gets that much
        less. Phone values are half that; the footer's own background is what
        actually separates it from the page, not the whitespace. */
     .main-container .pagination {
@@ -92,7 +92,7 @@
 }
 
 /* Coarse pointer styles */
-/* Touch affordances are scoped to :not(.pointer-fine) — see utils/pointerMode.js.
+/* Touch affordances are scoped to :not(.pointer-fine) — see utils/pointerMode.ts.
    The media query is only a first guess; a touchscreen laptop misreports itself
    as touch-only, and the class is removed as soon as a real mouse shows up.
    :where() keeps the added scope at zero specificity. */

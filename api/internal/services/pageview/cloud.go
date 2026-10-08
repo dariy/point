@@ -34,7 +34,7 @@ type CloudView struct {
 // BuildGraphView; it returns ErrNotVisible when the module is unavailable to
 // this viewer, or when the place itself is one they may not see.
 func (b *Builder) BuildCloudView(ctx context.Context, settings map[string]string, p CloudParams) (*CloudView, error) {
-	if !TagsModuleAccessible(settings, []string{"tags-atlas", "tags-graph"}, p.PublicOnly) {
+	if !TagVizAccessible(settings, []string{"tags-atlas", "tags-graph"}, p.PublicOnly) {
 		return nil, ErrNotVisible
 	}
 

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,10 +36,11 @@ func init() {
 	}
 }
 
-// installLogger points slog (and the legacy log package) at w.
-func installLogger(w io.Writer) {
+// installLogger points slog (and the legacy log package) at w, filtering below
+// level.
+func installLogger(w io.Writer, level slog.Level) {
 	logger := slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: level,
 	}))
 	slog.SetDefault(logger)
 
@@ -47,10 +49,25 @@ func installLogger(w io.Writer) {
 	log.SetFlags(0)
 }
 
+// parseLogLevel maps a LOG_LEVEL string to an slog.Level, defaulting to Info
+// for the empty string or anything unrecognised.
+func parseLogLevel(s string) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
 func main() {
 	// Start on stdout alone: the log file lives under the storage path, which
 	// isn't known until the config is loaded below.
-	installLogger(os.Stdout)
+	installLogger(os.Stdout, slog.LevelInfo)
 
 	// Check for CLI commands early — setup, reset-password and --version each
 	// exit the process; this returns only when we are meant to serve.
@@ -74,7 +91,7 @@ func main() {
 		utils.LogMaxBytes, utils.LogMaxBackups,
 	)
 	defer func() { _ = logFile.Close() }()
-	installLogger(io.MultiWriter(os.Stdout, logFile))
+	installLogger(io.MultiWriter(os.Stdout, logFile), parseLogLevel(cfg.LogLevel))
 
 	// Apply any backup restore scheduled from the admin UI. This must run BEFORE
 	// the database is opened: extracting a backup over an open SQLite file corrupts
@@ -148,11 +165,6 @@ func main() {
 			slog.Warn("failed to sync gemini_api_key to secrets", "error", err)
 		}
 	}
-	if cfg.PhotoLibraryPath != "" {
-		if err := svcs.Settings.SetSecret(ctx, "photo_library_path", cfg.PhotoLibraryPath); err != nil {
-			slog.Warn("failed to sync photo_library_path to secrets", "error", err)
-		}
-	}
 
 	// Synchronize active theme with public theme.css for the frontend
 	if err := svcs.Theme.SyncActiveTheme(ctx); err != nil {
@@ -163,6 +175,13 @@ func main() {
 
 	// Start background scheduler (goroutines honor ctx cancellation)
 	svcs.Scheduler.Start(ctx)
+	// Durable job worker; job kinds register before this line.
+	svcs.Jobs.Start(ctx)
+
+	// Prometheus exposition on a listener of its own, or nil when
+	// METRICS_ENABLED is off — which is the default, and then nothing below
+	// this line runs at all.
+	metricsSrv := startMetricsServer(cfg, repo, svcs)
 
 	// Start server
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -183,6 +202,13 @@ func main() {
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown error", "error", err)
+	}
+	// Closed before the re-exec below, not just at exit: a restart that left
+	// this port held would fail to rebind it in the new process.
+	if metricsSrv != nil {
+		if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("metrics listener shutdown error", "error", err)
+		}
 	}
 	slog.Info("graceful shutdown complete")
 

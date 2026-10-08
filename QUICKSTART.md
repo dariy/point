@@ -88,7 +88,6 @@ You can customize Point by editing the `.env` file.
 | `LOG_LEVEL` | `INFO` | Logging detail level: DEBUG, INFO, WARN, or ERROR |
 | `APP_NAME` | `Point` | The name of your blog displayed in the UI |
 | `APP_ENV` | `development` | Set to `production` for live environments |
-| `DEBUG` | `true` | Set to `false` in production environments |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Maximum allowed size for uploaded photos |
 | `JPEG_QUALITY` | `85` | Compression quality for JPEG images (1-100) |
 | `SESSION_EXPIRY_HOURS` | `720` | How long an admin session remains valid |

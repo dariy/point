@@ -16,7 +16,8 @@
         --sidebar-width: 0;
     }
 
-    .light-sidebar {
+    .light-sidebar,
+    .sidebar-footer {
         display: none;
     }
 
@@ -382,7 +383,7 @@
    Touch / Coarse Pointer
    ≥44px targets; always-visible overlays (no hover available)
    =========================== */
-/* Scoped to :not(.pointer-fine) — see utils/pointerMode.js. The custom-property
+/* Scoped to :not(.pointer-fine) — see utils/pointerMode.ts. The custom-property
    block keeps real specificity (no :where()) so it still beats the plain :root
    defaults it is overriding; the rest is zero-specificity scoping. */
 @media (pointer: coarse) {

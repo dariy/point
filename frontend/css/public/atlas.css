@@ -136,7 +136,7 @@
 /* Two-click selection (mirrors /tags): the first click on a chip highlights its
    connections and dims the rest; a second click opens it. */
 .atlas-node--dim {
-    opacity: 0.16;
+    opacity: 0.36;
 }
 
 /* The selected chip stays filled (like hover) with a lift, even off-hover. */
@@ -382,6 +382,45 @@
     border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
 }
 
+/* The button that opens a collapsed legend. Only a short layer map shows it. */
+.atlas-legend__more {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    margin: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* A short layer map (a phone on its side) has no room for the legend column
+   under the zoom control. The legend becomes one button; open, it is one row. */
+@container atlas-layer-map (max-height: 320px) {
+    /* Right of the zoom control column (10px + 34px), so they never meet. */
+    .atlas-legend {
+        bottom: 8px;
+        left: 52px;
+        flex-direction: row;
+        align-items: center;
+        padding: 0;
+    }
+    .atlas-legend__more {
+        display: flex;
+    }
+    .atlas-legend:not(.is-open) .atlas-toggle {
+        display: none;
+    }
+    .atlas-legend .atlas-toggle {
+        width: auto;
+        min-height: 44px;
+    }
+}
+
 /* The legend custom props live on .atlas-map; mirror them here for the dots. */
 .atlas-legend {
     --atlas-tag: var(--tag-type-tag);
@@ -424,5 +463,486 @@
     }
     .atlas-hint {
         font-size: 0.78rem;
+    }
+}
+
+/* ===========================
+   Atlas sheet — the posts of one place (AtlasSheet.ts)
+   One row of square cards and a bar, at the bottom edge of .atlas-map.
+   The look copies the post-details sheet (immersive-sheet.css).
+   =========================== */
+.atlas-map {
+    --atlas-sheet-h: max(20dvh, 8.5rem);
+}
+
+/* An open sheet lifts the legend and the Leaflet attribution above it. */
+.atlas-legend,
+.atlas-map .leaflet-bottom {
+    transition: transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.atlas-map.has-sheet .atlas-legend,
+.atlas-map.has-sheet .leaflet-bottom {
+    transform: translateY(calc(-1 * var(--atlas-sheet-h)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-legend,
+    .atlas-map .leaflet-bottom {
+        transition: none;
+    }
+}
+
+.atlas-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 800; /* above the Leaflet panes and controls */
+    height: var(--atlas-sheet-h, max(20dvh, 8.5rem));
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    background: var(--surface-card, var(--bg-primary));
+    color: var(--text-primary);
+    border-top-left-radius: var(--border-radius-xl);
+    border-top-right-radius: var(--border-radius-xl);
+    box-shadow: 0 -8px 32px var(--color-black-alpha-30);
+    transform: translateY(calc(100% + 2rem));
+    visibility: hidden;
+    transition: transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1), visibility 0s linear 0.34s;
+    will-change: transform;
+}
+
+.atlas-sheet.is-open {
+    transform: translateY(0);
+    visibility: visible;
+    transition: transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1), visibility 0s;
+}
+
+[data-theme="dark"] .atlas-sheet {
+    background: var(--color-rgb-30-30-30-alpha-85, rgba(30, 30, 30, 0.92));
+    border: var(--border-width) solid var(--color-white-alpha-10);
+    border-bottom: none;
+}
+
+/* A tall hit area around the visual grip bar, so a finger can catch it. */
+.atlas-sheet__grip {
+    flex-shrink: 0;
+    width: 100%;
+    height: 1.1rem;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: grab;
+    touch-action: none;
+}
+
+.atlas-sheet__grip::before {
+    content: "";
+    display: block;
+    width: 2.5rem;
+    height: 0.3rem;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: var(--border-primary);
+}
+
+.atlas-sheet__main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0 var(--spacing-md) var(--spacing-xs);
+}
+
+.atlas-sheet__row {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.atlas-sheet__grid {
+    height: 100%;
+}
+
+.atlas-sheet__grid .loading-spinner {
+    margin: auto;
+}
+
+.atlas-sheet__bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    min-height: 2rem;
+    position: relative;
+}
+
+.atlas-sheet__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.atlas-sheet__pages {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* The collapsed state: a pill at the bottom centre opens the sheet again. */
+.atlas-sheet-pill {
+    position: absolute;
+    left: 50%;
+    bottom: var(--spacing-md);
+    transform: translateX(-50%);
+    z-index: 800;
+    max-width: calc(100% - 2 * var(--spacing-md));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: var(--spacing-xs) var(--spacing-md);
+    border: none;
+    border-radius: var(--border-radius-full, 999px);
+    background: var(--color-black-alpha-40);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: white;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
+.atlas-sheet-pill[hidden] {
+    display: none;
+}
+
+/* A phone is too narrow for the full grip and bar: the row would be 2 cards.
+   A slimmer grip and bar make the row shorter, so about 3 squares fit at 390px. */
+@media (max-width: 480px) {
+    .atlas-sheet__grip {
+        height: 0.9rem;
+    }
+
+    .atlas-sheet__bar {
+        min-height: 1.75rem;
+    }
+}
+
+/* ── The cards ───────────────────────────────────────────────────────────── */
+/* One flex row. Flex, not grid, so the hero span, the orphan expansion and the
+   zoom template of post-grid.css have no effect. Three classes beat
+   `body.grid-zoom .posts-grid`. */
+.atlas-sheet .atlas-sheet__grid .posts-grid,
+.atlas-sheet .grid-preview-placeholder .posts-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: var(--atlas-sheet-gap, 8px);
+    height: 100%;
+    grid-template-columns: none;
+    grid-template-rows: none;
+}
+
+.atlas-sheet .atlas-sheet__grid .post-card-slot,
+.atlas-sheet .grid-preview-placeholder .post-card-slot {
+    flex: 0 0 auto;
+    height: 100%;
+    width: auto;
+    aspect-ratio: 1;
+    min-height: 0;
+    grid-column: auto !important;
+}
+
+.atlas-sheet .atlas-sheet__grid .post-card,
+.atlas-sheet .grid-preview-placeholder .post-card {
+    min-height: 0;
+    border-radius: var(--border-radius);
+}
+
+/* Only the title shows: no excerpt, no meta row, no tag strip. */
+.atlas-sheet .post-card-content > :not(.post-card-title) {
+    display: none;
+}
+
+.atlas-sheet .post-card-title {
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+.atlas-sheet .video-play-indicator svg {
+    width: 2rem;
+    height: 2rem;
+}
+
+/* The ghost of a neighbour page sits on the row, not on the page padding. */
+.atlas-sheet .grid-preview-placeholder {
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.atlas-sheet #atlas-grid-mount.grid-promoted {
+    transform: translateZ(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-sheet,
+    .atlas-sheet.is-open {
+        transition: none;
+    }
+}
+
+/* Layer handle — the grab handle at the top of a post list. */
+.atlas-layer-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--atlas-layer-handle-h);
+    cursor: pointer;
+    touch-action: none;
+}
+
+.atlas-layer-handle {
+    position: relative;
+}
+
+.atlas-layer-handle__live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.atlas-layer-handle__grip {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: currentColor;
+    opacity: 0.3;
+}
+
+.atlas-layer-handle:hover .atlas-layer-handle__grip,
+.atlas-layer-handle:focus-visible .atlas-layer-handle__grip {
+    opacity: 0.6;
+}
+
+/* ── Layer: map + list, map only ─────────────────────────────────────────── */
+/* body[data-atlas-layer] is the only input. The header (z 110) stays above the
+   map (z 100), so the map slides down from behind it. The card row and the
+   handle sit above the map, below the header. Bottom to top: the footer
+   (--atlas-layer-footer-h, css/public/footer.css), the card row, the handle,
+   the map. --atlas-layer-list-h is the height under the map, footer included. */
+/* Registered as a length, so getComputedStyle gives px and
+   atlasLayerGesture.ts::positions reads the same row height. */
+@property --atlas-layer-row-h {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 120px;
+}
+
+body {
+    --atlas-layer-handle-h: 30px;
+    --atlas-layer-row-h: clamp(96px, 22dvh, 220px);
+    --atlas-layer-list-h: calc(var(--atlas-layer-footer-h, 0px) + var(--atlas-layer-handle-h) + var(--atlas-layer-row-h));
+}
+
+/* The map takes no pull-to-refresh or scroll chaining while it is open. */
+html:has(> body:is([data-atlas-layer="mapList"], [data-atlas-layer="map"])) {
+    overscroll-behavior: none;
+}
+
+/* The edge page-arrows float over the map; the footer paginator pages the strip. */
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"]) .page-nav-arrow {
+    display: none;
+}
+
+.atlas-layer-map {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--atlas-layer-top, var(--atlas-layer-header-h, 0));
+    bottom: 0;
+    z-index: 100;
+    background: var(--bg-secondary, var(--bg-primary));
+    container: atlas-layer-map / size;
+    transform: translateY(-100%);
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.28s ease, visibility 0s linear 0.28s;
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-map,
+body[data-atlas-layer="map"] .atlas-layer-map {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 0.28s ease;
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-map {
+    bottom: var(--atlas-layer-list-h);
+}
+
+/* The map runs to the bottom of the viewport; the handle floats over it. */
+body[data-atlas-layer="map"] .atlas-layer-map {
+    bottom: var(--atlas-layer-footer-h, 0px);
+}
+
+body[data-atlas-layer="mapList"],
+body[data-atlas-layer="map"] {
+    overflow: hidden;
+}
+
+/* The handle and the card row become one strip fixed at the bottom. */
+body[data-atlas-layer="mapList"] .atlas-layer-handle,
+body[data-atlas-layer="map"] .atlas-layer-handle {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 105;
+    background: var(--bg-primary);
+    border-top: var(--border-width) solid var(--border-primary);
+}
+
+body[data-atlas-layer="mapList"] .atlas-layer-handle {
+    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h));
+}
+
+body[data-atlas-layer="map"] .atlas-layer-handle {
+    bottom: var(--atlas-layer-footer-h, 0px);
+}
+
+:is(body[data-atlas-layer="mapList"], body[data-atlas-dragging]) #grid-mount {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--atlas-layer-footer-h, 0px);
+    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h) - var(--atlas-layer-footer-h, 0px));
+    z-index: 105;
+    display: block;
+    background: var(--bg-primary);
+    padding: var(--atlas-layer-gap, 8px);
+    box-sizing: border-box;
+    overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: contain;
+}
+
+/* The card row: one page of cards that fits the strip. Its paginator is in the
+   footer line, so the in-flow one hides in every layer state. A drag shows the
+   layout of the state it snaps to (body[data-atlas-drag-target]), so the
+   release changes nothing on screen. */
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) #pagination-mount {
+    display: none;
+}
+
+/* In `map` no card shows: the handle is all that is left of the list. */
+body[data-atlas-layer="map"] #grid-mount {
+    display: none;
+}
+
+/* One flex row of cards. Flex, not grid, so the zoom template and the hero span
+   of post-grid.css have no effect. gridFit.ts::stripPerPage counts square cards;
+   the cards then grow to fill the row. A card is at most two rows wide, which a
+   full page never reaches, so a short last page does not stretch one card. */
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .posts-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--atlas-layer-gap, 8px);
+    height: 100%;
+    grid-template-columns: none;
+    grid-template-rows: none;
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card-slot {
+    flex: 1 1 0;
+    height: 100%;
+    width: auto;
+    min-width: 0;
+    max-width: calc(2 * var(--atlas-layer-row-h));
+    aspect-ratio: auto;
+    min-height: 0;
+    grid-column: auto !important;
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card {
+    min-height: 0;
+    border-radius: var(--border-radius);
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card-content > :not(.post-card-title) {
+    display: none;
+}
+
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount .post-card-title {
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+/* Free drag: the map, the handle and the card row share one height,
+   --atlas-layer-list-h, which the gesture sets. These rules follow the state
+   rules above and win on equal specificity, so a drag from any state looks alike. */
+body[data-atlas-dragging] {
+    overflow: hidden;
+}
+
+body[data-atlas-dragging] .atlas-layer-map {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    bottom: var(--atlas-layer-list-h);
+    transition: none;
+}
+
+body[data-atlas-dragging] .atlas-layer-handle {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 105;
+    background: var(--bg-primary);
+    border-top: var(--border-width) solid var(--border-primary);
+    bottom: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h));
+}
+
+body[data-atlas-dragging] #grid-mount {
+    display: block;
+}
+
+/* After release the handle slides to its snap position. */
+body[data-atlas-snapping] .atlas-layer-map,
+body[data-atlas-snapping] .atlas-layer-handle,
+body[data-atlas-snapping] #grid-mount {
+    transition: bottom 0.2s ease-out, height 0.2s ease-out;
+}
+
+/* The frame the state changes after a drag: the layout is already in place, so
+   the state rules must not animate the map or the handle a second time. */
+body[data-atlas-settling] .atlas-layer-map,
+body[data-atlas-settling] .atlas-layer-handle,
+body[data-atlas-settling] #grid-mount {
+    transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body[data-atlas-snapping] .atlas-layer-map,
+    body[data-atlas-snapping] .atlas-layer-handle,
+    body[data-atlas-snapping] #grid-mount {
+        transition: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-layer-map,
+    body[data-atlas-layer="mapList"] .atlas-layer-map,
+    body[data-atlas-layer="map"] .atlas-layer-map {
+        transition: none;
     }
 }

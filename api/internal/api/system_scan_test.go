@@ -164,12 +164,10 @@ func TestScanMediaImport_PathNotExist(t *testing.T) {
 	defer func() { _ = repo.Close() }()
 	settingsSvc := services.NewSettingsService(repo)
 
-	ctx := context.Background()
 	tmpDir2 := t.TempDir()
 	systemSvc2 := services.NewSystemService(repo, tmpDir2, "")
 	cacheSvc2 := services.NewCacheService(tmpDir2)
-	_ = settingsSvc.SetSecret(ctx, "photo_library_path", "/nonexistent/does/not/exist")
-	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, systemSvc2, cacheSvc2, nil, tmpDir2, "1.0")
+	h2 := NewSystemHandler(repo, nil, nil, settingsSvc, nil, systemSvc2, cacheSvc2, nil, tmpDir2, "1.0").WithPhotoLibraryPath("/nonexistent/does/not/exist")
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	if err := h2.ScanMediaImport(e.NewContext(req, rec)); err != nil {
@@ -203,9 +201,7 @@ func TestScanMediaImport_WithFiles(t *testing.T) {
 	}, settingsSvc, tagSvc)
 	systemSvc := services.NewSystemService(repo, tmpDir, "")
 	cacheSvc := services.NewCacheService(tmpDir)
-	ctx := context.Background()
-	_ = settingsSvc.SetSecret(ctx, "photo_library_path", importDir)
-	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, services.NewAuthService(repo), tmpDir, "1.2.3")
+	h := NewSystemHandler(repo, mediaSvc, postSvc, settingsSvc, tagSvc, systemSvc, cacheSvc, services.NewAuthService(repo), tmpDir, "1.2.3").WithPhotoLibraryPath(importDir)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()

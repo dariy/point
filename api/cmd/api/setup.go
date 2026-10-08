@@ -90,7 +90,7 @@ func runSetupCLI(repo repository.Repository, svcs *AppServices) {
 		{"show_view_counts", "false", "boolean"},
 
 		{"tags_visibility", "hidden", "string"},
-		{"enable_backup", "false", "boolean"},
+		{"enable_backup", "true", "boolean"},
 	}
 
 	for _, s := range seedSettings {

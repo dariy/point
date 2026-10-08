@@ -11,19 +11,35 @@ import (
 	"time"
 
 	"point-api/internal/models"
+	"point-api/internal/plugins"
 	"point-api/internal/repository"
+	"point-api/internal/utils"
 )
+
+// API key scopes. A general key has the access of its owner; a lightroom key
+// may only create new media, posts and tags (see api.lightroomAllowed).
+const (
+	ScopeGeneral   = "general"
+	ScopeLightroom = "lightroom"
+)
+
+// ValidScope reports whether s names a known API key scope.
+func ValidScope(s string) bool { return s == ScopeGeneral || s == ScopeLightroom }
 
 type ApiKeyService struct {
 	repo repository.Repository
+	// settings resolves the api-keys plugin toggle on every validation. The
+	// dependency is required rather than optional (WithX) on purpose: an
+	// unset collaborator would fail open, and this one guards authentication.
+	settings *SettingsService
 }
 
-func NewApiKeyService(repo repository.Repository) *ApiKeyService {
-	return &ApiKeyService{repo: repo}
+func NewApiKeyService(repo repository.Repository, settings *SettingsService) *ApiKeyService {
+	return &ApiKeyService{repo: repo, settings: settings}
 }
 
 // GenerateAPIKey generates a new high-entropy API key, stores its hash, and returns the raw key.
-func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name string, expiresAt *time.Time) (string, models.ApiKey, error) {
+func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name, scope string, expiresAt *time.Time) (string, models.ApiKey, error) {
 	// Generate raw key: point_pat_ + 32 random bytes hex
 	// 32 bytes hex = 64 chars. Total length = 10 + 64 = 74 chars.
 	b := make([]byte, 32)
@@ -38,6 +54,13 @@ func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name s
 	// Prefix: first 16 chars of the raw key (point_pat_ + 6 chars)
 	prefix := rawKey[:16]
 
+	if scope == "" {
+		scope = ScopeGeneral
+	}
+	if !ValidScope(scope) {
+		return "", models.ApiKey{}, wrapKind(ErrInvalidInput, fmt.Errorf("unknown API key scope %q", scope))
+	}
+
 	var expiresAtNull sql.NullTime
 	if expiresAt != nil {
 		expiresAtNull = sql.NullTime{Time: *expiresAt, Valid: true}
@@ -49,6 +72,7 @@ func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name s
 		KeyHash:   keyHash,
 		Prefix:    prefix,
 		ExpiresAt: expiresAtNull,
+		Scope:     scope,
 	}
 
 	apiKey, err := s.repo.CreateAPIKey(ctx, params)
@@ -60,7 +84,20 @@ func (s *ApiKeyService) GenerateAPIKey(ctx context.Context, userID int64, name s
 }
 
 // ValidateAPIKey verifies a raw API key and returns the associated principal.
+//
+// The api-keys plugin toggle is enforced here rather than in AuthMiddleware
+// because three callers reach this method — AuthMiddleware, OptionalAuthMiddleware
+// and the MCP bearer path — and disabling the plugin must close all three.
+// RequirePlugin only 404s the /api/api-keys management routes, so without this
+// check a key minted while the plugin was on kept authenticating after it was
+// turned off.
 func (s *ApiKeyService) ValidateAPIKey(ctx context.Context, rawKey string) (models.GetAPIKeyByHashRow, error) {
+	// Checked before the hash lookup: a disabled plugin should cost nothing and
+	// touch nothing, not even the key's last-used timestamp.
+	if err := s.apiKeysEnabled(ctx); err != nil {
+		return models.GetAPIKeyByHashRow{}, err
+	}
+
 	hash := sha256.Sum256([]byte(rawKey))
 	keyHash := hex.EncodeToString(hash[:])
 
@@ -84,13 +121,30 @@ func (s *ApiKeyService) ValidateAPIKey(ctx context.Context, rawKey string) (mode
 	}
 
 	// Update last used timestamp
-	go func() {
+	utils.SafeGo("apikey: touch last-used", func() {
 		// Using a background context for the async update to not block the current request
 		// or fail if the request context is cancelled.
 		_ = s.repo.TouchAPIKeyLastUsed(context.Background(), apiKey.ID)
-	}()
+	})
 
 	return apiKey, nil
+}
+
+// apiKeysEnabled reports whether the api-keys plugin is on, as an error so the
+// caller can return it unchanged. A settings read that fails closes the door:
+// every caller maps a non-nil error to 401, which is the safe direction for an
+// authentication gate.
+func (s *ApiKeyService) apiKeysEnabled(ctx context.Context) error {
+	// Snapshot, not GetAllSettings: this runs on every authenticated request
+	// and only reads. Same choice as api.RequirePlugin.
+	all, err := s.settings.Snapshot(ctx)
+	if err != nil {
+		return wrapKind(ErrUnauthenticated, errors.New("cannot resolve plugin state"))
+	}
+	if !plugins.IsEnabled("api-keys", all) {
+		return wrapKind(ErrUnauthenticated, errors.New("API keys are disabled"))
+	}
+	return nil
 }
 
 func (s *ApiKeyService) ListKeys(ctx context.Context, userID int64) ([]models.ApiKey, error) {

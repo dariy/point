@@ -1,0 +1,704 @@
+/**
+ * Public site header — blog logo, unified breadcrumb (tag path + active
+ * facets), and nav buttons.
+ */
+
+import { Component } from '../../components/Component.ts';
+import { SiteCrumb } from '../../components/public/SiteCrumb.ts';
+import { getSettings, getTheme, getUser, setTheme } from '../../store.ts';
+import { pluginHost } from '../../core/pluginHost.ts';
+import { html, setHTML, navigate, raw, sharePost } from '../../utils/helpers.ts';
+import { listPosts } from '../../api/posts.ts';
+import { listTags } from '../../api/tags.ts';
+import { APP_LOGO_SVG, EDIT_SVG, SUN_SVG, MOON_SVG, SEARCH_SVG, MENU_SVG, SHARE_SVG, EXPAND_SVG } from '../../utils/icons.ts';
+import { ViewContext } from '../../utils/viewContext.ts';
+import { hideFlyout } from '../../utils/tagFlyout.ts';
+import { FOLD_ORDER, HeaderFold } from '../../utils/headerFold.ts';
+import type { Slot, StoreSettings } from '../../utils/helpers.ts';
+import type { NavTagNode } from '../../api/nav.ts';
+import type { Post } from '../../api/posts.ts';
+import type { Tag } from '../../api/tags.ts';
+
+/** Rows the search typeahead shows per section. */
+const TYPEAHEAD_POSTS = 3;
+/** Overlap (px) the nav tolerates from the zone before it; see _navUncut. */
+const NAV_FIT_MARGIN = 1;
+const TYPEAHEAD_TAGS = 5;
+
+/**
+ * One tag-ancestry crumb. The last is the current tag, which may carry a slug
+ * for a self-link.
+ */
+export interface HeaderCrumb {
+  name: string;
+  slug?: string;
+  href?: string;
+  is_hidden?: boolean;
+  tooltip?: string;
+}
+
+/**
+ * What a page hands the header slot. The header passes all of it on to the
+ * breadcrumbs and nav-menu plugins it fills, which is why some of it is only
+ * read there.
+ */
+export interface PublicHeaderProps {
+  /** Public settings; reads blog_title, blog_subtitle and logo_url. */
+  settings?: StoreSettings;
+  /** Current pathname, for active nav highlighting. */
+  currentPath?: string;
+  /** Nav tag tree, for the crumbs' child dropdowns. */
+  navTags?: NavTagNode[];
+  /** Active tag, for the flyout highlight. */
+  currentTagSlug?: string;
+  /** Tag-ancestry crumbs. */
+  breadcrumb?: HeaderCrumb[];
+  /** Post / result count, shown as a trailing crumb. */
+  total?: number;
+  /** Suppress the year facet crumb — the timeline shows it. */
+  timelineVisible?: boolean;
+  /** Admin edit link for the page's post or tag. */
+  editUrl?: string | null;
+  /** Offer the share button. */
+  showShare?: boolean;
+  /** Offer the immersive toggle. */
+  onToggleImmersive?: (() => void) | null;
+  /** Mount the post list's distraction-free toggle among the nav actions. */
+  distractionToggle?: boolean;
+  /**
+   * Markup inserted as a middle header item (between breadcrumb and action
+   * buttons; wraps to its own full-width row on mobile), e.g. a page control.
+   * No caller passes one today.
+   */
+  slot?: Slot;
+  /**
+   * Context for the `timeline` slot. When set, the header renders the timeline
+   * between the breadcrumbs and the nav and fills it itself, so the whole
+   * header is one row. Pages that show no timeline leave it unset.
+   */
+  timeline?: object | null;
+  /** Receives the timeline handle once the slot fill resolves. */
+  onTimeline?: ((handle: any) => void) | null;
+}
+
+/** A slot fill's mount handle, as plugins return it. */
+interface SlotMount {
+  unmount?: () => void;
+}
+
+export class PublicHeader extends Component<PublicHeaderProps> {
+  _hasTrail = false;
+  _group: HTMLElement | null = null;
+  _inner: HTMLElement | null = null;
+  _slotMounts: SlotMount[] = [];
+  _docListeners: [string, EventListener][] = [];
+  _renderGen = 0;
+  _fold: HeaderFold | null = null;
+  _dfPlugin: SlotMount | null = null;
+  _typeaheadActive = false;
+  render() {
+    const {
+      settings = {},
+      breadcrumb = [],
+      editUrl = null,
+      showShare = false,
+      onToggleImmersive = null,
+      // A markup slot: html`` output goes in as markup, a plain string is
+      // escaped as text. No caller passes one today.
+      slot = ''
+    } = this.props;
+    const user = getUser();
+    const subtitle = settings.blog_subtitle || '';
+    const logoHtml = settings.logo_url ? html`<img class="app-logo" src="${settings.logo_url}" alt="${settings.blog_title || 'Logo'}" decoding="async">` : raw(APP_LOGO_SVG);
+    const shareButtonHtml = showShare ? html`<button type="button" class="header-action-btn share-btn" title="Share" aria-label="Share">
+           ${raw(SHARE_SVG)}
+         </button>` : '';
+    const immersiveToggleHtml = onToggleImmersive ? html`<button type="button" class="header-action-btn immersive-toggle-btn"
+                 title="Immersive mode" aria-label="Immersive mode">
+           ${raw(EXPAND_SVG)}
+         </button>` : '';
+    const vc = ViewContext.current();
+
+    // The context zone holds two renderers: the site crumb (ours — identity,
+    // and the only crumb left when the breadcrumbs plugin is off) and the trail
+    // the plugin fills. Each needs its own container because a Component owns
+    // its container's innerHTML; both wrappers are `display: contents`, so the
+    // crumbs stay direct flex children of `.site-breadcrumb`.
+    this._hasTrail = pluginHost.hasSlot('breadcrumbs') && !!(breadcrumb.length || vc.years && !this.props.timelineVisible || vc.query);
+    const crumbHtml = html`<nav class="site-breadcrumb" aria-label="Breadcrumb">
+            <span class="site-crumb-mount"></span>
+            <span class="breadcrumb-trail"></span>
+          </nav>`;
+
+    // ICON BUTTON GUIDANCE
+    // All icon-only buttons in the header use the `header-action-btn` class.
+    //   <a class="header-action-btn" href="..." aria-label="...">  — for navigation
+    //   <button class="header-action-btn" type="button" aria-label="...">  — for actions (no navigation)
+    // The `.theme-toggle` class is kept as an alias and for sun/moon icon visibility logic.
+    const editButtonHeader = user && editUrl ? html`<a href="${editUrl}" class="header-action-btn edit-btn-header" title="Edit" aria-label="Edit post">
+           ${raw(EDIT_SVG)}
+         </a>` : '';
+    const editButtonBurger = user && editUrl ? html`<a href="${editUrl}" class="header-action-btn" title="Edit" aria-label="Edit post">
+           ${raw(EDIT_SVG)}
+         </a>` : '';
+    const searchPlaceholder = vc.tag ? `Search ${vc.tag}...` : "Search...";
+    return html`
+      <div class="site-header-group">
+        <div id="search-typeahead-mount" class="search-typeahead-mount"></div>
+        <div class="site-header-inner">
+
+          <!-- Zone: identity — logo (+ subtitle); the textual blog title is the
+               site crumb at the head of the context zone, so "title → logo"
+               folds there (stage 50). -->
+          <div class="site-identity">
+            <a href="/" class="site-title-link">
+              <h1 class="site-title">
+                ${logoHtml}
+              </h1>
+              ${!breadcrumb.length && !vc.years && !vc.query && subtitle ? html`<p class="site-subtitle">${subtitle}</p>` : ''}
+            </a>
+          </div>
+
+          <!-- Zone: context — breadcrumbs + count (the only elastic zone) -->
+          ${crumbHtml}
+          ${immersiveToggleHtml || shareButtonHtml || editButtonHeader ? html`<div class="branding-actions">
+            ${immersiveToggleHtml}
+            ${shareButtonHtml}
+            ${editButtonHeader}
+          </div>` : ''}
+
+          <!-- Zone: timeline — fills the gap between the context and the nav. -->
+          ${this.props.timeline ? html`<div class="site-timeline" id="timeline-mount"></div>` : ''}
+
+          ${slot ? html`<div class="site-nav-slot">${slot}</div>` : ''}
+
+          <!-- Zone: nav — visible menu links (filled by the nav-menu plugin);
+               folds into the burger as a whole (fold-nav). -->
+          <nav class="site-nav" aria-label="Site menu">
+            <div class="site-nav-items"></div>
+          </nav>
+
+          <!-- Zone: tools — search, burger; last to fold, never folds away. -->
+          <div class="site-tools">
+
+            <form class="header-search-form" id="header-search" role="search" action="/search" method="get">
+              <input type="search" name="q" placeholder="${searchPlaceholder}" aria-label="Search posts" tabindex="-1">
+              <button type="button" aria-label="Toggle search" class="header-action-btn search-toggle-btn">
+                ${raw(SEARCH_SVG)}
+              </button>
+            </form>
+
+            <!-- Burger (shown when fold-nav active) -->
+            <div class="nav-burger" id="nav-burger">
+              <button class="header-action-btn burger-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="burger-dropdown">
+                ${raw(MENU_SVG)}
+              </button>
+              <div class="burger-dropdown" id="burger-dropdown">
+                <form class="burger-search-form" action="/search" method="get" role="search">
+                  ${raw(SEARCH_SVG)}
+                  <input type="search" name="q" placeholder="${searchPlaceholder}" autocomplete="off">
+                </form>
+
+                <div class="burger-buttons"></div>
+
+                <div class="burger-tags-slot" id="burger-tags-slot"></div>
+
+                <div class="burger-sitemap"></div>
+
+                <div class="burger-actions">
+                  <button class="theme-toggle" id="burger-theme-toggle" type="button" aria-label="Toggle theme">
+                    <span class="icon-sun">${raw(SUN_SVG)}</span>
+                    <span class="icon-moon">${raw(MOON_SVG)}</span>
+                  </button>
+                  ${immersiveToggleHtml}
+                  ${shareButtonHtml}
+                  ${editButtonBurger}
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>`;
+  }
+  afterRender() {
+    const {
+      onToggleImmersive
+    } = this.props;
+    this.container.querySelectorAll('.immersive-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        onToggleImmersive?.();
+      });
+    });
+    this.container.querySelectorAll('.share-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        const settings = getSettings() || {};
+        sharePost({
+          title: settings.blog_title || document.title,
+          url: window.location.href
+        });
+      });
+    });
+    const group = this.$('.site-header-group')!;
+    this._group = group;
+    this._inner = this.$('.site-header-inner');
+
+    // Render generation: slot fills are async, so a fill that resolves after a
+    // re-render belongs to a dead header and is unmounted on arrival.
+    this._slotMounts = [];
+    this._docListeners = [];
+    const gen = this._renderGen = (this._renderGen || 0) + 1;
+
+    // One fold controller owns the header's space; components and plugins
+    // contribute ordered fold ops (see utils/headerFold.ts for the order map).
+    this._fold = new HeaderFold({
+      observe: group,
+      fits: () => this._rowFits()
+    });
+    this._registerCoreFolds();
+
+    // Shell slots inside the header. Slot content changes the row's width, so
+    // each fill is followed by a relayout. The nav-menu plugin receives the
+    // whole inner row: it renders into `.site-nav-items` and the burger slots,
+    // and registers its own links → More fold stage (order 30) via `fold`.
+    //
+    // The mounts are kept so `_teardownRender` can unmount them: these plugins
+    // hold store subscriptions and document-level listeners, and a stale one
+    // acts on the *previous* render's detached DOM — which is how a leaked
+    // nav-menu ended up closing every header dropdown the moment it opened.
+    // The blog title. Mounted before the trail fill so it is present whatever
+    // the breadcrumbs plugin does — including not existing.
+    this.mountChild(SiteCrumb, '.site-crumb-mount', {
+      settings: this.props.settings || {},
+      hasTrail: this._hasTrail,
+      group,
+      fold: this._fold
+    });
+    if (pluginHost.hasSlot('breadcrumbs')) {
+      pluginHost.fill('breadcrumbs', this.$('.breadcrumb-trail'), {
+        ...this.props,
+        group: this._group
+      }).then(comps => {
+        this._keepSlotMounts(gen, comps);
+        this._fold?.relayout();
+      });
+    }
+    if (this.props.timeline && pluginHost.hasSlot('timeline')) {
+      // The pills arrive after a fetch and change width on each render.
+      this.$('.site-timeline')?.addEventListener('timeline:render', () => this._fold?.relayout());
+      pluginHost.fill('timeline', this.$('.site-timeline'), this.props.timeline).then(comps => {
+        this._keepSlotMounts(gen, comps);
+        if (gen === this._renderGen && !this._unmounted && comps[0]) this.props.onTimeline?.(comps[0]);
+        this._fold?.relayout();
+      });
+    }
+    if (pluginHost.hasSlot('nav-menu')) {
+      pluginHost.fill('nav-menu', this._inner, {
+        ...this.props,
+        fold: this._fold
+      }).then(comps => {
+        this._keepSlotMounts(gen, comps);
+        this._fold?.relayout();
+      });
+    }
+
+    // Distraction-free toggle: the post list asks for it (distractionToggle);
+    // mount it as the first icon in the nav action row. Its own mount keeps it
+    // out of the fold logic and lets the plugin CSS keep it visible when
+    // distraction-free hides the rest of the header.
+    if (this.props.distractionToggle && pluginHost.hasSlot('post-list-tools')) {
+      const tools = this.$('.site-tools');
+      if (tools) {
+        const holder = document.createElement('div');
+        holder.className = 'distraction-tool';
+        tools.insertBefore(holder, tools.firstChild);
+        // Keep the mount so beforeUnmount can tear it down — the plugin sets
+        // global state (body.distraction-free class, button portalled to body)
+        // that survives our container clear and would otherwise lock the site
+        // in full-screen mode when navigating off the list.
+        pluginHost.fill('post-list-tools', holder, {}).then(comps => {
+          if (this._unmounted) comps[0]?.unmount?.();else this._dfPlugin = comps[0];
+        });
+      }
+    }
+
+    // Theme toggle in the burger menu (the primary toggle now lives in the footer)
+    this.$('#burger-theme-toggle')?.addEventListener('click', () => {
+      const current = getTheme() || 'auto';
+      setTheme(current === 'dark' ? 'light' : 'dark');
+    });
+
+    // Header search (expandable)
+    const searchForm = this.$('#header-search');
+    if (searchForm) {
+      const input = searchForm.querySelector('input[type="search"]') as HTMLInputElement;
+      const toggleBtn = searchForm.querySelector('.search-toggle-btn')!;
+      const closeSearch = () => {
+        searchForm.classList.remove('is-active');
+        input.tabIndex = -1;
+        input.blur();
+      };
+      const submitSearch = () => {
+        const q = input.value.trim();
+        if (q) {
+          this._saveRecentSearch(q);
+          ViewContext.update({
+            query: q
+          });
+          input.value = '';
+        }
+        this._hideTypeahead();
+        closeSearch();
+      };
+      let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+      input.addEventListener('input', () => {
+        const q = input.value.trim();
+        clearTimeout(debounceTimer);
+        if (q.length >= 2) {
+          debounceTimer = setTimeout(() => this._showTypeahead(q, input), 300);
+        } else {
+          this._hideTypeahead();
+        }
+      });
+      input.addEventListener('focus', () => {
+        if (!input.value.trim()) this._showRecentSearches(input);
+      });
+      toggleBtn.addEventListener('click', e => {
+        e.preventDefault();
+        if (!searchForm.classList.contains('is-active')) {
+          searchForm.classList.add('is-active');
+          // Expand the search input to fill up to the breadcrumb's left edge
+          const breadcrumbEl = this.$('.site-breadcrumb');
+          if (breadcrumbEl) {
+            const formRect = searchForm.getBoundingClientRect();
+            const bcRect = breadcrumbEl.getBoundingClientRect();
+            input.style.setProperty('--search-width', `${formRect.right - bcRect.left}px`);
+          }
+          input.tabIndex = 0;
+          input.focus();
+        } else {
+          submitSearch();
+        }
+      });
+      searchForm.addEventListener('submit', e => {
+        e.preventDefault();
+        submitSearch();
+      });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeSearch();
+      });
+      this._onDocument('click', e => {
+        if (searchForm.classList.contains('is-active') && !searchForm.contains(e.target as Node)) closeSearch();
+      });
+    }
+
+    // Burger search (always-visible full-width input)
+    const burgerSearchForm = this.$('.burger-search-form');
+    if (burgerSearchForm) {
+      burgerSearchForm.addEventListener('submit', e => {
+        e.preventDefault();
+        const q = (burgerSearchForm.querySelector('input[type="search"]') as HTMLInputElement).value.trim();
+        if (q) ViewContext.update({
+          query: q
+        });
+        this._closeBurger();
+      });
+    }
+
+    // Burger toggle + outside-click close
+    const navBurger = this.$('#nav-burger');
+    if (navBurger) {
+      const burgerBtn = navBurger.querySelector('.burger-toggle');
+      burgerBtn?.addEventListener('click', e => {
+        e.stopPropagation();
+        const isOpen = navBurger.classList.contains('is-open');
+        navBurger.classList.toggle('is-open', !isOpen);
+        burgerBtn.setAttribute('aria-expanded', String(!isOpen));
+        if (!isOpen) {
+          const input = (navBurger.querySelector('input[type="search"]') as HTMLElement|null);
+          if (input) setTimeout(() => input.focus(), 100);
+        }
+      });
+      this._onDocument('click', e => {
+        if (!navBurger.contains(e.target as Node)) this._closeBurger();
+        else if ((e.target as Element).closest?.('a[href]')) this._closeBurger();
+      });
+      this._onDocument('keydown', e => {
+        if ((e as KeyboardEvent).key === 'Escape' && navBurger.classList.contains('is-open')) {
+          this._closeBurger();
+          (burgerBtn as HTMLElement | null)?.focus();
+        }
+      });
+      this._onDocument('popstate', () => this._closeBurger());
+    }
+
+    // Initial fold pass (HeaderFold's own ResizeObserver keeps it current).
+    this._fold.relayout();
+  }
+
+  /**
+   * A document-level listener owned by this render, removed by `_teardownRender`.
+   * Header listeners that outlive their DOM keep firing against detached nodes.
+   *
+   * Capture phase: these are dismiss handlers, and content below the header
+   * stops propagation on some taps (a photo card's first tap reveals its
+   * overlay), which would otherwise leave the burger or search stuck open.
+   */
+  _onDocument(type: string, handler: EventListener) {
+    document.addEventListener(type, handler, true);
+    this._docListeners.push([type, handler]);
+  }
+
+  /** Keep a slot fill's mounts, or unmount them if their render is already gone. */
+  _keepSlotMounts(gen: number, comps: SlotMount | SlotMount[] | null) {
+    const mounts = ([] as SlotMount[]).concat(comps || []).filter(Boolean);
+    if (gen !== this._renderGen || this._unmounted) {
+      mounts.forEach(m => m.unmount?.());
+      return;
+    }
+    this._slotMounts.push(...mounts);
+  }
+
+  /** Release everything this render attached outside its own container. */
+  _teardownRender() {
+    this._slotMounts?.forEach(m => m.unmount?.());
+    this._slotMounts = [];
+    this._docListeners?.forEach(([type, handler]) => document.removeEventListener(type, handler, true));
+    this._docListeners = [];
+    this._fold?.destroy();
+    this._fold = null;
+  }
+
+  /**
+   * Register the header's own fold stages. Order slot 30 (nav links → More)
+   * belongs to the nav-menu plugin; see utils/headerFold.ts for the full map.
+   */
+  _registerCoreFolds() {
+    const group = this._group;
+    const fold = this._fold;
+    if (!group || !fold) return;
+    const checkEllipsis = () => {
+      const folded = group.querySelectorAll('.crumb-pair.folded');
+      folded.forEach(p => p.classList.remove('show-ellipsis'));
+      if (folded.length) folded[folded.length - 1].classList.add('show-ellipsis');
+    };
+
+    // 10 — ornament: the subtitle goes first.
+    fold.register(FOLD_ORDER.subtitle, {
+      reset: () => group.classList.remove('fold-title'),
+      ops: () => [() => group.classList.add('fold-title')]
+    });
+
+    // 32 — the timeline takes its short form (active pill + year spinner)
+    // before any crumb folds.
+    fold.register(FOLD_ORDER.timeline, {
+      reset: () => group.classList.remove('fold-timeline'),
+      ops: () => [() => group.classList.add('fold-timeline')]
+    });
+
+    // 35 — history (after nav links fold at 30): facet pairs, then ancestor tag pairs, left to right. The
+    // blog-title (site) pair is spared here; it folds at 50.
+    fold.register(FOLD_ORDER.ancestorCrumbs, {
+      reset: () => {
+        group.querySelectorAll('.crumb-pair.folded').forEach(p => {
+          p.classList.remove('folded', 'show-ellipsis');
+        });
+        // A crumb dropdown anchored to a now-reflowing crumb would be
+        // mispositioned; close it so it re-opens against the new layout.
+        hideFlyout();
+      },
+      ops: () => {
+        const pairs = [...group.querySelectorAll('.crumb-pair')];
+        const facets = pairs.filter(p => p.classList.contains('crumb-facet-pair'));
+        const tags = pairs.filter(p => !p.classList.contains('crumb-facet-pair') && p.id !== 'site-crumb-pair');
+        return [...facets, ...tags].map(p => () => {
+          p.classList.add('folded');
+          checkEllipsis();
+        });
+      }
+    });
+
+    // 40 — the nav zone collapses into the burger.
+    fold.register(FOLD_ORDER.nav, {
+      // Don't close an open burger here: every relayout runs reset, and opening
+      // the burger dropdown can itself trigger one (a scrollbar appearing shifts
+      // the observed width), which would slam the menu shut the instant it
+      // opens. When the nav genuinely un-folds, `.nav-burger` is display:none
+      // via CSS, so a lingering is-open state stays invisible until it refolds.
+      reset: () => group.classList.remove('fold-nav'),
+      ops: () => [() => group.classList.add('fold-nav')]
+    });
+
+    // 50 — brand: the blog-title crumb folds, leaving the logo as the brand.
+    // (Unfolding is covered by stage 35's reset, which unfolds every pair.)
+    fold.register(FOLD_ORDER.brand, {
+      ops: () => {
+        const sitePair = group.querySelector('#site-crumb-pair');
+        return sitePair ? [() => {
+          sitePair.classList.add('folded');
+          checkEllipsis();
+        }] : [];
+      }
+    });
+
+    // 60 — last resort: ellipsize the current crumb (click opens the full path).
+    fold.register(FOLD_ORDER.currentCrumb, {
+      reset: () => group.classList.remove('fold-current'),
+      ops: () => [() => group.classList.add('fold-current')]
+    });
+
+  }
+
+  /**
+   * The row fits when the tools zone (always the last, rightmost zone) ends
+   * inside the inner container and hasn't wrapped to a second row (the inner
+   * row flex-wraps on narrow screens for the middle slot).
+   */
+  _rowFits() {
+    const inner = this._inner;
+    if (!inner) return true;
+    void inner.offsetWidth; // force reflow before measuring
+    const tools = inner.querySelector('.site-tools');
+    const first = inner.firstElementChild;
+    if (!tools || !first || tools === first) return true;
+    const cs = getComputedStyle(inner);
+    const right = inner.getBoundingClientRect().right - (parseFloat(cs.paddingRight) || 0);
+    const toolsRect = tools.getBoundingClientRect();
+    const firstRect = first.getBoundingClientRect();
+    if (toolsRect.top - firstRect.top > firstRect.height / 2) return false;
+    if (toolsRect.right > right + 1) return false;
+    return this._navUncut();
+  }
+
+  /**
+   * True when no nav link is cut: every item ends inside the nav, and the nav
+   * starts after the zone before it. A cut link folds the nav into the burger;
+   * empty space is better than a half-visible link.
+   */
+  _navUncut() {
+    const nav = this._inner?.querySelector<HTMLElement>('.site-nav');
+    if (!nav) return true;
+    const navRect = nav.getBoundingClientRect();
+    if (!navRect.width) return true;
+    if (nav.scrollWidth > nav.clientWidth + 1) return false;
+    for (const item of nav.querySelectorAll('.site-nav-items > *')) {
+      const r = item.getBoundingClientRect();
+      if (r.width && (r.left < navRect.left - 1 || r.right > navRect.right + 1)) return false;
+    }
+    let prev = nav.previousElementSibling;
+    while (prev && !prev.getBoundingClientRect().width) prev = prev.previousElementSibling;
+    return !prev || prev.getBoundingClientRect().right <= navRect.left + NAV_FIT_MARGIN;
+  }
+  _saveRecentSearch(q: string) {
+    const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+    const next = [q, ...recent.filter((s: string) => s !== q)].slice(0, 5);
+    localStorage.setItem('recentSearches', JSON.stringify(next));
+  }
+  async _showTypeahead(q: string, input: HTMLInputElement) {
+    this._typeaheadActive = true;
+    const vc = ViewContext.current();
+    const params: Parameters<typeof listPosts>[0] = {
+      q,
+      per_page: TYPEAHEAD_POSTS,
+      status: 'published'
+    };
+    if (vc.tag) params.tag = vc.tag;
+    try {
+      const [postsData, tagsData] = await Promise.all([listPosts(params), listTags({
+        q,
+        include_empty: false
+      })]);
+      if (!this._typeaheadActive) return;
+      // ListTags has no page-size parameter, so the tag cap is applied here —
+      // without it the Tags section renders every tag matching the query.
+      this._renderTypeaheadResults(q, postsData.posts || [], (tagsData.tags || []).slice(0, TYPEAHEAD_TAGS), input);
+    } catch (err) {
+      console.error('Typeahead failed:', err);
+    }
+  }
+  _showRecentSearches(input: HTMLInputElement) {
+    const recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+    if (!recent.length) return;
+    this._renderTypeaheadResults('', [], [], input, recent);
+  }
+  _renderTypeaheadResults(q: string, posts: Post[], tags: Tag[], input: HTMLInputElement, recent: string[] = []) {
+    const mount = document.getElementById('search-typeahead-mount');
+    if (!mount) return;
+    const inputRect = input.getBoundingClientRect();
+    mount.style.top = `${inputRect.bottom + 4}px`;
+    mount.style.left = `${inputRect.left}px`;
+    mount.style.width = `${inputRect.width}px`;
+    mount.classList.add('is-open');
+    // Collected rather than concatenated: `+=` would drop html`` output back to
+    // a plain string.
+    const parts: Slot[] = [];
+    if (recent.length) {
+      parts.push(html`<div class="typeahead-section"><div class="typeahead-label">Recent</div>`);
+      recent.forEach(s => {
+        parts.push(html`<a href="#" class="typeahead-item recent-item" data-q="${s}">${s}</a>`);
+      });
+      parts.push(html`</div>`);
+    } else {
+      if (tags.length) {
+        parts.push(html`<div class="typeahead-section"><div class="typeahead-label">Tags</div>`);
+        tags.forEach(t => {
+          parts.push(html`<a href="/tags/${t.slug}" class="typeahead-item tag-item">
+            <span class="name">${t.name}</span>
+            <span class="count">${t.post_count}</span>
+          </a>`);
+        });
+        parts.push(html`</div>`);
+      }
+      if (posts.length) {
+        parts.push(html`<div class="typeahead-section"><div class="typeahead-label">Posts</div>`);
+        posts.forEach(p => {
+          parts.push(html`<a href="/posts/${p.slug}" class="typeahead-item post-item">${p.title}</a>`);
+        });
+        parts.push(html`</div>`);
+      }
+      parts.push(html`<a href="#" class="typeahead-item search-all" data-q="${q}">Search everything for &ldquo;${q}&rdquo;</a>`);
+    }
+    setHTML(mount, html`${parts}`);
+    (mount.querySelectorAll('.typeahead-item') as NodeListOf<HTMLElement>).forEach(item => {
+      item.addEventListener('click', e => {
+        e.preventDefault();
+        const searchQ = item.dataset.q;
+        if (searchQ) {
+          this._saveRecentSearch(searchQ);
+          ViewContext.update({
+            query: searchQ
+          });
+          input.value = '';
+        } else {
+          const href = item.getAttribute('href');
+          if (href) navigate(href);
+        }
+        this._hideTypeahead();
+      });
+    });
+  }
+  _hideTypeahead() {
+    this._typeaheadActive = false;
+    const mount = document.getElementById('search-typeahead-mount');
+    mount?.classList.remove('is-open');
+  }
+  _closeBurger() {
+    const navBurger = this.$('#nav-burger');
+    if (!navBurger) return;
+    navBurger.classList.remove('is-open');
+    navBurger.querySelector('.burger-toggle')?.setAttribute('aria-expanded', 'false');
+  }
+  beforeRender() {
+    this._teardownRender();
+  }
+  beforeUnmount() {
+    this._teardownRender();
+    hideFlyout();
+    // Clears body.distraction-free and removes the button portalled to body.
+    this._dfPlugin?.unmount?.();
+    this._dfPlugin = null;
+  }
+}
