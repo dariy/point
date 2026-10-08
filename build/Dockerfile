@@ -20,6 +20,12 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_VERSION=dev
 
+# gen2brain/avif loads a host libavif through purego unless built with
+# nodynamic, and purego makes the Go linker emit a glibc-linked binary even with
+# CGO_ENABLED=0. The Alpine runtime has no glibc loader, so such a binary fails
+# with "./point: No such file or directory". nodynamic keeps only the WASM path.
+ENV GOFLAGS=-tags=nodynamic
+
 # Install build dependencies
 RUN apk add --no-cache git nodejs npm
 
@@ -48,6 +54,13 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -buildmode=exe \
     -ldflags="-s -w" \
     -o migrate-paths ./cmd/migrate-paths
+
+# Refuse a dynamically linked binary: only those embed an ELF loader path.
+RUN for f in point migrate-paths; do \
+        if grep -q -a -E '/lib(64)?/ld-' "$f"; then \
+            echo "ERROR: $f is dynamically linked; the Alpine runtime cannot start it" >&2; exit 1; \
+        fi; \
+    done
 
 # Install the lockfile-pinned esbuild so bundles are reproducible (build-js.sh
 # refuses npx-latest and uses node_modules/.bin/esbuild).
