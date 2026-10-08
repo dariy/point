@@ -64,7 +64,7 @@ export class BackupsSection extends Component {
     const opt = (v: number, label: string) => html`<option value="${v}"${String(intervalDays) === String(v) ? " selected" : ""}>${label}</option>`;
     return html`
       <div class="backup-settings">
-        ${raw(enableRow)}
+        ${enableRow}
         <div class="backup-setting-row">
           <label for="bk-freq">Frequency</label>
           <select id="bk-freq" class="filter-select"${enableBackup ? "" : " disabled"}>

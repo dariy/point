@@ -4,6 +4,7 @@ import type * as TagLinks from '../src/utils/tagLinks.ts';
 import type { TagIndex, TagIndexEntry } from '../src/utils/tagLinks.ts';
 import { mock } from './helpers/mock.ts';
 import { must } from './helpers/dom.ts';
+import { html as tag } from '../src/utils/helpers.ts';
 
 /** An index from partial entries; getTagAncestors reads only tag, parentSlug and showInAncestors. */
 const indexOf = (entries: [string, Partial<TagIndexEntry>][]): TagIndex =>
@@ -150,9 +151,17 @@ describe('renderTagLink', () => {
   });
 
   test('extra classes, prefix and suffix are placed around the name', () => {
-    const html = renderTagLink('fern', { extra: 'big', prefix: '<b>', suffix: '</b>' });
+    const html = renderTagLink('fern', { extra: 'big', prefix: tag`<b>`, suffix: tag`</b>` });
     assert.ok(html.includes('big'));
     assert.ok(html.includes('<b>fern</b>'));
+  });
+
+  test('a plain-string prefix or suffix is escaped as text', () => {
+    const html = String(renderTagLink('fern', { prefix: '<script>alert(1)</script>', suffix: '"><img src=x onerror=alert(1)>' }));
+    assert.ok(!html.includes('<script>'));
+    assert.ok(!html.includes('<img'));
+    assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;fern'));
+    assert.ok(html.includes('&quot;&gt;&lt;img src=x onerror=alert(1)&gt;</a>'));
   });
 
   test('an explicit url overrides the derived one', () => {

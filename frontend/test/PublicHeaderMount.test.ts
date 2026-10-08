@@ -52,6 +52,16 @@ describe('PublicHeader (mounted)', () => {
 
   const q = (sel: string) => must(header.container.querySelector<HTMLElement>(sel));
 
+  test('a plain-string slot is escaped as text', () => {
+    const el = dom.document.createElement('div');
+    dom.document.body.appendChild(el);
+    const h = new PublicHeader(el, { settings: { blog_title: 'Test blog' }, navTags: [], breadcrumb: [], slot: '<script>x</script>"><img src=x onerror=alert(1)>' });
+    const out = String(h.render());
+    assert.ok(!out.includes('<script>x'));
+    assert.ok(!out.includes('<img src=x'));
+    assert.ok(out.includes('&lt;script&gt;x&lt;/script&gt;&quot;&gt;&lt;img src=x onerror=alert(1)&gt;'));
+  });
+
   test('mount registers the fold controller and keeps the header group', () => {
     assert.ok(header._group, 'the header group is kept');
     assert.ok(header._fold, 'the fold controller exists after mount');
