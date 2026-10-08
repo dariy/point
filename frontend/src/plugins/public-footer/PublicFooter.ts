@@ -55,6 +55,12 @@ import {
  */
 let drawerOpen = false;
 
+/**
+ * A portrait viewport this narrow always gets the narrow footer line. Wider
+ * viewports get it only when the one-line atlas footer overflows (see _fitLine).
+ */
+const NARROW_QUERY = "(orientation: portrait) and (max-width: 48em)";
+
 export interface PublicFooterProps {
   /** Public settings; reads blog_title and author_name. */
   settings?: StoreSettings;
@@ -70,6 +76,9 @@ export class PublicFooter extends Component<PublicFooterProps> {
   _pagination: Pagination | null = null;
   _unsubPagination: Function | null = null;
   _cleanupFlyout: (() => void) | null = null;
+  _lineObserver: ResizeObserver | null = null;
+  _onDocKey: ((e: KeyboardEvent) => void) | null = null;
+  _onDocClick: ((e: MouseEvent) => void) | null = null;
   render() {
     const { settings = {}, immersiveTags = [] } = this.props;
 
@@ -152,16 +161,18 @@ export class PublicFooter extends Component<PublicFooterProps> {
             </div>
             <div class="footer-right">
               <div class="footer-actions">
-                <div class="footer-sliding-actions${drawerOpen ? " is-expanded" : ""}">
-                  ${zoomSlider}
-                  ${rssButton}
-                  ${revelioButton}
-                  ${authButton}
+                <div class="footer-menu">
+                  <div class="footer-sliding-actions${drawerOpen ? " is-expanded" : ""}">
+                    ${zoomSlider}
+                    ${rssButton}
+                    ${revelioButton}
+                    ${authButton}
+                  </div>
+                  ${themeToggle}
                 </div>
-                <button class="footer-action-btn footer-slider-btn" id="footer-slider-btn" type="button" aria-label="Toggle actions" title="More Actions">
+                <button class="footer-action-btn footer-slider-btn" id="footer-slider-btn" type="button" aria-label="Toggle actions" title="More Actions" aria-expanded="false">
                   ${raw(SLIDERS_SVG)}
                 </button>
-                ${themeToggle}
               </div>
             </div>
           </div>
@@ -216,11 +227,46 @@ export class PublicFooter extends Component<PublicFooterProps> {
       setTheme(current === "dark" ? "light" : "dark");
     });
 
-    this.$("#footer-slider-btn")?.addEventListener("click", () => {
+    // On a wide line the button slides the drawer open beside it. On the narrow
+    // atlas line (.footer-menu is not display: contents there) the drawer and
+    // the theme toggle are a popover above the button.
+    const actions = this.$(".footer-actions");
+    const sliderBtn = this.$("#footer-slider-btn");
+    const menu = this.$(".footer-menu");
+    const setOpen = (open: boolean) => {
+      actions?.classList.toggle("is-open", open);
+      sliderBtn?.setAttribute("aria-expanded", String(open));
+    };
+    sliderBtn?.addEventListener("click", () => {
+      if (menu && getComputedStyle(menu).display !== "contents") {
+        setOpen(!actions?.classList.contains("is-open"));
+        return;
+      }
       const el = this.$(".footer-sliding-actions");
       if (!el) return;
       drawerOpen = el.classList.toggle("is-expanded");
     });
+    this._onDocKey = (e) => {
+      if (e.key === "Escape" && actions?.classList.contains("is-open")) setOpen(false);
+    };
+    this._onDocClick = (e) => {
+      if (actions?.classList.contains("is-open") && !actions.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", this._onDocKey);
+    document.addEventListener("click", this._onDocClick, true);
+
+    // The line changes width when the footer turns into the atlas line, when
+    // the paginator shows, hides or changes its page count, and when the
+    // drawer slides open.
+    if (typeof ResizeObserver === "function") {
+      const ro = new ResizeObserver(() => this._fitLine());
+      for (const sel of [".footer-content", ".footer-center", ".footer-actions"]) {
+        const el = this.$(sel);
+        if (el) ro.observe(el);
+      }
+      this._lineObserver = ro;
+    }
+    this._fitLine();
 
     this.$("#revelio-toggle")?.addEventListener("click", () => this._toggleRevelio());
 
@@ -246,6 +292,24 @@ export class PublicFooter extends Component<PublicFooterProps> {
       const { tag, navPath } = parseTagUrl(url);
       ViewContext.update({ tag, navPath, postSlug: null, query: null });
     });
+  }
+
+  /**
+   * Mark the footer narrow when the viewport is a narrow portrait one, or when
+   * the full line (copyright, paginator, every action) does not fit. CSS uses
+   * `.is-narrow` only on the one-line atlas footer (css/public/footer.css):
+   * there it hides the copyright and folds the actions into the popover.
+   * The class comes off for the measurement, so the full line is what is
+   * measured and the result does not flip back and forth.
+   */
+  _fitLine() {
+    const footer = this.$(".site-footer");
+    const content = this.$(".footer-content");
+    if (!footer || !content) return;
+    footer.classList.remove("is-narrow");
+    const narrow = window.matchMedia?.(NARROW_QUERY).matches
+      || content.scrollWidth > content.clientWidth + 1;
+    footer.classList.toggle("is-narrow", narrow);
   }
 
   /**
@@ -283,6 +347,12 @@ export class PublicFooter extends Component<PublicFooterProps> {
   beforeRender() {
     this._cleanupFlyout?.();
     this._cleanupFlyout = null;
+    this._lineObserver?.disconnect();
+    this._lineObserver = null;
+    if (this._onDocKey) document.removeEventListener("keydown", this._onDocKey);
+    if (this._onDocClick) document.removeEventListener("click", this._onDocClick, true);
+    this._onDocKey = null;
+    this._onDocClick = null;
     if (this._onZoomSync) {
       window.removeEventListener("point:grid-zoom", this._onZoomSync);
       this._onZoomSync = null;

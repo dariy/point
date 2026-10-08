@@ -63,7 +63,7 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => measure()) : null;
   const measure = () => {
     const headerBottom = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
-    // In `map` the footer is a fixed strip under the handle. No footer plugin leaves the mount empty: 0px.
+    // In `mapList`, `map` and a drag the footer is the fixed bottom bar under the strip and the handle. No footer plugin leaves the mount empty: 0px.
     const fm = document.getElementById('footer-mount');
     if (fm !== footerMount) {
       if (footerMount) ro?.unobserve(footerMount);

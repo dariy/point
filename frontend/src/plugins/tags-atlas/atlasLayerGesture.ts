@@ -140,8 +140,8 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     const { top, bottom } = bounds();
     const cs = getComputedStyle(body);
     const rowMin = parseFloat(cs.getPropertyValue('--atlas-layer-row-min')) || 120;
-    const pager = parseFloat(cs.getPropertyValue('--atlas-layer-pager-h')) || 0;
-    const mapList = window.innerHeight - Math.max(window.innerHeight * 0.2, handle.offsetHeight + rowMin + pager);
+    // The same height as the --atlas-layer-list-h default in atlas.css: the footer, the handle and one card row.
+    const mapList = window.innerHeight - Math.max(window.innerHeight * 0.2, px('--atlas-layer-footer-h') + handle.offsetHeight + rowMin);
     return { list: top, mapList: Math.min(Math.max(mapList, top), bottom), map: bottom };
   };
   const setHandleY = (y: number) => body.style.setProperty('--atlas-layer-list-h', `${window.innerHeight - y}px`);

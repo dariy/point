@@ -83,7 +83,17 @@ describe('Atlas layer', () => {
       });
     }
 
-    it('mapList shows the map, hides the footer and sizes the list to about a fifth', async () => {
+    // The footer is the bottom bar: fixed at the viewport bottom, one line high.
+    const bottomBar = async () => {
+      const footer = page.locator('#footer-mount .site-footer');
+      await footer.waitFor({ state: 'visible' });
+      const f = (await footer.boundingBox())!;
+      assert.ok(Math.abs(f.y + f.height - 844) <= 1, `footer bottom ${f.y + f.height}`);
+      assert.ok(f.height <= 80, `footer is one line, height ${f.height}`);
+      return f;
+    };
+
+    it('mapList shows the map over a strip that stands on the one-line footer', async () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(BASE + '/tags/atlas-handle');
       await page.locator('.atlas-layer-handle').waitFor();
@@ -92,25 +102,40 @@ describe('Atlas layer', () => {
       await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
       const map = page.locator('.atlas-layer-map');
       await map.waitFor({ state: 'visible' });
-      assert.equal(await page.locator('#footer-mount .site-footer').isVisible(), false);
       // The slide ends when the transform is gone.
       await page.waitForFunction(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).transform === 'none');
+      const f = await bottomBar();
       const m = (await map.boundingBox())!;
       const h = (await page.locator('#header-mount').boundingBox())!;
       assert.ok(Math.abs(m.y - (h.y + h.height)) <= 1, `map top ${m.y} vs header bottom ${h.y + h.height}`);
       const g = (await page.locator('#grid-mount').boundingBox())!;
       const handle = (await page.locator('.atlas-layer-handle').boundingBox())!;
-      const pager = (await page.locator('#pagination-mount').boundingBox())!;
-      const list = g.height + handle.height + pager.height;
-      assert.ok(list >= 844 * 0.15 && list <= 844 * 0.25, `list height ${list}`);
-      assert.ok(Math.abs(g.y + g.height - pager.y) <= 1, 'the paginator sits under the cards');
-      assert.ok(Math.abs(pager.y + pager.height - 844) <= 1, 'list sits at the bottom');
-      assert.ok(Math.abs(m.y + m.height - (handle.y)) <= 1, 'map ends where the list starts');
+      assert.equal(await page.locator('#pagination-mount').isVisible(), false, 'no paginator under the cards');
+      const list = 844 - handle.y;
+      assert.ok(list >= 844 * 0.15 && list <= 844 * 0.3, `list height ${list}`);
+      assert.ok(Math.abs(g.y + g.height - f.y) <= 1, 'the cards stand on the footer');
+      assert.ok(Math.abs(handle.y + handle.height - g.y) <= 1, 'the handle sits on the cards');
+      assert.ok(Math.abs(m.y + m.height - handle.y) <= 1, 'map ends where the list starts');
       await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
       await page.locator('#footer-mount .site-footer').waitFor({ state: 'visible' });
     });
 
-    it('map fills below the header, collapses the list to a handle over a minimized footer', async () => {
+    it('a drag shows the one-line footer under the handle', async () => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(BASE + '/tags/atlas-handle');
+      await page.locator('.atlas-layer-handle').waitFor();
+      await page.evaluate(() => {
+        document.body.dataset.atlasDragTarget = 'list';
+        document.body.setAttribute('data-atlas-dragging', '');
+      });
+      await bottomBar();
+      await page.evaluate(() => {
+        document.body.removeAttribute('data-atlas-dragging');
+        document.body.removeAttribute('data-atlas-drag-target');
+      });
+    });
+
+    it('map fills below the header, collapses the list to a handle on the one-line footer', async () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(BASE + '/tags/atlas-handle');
       await page.locator('.atlas-layer-handle').waitFor();
@@ -124,17 +149,12 @@ describe('Atlas layer', () => {
       const handle = (await page.locator('.atlas-layer-handle').boundingBox())!;
       assert.ok(handle.height <= 32, `handle height ${handle.height}`);
       assert.equal(await page.locator('#grid-mount .post-card').first().isVisible(), false, 'no card shows');
-      // The minimized footer: copyright only, between the handle and the viewport bottom.
-      const footer = page.locator('#footer-mount .site-footer');
-      await footer.waitFor({ state: 'visible' });
-      const f = (await footer.boundingBox())!;
-      assert.ok(Math.abs(f.y + f.height - 844) <= 1, `footer bottom ${f.y + f.height}`);
+      const f = await bottomBar();
       assert.ok(Math.abs(handle.y + handle.height - f.y) <= 1, 'handle sits on the footer');
-      assert.ok(f.height <= 48, `footer height ${f.height}`);
       assert.ok(Math.abs(m.y + m.height - f.y) <= 1, `map bottom ${m.y + m.height} vs footer top ${f.y}`);
       assert.equal(await page.locator('.footer-copyright').isVisible(), true);
-      assert.equal(await page.locator('.footer-right').isVisible(), false);
-      assert.equal(await page.locator('.footer-center').isVisible(), false);
+      assert.equal(await page.locator('#footer-slider-btn').isVisible(), true);
+      assert.equal(await page.locator('.footer-pagination').isVisible(), false, 'no paginator in map');
       // Without the footer plugin the mount is empty: the handle sits at the page bottom.
       await page.evaluate(() => document.querySelector('#footer-mount')!.replaceChildren());
       await page.waitForFunction(() => getComputedStyle(document.body).getPropertyValue('--atlas-layer-footer-h').trim() === '0px');
