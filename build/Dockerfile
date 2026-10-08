@@ -38,14 +38,14 @@ COPY api/ ./
 # Removing -a flag to enable incremental builds
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -buildmode=exe \
     -ldflags="-s -w -X main.Version=${BUILD_VERSION}" \
     -o point ./cmd/api
 
 # Build the path migration utility
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -buildmode=exe \
     -ldflags="-s -w" \
     -o migrate-paths ./cmd/migrate-paths
 
