@@ -10,6 +10,8 @@
     justify-content: center;
     min-width: 0;
     user-select: none;
+    /* A double tap toggles the timeline: the browser must not zoom the page (iPad). */
+    touch-action: manipulation;
 }
 
 /* A phone turned sideways has ~390px of height to give a grid of photographs,
