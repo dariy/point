@@ -276,42 +276,100 @@ body.grid-zoomable .footer-zoom {
     }
 }
 
-/* The map layer covers the footer position: `list` shows the normal footer,
-   `mapList` hides it, a drag shows the minimized one, and `map` shows a minimized one (copyright only) fixed
-   under the handle. With the footer plugin off the mount is empty and takes
-   no space. */
-body[data-atlas-layer="mapList"] #footer-mount {
-    display: none;
+/* The drawer and the theme toggle share one wrapper, so the narrow atlas line
+   can show them as one popover. Everywhere else the wrapper has no box, and
+   `order` keeps the old row: drawer, slider button, theme toggle. */
+.footer-menu {
+    display: contents;
 }
 
-:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) #footer-mount {
+.footer-slider-btn {
+    order: 1;
+}
+
+.footer-menu .theme-toggle {
+    order: 2;
+}
+
+/* The atlas layer: in `mapList`, `map` and during a drag the footer is the
+   bottom bar — fixed, one line, normal padding. The card strip and the handle
+   stand on it (--atlas-layer-footer-h, css/public/atlas.css). `list` keeps the
+   normal footer. With the footer plugin off the mount is empty and takes no
+   space. */
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) #footer-mount {
+    display: block;
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 105;
+    z-index: 106;
 }
 
-/* A drag shows the minimized footer in every state, so the handle has a floor. */
-body[data-atlas-dragging] #footer-mount {
-    display: block;
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer .footer-content {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    text-align: start;
 }
 
-:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer {
-    padding: var(--spacing-xs, 4px) 0;
-    padding-bottom: env(safe-area-inset-bottom, 0);
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer :is(.footer-left, .footer-center, .footer-right) {
+    flex: none;
+    order: 0;
 }
 
-:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer .footer-center,
-:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer .footer-right {
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer .footer-copyright {
+    margin: 0;
+    white-space: nowrap;
+}
+
+/* The paginator is in the line in `mapList` (or a drag that snaps to it) at
+   every width, and nowhere else in the layer. */
+:is(body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer :is(.footer-pagination, .footer-center:has(> .footer-pagination)) {
     display: none;
 }
 
-body[data-atlas-layer="map"] .site-footer .footer-content {
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"]) .site-footer :is(.footer-pagination, .footer-center:has(> .footer-pagination)) {
     display: block;
 }
 
-body[data-atlas-layer="map"] .site-footer .footer-copyright {
-    margin: 0;
-    text-align: center;
+/* The narrow line (PublicFooter._fitLine sets .is-narrow): the copyright goes
+   first when the paginator shows, and the actions fold into the slider button.
+   The button opens the drawer and the theme toggle as a popover above it. */
+:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"]) .site-footer.is-narrow:has(.footer-pagination .pagination) .footer-copyright {
+    display: none;
+}
+
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer.is-narrow .footer-actions {
+    position: relative;
+    padding-left: 0;
+}
+
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer.is-narrow .footer-menu {
+    display: none;
+}
+
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer.is-narrow .footer-actions.is-open .footer-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--spacing-sm);
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + var(--spacing-sm));
+    padding: var(--spacing-sm);
+    background: var(--surface-card);
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+}
+
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) .site-footer.is-narrow .footer-actions.is-open .footer-sliding-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: none;
+    opacity: 1;
+    overflow: visible;
 }

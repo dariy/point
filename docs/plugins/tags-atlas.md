@@ -14,8 +14,8 @@ reads only that attribute.
 | State | `?view=` | What you see |
 |-------|-----------|--------------|
 | `list` | `list` | The page as it is, plus the handle. The footer shows. |
-| `mapList` | `split` | The map comes down from behind the header. The post list is one row of cards over the footer position, about 20% of the viewport high. The footer is hidden. |
-| `map` | `map` | The map fills the space below the header. The post list is only the handle, at the bottom. The footer is hidden. |
+| `mapList` | `split` | The map comes down from behind the header. The post list is one row of cards on the footer, about 20% of the viewport high with the footer. The footer is one line at the bottom, with the paginator in it. |
+| `map` | `map` | The map fills the space below the header. The post list is only the handle, on the footer. The footer is one line at the bottom, without the paginator. |
 
 The map shows only the posts of the current list (same filter as the cards). It loads
 (Leaflet, post data, tiles) on the first change out of `list`. A page that stays in

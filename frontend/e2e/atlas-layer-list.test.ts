@@ -73,10 +73,38 @@ describe('Atlas layer list', () => {
       const gm = document.querySelector('#grid-mount')!;
       return gm.scrollWidth <= gm.clientWidth + 1;
     }, null, { timeout: 5000 });
-    const next = page.locator('#pagination-mount .page-next');
-    assert.ok(await next.isVisible(), 'the paginator shows under the strip');
+    const next = page.locator('#footer-mount .footer-pagination .page-next');
+    assert.ok(await next.isVisible(), 'the paginator shows in the footer');
+    assert.equal(await page.locator('#pagination-mount').isVisible(), false);
     await next.click();
     await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === '2');
     await page.waitForFunction((f) => document.querySelector('#grid-mount .post-card-title')?.textContent?.trim() !== f, first);
+  });
+
+  it('the narrow footer line hides the copyright and folds the actions into the burger', async () => {
+    await page.goto(BASE + '/?view=split');
+    await page.locator('#footer-mount .footer-pagination .pagination').waitFor();
+    assert.equal(await page.locator('.footer-copyright').isVisible(), false, 'copyright hidden at 390px');
+    const theme = page.locator('#footer-mount #theme-toggle');
+    const burger = page.locator('#footer-slider-btn');
+    assert.equal(await theme.isVisible(), false, 'theme toggle folded');
+    await burger.click();
+    await theme.waitFor({ state: 'visible' });
+    const t = (await theme.boundingBox())!;
+    const b = (await burger.boundingBox())!;
+    assert.ok(t.y + t.height <= b.y, 'the popover is above the burger');
+    await page.keyboard.press('Escape');
+    await theme.waitFor({ state: 'hidden' });
+    await burger.click();
+    await theme.waitFor({ state: 'visible' });
+    await page.mouse.click(5, 300);
+    await theme.waitFor({ state: 'hidden' });
+  });
+
+  it('map hides the footer paginator', async () => {
+    await page.goto(BASE + '/?view=map');
+    await page.locator('#footer-mount .site-footer').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.footer-pagination').isVisible(), false);
+    assert.equal(await page.locator('.footer-copyright').isVisible(), true);
   });
 });

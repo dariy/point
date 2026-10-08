@@ -728,10 +728,11 @@
 /* ── Layer: map + list, map only ─────────────────────────────────────────── */
 /* body[data-atlas-layer] is the only input. The header (z 110) stays above the
    map (z 100), so the map slides down from behind it. The card row and the
-   handle sit above the map, below the header. */
+   handle sit above the map, below the header. Bottom to top: the footer
+   (--atlas-layer-footer-h, css/public/footer.css), the card row, the handle,
+   the map. --atlas-layer-list-h is the height under the map, footer included. */
 body {
-    --atlas-layer-pager-h: 44px;
-    --atlas-layer-list-h: max(20dvh, calc(var(--atlas-layer-handle-h, 20px) + var(--atlas-layer-row-min, 120px) + var(--atlas-layer-pager-h)));
+    --atlas-layer-list-h: max(20dvh, calc(var(--atlas-layer-footer-h, 0px) + var(--atlas-layer-handle-h, 20px) + var(--atlas-layer-row-min, 120px)));
 }
 
 .atlas-layer-map {
@@ -793,8 +794,8 @@ body[data-atlas-layer="map"] .atlas-layer-handle {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
-    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px));
+    bottom: var(--atlas-layer-footer-h, 0px);
+    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px) - var(--atlas-layer-footer-h, 0px));
     z-index: 105;
     display: block;
     background: var(--bg-primary);
@@ -805,35 +806,16 @@ body[data-atlas-layer="map"] .atlas-layer-handle {
     overscroll-behavior: contain;
 }
 
-/* The card row: one page of cards that fits the strip, with the paginator under
-   it, as in `list`. A drag shows the layout of the state it snaps to
-   (body[data-atlas-drag-target]), so the release changes nothing on screen. */
-:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #grid-mount {
-    bottom: var(--atlas-layer-pager-h);
-    height: calc(var(--atlas-layer-list-h) - var(--atlas-layer-handle-h, 20px) - var(--atlas-layer-pager-h));
-}
-
-:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #pagination-mount {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: var(--atlas-layer-pager-h);
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    z-index: 105;
-    background: var(--bg-primary);
-}
-
-:is(body[data-atlas-layer="mapList"]:not([data-atlas-drag-target]), body[data-atlas-drag-target="mapList"], body[data-atlas-drag-target="map"]) #pagination-mount .pagination {
-    margin: 0;
+/* The card row: one page of cards that fits the strip. Its paginator is in the
+   footer line, so the in-flow one hides in every layer state. A drag shows the
+   layout of the state it snaps to (body[data-atlas-drag-target]), so the
+   release changes nothing on screen. */
+:is(body[data-atlas-layer="mapList"], body[data-atlas-layer="map"], body[data-atlas-dragging]) #pagination-mount {
+    display: none;
 }
 
 /* In `map` no card shows: the handle is all that is left of the list. */
-body[data-atlas-layer="map"] #grid-mount,
-body[data-atlas-layer="map"] #pagination-mount {
+body[data-atlas-layer="map"] #grid-mount {
     display: none;
 }
 
@@ -898,10 +880,6 @@ body[data-atlas-dragging] .atlas-layer-handle {
 
 body[data-atlas-dragging] #grid-mount {
     display: block;
-}
-
-body[data-atlas-drag-target="list"] #pagination-mount {
-    display: none;
 }
 
 /* After release the handle slides to its snap position. */
