@@ -72,6 +72,9 @@ for arg in "$@"; do
       echo "  --method=native     Install as native Linux binary + systemd service"
       echo "  --non-interactive   Accept all defaults without prompting"
       echo "  --test              Test mode: use localhost/point:dev image in Docker Compose"
+      echo ""
+      echo "  Env POINT_INSTALL_DIR and POINT_DATA_DIR set the directory defaults."
+      echo "  A relative path resolves against the working directory."
       exit 0
       ;;
     *) warn "Unknown argument: $arg" ;;
@@ -132,6 +135,24 @@ copy_data_yml() {
 #   PHOTO_LIB_PATH - existing photo library path (optional, may be empty)
 #   INSTALL_DIR    - directory where compose/env files live (docker) or app lives (native)
 
+# abs_path PATH → PATH made absolute: a leading ~ expands to $HOME and a
+# relative path resolves against the working directory. Compose reads a volume
+# source without / or ./ as a named volume, and resolves ./ from the install
+# directory, so DATA_PATH in .env must be absolute.
+abs_path() {
+  local p="$1"
+  # shellcheck disable=SC2088  # matches a literal ~/ prefix; it does not expand it
+  case "$p" in
+    "~")   p="$HOME" ;;
+    "~/"*) p="${HOME}/${p#"~/"}" ;;
+  esac
+  case "$p" in
+    /*) ;;
+    *)  p="$(pwd)/${p#./}" ;;
+  esac
+  echo "${p%/}"
+}
+
 collect_config() {
   local method="$1"
   echo ""
@@ -139,14 +160,14 @@ collect_config() {
   echo ""
 
   if [ "$method" = "docker" ]; then
-    INSTALL_DIR=$(maybe_ask "Install directory" "$(pwd)")
-    DATA_DIR=$(maybe_ask "Data directory" "${INSTALL_DIR}/data")
+    INSTALL_DIR=$(abs_path "$(maybe_ask "Install directory" "${POINT_INSTALL_DIR:-$(pwd)}")")
+    DATA_DIR=$(abs_path "$(maybe_ask "Data directory" "${POINT_DATA_DIR:-${INSTALL_DIR}/data}")")
     APP_PORT=$(maybe_ask "Host Port" "${AUTO_PORT:-8000}")
     PORT=8000
     say "Note: Docker install uses host port ${APP_PORT} (inner port ${PORT})"
   else
     INSTALL_DIR="/opt/point"
-    DATA_DIR=$(maybe_ask "Data directory" "/var/lib/point")
+    DATA_DIR=$(abs_path "$(maybe_ask "Data directory" "${POINT_DATA_DIR:-/var/lib/point}")")
     PORT=$(maybe_ask "Port" "${AUTO_PORT:-8000}")
     APP_PORT=$PORT
   fi
