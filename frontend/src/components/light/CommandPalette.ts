@@ -17,6 +17,7 @@ interface SearchResult {
   href: string;
   label: string;
   sublabel?: string;
+  /** A constant SVG from utils/icons.ts; rendered through raw(). */
   icon: string;
   type: string;
 }

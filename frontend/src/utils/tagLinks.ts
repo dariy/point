@@ -11,8 +11,8 @@
  * shared dropdown singleton) and tagStrip.ts (the scrollable strip).
  */
 
-import { html, raw } from './helpers.ts';
-import type { RawHtml } from './helpers.ts';
+import { html } from './helpers.ts';
+import type { RawHtml, Slot } from './helpers.ts';
 
 /**
  * Build a tag URL whose `path` query carries the ancestor slug chain the user
@@ -92,23 +92,23 @@ export function tagKind(tag: TagLike | null | undefined) {
 }
 
 /**
- * One tag as an <a>. `prefix` and `suffix` are markup slots — whatever a caller
- * puts there lands inside the link unescaped — so they take html`` output, not
- * a user-supplied string. The tag's own name always goes through the tag.
+ * One tag as an <a>. `prefix` and `suffix` are markup slots: html`` output
+ * goes in as markup, a plain string is escaped as text. The tag's own name
+ * always goes through the tag.
  *
  * @returns interpolate it directly; no raw()
  *   at the call site.
  */
 export function renderTagLink(
   tag: TagLike,
-  { active = false, extra = '', prefix = '', suffix = '' } = {},
+  { active = false, extra = '', prefix = '' as Slot, suffix = '' as Slot } = {},
 ): RawHtml {
   const name = typeof tag === 'string' ? tag : tag.name;
   const slug = typeof tag === 'string' ? tag : tag.slug;
   const href = (typeof tag === 'object' && tag.url) ? tag.url : `/tags/${slug}`;
   const classes = ['tag-link', `tag-kind-${tagKind(tag)}`, active ? 'active' : '', extra].filter(Boolean).join(' ');
   const isExternal = /^https?:\/\//.test(href);
-  return html`<a href="${href}" class="${classes}"${isExternal ? html` target="_blank" rel="noopener noreferrer"` : ''}>${raw(prefix)}${name}${raw(suffix)}</a>`;
+  return html`<a href="${href}" class="${classes}"${isExternal ? html` target="_blank" rel="noopener noreferrer"` : ''}>${prefix}${name}${suffix}</a>`;
 }
 
 export function buildTagIndex(

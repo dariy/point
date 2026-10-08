@@ -103,8 +103,8 @@ export class PublicHeader extends Component<PublicHeaderProps> {
       editUrl = null,
       showShare = false,
       onToggleImmersive = null,
-      // A markup slot by design: a caller drops rendered markup in, so it goes
-      // through raw() below. No caller passes one today.
+      // A markup slot: html`` output goes in as markup, a plain string is
+      // escaped as text. No caller passes one today.
       slot = ''
     } = this.props;
     const user = getUser();
@@ -170,7 +170,7 @@ export class PublicHeader extends Component<PublicHeaderProps> {
           <!-- Zone: timeline — fills the gap between the context and the nav. -->
           ${this.props.timeline ? html`<div class="site-timeline" id="timeline-mount"></div>` : ''}
 
-          ${slot ? html`<div class="site-nav-slot">${raw(slot)}</div>` : ''}
+          ${slot ? html`<div class="site-nav-slot">${slot}</div>` : ''}
 
           <!-- Zone: nav — visible menu links (filled by the nav-menu plugin);
                folds into the burger as a whole (fold-nav). -->

@@ -26,6 +26,7 @@ interface NavItem {
 }
 
 /** Icon and label per tags-viz plugin, keyed by plugin id. */
+// Each icon is a constant SVG from utils/icons.ts, so raw(b.icon) is safe.
 const VIZ_META: Record<string, { icon: string; label: string }> = {
   'tags-graph': {
     icon: TAGS_SVG,
