@@ -118,7 +118,7 @@ The app is configured via environment variables (or a `.env` file in the working
 
 ### Prerequisites
 
-- Go 1.26.6+ (the version in `api/go.mod`) for local backend development
+- Go 1.26.9+ (the version in `api/go.mod`) for local backend development
 - Node 24+ (the version in `.nvmrc`, an official build: distro builds cannot
   remove TypeScript types, which the frontend tests need) for the frontend bundles — `scripts/run.sh` installs the npm dev
   dependencies itself on first run
