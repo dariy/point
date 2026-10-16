@@ -16,12 +16,12 @@
   },
   "devDependencies": {
     "@playwright/cli": "0.1.22",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "esbuild": "^0.28.2",
     "linkedom": "^0.18.13",
-    "oxc-parser": "0.153.0",
-    "oxlint": "1.87.0",
-    "playwright": "^1.63.0",
+    "oxc-parser": "0.154.0",
+    "oxlint": "1.88.0",
+    "playwright": "^1.64.0",
     "typescript": "^7.0.2"
   }
 }
