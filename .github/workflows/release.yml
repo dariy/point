@@ -50,24 +50,7 @@ jobs:
           fail_ci_if_error: false
 
   vulnerability-scan:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: api/go.mod
-          cache-dependency-path: api/go.sum
-
-      - name: Run govulncheck
-        working-directory: api
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          govulncheck ./...
+    uses: ./.github/workflows/govulncheck.yml
 
   build-and-push:
     needs: [test, vulnerability-scan]

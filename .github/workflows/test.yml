@@ -136,28 +136,9 @@ jobs:
           flags: frontend
           name: codecov-frontend
 
+  # Same scan and Go version as the release gate; see govulncheck.yml.
   govulncheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          # Tracks api/go.mod like every other job, with check-latest so the
-          # newest patch release is resolved rather than the runner's cached
-          # one: govulncheck resolves Go stdlib symbols from the toolchain in
-          # use, so an older patch level here would re-flag stdlib vulns
-          # already fixed upstream.
-          go-version-file: api/go.mod
-          check-latest: true
-          cache-dependency-path: api/go.sum
-
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-
-      - name: Run govulncheck
-        run: ./scripts/check.sh --only govulncheck
+    uses: ./.github/workflows/govulncheck.yml
 
   test:
     runs-on: ubuntu-latest
