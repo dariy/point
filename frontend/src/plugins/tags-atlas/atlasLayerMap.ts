@@ -3,7 +3,7 @@
  * makes one, and it keeps it until the page unloads or `tags-atlas` is off.
  *
  * The map is lazy. Nothing loads (no Leaflet, no data, no tiles) until the
- * first `show()`. Then the controller loads Leaflet, builds the map and mounts
+ * first `show()` or `warm()`. Then the controller loads Leaflet, builds the map and mounts
  * AtlasPlaces on it: country shapes, selectable geo-tags and the tag-post graph.
  * The map is never rebuilt. It calls `invalidateSize` whenever its box changes.
  */
@@ -33,6 +33,12 @@ export interface AtlasLayerMapController {
    * `show()` puts the kept view back.
    */
   park(): void;
+  /**
+   * Build the map off screen (the `list` state), so the first `show()` only
+   * shows it. Leaflet, the tiles and the places load into the hidden box. The
+   * map stays parked: a viewport from the URL is kept for the first `show()`.
+   */
+  warm(): void;
   /**
    * A new list page shows the map: bring the selection and the URL viewport in
    * line with the new route.
@@ -69,6 +75,8 @@ export function mountAtlasLayerMap(
   let dead = false;
   let ro: ResizeObserver | null = null;
   let parked: { center: unknown; zoom: number } | null = null;
+  // The last call was show() (true) or park()/warm() (false).
+  let shown = false;
   const isAlive = () => !dead;
 
   const writeView = () => {
@@ -141,6 +149,14 @@ export function mountAtlasLayerMap(
     });
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
+    // A warm build is off screen, in a box larger than the mapList box. At a
+    // low zoom `maxBounds` can move the URL centre for it, and a fit-to-places
+    // fits the wrong box. So the first show() sets the view: the URL view is
+    // kept for it, or the fit waits for it.
+    if (!shown) {
+      if (view) parked = { center: [view.lat, view.lng], zoom: view.zoom };
+      else places.holdFit();
+    }
     map.invalidateSize();
     ro = new ResizeObserver(onResize);
     ro.observe(opts.container);
@@ -150,6 +166,7 @@ export function mountAtlasLayerMap(
   return {
     show() {
       if (dead) return;
+      shown = true;
       if (!map) {
         void build();
         return;
@@ -163,9 +180,18 @@ export function mountAtlasLayerMap(
       } else {
         map.invalidateSize();
       }
+      places?.releaseFit();
     },
     park() {
-      if (map && !parked) parked = { center: map.getCenter(), zoom: map.getZoom() };
+      // Keep the view only when a shown map goes off screen. A map that was
+      // never shown (a warm build) is not parked here: its fit-to-places can
+      // land after this call, and the first show() must keep that fit.
+      if (map && shown && !parked) parked = { center: map.getCenter(), zoom: map.getZoom() };
+      shown = false;
+    },
+    warm() {
+      if (dead || map) return;
+      void build();
     },
     route() {
       places?.syncToRoute();

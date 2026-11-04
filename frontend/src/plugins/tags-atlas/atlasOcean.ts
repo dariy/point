@@ -19,7 +19,11 @@
  * next list page shows the same map at the same viewport: no new `L.map`, no
  * new tiles, no new places fetch.
  *
- * Leaflet loads on the first `mapList` or `full`, not before.
+ * Warm-up: a list page that attaches in the `list` state builds the map in an
+ * idle callback after the attach (GridPager.arm runs after the grid render, so
+ * the LCP image goes first). The container stays `visibility: hidden` and the
+ * first `mapList` or `full` only shows the map. With `saveData` on, nothing
+ * warms; Leaflet loads on the first `mapList` or `full`.
  */
 
 import { getAtlasLayerState, isAtlasListPath } from './atlasLayerState.ts';
@@ -61,6 +65,10 @@ export interface AtlasOceanDeps {
   observeState(body: HTMLElement, fn: () => void): () => void;
   /** The current path and query. */
   path(): string;
+  /** Run `fn` when the page is idle. Returns a cancel. */
+  idle(fn: () => void): () => void;
+  /** True when the user asks to save data (`navigator.connection.saveData`). */
+  saveData(): boolean;
 }
 
 export interface AtlasOcean {
@@ -87,6 +95,19 @@ function defaultObserveState(body: HTMLElement, fn: () => void): () => void {
   return () => mo.disconnect();
 }
 
+function defaultIdle(fn: () => void): () => void {
+  if (typeof requestIdleCallback === 'function') {
+    const id = requestIdleCallback(fn, { timeout: 5000 });
+    return () => cancelIdleCallback(id);
+  }
+  const id = setTimeout(fn, 1500);
+  return () => clearTimeout(id);
+}
+
+function defaultSaveData(): boolean {
+  return (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+}
+
 function defaultDeps(): AtlasOceanDeps {
   return {
     body: document.body,
@@ -95,6 +116,8 @@ function defaultDeps(): AtlasOceanDeps {
     mountMap: (container, body) => mountAtlasLayerMap({ container }, body),
     observeState: defaultObserveState,
     path: () => location.pathname + location.search,
+    idle: defaultIdle,
+    saveData: defaultSaveData,
   };
 }
 
@@ -112,6 +135,25 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   let timer: ReturnType<typeof setTimeout> | undefined;
   // A page detached since the last attach: the next attach is a new route.
   let moved = false;
+  // The warm-up: scheduled (a cancel), done, or neither.
+  let cancelWarm: (() => void) | null = null;
+  let warmed = false;
+
+  const stopWarm = () => {
+    cancelWarm?.();
+    cancelWarm = null;
+  };
+
+  /** In `list`, build the hidden map when the page is idle (see the file comment). */
+  const scheduleWarm = () => {
+    if (warmed || cancelWarm || current !== 'hidden' || deps.saveData()) return;
+    cancelWarm = deps.idle(() => {
+      cancelWarm = null;
+      if (!map || !layout || current !== 'hidden') return;
+      warmed = true;
+      map.warm();
+    });
+  };
 
   const present = (p: AtlasPresentation) => {
     current = p;
@@ -119,7 +161,12 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     // A hidden map keeps its view: its box changes size, and the next show
     // must not find a centre that `maxBounds` moved (atlasLayerMap.ts::park).
     if (p === 'hidden') map?.park();
-    else map?.show();
+    else {
+      // A shown map is built; a warm-up has nothing left to do.
+      stopWarm();
+      warmed = true;
+      map?.show();
+    }
   };
 
   const releaseLayout = () => {
@@ -157,6 +204,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       // A new page: the selection and the URL viewport follow the new route.
       if (newRoute) map.route();
       present(presentationForState(getAtlasLayerState(body)));
+      scheduleWarm();
     },
 
     detach(path = deps.path(), ms = DETACH_MS) {
@@ -168,6 +216,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         timer = setTimeout(() => { releaseLayout(); present('hidden'); }, ms);
         return;
       }
+      stopWarm();
       releaseLayout();
       present('hidden');
     },
@@ -176,6 +225,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     presentation: () => current,
 
     destroy() {
+      stopWarm();
+      warmed = false;
       releaseLayout();
       map?.destroy();
       map = null;

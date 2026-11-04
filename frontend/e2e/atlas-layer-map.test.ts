@@ -61,16 +61,59 @@ describe('Atlas layer map', () => {
     await browser?.close();
   });
 
-  it('makes no map request while the page stays in list', async () => {
-    tiles.length = 0;
+  it('warms the map hidden in list; the first mapList makes no Leaflet or places request', async () => {
     const requests: string[] = [];
-    page.on('request', (r) => requests.push(r.url()));
+    const onRequest = (r: { url(): string }) => requests.push(r.url());
+    page.on('request', onRequest);
     await page.goto(BASE + '/tags/atlas-map-set');
-    await page.locator('.atlas-layer-handle').waitFor();
+    await page.locator('#grid-mount .post-card').first().waitFor();
+    // The warm-up runs in an idle callback after the grid render.
+    await page.locator('.atlas-layer-map.leaflet-container').waitFor({ state: 'attached' });
+    await page.locator('.atlas-layer-map .atlas-marker').first().waitFor({ state: 'attached' });
+    const box = await page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('.atlas-layer-map')!;
+      const cs = getComputedStyle(el);
+      return { visibility: cs.visibility, pointer: cs.pointerEvents, h: el.offsetHeight };
+    });
+    assert.equal(box.visibility, 'hidden');
+    assert.equal(box.pointer, 'none');
+    assert.ok(box.h > 0, 'the hidden map keeps its size');
+    assert.ok(requests.some((u) => /leaflet\.js/.test(u)), 'leaflet loaded in list');
+    assert.ok(requests.some((u) => /\/api\/pages\/graph\?/.test(u)), 'places loaded in list');
+
+    requests.length = 0;
+    await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
     await page.waitForTimeout(500);
-    assert.equal(tiles.length, 0, 'tile requests: ' + tiles.join(', '));
-    assert.equal(requests.filter((u) => /leaflet/.test(u)).length, 0, 'leaflet loaded in list');
-    assert.equal(await page.locator('.atlas-layer-marker').count(), 0);
+    assert.equal(requests.filter((u) => /leaflet\.js|\/api\/pages\/graph\?/.test(u)).length, 0,
+      'mapList requests: ' + requests.join(', '));
+    // A re-arm in list must not keep a view from before the fit-to-places.
+    await page.waitForTimeout(400);
+    const inside = await page.evaluate(() => {
+      const box = document.querySelector('.atlas-layer-map')!.getBoundingClientRect();
+      const m = document.querySelector('.atlas-layer-map .atlas-marker')!.getBoundingClientRect();
+      return m.left >= box.left && m.right <= box.right && m.top >= box.top && m.bottom <= box.bottom;
+    });
+    assert.ok(inside, 'the warm map shows its places on the first mapList');
+    page.off('request', onRequest);
+  });
+
+  it('makes no map request in list when saveData is on', async () => {
+    const ctx = await browser!.newContext({ viewport: { width: 390, height: 844 } });
+    const p = await ctx.newPage();
+    await p.addInitScript(() => {
+      localStorage.removeItem('atlasLayerState');
+      Object.defineProperty(navigator, 'connection', { value: { saveData: true } });
+    });
+    const requests: string[] = [];
+    p.on('request', (r) => requests.push(r.url()));
+    await p.route(/arcgisonline\.com/, (route) => route.abort());
+    await p.goto(BASE + '/tags/atlas-map-set');
+    await p.locator('.atlas-layer-handle').waitFor();
+    await p.waitForTimeout(2500);
+    const map = requests.filter((u) => /leaflet|arcgisonline|\/api\/pages\/graph\?/.test(u));
+    assert.equal(map.length, 0, 'map requests: ' + map.join(', '));
+    assert.equal(await p.locator('.atlas-layer-map.leaflet-container').count(), 0);
+    await ctx.close();
   });
 
   const openMap = async (state = 'map') => {
