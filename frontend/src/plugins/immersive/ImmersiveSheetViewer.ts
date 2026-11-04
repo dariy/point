@@ -28,12 +28,13 @@
 import type { MediaViewerProps } from '../../components/shared/MediaViewer.ts';
 import { MediaViewer } from '../../components/shared/MediaViewer.ts';
 import type { PostStub } from '../../api/posts.ts';
-import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.ts';
+import { html, setHTML, linkify, raw, sharePost, navigate } from '../../utils/helpers.ts';
 import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { renderTagLink, buildTagIndex, parseTagUrl, postGeoTag } from '../../utils/tagLinks.ts';
-import { atlasPresentation, presentAtlasOcean } from '../tags-atlas/atlasOcean.ts';
+import { atlasPresentation, expandAtlasOcean, presentAtlasOcean } from '../tags-atlas/atlasOcean.ts';
+import { searchWithState, searchWithView } from '../tags-atlas/atlasLayerState.ts';
 import { setupTagFlyout } from '../../utils/tagFlyout.ts';
 import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.ts';
 import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.ts';
@@ -43,6 +44,8 @@ const SHEET_ANIM_MS = 340;
 const SHEET_ANIM = `transform ${SHEET_ANIM_MS / 1000}s cubic-bezier(0.22, 0.61, 0.36, 1)`;
 /** The map zoom in the sheet's slot: a town and its streets. */
 const SHEET_MAP_ZOOM = 10;
+/** The full map's zoom after a tap on the slot: the place and the places near it. */
+const FULL_MAP_ZOOM = 6;
 export class ImmersiveSheetViewer extends MediaViewer {
   _sheetOpen: boolean;
   _sheetHeight: number;
@@ -61,6 +64,8 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _mapShown = false;
   /** Stop the frame loop that keeps the window on the slot during a sheet slide. */
   _mapFollowStop: (() => void) | null = null;
+  /** A tap opened the full map: the ocean is not this viewer's now. */
+  _mapLeaving = false;
   constructor(container: HTMLElement, props: MediaViewerProps = {}) {
     super(container, props);
     this._sheetOpen = false; // current snap state
@@ -284,8 +289,30 @@ export class ImmersiveSheetViewer extends MediaViewer {
     }, { capture: true, passive: true });
   }
 
-  /** A tap in the window. Child 5 of the atlas-ocean epic opens the full map here. */
-  _onMapTap() {}
+  /**
+   * A tap in the window opens the geo-tag's page in `map` state, at the place.
+   * The ocean grows the window to the whole screen while the viewer fades
+   * (`immersive-map-leaving`); then the move. The tag page's attach sets the
+   * zoom, selects the place and focuses this post's chip
+   * (atlasOcean.ts::expand). The history entry carries `fromPost` (the way
+   * back to this post) and `sheet: 'open'`.
+   */
+  _onMapTap() {
+    const geo = this._mapGeoTag();
+    const postSlug = this.props.post?.slug;
+    if (!geo || !postSlug || this._mapLeaving) return;
+    this._mapLeaving = true;
+    this._stopMapFollow();
+    // The tag page owns the ocean from here: this viewer's cleanup must not hide it.
+    this._mapShown = false;
+    this.container.classList.add('immersive-map-leaving');
+    const center = { lat: geo.latitude, lng: geo.longitude };
+    const search = searchWithView(searchWithState('', 'map'), { ...center, zoom: FULL_MAP_ZOOM });
+    const path = `/tags/${encodeURIComponent(geo.slug)}${search}`;
+    void expandAtlasOcean({ center, zoom: FULL_MAP_ZOOM, focusPostSlug: postSlug }).then(() => {
+      navigate(path, { state: { fromPost: postSlug, sheet: 'open' } });
+    });
+  }
 
   /**
    * Put the ocean's window on the slot, or hide the ocean when the slot is off
@@ -293,6 +320,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
    * the next ones move the map with the slot, so a pan in the window stays.
    */
   _syncMapWindow() {
+    if (this._mapLeaving) return;
     const slot = this.$('.immersive-sheet-map');
     const geo = slot ? this._mapGeoTag() : null;
     // A shut sheet has no slot on screen; a closing slide keeps the window to the end.
@@ -534,6 +562,8 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _cleanup() {
     super._cleanup();
     this._hideMapWindow();
+    this._mapLeaving = false;
+    this.container.classList.remove('immersive-map-leaving');
     this._swipeInMap = false;
     if (this._onResize) {
       window.removeEventListener('resize', this._onResize);

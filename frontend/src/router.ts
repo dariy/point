@@ -118,17 +118,17 @@ class Router {
     this._showFallback("404", "Page not found.");
   }
 
-  /** Programmatically navigate to a path. */
-  navigate(path: string, { replace = false }: { replace?: boolean } = {}) {
+  /** Programmatically navigate to a path. `state` goes into the history entry. */
+  navigate(path: string, { replace = false, state = null }: { replace?: boolean; state?: unknown } = {}) {
     // A move between post list pages keeps the atlas layer's view mode (list,
     // map and list, map only). The URL carries it; the next page reads it on mount.
     if (document.body.hasAttribute("data-atlas-layer")) {
       path = carryStateToPath(path, getAtlasLayerState());
     }
     if (replace) {
-      history.replaceState(null, "", path);
+      history.replaceState(state, "", path);
     } else {
-      history.pushState(null, "", path);
+      history.pushState(state, "", path);
     }
     // Always render using the browser's resolved location to ensure absolute
     // path matching in the router.
@@ -169,8 +169,8 @@ class Router {
   }
 
   _onNavigate(event: Event) {
-    const { path, replace } = (event as CustomEvent<{ path: string; replace?: boolean }>).detail;
-    this.navigate(path, { replace });
+    const { path, replace, state } = (event as CustomEvent<{ path: string; replace?: boolean; state?: unknown }>).detail;
+    this.navigate(path, { replace, state });
   }
 
   _onUnauthorized() {

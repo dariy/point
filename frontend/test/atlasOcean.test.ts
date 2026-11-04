@@ -65,7 +65,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
       return {
         show: () => log.push('show'),
         park: () => log.push('park'),
-        route: () => log.push('route'),
+        route: (focus) => log.push(focus ? `route ${focus}` : 'route'),
+        setView: (c, z) => log.push(`setView ${c.lat},${c.lng} z${z}`),
         warm: () => log.push('warm'),
         frame: (c, o, z) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}${z == null ? '' : ` z${z}`}`),
         offsetOf: () => ({ x: 0, y: 0 }),
@@ -445,6 +446,81 @@ describe('atlasOcean', () => {
       assert.equal(p.pendingFrames, 0);
       assert.equal(p.ocean.presentation(), 'full');
       assert.equal(p.container.style.clipPath, '');
+    });
+
+    describe('expand (the sheet widget opens the full map)', () => {
+      const target = { center: paris, zoom: 6, focusPostSlug: 'a-post' };
+
+      test('the clip grows from the slot to the whole box; the zoom waits for the tag page', async () => {
+        const p = fakePage('list');
+        let taps = 0;
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, zoom: 10, onTap: () => taps++ });
+        p.log.length = 0;
+        const done = p.ocean.expand(target, 100);
+        assert.equal(p.ocean.presentation(), 'window');
+        assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+        p.tick(50);
+        // Half way (eased 0.5): top 250, bottom 50, sides 10.
+        assert.equal(p.container.style.clipPath, 'inset(250px 10px 50px 10px)');
+        p.tick(100);
+        await done;
+        // The map holds as a window over the whole box, the point at the centre.
+        assert.equal(p.ocean.presentation(), 'window');
+        assert.equal(p.container.style.clipPath, 'inset(0px 0px 0px 0px)');
+        assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,0');
+        assert.ok(!p.log.some((l) => /z\d/.test(l)), 'no zoom change during the tween');
+        // A tap while it holds does not open the full map a second time.
+        p.dispatch('pointerdown');
+        p.dispatch('pointerup');
+        p.dispatch('click');
+        assert.equal(taps, 0);
+
+        // The tag page attaches in `map` state: full, then the zoom, then the selection.
+        p.log.length = 0;
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.equal(p.ocean.presentation(), 'full');
+        assert.equal(p.container.style.clipPath, '');
+        assert.deepEqual(p.log, ['layout', 'show', 'setView 48.85,2.35 z6', 'route a-post']);
+        assert.equal(p.maps, 1, 'no second map');
+      });
+
+      test('reduced motion: the window covers the box at once', async () => {
+        const p = fakePage('list', { reducedMotion: true });
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        await p.ocean.expand(target);
+        assert.equal(p.pendingFrames, 0);
+        assert.equal(p.container.style.clipPath, 'inset(0px 0px 0px 0px)');
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.equal(p.ocean.presentation(), 'full');
+        assert.equal(p.log[p.log.length - 1], 'route a-post');
+      });
+
+      test('a present before the attach cancels the expand', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        const done = p.ocean.expand(target, 100);
+        p.ocean.present('hidden');
+        await done;
+        p.log.length = 0;
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.deepEqual(p.log, ['layout', 'show']);
+      });
+
+      test('a later attach after a finished expand is a plain attach', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        const done = p.ocean.expand(target, 100);
+        p.tick(100);
+        await done;
+        p.setUrlState('map');
+        p.ocean.attach();
+        p.log.length = 0;
+        p.ocean.attach();
+        assert.deepEqual(p.log, ['show']);
+      });
     });
 
     test('destroy removes the window listeners', () => {
