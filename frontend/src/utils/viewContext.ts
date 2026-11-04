@@ -1,12 +1,19 @@
 import { getRoute } from '../store.ts';
 import { navigate } from './helpers.ts';
+import { isAtlasListPath, VIEW_PARAM } from '../plugins/tags-atlas/atlasLayerState.ts';
 
-/** `url` plus the `atlas` and `view` parameters of the current location. */
+/**
+ * `url` plus the `atlas` and `view` parameters of the current location. The map
+ * viewport (`at`) rides along too, but only when `url` is still a list page that
+ * has the map layer.
+ */
 function carryAtlasParams(url: string): string {
   const from = new URLSearchParams(window.location.search);
   const [path = '', search = ''] = url.split('?');
   const params = new URLSearchParams(search);
-  for (const key of ['atlas', 'view']) {
+  const keys = ['atlas', 'view'];
+  if (isAtlasListPath(url)) keys.push(VIEW_PARAM);
+  for (const key of keys) {
     const value = from.get(key);
     if (value !== null) params.set(key, value);
   }

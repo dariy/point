@@ -113,7 +113,7 @@ export interface AtlasView {
   zoom: number;
 }
 
-const VIEW_PARAM = 'at';
+export const VIEW_PARAM = 'at';
 
 /** The viewport in `?at=lat,lng,zoom`, or null when absent or malformed. */
 export function viewFromSearch(search: string): AtlasView | null {
