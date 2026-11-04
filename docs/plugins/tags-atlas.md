@@ -43,6 +43,21 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
 - **Keyboard** on the handle: Enter or Space cycles, ArrowDown goes forward, ArrowUp
   goes back, Escape goes to `list`.
 
+### Map taps
+
+- **Tap on a place** (a country shape or a marker): the place is selected, and its tag
+  page `/tags/<slug>` opens. The list shows the posts of that place.
+- **Tap on the place that is open**: the cloud moves to the tap point. The route does not
+  change.
+- **Tap on empty map** (the sea, or a country with no geo-tag): the selection is cleared.
+  On `/tags/<slug>`, the home page `/` opens. On `/`, only the selection is cleared.
+
+A move between list pages (`/` and `/tags/<slug>`) does not rebuild the map. This is
+also true for Back, Forward and a tag link. The same map stays, with the same viewport
+and tiles, and it does not fit to the places again. The old page parks the map
+(`atlasLayerHost.ts`) and the new page takes it. A move to any other page (a post,
+search, admin) destroys the map.
+
 When the layer map is less than 320px high (a phone on its side), the legend is one
 button to the right of the zoom control. The button opens the filters in one row.
 

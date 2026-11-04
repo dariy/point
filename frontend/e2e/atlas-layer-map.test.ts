@@ -141,16 +141,39 @@ describe('Atlas layer map', () => {
     const titles = () => page.evaluate(() =>
       [...document.querySelectorAll('#grid-mount .post-card-title')].map((e) => e.textContent?.trim() ?? ''));
 
+    // A mark on the live Leaflet pane. A rebuilt map has a new pane without it.
+    const markMap = () => page.evaluate(() => {
+      document.querySelector<HTMLElement>('.atlas-layer-map .leaflet-map-pane')!.dataset.e2eMark = '1';
+    });
+    const sameMap = () => page.evaluate(() =>
+      document.querySelectorAll('.atlas-layer-map .leaflet-map-pane[data-e2e-mark="1"]').length === 1);
+
     const selectMapton = async () => {
       await openMap('mapList');
       await page.evaluate(() => { (window as any).__noReload = true; });
+      await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
+      await markMap();
       await page.locator('.atlas-layer-map .atlas-marker').first().click();
       await page.waitForFunction(() => location.pathname === '/tags/mapton');
       await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length === 1);
-      // A map click clears only an active selection; the tag page redraws the
-      // places first, so wait until the selection is back on the map.
       await page.locator('.atlas-layer-map .atlas-node--center').waitFor();
     };
+
+    it('keeps the same map when a tap on a place opens its tag page', async () => {
+      await selectMapton();
+      assert.equal(await sameMap(), true, 'the map was not rebuilt');
+    });
+
+    it('does nothing when the place that is open is tapped again', async () => {
+      await selectMapton();
+      const entries = await page.evaluate(() => history.length);
+      // The cloud covers the marker, so the click goes to the marker directly.
+      await page.evaluate(() => document.querySelector<HTMLElement>('.atlas-layer-map .atlas-marker')!.click());
+      await page.waitForTimeout(300);
+      assert.equal(await page.evaluate(() => location.pathname), '/tags/mapton');
+      assert.equal(await page.evaluate(() => history.length), entries, 'no new history entry');
+      assert.equal(await sameMap(), true);
+    });
 
     it('opens the geo-tag page client-side and keeps the view mode', async () => {
       await selectMapton();
@@ -166,14 +189,23 @@ describe('Atlas layer map', () => {
     it('goes back to the home page when the selection is cleared on the map', async () => {
       await selectMapton();
       await page.locator('.atlas-layer-map').click({ position: { x: 200, y: 450 } });
-      // The router pushes `/` and unmounts the tag page (the layer drops to
-      // `list`) before the home page mounts and reads the state from the URL.
       // Wait for the home grid, not for the path alone.
       await page.waitForFunction(() => location.pathname === '/'
         && document.querySelectorAll('#grid-mount .post-card').length > 1);
       assert.equal(await page.evaluate(() => (window as any).__noReload === true), true, 'no full page load');
+      assert.equal(await sameMap(), true, 'the map was not rebuilt');
+      assert.equal(await page.locator('.atlas-layer-map .atlas-node').count(), 0, 'no selection on home');
       assert.equal(await page.evaluate(() => document.body.dataset.atlasLayer), 'mapList');
       assert.equal(await page.locator('#atlas-filter-mount').count(), 0);
+    });
+
+    it('destroys the map when a post opens', async () => {
+      await selectMapton();
+      await page.locator('#grid-mount .post-card').first().click();
+      await page.waitForFunction(() => location.pathname.startsWith('/posts/') || location.search.includes('slug='));
+      await page.waitForFunction(() => !document.querySelector('.atlas-layer-map .leaflet-map-pane'));
+      assert.equal(await page.evaluate(() => document.body.hasAttribute('data-atlas-layer')
+        ? document.body.dataset.atlasLayer : 'list'), 'list');
     });
   });
 });

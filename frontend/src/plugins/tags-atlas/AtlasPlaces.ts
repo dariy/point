@@ -325,6 +325,19 @@ export class AtlasPlaces {
     }
   }
 
+  /**
+   * Match the selection to the route after the map moved to a new list page:
+   * `/` has no selection, `/tags/<slug>` selects that place. A selection that
+   * already matches stays as it is (no new cloud, no pan).
+   */
+  syncToRoute(): void {
+    const vc = ViewContext.current();
+    const slug = vc.path.startsWith('/tags/') ? vc.tag : null;
+    if (this._activeTag && this._activeTag.slug === slug) return;
+    if (this._activeTag) this._clearSelection();
+    this._restoreFromUrl();
+  }
+
   /** The hint and the legend; the legend toggles hide a node type. */
   _mountOverlays(): void {
     const hint = document.createElement("div");

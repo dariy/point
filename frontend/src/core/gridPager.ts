@@ -45,6 +45,7 @@ import { mountAtlasLayerGesture } from '../plugins/tags-atlas/atlasLayerGesture.
 import { mountAtlasLayerLayout } from '../plugins/tags-atlas/atlasLayerLayout.ts';
 import { mountAtlasLayerMap } from '../plugins/tags-atlas/atlasLayerMap.ts';
 import type { AtlasLayerMapController } from '../plugins/tags-atlas/atlasLayerMap.ts';
+import { parkAtlasLayer, takeParkedAtlasLayer } from '../plugins/tags-atlas/atlasLayerHost.ts';
 
 import type { Post } from '../api/posts.ts';
 import type { PostCardProps } from '../components/public/PostCard.ts';
@@ -149,6 +150,13 @@ export class GridPager {
       next: null
     };
     this._warmedMedia = null;
+    // The page before this one left its live map for the next list page.
+    const kept = takeParkedAtlasLayer();
+    if (kept) {
+      this._atlasLayout = kept.layout;
+      this._atlasMap = kept.map;
+      kept.map?.setOwner(this._o.isAlive);
+    }
   }
 
   /**
@@ -250,9 +258,11 @@ export class GridPager {
     this._atlasGesture = null;
     this._atlasHandle?.remove();
     this._atlasHandle = null;
-    this._atlasLayout?.();
+    // A move to another list page (`/` ↔ `/tags/<slug>`) keeps the layout and
+    // the live map for the next page's pager; any other move destroys them.
+    if (this._atlasLayout) parkAtlasLayer({ layout: this._atlasLayout, map: this._atlasMap });
+    else this._atlasMap?.destroy();
     this._atlasLayout = null;
-    this._atlasMap?.destroy();
     this._atlasMap = null;
     this._committedGhost?.remove();
     this._committedGhost = null;

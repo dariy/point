@@ -138,6 +138,16 @@ export function replaceSearch(search: string): void {
 }
 
 /**
+ * True when `path` is a post list page that has the map layer: `/` or
+ * `/tags/<slug>`, but not a post inside a tag (`?slug=`).
+ */
+export function isAtlasListPath(path: string): boolean {
+  const url = new URL(path, 'http://x');
+  const isList = url.pathname === '/' || /^\/tags\/[^/]+\/?$/.test(url.pathname);
+  return isList && !url.searchParams.has('slug');
+}
+
+/**
  * `path` with the `view` parameter for `state`, when `path` is a post list page
  * (`/` or `/tags/<slug>`, not a post inside a tag) that names no state of its own.
  * Any other path returns `path` unchanged. This is how a tag link keeps the view
@@ -145,7 +155,6 @@ export function replaceSearch(search: string): void {
  */
 export function carryStateToPath(path: string, state: AtlasLayerState): string {
   const url = new URL(path, 'http://x');
-  const isList = url.pathname === '/' || /^\/tags\/[^/]+\/?$/.test(url.pathname);
-  if (!isList || url.searchParams.has('slug') || stateFromSearchOrNull(url.search)) return path;
+  if (!isAtlasListPath(path) || stateFromSearchOrNull(url.search)) return path;
   return url.pathname + searchWithState(url.search, state) + url.hash;
 }
