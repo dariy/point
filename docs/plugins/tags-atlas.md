@@ -52,11 +52,15 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
 - **Tap on empty map** (the sea, or a country with no geo-tag): the selection is cleared.
   On `/tags/<slug>`, the home page `/` opens. On `/`, only the selection is cleared.
 
+One module owns the map: `atlasOcean.ts`. It keeps the container, the Leaflet map, the
+tiles and the places until the page unloads or `tags-atlas` is off. A list page attaches
+to it and detaches from it, and it never makes or destroys the map.
+
 A move between list pages (`/` and `/tags/<slug>`) does not rebuild the map. This is
 also true for Back, Forward and a tag link. The same map stays, with the same viewport
-and tiles, and it does not fit to the places again. The old page parks the map
-(`atlasLayerHost.ts`) and the new page takes it. A move to any other page (a post,
-search, admin) destroys the map.
+and tiles, and it does not fit to the places again. A move to any other page (a post,
+search, admin) hides the map and keeps it. A return to the list page shows the same map
+at the same viewport. Leaflet loads on the first change out of `list`, not before.
 
 When the layer map is less than 320px high (a phone on its side), the legend is one
 button to the right of the zoom control. The button opens the filters in one row.
