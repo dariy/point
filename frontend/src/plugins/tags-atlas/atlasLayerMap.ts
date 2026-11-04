@@ -1,37 +1,42 @@
 /**
- * atlasLayerMap — the map inside the layer.
+ * atlasLayerMap — the map inside the layer. Only the ocean (atlasOcean.ts)
+ * makes one, and it keeps it until the page unloads or `tags-atlas` is off.
  *
- * The map is lazy. Nothing loads (no Leaflet, no data, no tiles) while the page
- * stays in `list`. On the first change out of `list` the controller loads
- * Leaflet, builds the map and mounts AtlasPlaces on it: country shapes,
- * selectable geo-tags and the tag-post graph. The map is never rebuilt. It
- * calls `invalidateSize` whenever its box changes (a state change or a drag).
- *
- * A move between list pages (`/` and `/tags/<slug>`) keeps the map: the old
- * page's pager parks it and the new page's pager takes it (atlasLayerHost.ts).
+ * The map is lazy. Nothing loads (no Leaflet, no data, no tiles) until the
+ * first `show()`. Then the controller loads Leaflet, builds the map and mounts
+ * AtlasPlaces on it: country shapes, selectable geo-tags and the tag-post graph.
+ * The map is never rebuilt. It calls `invalidateSize` whenever its box changes.
  */
 
 import { loadLeaflet, TILE_ATTR, TILE_DARK, TILE_LIGHT, TILE_MAX_NATIVE_ZOOM } from '../../utils/leaflet.ts';
 import { navigate } from '../../utils/helpers.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { AtlasPlaces } from './AtlasPlaces.ts';
-import { getAtlasLayerState, replaceSearch, searchWithView, viewFromSearch } from './atlasLayerState.ts';
+import { getAtlasLayerState, isAtlasListPath, replaceSearch, searchWithView, viewFromSearch } from './atlasLayerState.ts';
 
 import type { LeafletRef } from '../../utils/leaflet.ts';
 
 export interface AtlasLayerMapOptions {
   /** the map container */
   container: HTMLElement;
-  /** false once the host unmounted */
-  isAlive: () => boolean;
 }
 
 export interface AtlasLayerMapController {
+  /** The map is on screen: build it on the first call, then re-measure. */
+  show(): void;
+  /** Re-measure the map box. */
+  resize(): void;
   /**
-   * Give the map to a new page (its `isAlive`), or park it (`null`). A new owner
-   * also brings the selection and the URL viewport in line with the new route.
+   * The map goes off screen for another page. Its hidden box changes size, and
+   * at a low zoom Leaflet's `maxBounds` would move the centre for it. So a
+   * parked map ignores resizes, and the next `show()` puts the kept view back.
    */
-  setOwner(isAlive: (() => boolean) | null): void;
+  park(): void;
+  /**
+   * A new list page shows the map: bring the selection and the URL viewport in
+   * line with the new route.
+   */
+  route(): void;
   destroy(): void;
 }
 
@@ -51,7 +56,7 @@ function openPlace(slug: string | null): void {
   navigate(path + (years ? `?timeline=${years[0]}-${years[1]}` : ''));
 }
 
-/** Start the controller. It waits for the first state other than `list`. */
+/** Start the controller. It loads nothing until the first `show()`. */
 export function mountAtlasLayerMap(
   opts: AtlasLayerMapOptions,
   body: HTMLElement = document.body,
@@ -62,12 +67,12 @@ export function mountAtlasLayerMap(
   let loading = false;
   let dead = false;
   let ro: ResizeObserver | null = null;
-  // The page that owns the map. A parked map has no owner and stays alive.
-  let owner: () => boolean = opts.isAlive;
-  const isAlive = () => !dead && owner();
+  let parked: { center: unknown; zoom: number } | null = null;
+  const isAlive = () => !dead;
 
   const writeView = () => {
     if (!map || getAtlasLayerState(body) === 'list') return;
+    if (!isAtlasListPath(location.pathname + location.search)) return;
     const c = map.getCenter();
     replaceSearch(searchWithView(location.search, { lat: c.lat, lng: c.lng, zoom: map.getZoom() }));
   };
@@ -118,30 +123,43 @@ export function mountAtlasLayerMap(
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
     map.invalidateSize();
-    ro = new ResizeObserver(() => map?.invalidateSize());
+    // A parked map ignores its hidden box (see `park`).
+    ro = new ResizeObserver(() => { if (!parked) map?.invalidateSize(); });
     ro.observe(opts.container);
     void places.start();
   }
 
-  const sync = () => {
-    if (getAtlasLayerState(body) !== 'list') void build();
-    else map?.invalidateSize();
-  };
-  const mo = new MutationObserver(sync);
-  mo.observe(body, { attributes: true, attributeFilter: ['data-atlas-layer'] });
-  sync();
-
   return {
-    setOwner(next) {
-      owner = next ?? (() => true);
-      if (!next) return;
+    show() {
+      if (dead) return;
+      if (!map) {
+        void build();
+        return;
+      }
+      if (parked) {
+        // The box can differ from the one the map left (the window changed
+        // size). Re-measure without a pan, then put the kept view back.
+        const { center, zoom } = parked;
+        parked = null;
+        map.invalidateSize({ pan: false });
+        map.setView(center, zoom, { animate: false });
+      } else {
+        map.invalidateSize();
+      }
+    },
+    resize() {
+      if (!parked) map?.invalidateSize();
+    },
+    park() {
+      if (map && !parked) parked = { center: map.getCenter(), zoom: map.getZoom() };
+    },
+    route() {
       places?.syncToRoute();
       // The router carried `?view=` to the new URL, but not the viewport.
       writeView();
     },
     destroy() {
       dead = true;
-      mo.disconnect();
       ro?.disconnect();
       document.removeEventListener('themechange', onTheme);
       places?.destroy();

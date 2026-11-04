@@ -42,10 +42,7 @@ import { flipGrid } from '../utils/gridFlip.ts';
 import { pluginHost } from './pluginHost.ts';
 import { mountAtlasLayerHandle } from '../plugins/tags-atlas/atlasLayerHandle.ts';
 import { mountAtlasLayerGesture } from '../plugins/tags-atlas/atlasLayerGesture.ts';
-import { mountAtlasLayerLayout } from '../plugins/tags-atlas/atlasLayerLayout.ts';
-import { mountAtlasLayerMap } from '../plugins/tags-atlas/atlasLayerMap.ts';
-import type { AtlasLayerMapController } from '../plugins/tags-atlas/atlasLayerMap.ts';
-import { parkAtlasLayer, takeParkedAtlasLayer } from '../plugins/tags-atlas/atlasLayerHost.ts';
+import { attachAtlasOcean, destroyAtlasOcean, detachAtlasOcean } from '../plugins/tags-atlas/atlasOcean.ts';
 
 import type { Post } from '../api/posts.ts';
 import type { PostCardProps } from '../components/public/PostCard.ts';
@@ -135,8 +132,8 @@ export class GridPager {
   _zoomWheelEl: HTMLElement | null = null;
   _atlasHandle: HTMLElement | null = null;
   _atlasGesture: (() => void) | null = null;
-  _atlasLayout: (() => void) | null = null;
-  _atlasMap: AtlasLayerMapController | null = null;
+  /** this pager attached the atlas ocean (atlasOcean.ts) */
+  _atlasAttached = false;
 
   constructor(opts: GridPagerOptions) {
     this._o = {
@@ -150,13 +147,6 @@ export class GridPager {
       next: null
     };
     this._warmedMedia = null;
-    // The page before this one left its live map for the next list page.
-    const kept = takeParkedAtlasLayer();
-    if (kept) {
-      this._atlasLayout = kept.layout;
-      this._atlasMap = kept.map;
-      kept.map?.setOwner(this._o.isAlive);
-    }
   }
 
   /**
@@ -183,7 +173,10 @@ export class GridPager {
     this._setupGestures();
     this._setupPageControls();
     const gm = this._o.gridMount();
-    if (gm && pluginHost.isEnabled('tags-atlas')) {
+    const atlas = pluginHost.isEnabled('tags-atlas');
+    // The map lives in the ocean; with the plugin off, nothing of it stays.
+    if (!atlas) destroyAtlasOcean();
+    if (gm && atlas) {
       // The handle outlives a re-arm, and so does its gesture: a re-fit that lands
       // mid-drag must not cut the drag off.
       const handle = mountAtlasLayerHandle(gm);
@@ -192,14 +185,8 @@ export class GridPager {
         this._atlasGesture = handle ? mountAtlasLayerGesture(handle, this._o.gridMount) : null;
       }
       this._atlasHandle = handle;
-      this._atlasLayout ??= mountAtlasLayerLayout();
-      const container = document.querySelector<HTMLElement>('body > .atlas-layer-map');
-      if (container) {
-        this._atlasMap ??= mountAtlasLayerMap({
-          container,
-          isAlive: this._o.isAlive,
-        });
-      }
+      attachAtlasOcean();
+      this._atlasAttached = true;
     }
     if (this._o.zoom) this._setupZoomInputs();
     this._preloadAdjacentGrids();
@@ -248,9 +235,8 @@ export class GridPager {
     this._atlasGesture = null;
     this._atlasHandle?.remove();
     this._atlasHandle = null;
-    // The layout (and the map container it owns) and the map stay: a list
-    // refresh (a place filter, a page) must keep the map selection and view.
-    // Only destroy() removes them.
+    // The ocean stays attached: a list refresh (a place filter, a page) must
+    // keep the map selection and view.
   }
   destroy() {
     this._teardown();
@@ -258,12 +244,10 @@ export class GridPager {
     this._atlasGesture = null;
     this._atlasHandle?.remove();
     this._atlasHandle = null;
-    // A move to another list page (`/` ↔ `/tags/<slug>`) keeps the layout and
-    // the live map for the next page's pager; any other move destroys them.
-    if (this._atlasLayout) parkAtlasLayer({ layout: this._atlasLayout, map: this._atlasMap });
-    else this._atlasMap?.destroy();
-    this._atlasLayout = null;
-    this._atlasMap = null;
+    // The map is kept for every page. A move to another list page keeps it on
+    // screen for the next pager; any other move hides it.
+    if (this._atlasAttached) detachAtlasOcean();
+    this._atlasAttached = false;
     this._committedGhost?.remove();
     this._committedGhost = null;
     if (this._o.zoom) {

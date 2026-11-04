@@ -107,7 +107,8 @@ describe('Atlas layer URL state', () => {
       await page.waitForFunction(() => location.search.includes('slug='));
       await page.locator('#content-mount').waitFor({ state: 'attached' });
       // The post view on the tag page is the same page: the atlas layout must go, or CSS puts the post in the list panel.
-      await page.waitForFunction(() => !document.querySelector('body > .atlas-layer-map'));
+      // The map itself stays, hidden (atlasOcean.ts).
+      await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'hidden');
       assert.notEqual(await state(), 'mapList');
       assert.notEqual(await state(), 'map');
       await page.goBack();

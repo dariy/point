@@ -199,13 +199,34 @@ describe('Atlas layer map', () => {
       assert.equal(await page.locator('#atlas-filter-mount').count(), 0);
     });
 
-    it('destroys the map when a post opens', async () => {
+    it('keeps the map hidden on a post, and Back shows the same map at the same viewport', async () => {
       await selectMapton();
+      await page.waitForFunction(() => /[?&]at=/.test(location.search));
+      await page.waitForTimeout(500);
+      const at = () => page.evaluate(() => (new URLSearchParams(location.search).get('at') ?? '').split(',').map(Number));
+      const before = await at();
+      const later: string[] = [];
+      const onRequest = (r: { url(): string }) => later.push(r.url());
+      page.on('request', onRequest);
       await page.locator('#grid-mount .post-card').first().click();
       await page.waitForFunction(() => location.pathname.startsWith('/posts/') || location.search.includes('slug='));
-      await page.waitForFunction(() => !document.querySelector('.atlas-layer-map .leaflet-map-pane'));
+      await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'hidden');
       assert.equal(await page.evaluate(() => document.body.hasAttribute('data-atlas-layer')
         ? document.body.dataset.atlasLayer : 'list'), 'list');
+      assert.equal(await sameMap(), true, 'a post does not destroy the map');
+      await page.goBack();
+      await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
+      assert.equal(await page.evaluate(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')!.dataset.atlasOcean), 'mapList');
+      assert.equal(await sameMap(), true, 'the map was not rebuilt');
+      // The hidden box had another size; the map must not drift for it.
+      await page.waitForTimeout(800);
+      const after = await at();
+      assert.equal(after[2], before[2], 'same zoom');
+      assert.ok(Math.abs(after[0]! - before[0]!) < 0.5 && Math.abs(after[1]! - before[1]!) < 0.5,
+        `same viewport: ${before.join(',')} → ${after.join(',')}`);
+      page.off('request', onRequest);
+      assert.deepEqual(later.filter((u) => /leaflet/.test(u)), [], 'no second Leaflet load');
+      assert.deepEqual(later.filter((u) => /\/api\/pages\/graph(\?|$)/.test(u)), [], 'no second places fetch');
     });
   });
 });
