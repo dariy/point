@@ -24,12 +24,13 @@ export interface AtlasLayerMapOptions {
 export interface AtlasLayerMapController {
   /** The map is on screen: build it on the first call, then re-measure. */
   show(): void;
-  /** Re-measure the map box. */
-  resize(): void;
   /**
-   * The map goes off screen for another page. Its hidden box changes size, and
-   * at a low zoom Leaflet's `maxBounds` would move the centre for it. So a
-   * parked map ignores resizes, and the next `show()` puts the kept view back.
+   * The map goes off screen: the `list` state, or a page that is not a list.
+   * Its hidden box has another size, and at a low zoom Leaflet's `maxBounds`
+   * would move the centre for it. So a parked map keeps its view. A resize of
+   * the hidden box does nothing; a resize while the box is visible (a handle
+   * drag from `list`) re-measures and starts again from the kept view. The next
+   * `show()` puts the kept view back.
    */
   park(): void;
   /**
@@ -79,6 +80,24 @@ export function mountAtlasLayerMap(
 
   const onTheme = () => tiles?.setUrl(isDarkTheme() ? TILE_DARK : TILE_LIGHT);
 
+  /** Re-measure without a pan, then set the kept view (see `park`). */
+  const restore = (kept: { center: unknown; zoom: number }) => {
+    map.invalidateSize({ pan: false });
+    map.setView(kept.center, kept.zoom, { animate: false });
+  };
+
+  const onResize = () => {
+    if (!map) return;
+    if (!parked) {
+      map.invalidateSize();
+      return;
+    }
+    // A parked map is hidden (nothing to do), or a handle drag from `list`
+    // shows it. A drag needs the true size, but its view comes from the kept
+    // one, not from the last clamp. The kept view stays for the next `show()`.
+    if (getComputedStyle(opts.container).visibility === 'visible') restore(parked);
+  };
+
   async function build() {
     if (map || loading) return;
     loading = true;
@@ -123,8 +142,7 @@ export function mountAtlasLayerMap(
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
     map.invalidateSize();
-    // A parked map ignores its hidden box (see `park`).
-    ro = new ResizeObserver(() => { if (!parked) map?.invalidateSize(); });
+    ro = new ResizeObserver(onResize);
     ro.observe(opts.container);
     void places.start();
   }
@@ -138,17 +156,13 @@ export function mountAtlasLayerMap(
       }
       if (parked) {
         // The box can differ from the one the map left (the window changed
-        // size). Re-measure without a pan, then put the kept view back.
-        const { center, zoom } = parked;
+        // size). Re-measure, then put the kept view back.
+        const kept = parked;
         parked = null;
-        map.invalidateSize({ pan: false });
-        map.setView(center, zoom, { animate: false });
+        restore(kept);
       } else {
         map.invalidateSize();
       }
-    },
-    resize() {
-      if (!parked) map?.invalidateSize();
     },
     park() {
       if (map && !parked) parked = { center: map.getCenter(), zoom: map.getZoom() };

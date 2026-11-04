@@ -35,7 +35,6 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map') {
       maps++;
       return {
         show: () => log.push('show'),
-        resize: () => log.push('resize'),
         park: () => log.push('park'),
         route: () => log.push('route'),
         destroy: () => log.push('map.destroy'),
@@ -83,6 +82,14 @@ describe('atlasOcean', () => {
     assert.equal(p.ocean.presentation(), 'hidden');
   });
 
+  test('a change to list on the same page parks the map; the change back shows it', () => {
+    const p = fakePage('mapList');
+    p.ocean.attach();
+    setAtlasLayerState('list', p.body);
+    setAtlasLayerState('mapList', p.body);
+    assert.deepEqual(p.log, ['layout', 'show', 'park', 'show']);
+  });
+
   test('a list state does not show the map (Leaflet does not load)', () => {
     const p = fakePage('list');
     p.ocean.attach();
@@ -118,7 +125,7 @@ describe('atlasOcean', () => {
     p.ocean.attach();
     assert.equal(p.maps, 1, 'no second map');
     assert.equal(p.ocean.presentation(), 'full');
-    assert.deepEqual(p.log, ['layout', 'show', 'park', 'layout.cleanup', 'resize', 'layout', 'route', 'show']);
+    assert.deepEqual(p.log, ['layout', 'show', 'layout.cleanup', 'park', 'layout', 'route', 'show']);
   });
 
   test('the return does not slide the map in', () => {
@@ -141,7 +148,7 @@ describe('atlasOcean', () => {
     p.ocean.detach('/', 5);
     await new Promise((r) => setTimeout(r, 20));
     assert.equal(p.ocean.presentation(), 'hidden');
-    assert.deepEqual(p.log.slice(-2), ['layout.cleanup', 'resize']);
+    assert.deepEqual(p.log.slice(-2), ['layout.cleanup', 'park']);
     assert.ok(!p.log.includes('map.destroy'));
   });
 

@@ -137,6 +137,47 @@ describe('Atlas layer map', () => {
     assert.ok(tilesCover || tiles.length > 0, 'the map follows the new box');
   });
 
+  it('keeps the viewport at zoom 2 on mapList → list → mapList', async () => {
+    // A view near the north edge: the taller `list` box cannot hold it at zoom 2.
+    await page.goto(BASE + '/?view=split&at=55,30,2');
+    await page.locator('.atlas-layer-map .leaflet-tile-pane').waitFor({ state: 'attached' });
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
+    await page.waitForTimeout(800);
+    const at = () => page.evaluate(() => (new URLSearchParams(location.search).get('at') ?? '').split(',').map(Number));
+    const before = await at();
+    assert.equal(before[2], 2, 'the map opens at zoom 2');
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
+      await page.waitForTimeout(600);
+      await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
+      await page.waitForTimeout(600);
+      const after = await at();
+      assert.equal(after[2], before[2], 'same zoom');
+      assert.ok(Math.abs(after[0]! - before[0]!) < 0.5 && Math.abs(after[1]! - before[1]!) < 0.5,
+        `same viewport (round ${i + 1}): ${before.join(',')} → ${after.join(',')}`);
+    }
+    // A slow handle drag from `list` shows the map while the state is still
+    // `list`. The release in `mapList` must find the same view.
+    await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
+    await page.waitForTimeout(600);
+    const h = (await page.locator('.atlas-layer-handle').boundingBox())!;
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+    await page.mouse.down();
+    for (let y = h.y + h.height / 2; y < 500; y += 20) {
+      await page.mouse.move(h.x + h.width / 2, y);
+      await page.waitForTimeout(30);
+    }
+    assert.equal(await page.evaluate(() => document.body.hasAttribute('data-atlas-dragging')), true, 'the drag shows the map');
+    assert.equal(await page.evaluate(() => document.body.dataset.atlasLayer ?? 'list'), 'list');
+    await page.mouse.up();
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
+    await page.waitForTimeout(600);
+    const dragged = await at();
+    assert.equal(dragged[2], before[2], 'same zoom after the drag');
+    assert.ok(Math.abs(dragged[0]! - before[0]!) < 0.5 && Math.abs(dragged[1]! - before[1]!) < 0.5,
+      `same viewport after the drag: ${before.join(',')} → ${dragged.join(',')}`);
+  });
+
   describe('geo-tag selection', () => {
     const titles = () => page.evaluate(() =>
       [...document.querySelectorAll('#grid-mount .post-card-title')].map((e) => e.textContent?.trim() ?? ''));

@@ -116,7 +116,9 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   const present = (p: AtlasPresentation) => {
     current = p;
     if (container) container.dataset.atlasOcean = p;
-    if (p === 'hidden') map?.resize();
+    // A hidden map keeps its view: its box changes size, and the next show
+    // must not find a centre that `maxBounds` moved (atlasLayerMap.ts::park).
+    if (p === 'hidden') map?.park();
     else map?.show();
   };
 
@@ -166,7 +168,6 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         timer = setTimeout(() => { releaseLayout(); present('hidden'); }, ms);
         return;
       }
-      map?.park();
       releaseLayout();
       present('hidden');
     },
