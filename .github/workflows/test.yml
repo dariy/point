@@ -43,7 +43,7 @@ jobs:
           # Pinned for reproducible CI; the action downloads the release binary
           # rather than compiling it. Keep in sync with local tooling —
           # scripts/doctor.sh reads this line.
-          version: v2.12.2
+          version: v2.15.0
           install-only: true
           # The action's schema check of .golangci.yml is not part of the gate
           # (and the config does not pass it).
