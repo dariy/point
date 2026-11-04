@@ -8,7 +8,7 @@ import { isAtlasListPath, setAtlasLayerState } from '../src/plugins/tags-atlas/a
  * A fake page. `log` records what the ocean did to the map and the layout;
  * `maps` counts the map controllers (one controller = one Leaflet map at most).
  */
-function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?: boolean } = {}) {
+function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?: boolean; reducedMotion?: boolean } = {}) {
   const attrs = new Map<string, string>();
   const observers = new Set<() => void>();
   const body = {
@@ -19,7 +19,34 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     },
     removeAttribute: (n: string) => { attrs.delete(n); },
   } as unknown as HTMLElement;
-  const container = { dataset: {} as Record<string, string>, style: { transition: '' }, offsetHeight: 0, remove: () => log.push('container.remove') };
+  // The container's listeners, by type (the ocean listens in the capture phase).
+  const listeners = new Map<string, Set<(e: any) => void>>();
+  const container = {
+    dataset: {} as Record<string, string>,
+    style: { transition: '', clipPath: '' },
+    offsetHeight: 0,
+    remove: () => log.push('container.remove'),
+    addEventListener: (type: string, fn: (e: any) => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(fn);
+    },
+    removeEventListener: (type: string, fn: (e: any) => void) => { listeners.get(type)?.delete(fn); },
+  };
+  /** Send a DOM event to the container's listeners. Returns what the listeners did to it. */
+  const dispatch = (type: string, init: Record<string, number> = {}) => {
+    const ev = {
+      type, pointerId: 1, clientX: 0, clientY: 0, ...init,
+      stopped: false, prevented: false,
+      stopImmediatePropagation() { ev.stopped = true; },
+      preventDefault() { ev.prevented = true; },
+    };
+    for (const fn of listeners.get(type) ?? []) fn(ev);
+    return ev;
+  };
+  // The animation frames the ocean asked for; `tick(ms)` runs them at time `ms`.
+  const frames = new Set<(now: number) => void>();
+  let clock = 0;
+  let windowTap: (() => void) | null = null;
   const log: string[] = [];
   let maps = 0;
   let urlState = initial;
@@ -40,6 +67,10 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
         park: () => log.push('park'),
         route: () => log.push('route'),
         warm: () => log.push('warm'),
+        frame: (c, o) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}`),
+        offsetOf: () => ({ x: 0, y: 0 }),
+        panBy: (dx, dy) => log.push(`panBy ${dx},${dy}`),
+        setWindowTap: (fn) => { windowTap = fn; },
         destroy: () => log.push('map.destroy'),
       };
     },
@@ -51,6 +82,11 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
       return () => { idle.delete(fn); };
     },
     saveData: () => !!opts.saveData,
+    // The box: a 400×800 viewport.
+    box: () => ({ left: 0, top: 0, width: 400, height: 800 }) as DOMRect,
+    reducedMotion: () => !!opts.reducedMotion,
+    frame: (fn) => { frames.add(fn); return () => { frames.delete(fn); }; },
+    now: () => clock,
   });
   return {
     ocean,
@@ -65,6 +101,17 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
       for (const fn of fns) fn();
     },
     get pendingIdle() { return idle.size; },
+    dispatch,
+    /** A place pick in the map (AtlasPlaces → onSelect), as the controller sees it. */
+    get windowTap() { return windowTap; },
+    /** Run the pending frames at time `ms`. */
+    tick(ms: number) {
+      clock = ms;
+      const fns = [...frames];
+      frames.clear();
+      for (const fn of fns) fn(ms);
+    },
+    get pendingFrames() { return frames.size; },
     /** the state the next page reads from its URL */
     setUrlState(s: 'list' | 'mapList' | 'map') { urlState = s; },
   };
@@ -245,6 +292,150 @@ describe('atlasOcean', () => {
     p.ocean.detach('/posts/a-post');
     assert.equal(p.pendingIdle, 0);
     assert.ok(!p.log.includes('warm'));
+  });
+
+  describe('window', () => {
+    const slot = { left: 20, top: 500, width: 360, height: 200 };
+    const paris = { lat: 48.85, lng: 2.35 };
+
+    test('present(window) clips the box to the rect and centres the point in it', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      assert.equal(p.ocean.presentation(), 'window');
+      assert.equal(p.container.dataset.atlasOcean, 'window');
+      assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+      // The point goes 200 px below the box centre: the slot centre.
+      assert.deepEqual(p.log, ['frame 48.85,2.35 0,200']);
+      assert.equal(p.maps, 1, 'a window on a post with no list makes the map');
+    });
+
+    test('a window with no centre moves the map with the slot (a sheet scroll)', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      p.ocean.present({ kind: 'window', rect: { ...slot, top: 300 } });
+      assert.equal(p.container.style.clipPath, 'inset(300px 20px 300px 20px)');
+      assert.deepEqual(p.log.slice(-2), ['frame - 0,0', 'panBy 0,200']);
+    });
+
+    test('a move out of the window removes the clip and the tap', () => {
+      const p = fakePage('list');
+      let taps = 0;
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => taps++ });
+      p.ocean.present('hidden');
+      assert.equal(p.container.style.clipPath, '');
+      assert.equal(p.container.dataset.atlasOcean, 'hidden');
+      assert.equal(p.windowTap, null);
+      assert.equal(p.log[p.log.length - 1], 'park');
+      // A click on a hidden ocean goes on to the map as before.
+      const ev = p.dispatch('click');
+      assert.equal(ev.stopped, false);
+      assert.equal(taps, 0);
+    });
+
+    test('a tap in the window calls onTap; the click does not reach the map', () => {
+      const p = fakePage('list');
+      let taps = 0;
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => taps++ });
+      p.dispatch('pointerdown', { clientX: 100, clientY: 600 });
+      p.dispatch('pointermove', { clientX: 103, clientY: 601 });
+      p.dispatch('pointerup');
+      const ev = p.dispatch('click');
+      assert.equal(taps, 1);
+      assert.equal(ev.stopped, true, 'Leaflet and AtlasPlaces do not see the click');
+      assert.equal(ev.prevented, true);
+    });
+
+    test('a drag in the window moves the map and is not a tap', () => {
+      const p = fakePage('list');
+      let taps = 0;
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => taps++ });
+      p.dispatch('pointerdown', { clientX: 100, clientY: 600 });
+      p.dispatch('pointermove', { clientX: 140, clientY: 600 });
+      p.dispatch('pointerup');
+      const ev = p.dispatch('click');
+      assert.equal(taps, 0);
+      assert.equal(ev.stopped, true, 'the click after a drag selects nothing');
+    });
+
+    test('a pinch in the window is not a tap', () => {
+      const p = fakePage('list');
+      let taps = 0;
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => taps++ });
+      p.dispatch('pointerdown', { pointerId: 1 });
+      p.dispatch('pointerdown', { pointerId: 2, clientX: 50 });
+      p.dispatch('pointerup', { pointerId: 2 });
+      p.dispatch('pointerup', { pointerId: 1 });
+      p.dispatch('click');
+      assert.equal(taps, 0);
+    });
+
+    test('a place pick in the window calls onTap, not the tag page', () => {
+      const p = fakePage('list');
+      let taps = 0;
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => taps++ });
+      assert.ok(p.windowTap, 'the controller has a window tap');
+      p.windowTap!();
+      assert.equal(taps, 1);
+    });
+
+    test('animateTo tweens the clip from the full box to the slot, then sets the window', async () => {
+      const p = fakePage('map');
+      p.ocean.attach();
+      const done = p.ocean.animateTo({ kind: 'window', rect: slot, center: paris }, 100);
+      // The tween runs in window mode at the full box.
+      assert.equal(p.ocean.presentation(), 'window');
+      assert.equal(p.container.style.clipPath, 'inset(0px 0px 0px 0px)');
+      p.tick(50);
+      // Half way (eased 0.5): top 250, bottom 50, sides 10.
+      assert.equal(p.container.style.clipPath, 'inset(250px 10px 50px 10px)');
+      assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,100', 'the point pans with the clip');
+      p.tick(100);
+      await done;
+      assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+      assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,200');
+      assert.equal(p.pendingFrames, 0);
+    });
+
+    test('animateTo from the window to full grows the clip, then removes it', async () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      const done = p.ocean.animateTo('full', 100);
+      p.tick(50);
+      assert.equal(p.container.style.clipPath, 'inset(250px 10px 50px 10px)');
+      p.tick(100);
+      await done;
+      assert.equal(p.ocean.presentation(), 'full');
+      assert.equal(p.container.style.clipPath, '');
+      assert.equal(p.log[p.log.length - 1], 'show');
+    });
+
+    test('animateTo under reduced motion is instant', async () => {
+      const p = fakePage('map', { reducedMotion: true });
+      p.ocean.attach();
+      await p.ocean.animateTo({ kind: 'window', rect: slot, center: paris });
+      assert.equal(p.pendingFrames, 0);
+      assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+    });
+
+    test('a present during a tween stops the tween and resolves it', async () => {
+      const p = fakePage('map');
+      p.ocean.attach();
+      const done = p.ocean.animateTo({ kind: 'window', rect: slot, center: paris }, 100);
+      p.ocean.present('full');
+      await done;
+      assert.equal(p.pendingFrames, 0);
+      assert.equal(p.ocean.presentation(), 'full');
+      assert.equal(p.container.style.clipPath, '');
+    });
+
+    test('destroy removes the window listeners', () => {
+      const p = fakePage('list');
+      let taps = 0;
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => taps++ });
+      p.ocean.destroy();
+      p.dispatch('click');
+      assert.equal(taps, 0);
+    });
   });
 });
 
