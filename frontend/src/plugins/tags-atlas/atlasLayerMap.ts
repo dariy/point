@@ -6,6 +6,9 @@
  * Leaflet, builds the map and mounts AtlasPlaces on it: country shapes,
  * selectable geo-tags and the tag-post graph. The map is never rebuilt. It
  * calls `invalidateSize` whenever its box changes (a state change or a drag).
+ *
+ * A move between list pages (`/` and `/tags/<slug>`) keeps the map: the old
+ * page's pager parks it and the new page's pager takes it (atlasLayerHost.ts).
  */
 
 import { loadLeaflet, TILE_ATTR, TILE_DARK, TILE_LIGHT, TILE_MAX_NATIVE_ZOOM } from '../../utils/leaflet.ts';
@@ -24,6 +27,11 @@ export interface AtlasLayerMapOptions {
 }
 
 export interface AtlasLayerMapController {
+  /**
+   * Give the map to a new page (its `isAlive`), or park it (`null`). A new owner
+   * also brings the selection and the URL viewport in line with the new route.
+   */
+  setOwner(isAlive: (() => boolean) | null): void;
   destroy(): void;
 }
 
@@ -54,6 +62,15 @@ export function mountAtlasLayerMap(
   let loading = false;
   let dead = false;
   let ro: ResizeObserver | null = null;
+  // The page that owns the map. A parked map has no owner and stays alive.
+  let owner: () => boolean = opts.isAlive;
+  const isAlive = () => !dead && owner();
+
+  const writeView = () => {
+    if (!map || getAtlasLayerState(body) === 'list') return;
+    const c = map.getCenter();
+    replaceSearch(searchWithView(location.search, { lat: c.lat, lng: c.lng, zoom: map.getZoom() }));
+  };
 
   const onTheme = () => tiles?.setUrl(isDarkTheme() ? TILE_DARK : TILE_LIGHT);
 
@@ -67,7 +84,8 @@ export function mountAtlasLayerMap(
       loading = false;
       return;
     }
-    if (dead || !opts.isAlive()) return;
+    loading = false;
+    if (!isAlive()) return;
     // zoomAnimation is off: Leaflet 1.9.4 animates the country shapes (an SVG
     // overlay) with a transform that drifts from the tile pane for this map.
     map = L.map(opts.container, {
@@ -79,11 +97,7 @@ export function mountAtlasLayerMap(
     // A reload or a return from a post brings the viewport back from the URL.
     const view = viewFromSearch(location.search);
     map.setView(view ? [view.lat, view.lng] : [20, 0], view ? view.zoom : 2);
-    map.on('moveend', () => {
-      if (getAtlasLayerState(body) === 'list') return;
-      const c = map.getCenter();
-      replaceSearch(searchWithView(location.search, { lat: c.lat, lng: c.lng, zoom: map.getZoom() }));
-    });
+    map.on('moveend', writeView);
     tiles = L.tileLayer(isDarkTheme() ? TILE_DARK : TILE_LIGHT, {
       attribution: TILE_ATTR,
       maxZoom: 18,
@@ -97,7 +111,7 @@ export function mountAtlasLayerMap(
       L,
       map,
       root: opts.container,
-      isAlive: opts.isAlive,
+      isAlive,
       // The picked geo-tag opens as a tag page; clearing it goes home.
       onSelect: (tag) => openPlace(tag?.slug ?? null),
     });
@@ -118,6 +132,13 @@ export function mountAtlasLayerMap(
   sync();
 
   return {
+    setOwner(next) {
+      owner = next ?? (() => true);
+      if (!next) return;
+      places?.syncToRoute();
+      // The router carried `?view=` to the new URL, but not the viewport.
+      writeView();
+    },
     destroy() {
       dead = true;
       mo.disconnect();
