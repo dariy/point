@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1632,6 +1633,30 @@ func TestPostHandler_GuestMediaMetadata(t *testing.T) {
 		md, _ := metaOf(fetch(true, true))
 		if md["GPSLatitude"] != 48.1 || md["LensModel"] != "XF35" {
 			t.Errorf("%s: admin metadata = %v", vis, md)
+		}
+	}
+}
+
+// The single-post payload carries each tag's kind and, for a place tag, its
+// coordinates — the immersive sheet finds the post's place by them.
+func TestBuildPostResponse_TagGeoFields(t *testing.T) {
+	tags := []models.Tag{
+		{ID: 1, Name: "Paris", Slug: "paris", Kind: "tag",
+			Latitude: sql.NullFloat64{Float64: 48.85, Valid: true}, Longitude: sql.NullFloat64{Float64: 2.35, Valid: true}},
+		{ID: 2, Name: "Film", Slug: "film", Kind: "tag"},
+		{ID: 3, Name: "Half", Slug: "half", Latitude: sql.NullFloat64{Float64: 1, Valid: true}},
+	}
+	resp := buildPostResponse(models.Post{Slug: "p"}, tags, "", nil, nil, "")
+	got := resp["tags"].([]map[string]interface{})
+	if len(got) != 3 {
+		t.Fatalf("tags = %d, want 3", len(got))
+	}
+	if got[0]["latitude"] != 48.85 || got[0]["longitude"] != 2.35 || got[0]["kind"] != "tag" {
+		t.Errorf("place tag = %v, want kind and both coordinates", got[0])
+	}
+	for _, i := range []int{1, 2} {
+		if _, ok := got[i]["latitude"]; ok {
+			t.Errorf("tag %v: latitude without both coordinates", got[i])
 		}
 	}
 }

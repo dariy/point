@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
 import {
-  clipInsets, createTapGate, easeInOut, insetCss, insetsEmpty, TAP_SLOP_PX, tweenPoint, tweenRect, windowOffset,
+  clipInsets, createTapGate, easeInOut, insetCss, insetsEmpty, intersectRect, TAP_SLOP_PX, tweenPoint, tweenRect, windowOffset,
 } from '../src/plugins/tags-atlas/atlasOceanGeometry.ts';
 
 // The map box: the whole 400×800 viewport.
@@ -64,6 +64,15 @@ describe('atlasOceanGeometry', () => {
     // The point's place in the box: box centre + (p - centre).
     const at = { x: box.width / 2 + (p.x - centre.x), y: box.height / 2 + (p.y - centre.y) };
     assert.deepEqual(at, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+  });
+
+  test('intersectRect: the part of a slot inside its scroller; no overlap is empty', () => {
+    const scroller = { left: 0, top: 300, width: 400, height: 500 };
+    assert.deepEqual(intersectRect({ left: 20, top: 250, width: 360, height: 200 }, scroller),
+      { left: 20, top: 300, width: 360, height: 150 });
+    const none = intersectRect({ left: 20, top: 100, width: 360, height: 100 }, scroller);
+    assert.equal(none.height, 0);
+    assert.equal(insetsEmpty(clipInsets(none, box), box), true);
   });
 
   test('tweenRect at t = 0, 0.5 and 1', () => {

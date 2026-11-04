@@ -12,3 +12,19 @@ this plugin disables the standard viewer and vice versa, and the active one of t
 cannot be switched off — a post rendered immersively has nothing else to show.
 
 See [Immersive Mode & Media Viewer](../features/immersive.md) for details.
+
+## The map in the sheet
+
+A post with its own place tag (a tag with `latitude` and `longitude`, not an
+inherited ancestor) shows a map of that place in the Details sheet, after the
+tags. The sheet does not make a second map. It has an empty slot, and the
+[`tags-atlas`](tags-atlas.md) map shows through it (`atlasOcean.ts`, the
+`window` presentation). The window follows the slot while the sheet drags,
+slides and scrolls. Drag and pinch in the slot move the map, not the sheet.
+
+- With `tags-atlas` off, or with no place tag on the post, there is no slot and
+  Leaflet does not load.
+- A post that is the first page of the visit builds the map when the sheet
+  opens on it.
+- The ocean goes back to `hidden` when the sheet closes and when the viewer
+  goes (a close, or a move to the previous or next post).

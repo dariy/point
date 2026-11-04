@@ -26,11 +26,45 @@ let tagKind: typeof TagLinks.tagKind;
 let renderTagLink: typeof TagLinks.renderTagLink;
 let buildTagIndex: typeof TagLinks.buildTagIndex;
 let getTagAncestors: typeof TagLinks.getTagAncestors;
+let postGeoTag: typeof TagLinks.postGeoTag;
 
 before(async () => {
   globalThis.window = mock<typeof window>({ location: mock<Location>({ origin: 'https://example.com' }) });
-  ({ tagHref, tagKind, renderTagLink, buildTagIndex, getTagAncestors } =
+  ({ tagHref, tagKind, renderTagLink, buildTagIndex, getTagAncestors, postGeoTag } =
     await import('../src/utils/tagLinks.ts'));
+});
+
+// ── postGeoTag ───────────────────────────────────────────────────────────────
+
+/**
+ * The sheet's map widget centres on the post's own place. An inherited tag is
+ * an ancestor added for subtree matching, not the post's place, so it never
+ * counts; a tag with one coordinate is not a place.
+ */
+describe('postGeoTag', () => {
+  const paris = { name: 'Paris', slug: 'paris', latitude: 48.85, longitude: 2.35 };
+
+  test('null for no post, no tags and an empty list', () => {
+    assert.strictEqual(postGeoTag(null), null);
+    assert.strictEqual(postGeoTag({}), null);
+    assert.strictEqual(postGeoTag({ tags: [] }), null);
+  });
+
+  test('null when the only geo-tags are inherited', () => {
+    const france = { name: 'France', slug: 'france', latitude: 46, longitude: 2, inherited: true };
+    assert.strictEqual(postGeoTag({ tags: [{ name: 'Film', slug: 'film' }, france] }), null);
+  });
+
+  test('the first own geo-tag, in second place after a plain tag', () => {
+    const lyon = { name: 'Lyon', slug: 'lyon', latitude: 45.76, longitude: 4.84 };
+    assert.strictEqual(postGeoTag({ tags: [{ name: 'Film', slug: 'film' }, paris, lyon] }), paris);
+  });
+
+  test('a tag with only one coordinate is not a geo-tag', () => {
+    const half = { name: 'Half', slug: 'half', latitude: 10 };
+    assert.strictEqual(postGeoTag({ tags: [half] }), null);
+    assert.strictEqual(postGeoTag({ tags: [half, paris] }), paris);
+  });
 });
 
 // ── tagHref ──────────────────────────────────────────────────────────────────

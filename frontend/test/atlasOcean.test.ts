@@ -67,7 +67,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
         park: () => log.push('park'),
         route: () => log.push('route'),
         warm: () => log.push('warm'),
-        frame: (c, o) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}`),
+        frame: (c, o, z) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}${z == null ? '' : ` z${z}`}`),
         offsetOf: () => ({ x: 0, y: 0 }),
         panBy: (dx, dy) => log.push(`panBy ${dx},${dy}`),
         setWindowTap: (fn) => { windowTap = fn; },
@@ -315,6 +315,25 @@ describe('atlasOcean', () => {
       p.ocean.present({ kind: 'window', rect: { ...slot, top: 300 } });
       assert.equal(p.container.style.clipPath, 'inset(300px 20px 300px 20px)');
       assert.deepEqual(p.log.slice(-2), ['frame - 0,0', 'panBy 0,200']);
+    });
+
+    test('a window with a zoom frames the point at that zoom', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, zoom: 10 });
+      assert.deepEqual(p.log, ['frame 48.85,2.35 0,200 z10']);
+    });
+
+    test('a clip shows only the slot inside it; the view follows the whole slot', () => {
+      const p = fakePage('list');
+      // The slot runs 100 px under the top of the sheet's scroller.
+      const clip = { left: 0, top: 600, width: 400, height: 200 };
+      p.ocean.present({ kind: 'window', rect: slot, clip, center: paris });
+      assert.equal(p.container.style.clipPath, 'inset(600px 20px 100px 20px)');
+      assert.deepEqual(p.log, ['frame 48.85,2.35 0,200']);
+      // A scroll moves the slot up by 50: the map moves with the slot, not with the clip.
+      p.ocean.present({ kind: 'window', rect: { ...slot, top: 450 }, clip });
+      assert.equal(p.container.style.clipPath, 'inset(600px 20px 150px 20px)');
+      assert.deepEqual(p.log.slice(-2), ['frame - 0,150', 'panBy 0,50']);
     });
 
     test('a move out of the window removes the clip and the tap', () => {
