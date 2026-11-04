@@ -965,3 +965,32 @@ body .atlas-layer-map[data-atlas-ocean="window"] {
 body .atlas-layer-map[data-atlas-ocean="window"] :is(.leaflet-control-container, .atlas-hint, .atlas-legend) {
     display: none;
 }
+
+/* The way back to the post the full map came from (atlasFromPost.ts). Above the
+   map (z-index 100) and its controls, below the header's menus; top centre, so
+   it does not cover the zoom control (top left) or the legend. */
+.atlas-from-post {
+    position: fixed;
+    top: calc(var(--atlas-layer-top, 0px) + var(--spacing-sm, 8px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 105;
+    max-width: min(80vw, 24rem);
+    padding: 6px 14px;
+    overflow: hidden;
+    border: 1px solid var(--border-primary, rgba(0, 0, 0, 0.12));
+    border-radius: 999px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    box-shadow: 0 2px 9px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+}
+
+.atlas-from-post:hover,
+.atlas-from-post:focus-visible {
+    background: var(--bg-secondary, var(--bg-primary));
+}
