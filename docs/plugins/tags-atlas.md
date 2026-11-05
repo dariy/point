@@ -17,9 +17,8 @@ reads only that attribute.
 | `mapList` | `split` | The map comes down from behind the header. The post list is one row of cards on the footer, `clamp(96px, 22dvh, 220px)` high (`--atlas-layer-row-h`). The cards fill the row width. The footer is one line at the bottom, with the paginator in it. The edge page arrows do not show. |
 | `map` | `map` | The map fills the space below the header. The post list is only the handle, on the footer. The footer is one line at the bottom, without the paginator. |
 
-The map shows only the posts of the current list (same filter as the cards). It loads
-(Leaflet, post data, tiles) on the first change out of `list`. A page that stays in
-`list` makes no map request.
+The map shows only the posts of the current list (same filter as the cards). The page
+does not wait for the map: see [Warm-up](#warm-up).
 
 ## Gestures
 
@@ -52,21 +51,60 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
 - **Tap on empty map** (the sea, or a country with no geo-tag): the selection is cleared.
   On `/tags/<slug>`, the home page `/` opens. On `/`, only the selection is cleared.
 
+When the layer map is less than 320px high (a phone on its side), the legend is one
+button to the right of the zoom control. The button opens the filters in one row.
+
+## One map for the visit
+
 One module owns the map: `atlasOcean.ts`. It keeps the container, the Leaflet map, the
 tiles and the places until the page unloads or `tags-atlas` is off. A list page attaches
-to it and detaches from it, and it never makes or destroys the map.
+to it and detaches from it. A page never makes or destroys the map. A page asks for a
+presentation:
+
+| Presentation | When | What you see |
+|--------------|------|--------------|
+| `hidden` | The `list` state, and every page that is not a list page | No map. The map stays in memory. |
+| `mapList` | The `mapList` state | The map above the card row. |
+| `full` | The `map` state | The map below the header. |
+| `window` | The Details sheet of a post with a place tag | The map through the sheet's map slot. |
 
 A move between list pages (`/` and `/tags/<slug>`) does not rebuild the map. This is
 also true for Back, Forward and a tag link. The same map stays, with the same viewport
 and tiles, and it does not fit to the places again. A move to any other page (a post,
-search, admin) hides the map and keeps it. A return to the list page shows the same map
-at the same viewport. One move is different: a Back from the full map to a post whose
-sheet map opened it. Then the map stays on screen and shrinks into the sheet's map slot
-(see [immersive-sheet.md](immersive-sheet.md)). While the full map's history entry has
-`fromPost`, a "‹ <post title>" chip at the top goes back to that post. Leaflet loads on the first change out of `list`, not before.
+search, admin) sets `hidden` and keeps the map. A return to the list page shows the same
+map at the same viewport.
 
-When the layer map is less than 320px high (a phone on its side), the legend is one
-button to the right of the zoom control. The button opens the filters in one row.
+### Warm-up
+
+A list page that opens in the `list` state builds the map when the browser is idle,
+after the first grid render. The first photos load first. The map is built with
+`visibility: hidden`, so it keeps its size, and the places load. The first change to
+`mapList` or `map` then only shows the map. When the browser asks to save data
+(`navigator.connection.saveData`), there is no warm-up: Leaflet loads on the first change
+out of `list`.
+
+A visit that starts on a post builds the map only when the Details sheet opens on a post
+with a place tag. A post with no place tag loads no Leaflet.
+
+### The window
+
+The `window` presentation does not make a second map, and it does not resize the map.
+The container keeps its size, moves above the post viewer and is clipped to a rectangle
+(`clip-path: inset(…)`). A click outside the rectangle goes to the page below. The view
+moves so that the place is at the centre of the rectangle. The clip follows the slot
+while the sheet drags, slides and scrolls. See
+[immersive-sheet.md](immersive-sheet.md) for the slot. In the window, drag and pinch
+move the map. A tap, also a tap on a place marker, opens the full map, not the place's
+tag page. With `tags-atlas` off, the sheet has no slot and no map.
+
+A change between `window` and `full` is one motion: the clip grows or shrinks, and the
+place moves to the new centre. The zoom does not change during the motion. Leaflet runs
+with `zoomAnimation: false`, and the new zoom comes after the clip motion stops. With
+`prefers-reduced-motion: reduce`, each change of presentation is instant.
+
+A Back from the full map to a post whose sheet map opened it does not hide the map. The
+map stays on screen and shrinks into the sheet's map slot. While the full map's history
+entry has `fromPost`, a "‹ <post title>" chip at the top goes back to that post.
 
 ## URL
 

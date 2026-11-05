@@ -24,6 +24,10 @@ slides and scrolls. Drag and pinch in the slot move the map, not the sheet.
 
 - With `tags-atlas` off, or with no place tag on the post, there is no slot and
   Leaflet does not load.
+- There is one map for the visit. A list page builds it when the browser is
+  idle (the warm-up, not when the browser asks to save data), and a post sets it
+  to `hidden` and keeps it. The window shows that same map, with no new tiles
+  and no new places request.
 - A post that is the first page of the visit builds the map when the sheet
   opens on it.
 - The ocean goes back to `hidden` when the sheet closes and when the viewer
