@@ -55,10 +55,10 @@ export interface AtlasLayerMapController {
    * The map is on screen through a window (atlasOcean.ts): the box keeps its
    * size, a clip shows part of it. Build the map on the first call. With
    * `center`, set the view so `center` sits `offset` px from the box centre (the
-   * window centre). A parked view stays parked for the next `show()` after a
+   * window centre), at `zoom` when given. A parked view stays parked for the next `show()` after a
    * `park()`; a `show()` straight from a window keeps the window's view.
    */
-  frame(center: LatLng | null, offset: Point): void;
+  frame(center: LatLng | null, offset: Point, zoom?: number): void;
   /** Where `latLng` is now, from the box centre, in px. `null` before the build. */
   offsetOf(latLng: LatLng): Point | null;
   /** Move the view by `dx`, `dy` px, with no animation. */
@@ -104,7 +104,7 @@ export function mountAtlasLayerMap(
   // The last call was frame(): the map shows through a window.
   let windowed = false;
   // A frame() before the build: applied when the map is built.
-  let pendingFrame: { center: LatLng | null; offset: Point } | null = null;
+  let pendingFrame: { center: LatLng | null; offset: Point; zoom?: number } | null = null;
   let windowTap: (() => void) | null = null;
   const isAlive = () => !dead;
 
@@ -123,9 +123,9 @@ export function mountAtlasLayerMap(
     map.setView(kept.center, kept.zoom, { animate: false });
   };
 
-  /** Put `center` at `offset` px from the box centre, at the current zoom. */
-  const centerAt = (center: LatLng, offset: Point) => {
-    const z = map.getZoom();
+  /** Put `center` at `offset` px from the box centre, at `zoom` (default: the current zoom). */
+  const centerAt = (center: LatLng, offset: Point, zoom?: number) => {
+    const z = zoom ?? map.getZoom();
     const p = map.project([center.lat, center.lng], z);
     map.setView(map.unproject([p.x - offset.x, p.y - offset.y], z), z, { animate: false });
   };
@@ -208,7 +208,7 @@ export function mountAtlasLayerMap(
       else places.holdFit();
     }
     map.invalidateSize();
-    if (windowed && pendingFrame?.center) centerAt(pendingFrame.center, pendingFrame.offset);
+    if (windowed && pendingFrame?.center) centerAt(pendingFrame.center, pendingFrame.offset, pendingFrame.zoom);
     pendingFrame = null;
     ro = new ResizeObserver(onResize);
     ro.observe(opts.container);
@@ -255,17 +255,19 @@ export function mountAtlasLayerMap(
       if (dead || map) return;
       void build();
     },
-    frame(center, offset) {
+    frame(center, offset, zoom) {
       if (dead) return;
       windowed = true;
       shown = false;
       if (!map) {
-        pendingFrame = { center, offset };
+        // A second frame() before the build keeps the first centre (a slot
+        // that moves while Leaflet loads keeps its point).
+        pendingFrame = { center: center ?? pendingFrame?.center ?? null, offset, zoom: zoom ?? pendingFrame?.zoom };
         void build();
         return;
       }
       map.invalidateSize({ pan: false });
-      if (center) centerAt(center, offset);
+      if (center) centerAt(center, offset, zoom);
     },
     offsetOf(latLng) {
       if (!map) return null;

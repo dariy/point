@@ -7,6 +7,7 @@
  *
  *   clipInsets     the insets that show `rect` of the map box
  *   windowOffset   where the window centre is, from the box centre, in pixels
+ *   intersectRect  the part of a rect inside another (a slot in a scroller)
  *   tweenRect      a rect between two rects at `t` (0…1)
  *   createTapGate  a tap or a drag, from the pointer moves
  */
@@ -71,6 +72,18 @@ export function windowOffset(rect: Rect, box: Rect): Point {
     x: rect.left + rect.width / 2 - (box.left + box.width / 2),
     y: rect.top + rect.height / 2 - (box.top + box.height / 2),
   };
+}
+
+/**
+ * The part of `a` inside `b`. No overlap gives a rect of zero width or height
+ * (clipInsets then shows nothing).
+ */
+export function intersectRect(a: Rect, b: Rect): Rect {
+  const left = Math.max(a.left, b.left);
+  const top = Math.max(a.top, b.top);
+  const right = Math.min(a.left + a.width, b.left + b.width);
+  const bottom = Math.min(a.top + a.height, b.top + b.height);
+  return { left, top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;

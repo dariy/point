@@ -41,7 +41,7 @@ import { mountAtlasLayerLayout } from './atlasLayerLayout.ts';
 import { mountAtlasLayerMap } from './atlasLayerMap.ts';
 
 import {
-  clipInsets, createTapGate, easeInOut, insetCss, tweenPoint, tweenRect, windowOffset,
+  clipInsets, createTapGate, easeInOut, insetCss, intersectRect, tweenPoint, tweenRect, windowOffset,
 } from './atlasOceanGeometry.ts';
 
 import type { AtlasLayerState } from './atlasLayerState.ts';
@@ -56,6 +56,14 @@ export interface AtlasWindow {
   rect: Rect;
   /** The point to put at the rect centre. Without it, the map moves with the rect. */
   center?: LatLng;
+  /** The zoom for `center`. Without it, the zoom does not change. */
+  zoom?: number;
+  /**
+   * The part of the page where `rect` can show (a scroller's box). The clip is
+   * `rect` inside `clip`; the view still follows `rect`, so a slot that scrolls
+   * under the scroller's edge keeps its map in place.
+   */
+  clip?: Rect;
   /** A tap in the window (not a drag or a pinch), or a tap on a place. */
   onTap?: () => void;
 }
@@ -254,9 +262,12 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     if (container) container.style.clipPath = rect ? insetCss(clipInsets(rect, box)) : '';
   };
 
+  /** The part of a window on screen: its rect inside its clip. */
+  const visibleRect = (w: AtlasWindow): Rect => (w.clip ? intersectRect(w.rect, w.clip) : w.rect);
+
   /** The rect on screen now: the window, the whole box, or nothing (hidden). */
   const shownRect = (box: Rect): Rect | null => {
-    if (current === 'window') return win?.rect ?? null;
+    if (current === 'window') return win ? visibleRect(win) : null;
     return current === 'hidden' ? null : box;
   };
 
@@ -278,10 +289,10 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     win = w;
     ctl.setWindowTap(() => win?.onTap?.());
     const box = deps.box(el);
-    setClip(w.rect, box);
+    setClip(visibleRect(w), box);
     const offset = windowOffset(w.rect, box);
     if (!recenter) ctl.frame(null, offset);
-    else if (w.center) ctl.frame(w.center, offset);
+    else if (w.center) ctl.frame(w.center, offset, w.zoom);
     else if (prev) {
       // The slot moved (a sheet drag or scroll): the map moves with it.
       ctl.frame(null, offset);
@@ -388,7 +399,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       stopTween();
       const box = container ? deps.box(container) : null;
       const from = box ? shownRect(box) : null;
-      const to = typeof req === 'object' ? req.rect : req === 'hidden' ? null : box;
+      const to = typeof req === 'object' ? visibleRect(req) : req === 'hidden' ? null : box;
       if (!box || !from || !to || ms <= 0 || deps.reducedMotion()) {
         show(req);
         return Promise.resolve();

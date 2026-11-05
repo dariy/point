@@ -13,6 +13,7 @@
 
 import { html } from './helpers.ts';
 import type { RawHtml, Slot } from './helpers.ts';
+import type { PostTag } from '../api/posts.ts';
 
 /**
  * Build a tag URL whose `path` query carries the ancestor slug chain the user
@@ -89,6 +90,21 @@ export function tagKind(tag: TagLike | null | undefined) {
   if (tag.kind === 'year') return 'year';
   if (typeof tag.latitude === 'number' && typeof tag.longitude === 'number') return 'geo';
   return 'tag';
+}
+
+/** A post tag with both coordinates: what {@link postGeoTag} returns. */
+export type GeoTag = PostTag & { latitude: number; longitude: number };
+
+/**
+ * The post's geo-tag: the first of its own tags (`!inherited`) that
+ * {@link tagKind} calls `'geo'`. An ancestor that page endpoints add for
+ * subtree matching is not the post's place. Null when there is none.
+ */
+export function postGeoTag(post: { tags?: PostTag[] | null } | null | undefined): GeoTag | null {
+  for (const t of post?.tags || []) {
+    if (!t.inherited && tagKind(t) === 'geo') return t as GeoTag;
+  }
+  return null;
 }
 
 /**
