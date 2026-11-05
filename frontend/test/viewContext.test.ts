@@ -88,7 +88,7 @@ describe('ViewContext.toUrl', () => {
 // target is still a list page; a filter change starts clean.
 describe('ViewContext.update', () => {
   let ViewContext: typeof ViewContextClass;
-  let navigated: { path: string; replace: boolean }[];
+  let navigated: { path: string; replace: boolean; state?: unknown }[];
 
   before(async () => {
     ({ ViewContext } = await import('../src/utils/viewContext.ts'));
@@ -96,6 +96,7 @@ describe('ViewContext.update', () => {
 
   const at = (pathname: string, search: string) => {
     navigated = [];
+    global.history = mock<History>({ state: null });
     global.window = mock<typeof window>({
       location: mock<Location>({ pathname, search }),
       dispatchEvent: (e: Event) => {
@@ -109,8 +110,15 @@ describe('ViewContext.update', () => {
     at('/tags/kyiv', '?view=map&at=50.4501,30.5234,11');
     ViewContext.update({ per_page: 12, page: 1 }, { replace: true });
     assert.deepStrictEqual(navigated, [
-      { path: '/tags/kyiv?per_page=12&view=map&at=50.4501%2C30.5234%2C11', replace: true },
+      { path: '/tags/kyiv?per_page=12&view=map&at=50.4501%2C30.5234%2C11', replace: true, state: null },
     ]);
+  });
+
+  test('a replace keeps the history state of the entry', () => {
+    at('/tags/kyiv', '?view=map');
+    global.history = mock<History>({ state: { fromPost: 'a-post', sheet: 'open' } });
+    ViewContext.update({ per_page: 12, page: 1 }, { replace: true });
+    assert.deepStrictEqual(navigated[0]?.state, { fromPost: 'a-post', sheet: 'open' });
   });
 
   test('a page change on the home list keeps the viewport', () => {

@@ -52,6 +52,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   const log: string[] = [];
   let maps = 0;
   let urlState = initial;
+  let path = '/';
   // The idle callbacks the ocean asked for; `idle()` runs them.
   const idle = new Set<() => void>();
   const ocean = createAtlasOcean({
@@ -78,7 +79,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
       };
     },
     observeState: (_b, fn) => { observers.add(fn); return () => observers.delete(fn); },
-    path: () => '/',
+    path: () => path,
     idle: (fn) => {
       log.push('idle');
       idle.add(fn);
@@ -120,6 +121,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     get chip() { return chip; },
     /** the state the next page reads from its URL */
     setUrlState(s: 'list' | 'mapList' | 'map') { urlState = s; },
+    /** the path and query that the ocean reads (deps.path) */
+    setPath(p: string) { path = p; },
   };
 }
 
@@ -182,6 +185,28 @@ describe('atlasOcean', () => {
     p.ocean.attach();
     assert.equal(p.maps, 1);
     assert.deepEqual(p.log, ['layout', 'show', 'route', 'show']);
+  });
+
+  test('Back to a list page whose URL names another view: the kept layout takes the URL view', () => {
+    // /search arms a grid too: its layout reads `list`. A Back to /tags/x?view=map keeps that layout.
+    const p = fakePage('list');
+    p.setPath('/search?q=x');
+    p.ocean.attach();
+    p.setPath('/tags/kyiv?view=map');
+    p.ocean.detach('/tags/kyiv?view=map');
+    p.ocean.attach();
+    assert.equal(p.body.getAttribute('data-atlas-layer'), 'map');
+    assert.equal(p.ocean.presentation(), 'full');
+    assert.equal(p.log.filter((l) => l === 'layout').length, 1, 'the layout stays');
+  });
+
+  test('a kept layout with no view in the URL keeps its state', () => {
+    const p = fakePage('mapList');
+    p.ocean.attach();
+    p.setPath('/tags/france');
+    p.ocean.detach('/tags/france');
+    p.ocean.attach();
+    assert.equal(p.body.getAttribute('data-atlas-layer'), 'mapList');
   });
 
   test('list → post → list: the map is hidden, kept, and shown again', () => {

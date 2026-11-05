@@ -173,6 +173,24 @@ describe('Atlas layer URL state', () => {
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
   });
 
+  it('Back from another page to a tag page in map shows map and keeps the history state', async () => {
+    await page.goto(BASE + '/tags/urlton?view=map');
+    await page.waitForFunction(() => document.body.dataset.atlasLayer === 'map');
+    await page.evaluate(() => history.replaceState({ e2eMark: 1 }, ''));
+    // A search with results arms a grid, so the ocean mounts a layout there in `list`.
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: { path: '/search?q=Atlas', replace: false } })));
+    await page.waitForFunction(() => location.pathname === '/search');
+    await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length > 0);
+    await page.goBack();
+    await page.waitForFunction(() => location.pathname === '/tags/urlton');
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'full');
+    // The page settles (the per-page refit) and the state holds.
+    await page.waitForTimeout(600);
+    assert.equal(await state(), 'map');
+    assert.match(await search(), /view=map/);
+    assert.deepEqual(await page.evaluate(() => history.state), { e2eMark: 1 });
+  });
+
   it('the saved view mode opens when the URL names none; the URL wins; a bad value is ignored', async () => {
     await page.goto(BASE + '/');
     await page.locator('.atlas-layer-handle').waitFor();
