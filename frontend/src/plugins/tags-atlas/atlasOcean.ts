@@ -24,6 +24,12 @@
  * clip (and the window centre) from one presentation to the next, at a fixed
  * zoom; under `prefers-reduced-motion: reduce` it is instant.
  *
+ * `expand` is the move from a post's window to the full map. The clip grows
+ * from the window to the whole box and the place comes to the centre, at the
+ * window's zoom. The map stays a window over the page until the next list page
+ * attaches (the tag page in `map` state). That attach shows `full`, sets the
+ * zoom, selects the route's place and focuses the post's chip.
+ *
  * On a list page the presentation follows `body[data-atlas-layer]`. A detach to
  * any other page (a post, search, admin) sets `hidden` and keeps the map. The
  * next list page shows the same map at the same viewport: no new `L.map`, no
@@ -70,6 +76,16 @@ export interface AtlasWindow {
 
 /** What a page asks the ocean to show. */
 export type AtlasPresentationRequest = Exclude<AtlasPresentation, 'window'> | AtlasWindow;
+
+/** A move from a window to the full map (`expand`). */
+export interface AtlasExpand {
+  /** The place: it goes to the centre of the map. */
+  center: LatLng;
+  /** The full map's zoom, set after the tween. */
+  zoom: number;
+  /** The post whose chip the full map focuses in the place's cloud. */
+  focusPostSlug?: string;
+}
 
 /** The clip tween, in ms (the same as the layer slide in atlas.css). */
 export const TWEEN_MS = 280;
@@ -124,6 +140,12 @@ export interface AtlasOcean {
   present(presentation: AtlasPresentationRequest): void;
   /** Tween the clip to `presentation`. Resolves when it is in place (or replaced). */
   animateTo(presentation: AtlasPresentationRequest, ms?: number): Promise<void>;
+  /**
+   * Grow the window to the whole box, with `target.center` at the centre and
+   * no zoom change. Resolves when the tween ends: navigate then. The next
+   * attach finishes the move (see the file comment); a `present` cancels it.
+   */
+  expand(target: AtlasExpand, ms?: number): Promise<void>;
   presentation(): AtlasPresentation;
   destroy(): void;
 }
@@ -209,6 +231,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   let endTween: (() => void) | null = null;
   const gate = createTapGate();
   let stopInput: (() => void) | null = null;
+  // An expand that waits for the next attach.
+  let expanding: AtlasExpand | null = null;
 
   const stopTween = () => {
     cancelTween?.();
@@ -319,6 +343,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   };
 
   const present = (req: AtlasPresentationRequest) => {
+    expanding = null;
     stopTween();
     show(req);
   };
@@ -341,6 +366,43 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       warmed = true;
       map?.show();
     }
+  };
+
+  const animateTo = (req: AtlasPresentationRequest, ms = TWEEN_MS): Promise<void> => {
+    stopTween();
+    const box = container ? deps.box(container) : null;
+    const from = box ? shownRect(box) : null;
+    const to = typeof req === 'object' ? visibleRect(req) : req === 'hidden' ? null : box;
+    if (!box || !from || !to || ms <= 0 || deps.reducedMotion()) {
+      show(req);
+      return Promise.resolve();
+    }
+    const target = typeof req === 'object' ? req : null;
+    // The pan: the target centre goes from where it is now to the target
+    // window centre, in step with the clip. The zoom does not change.
+    const fromOff = target?.center ? map?.offsetOf(target.center) ?? null : null;
+    const toOff = target ? windowOffset(target.rect, box) : null;
+    // The tween runs in window mode: the clip moves, the box stays.
+    presentWindow({ ...(target ?? win ?? { kind: 'window' }), kind: 'window', rect: from, center: undefined }, false);
+    const start = deps.now();
+    return new Promise<void>((resolve) => {
+      endTween = resolve;
+      const step = (now: number) => {
+        const t = Math.min(1, (now - start) / ms);
+        const e = easeInOut(t);
+        setClip(tweenRect(from, to, e), box);
+        if (target?.center && fromOff && toOff) map?.frame(target.center, tweenPoint(fromOff, toOff, e));
+        if (t < 1) {
+          cancelTween = deps.frame(step);
+          return;
+        }
+        cancelTween = null;
+        endTween = null;
+        show(req);
+        resolve();
+      };
+      cancelTween = deps.frame(step);
+    });
   };
 
   const releaseLayout = () => {
@@ -373,9 +435,20 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
           else clear();
         }
       }
-      // A new page: the selection and the URL viewport follow the new route.
-      if (newRoute) ctl.route();
-      present(presentationForState(getAtlasLayerState(body)));
+      const exp = expanding;
+      expanding = null;
+      if (exp) {
+        // The end of an expand: the window covers the box, so the map is
+        // already where `full` shows it. Then the zoom, then the selection.
+        stopTween();
+        show(presentationForState(getAtlasLayerState(body)));
+        ctl.setView(exp.center, exp.zoom);
+        ctl.route(exp.focusPostSlug);
+      } else {
+        // A new page: the selection and the URL viewport follow the new route.
+        if (newRoute) ctl.route();
+        present(presentationForState(getAtlasLayerState(body)));
+      }
       scheduleWarm();
     },
 
@@ -395,46 +468,21 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
 
     present,
 
-    animateTo(req, ms = TWEEN_MS) {
-      stopTween();
-      const box = container ? deps.box(container) : null;
-      const from = box ? shownRect(box) : null;
-      const to = typeof req === 'object' ? visibleRect(req) : req === 'hidden' ? null : box;
-      if (!box || !from || !to || ms <= 0 || deps.reducedMotion()) {
-        show(req);
-        return Promise.resolve();
-      }
-      const target = typeof req === 'object' ? req : null;
-      // The pan: the target centre goes from where it is now to the target
-      // window centre, in step with the clip. The zoom does not change.
-      const fromOff = target?.center ? map?.offsetOf(target.center) ?? null : null;
-      const toOff = target ? windowOffset(target.rect, box) : null;
-      // The tween runs in window mode: the clip moves, the box stays.
-      presentWindow({ ...(target ?? win ?? { kind: 'window' }), kind: 'window', rect: from, center: undefined }, false);
-      const start = deps.now();
-      return new Promise<void>((resolve) => {
-        endTween = resolve;
-        const step = (now: number) => {
-          const t = Math.min(1, (now - start) / ms);
-          const e = easeInOut(t);
-          setClip(tweenRect(from, to, e), box);
-          if (target?.center && fromOff && toOff) map?.frame(target.center, tweenPoint(fromOff, toOff, e));
-          if (t < 1) {
-            cancelTween = deps.frame(step);
-            return;
-          }
-          cancelTween = null;
-          endTween = null;
-          show(req);
-          resolve();
-        };
-        cancelTween = deps.frame(step);
-      });
+    animateTo,
+
+    expand(target, ms = TWEEN_MS) {
+      const box = container && current === 'window' ? deps.box(container) : null;
+      const done = box
+        ? animateTo({ kind: 'window', rect: box, center: target.center }, ms)
+        : Promise.resolve();
+      expanding = target;
+      return done;
     },
 
     presentation: () => current,
 
     destroy() {
+      expanding = null;
       stopTween();
       stopWarm();
       leaveWindow();
@@ -484,6 +532,12 @@ export function presentAtlasOcean(presentation: AtlasPresentationRequest): void 
 export function animateAtlasOcean(presentation: AtlasPresentationRequest, ms?: number): Promise<void> {
   ocean ??= createAtlasOcean(defaultDeps());
   return ocean.animateTo(presentation, ms);
+}
+
+/** Grow the window to the full map (instant under reduced motion). See `AtlasOcean.expand`. */
+export function expandAtlasOcean(target: AtlasExpand, ms?: number): Promise<void> {
+  ocean ??= createAtlasOcean(defaultDeps());
+  return ocean.expand(target, ms);
 }
 
 /** The current presentation. `hidden` before the first attach. */

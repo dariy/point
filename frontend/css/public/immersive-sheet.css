@@ -193,6 +193,23 @@ body.ui-hidden .immersive-sheet-hint {
     background: var(--bg-tertiary);
 }
 
+/* A tap on the map opens the full map (ImmersiveSheetViewer.ts::_onMapTap). The
+   viewer and its header fade while the ocean grows the window to the screen.
+   0.28s is atlasOcean.ts::TWEEN_MS. */
+.immersive-map-leaving,
+.immersive-layout:has(.immersive-map-leaving) :is(.site-header-group, .site-footer) {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .immersive-map-leaving,
+    .immersive-layout:has(.immersive-map-leaving) :is(.site-header-group, .site-footer) {
+        transition: none;
+    }
+}
+
 /* ── Inline EXIF (second column) ──────────────────────────────────────────── */
 .immersive-sheet-exif {
     float: right;

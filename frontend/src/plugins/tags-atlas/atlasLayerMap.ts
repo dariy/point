@@ -48,9 +48,12 @@ export interface AtlasLayerMapController {
   warm(): void;
   /**
    * A new list page shows the map: bring the selection and the URL viewport in
-   * line with the new route.
+   * line with the new route. `focusPostSlug` (a move from a post's map
+   * widget) selects the route's place again and focuses that post's chip.
    */
-  route(): void;
+  route(focusPostSlug?: string): void;
+  /** Put `center` at the box centre at `zoom`, with no animation. Nothing before the build. */
+  setView(center: LatLng, zoom: number): void;
   /**
    * The map is on screen through a window (atlasOcean.ts): the box keeps its
    * size, a clip shows part of it. Build the map on the first call. With
@@ -281,8 +284,11 @@ export function mountAtlasLayerMap(
     setWindowTap(fn) {
       windowTap = fn;
     },
-    route() {
-      places?.syncToRoute();
+    setView(center, zoom) {
+      map?.setView([center.lat, center.lng], zoom, { animate: false });
+    },
+    route(focusPostSlug) {
+      places?.syncToRoute(focusPostSlug);
       // The router carried `?view=` to the new URL, but not the viewport.
       writeView();
     },
