@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { createAtlasOcean, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
+import { createAtlasOcean, defaultIdle, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
 import { isAtlasListPath, setAtlasLayerState } from '../src/plugins/tags-atlas/atlasLayerState.ts';
 
 /**
@@ -245,5 +245,59 @@ describe('atlasOcean', () => {
     p.ocean.detach('/posts/a-post');
     assert.equal(p.pendingIdle, 0);
     assert.ok(!p.log.includes('warm'));
+  });
+});
+
+describe('atlasOcean default deps', () => {
+  const g = globalThis as Record<string, unknown>;
+
+  test('defaultIdle uses requestIdleCallback and its cancel', () => {
+    const calls: string[] = [];
+    const prevRic = g.requestIdleCallback;
+    const prevCic = g.cancelIdleCallback;
+    g.requestIdleCallback = (fn: () => void, opts: { timeout: number }) => {
+      calls.push(`ric:${opts.timeout}`);
+      fn();
+      return 7;
+    };
+    g.cancelIdleCallback = (id: number) => calls.push(`cic:${id}`);
+    try {
+      let ran = false;
+      const cancel = defaultIdle(() => { ran = true; });
+      cancel();
+      assert.ok(ran);
+      assert.deepEqual(calls, ['ric:5000', 'cic:7']);
+    } finally {
+      g.requestIdleCallback = prevRic;
+      g.cancelIdleCallback = prevCic;
+    }
+  });
+
+  test('defaultIdle falls back to a timeout that the cancel clears', async () => {
+    const prevRic = g.requestIdleCallback;
+    g.requestIdleCallback = undefined;
+    try {
+      let ran = false;
+      const cancel = defaultIdle(() => { ran = true; });
+      cancel();
+      await new Promise((r) => setTimeout(r, 1600));
+      assert.equal(ran, false);
+    } finally {
+      g.requestIdleCallback = prevRic;
+    }
+  });
+
+  test('defaultSaveData reads navigator.connection.saveData', () => {
+    const prev = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    try {
+      Object.defineProperty(globalThis, 'navigator', { value: { connection: { saveData: true } }, configurable: true });
+      assert.equal(defaultSaveData(), true);
+      Object.defineProperty(globalThis, 'navigator', { value: { connection: { saveData: false } }, configurable: true });
+      assert.equal(defaultSaveData(), false);
+      Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
+      assert.equal(defaultSaveData(), false);
+    } finally {
+      if (prev) Object.defineProperty(globalThis, 'navigator', prev);
+    }
   });
 });

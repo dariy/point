@@ -95,7 +95,8 @@ function defaultObserveState(body: HTMLElement, fn: () => void): () => void {
   return () => mo.disconnect();
 }
 
-function defaultIdle(fn: () => void): () => void {
+/** `deps.idle` in the app: an idle callback, or a timeout where there is none. */
+export function defaultIdle(fn: () => void): () => void {
   if (typeof requestIdleCallback === 'function') {
     const id = requestIdleCallback(fn, { timeout: 5000 });
     return () => cancelIdleCallback(id);
@@ -104,7 +105,8 @@ function defaultIdle(fn: () => void): () => void {
   return () => clearTimeout(id);
 }
 
-function defaultSaveData(): boolean {
+/** `deps.saveData` in the app: true when the browser asks to save data. */
+export function defaultSaveData(): boolean {
   return (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
 }
 
