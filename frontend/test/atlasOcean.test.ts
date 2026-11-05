@@ -1,14 +1,14 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { createAtlasOcean, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
+import { createAtlasOcean, defaultIdle, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
 import { isAtlasListPath, setAtlasLayerState } from '../src/plugins/tags-atlas/atlasLayerState.ts';
 
 /**
  * A fake page. `log` records what the ocean did to the map and the layout;
  * `maps` counts the map controllers (one controller = one Leaflet map at most).
  */
-function fakePage(initial: 'list' | 'mapList' | 'map' = 'map') {
+function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?: boolean } = {}) {
   const attrs = new Map<string, string>();
   const observers = new Set<() => void>();
   const body = {
@@ -23,6 +23,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map') {
   const log: string[] = [];
   let maps = 0;
   let urlState = initial;
+  // The idle callbacks the ocean asked for; `idle()` runs them.
+  const idle = new Set<() => void>();
   const ocean = createAtlasOcean({
     body,
     container: () => container as unknown as HTMLElement,
@@ -37,11 +39,18 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map') {
         show: () => log.push('show'),
         park: () => log.push('park'),
         route: () => log.push('route'),
+        warm: () => log.push('warm'),
         destroy: () => log.push('map.destroy'),
       };
     },
     observeState: (_b, fn) => { observers.add(fn); return () => observers.delete(fn); },
     path: () => '/',
+    idle: (fn) => {
+      log.push('idle');
+      idle.add(fn);
+      return () => { idle.delete(fn); };
+    },
+    saveData: () => !!opts.saveData,
   });
   return {
     ocean,
@@ -49,6 +58,13 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map') {
     container,
     log,
     get maps() { return maps; },
+    /** the page goes idle: run the pending idle callbacks */
+    idle() {
+      const fns = [...idle];
+      idle.clear();
+      for (const fn of fns) fn();
+    },
+    get pendingIdle() { return idle.size; },
     /** the state the next page reads from its URL */
     setUrlState(s: 'list' | 'mapList' | 'map') { urlState = s; },
   };
@@ -176,5 +192,112 @@ describe('atlasOcean', () => {
     p.ocean.destroy();
     assert.deepEqual(p.log.slice(-3), ['layout.cleanup', 'map.destroy', 'container.remove']);
     assert.equal(p.ocean.presentation(), 'hidden');
+  });
+
+  test('warm-up: in list, the map builds in an idle callback after the attach, not before', () => {
+    const p = fakePage('list');
+    assert.equal(p.pendingIdle, 0, 'nothing is scheduled before the first grid render (attach)');
+    p.ocean.attach();
+    assert.ok(!p.log.includes('warm'), 'the attach itself does not build the map');
+    assert.equal(p.pendingIdle, 1);
+    p.idle();
+    assert.deepEqual(p.log, ['layout', 'park', 'idle', 'warm']);
+    assert.equal(p.ocean.presentation(), 'hidden', 'the warm map stays hidden');
+    // A re-arm does not warm again.
+    p.ocean.attach();
+    assert.equal(p.pendingIdle, 0);
+    // The first change to mapList only shows the map.
+    setAtlasLayerState('mapList', p.body);
+    assert.equal(p.log[p.log.length - 1], 'show');
+    assert.equal(p.maps, 1);
+  });
+
+  test('warm-up: no warm-up when saveData is on; the first mapList builds the map', () => {
+    const p = fakePage('list', { saveData: true });
+    p.ocean.attach();
+    assert.equal(p.pendingIdle, 0);
+    p.idle();
+    assert.ok(!p.log.includes('warm'));
+    setAtlasLayerState('mapList', p.body);
+    assert.deepEqual(p.log, ['layout', 'park', 'show']);
+  });
+
+  test('warm-up: no warm-up when the page attaches in mapList or map', () => {
+    const p = fakePage('mapList');
+    p.ocean.attach();
+    assert.equal(p.pendingIdle, 0);
+    setAtlasLayerState('list', p.body);
+    p.ocean.attach();
+    assert.equal(p.pendingIdle, 0, 'a shown map is built: nothing to warm');
+  });
+
+  test('warm-up: a state change before the idle callback cancels the warm-up', () => {
+    const p = fakePage('list');
+    p.ocean.attach();
+    setAtlasLayerState('mapList', p.body);
+    assert.equal(p.pendingIdle, 0);
+    assert.ok(!p.log.includes('warm'));
+  });
+
+  test('warm-up: a move to a post before the idle callback cancels the warm-up', () => {
+    const p = fakePage('list');
+    p.ocean.attach();
+    p.ocean.detach('/posts/a-post');
+    assert.equal(p.pendingIdle, 0);
+    assert.ok(!p.log.includes('warm'));
+  });
+});
+
+describe('atlasOcean default deps', () => {
+  const g = globalThis as Record<string, unknown>;
+
+  test('defaultIdle uses requestIdleCallback and its cancel', () => {
+    const calls: string[] = [];
+    const prevRic = g.requestIdleCallback;
+    const prevCic = g.cancelIdleCallback;
+    g.requestIdleCallback = (fn: () => void, opts: { timeout: number }) => {
+      calls.push(`ric:${opts.timeout}`);
+      fn();
+      return 7;
+    };
+    g.cancelIdleCallback = (id: number) => calls.push(`cic:${id}`);
+    try {
+      let ran = false;
+      const cancel = defaultIdle(() => { ran = true; });
+      cancel();
+      assert.ok(ran);
+      assert.deepEqual(calls, ['ric:5000', 'cic:7']);
+    } finally {
+      g.requestIdleCallback = prevRic;
+      g.cancelIdleCallback = prevCic;
+    }
+  });
+
+  test('defaultIdle falls back to a timeout that the cancel clears', async () => {
+    const prevRic = g.requestIdleCallback;
+    g.requestIdleCallback = undefined;
+    try {
+      let ran = false;
+      const cancel = defaultIdle(() => { ran = true; });
+      cancel();
+      await new Promise((r) => setTimeout(r, 1600));
+      assert.equal(ran, false);
+    } finally {
+      g.requestIdleCallback = prevRic;
+    }
+  });
+
+  test('defaultSaveData reads navigator.connection.saveData', () => {
+    const prev = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    try {
+      Object.defineProperty(globalThis, 'navigator', { value: { connection: { saveData: true } }, configurable: true });
+      assert.equal(defaultSaveData(), true);
+      Object.defineProperty(globalThis, 'navigator', { value: { connection: { saveData: false } }, configurable: true });
+      assert.equal(defaultSaveData(), false);
+      Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
+      assert.equal(defaultSaveData(), false);
+    } finally {
+      if (prev) Object.defineProperty(globalThis, 'navigator', prev);
+    }
   });
 });

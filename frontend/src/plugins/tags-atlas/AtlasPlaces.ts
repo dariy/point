@@ -211,6 +211,9 @@ export class AtlasPlaces {
   _reposition: () => void;
   _drawSeq = 0;
   _didFitBounds = false;
+  /** While true, the opening fit waits in `_heldFit` (a map built off screen). */
+  _holdFit = false;
+  _heldFit: Array<[number, number]> | null = null;
   _tagsById: Map<number, AtlasTag> = new Map();
   _data: { tags?: AtlasTag[] } | null = null;
   _hint: HTMLElement | null = null;
@@ -696,8 +699,11 @@ export class AtlasPlaces {
     // user's own pan and zoom — refitting on every handle drag would fling the
     // map around while they are reading it.
     if (bounds.length && !this._didFitBounds) {
-      this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
-      this._didFitBounds = true;
+      if (this._holdFit) this._heldFit = bounds;
+      else {
+        this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+        this._didFitBounds = true;
+      }
     }
 
     this._updateHint(bounds.length);
@@ -711,6 +717,25 @@ export class AtlasPlaces {
    * The idle hint doubles as the empty state: a timeline range can leave the map
    * with no places at all, which otherwise reads as a failed load.
    */
+  /**
+   * Hold the opening fit-to-places: the map is built off screen, in a box of
+   * another size. `releaseFit` runs the held fit when the map is shown.
+   */
+  holdFit(): void {
+    this._holdFit = true;
+  }
+
+  releaseFit(): void {
+    if (!this._holdFit) return;
+    this._holdFit = false;
+    const bounds = this._heldFit;
+    this._heldFit = null;
+    if (bounds && !this._didFitBounds) {
+      this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+      this._didFitBounds = true;
+    }
+  }
+
   _updateHint(placeCount: number): void {
     const hint = this.$("#atlas-hint");
     if (!hint) return;
