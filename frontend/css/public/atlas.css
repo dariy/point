@@ -946,3 +946,22 @@ body[data-atlas-settling] #grid-mount {
         transition: none;
     }
 }
+
+/* The window (atlasOcean.ts): the map keeps its box and shows through the
+   clip-path the ocean sets. It sits above the post viewer (the sheet and the
+   header are z-index 50; layout.css has 110) and below the menus and modals.
+   The clip also clips hit-testing, so the page under the rest of the box gets
+   its clicks. `body` makes these rules win over the layer-state rules. */
+body .atlas-layer-map[data-atlas-ocean="window"] {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    z-index: 115;
+    transition: none;
+    touch-action: none;
+}
+
+/* A window is too small for the controls and the overlays: a tap opens the full map. */
+body .atlas-layer-map[data-atlas-ocean="window"] :is(.leaflet-control-container, .atlas-hint, .atlas-legend) {
+    display: none;
+}

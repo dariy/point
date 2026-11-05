@@ -15,6 +15,13 @@ import { AtlasPlaces } from './AtlasPlaces.ts';
 import { getAtlasLayerState, isAtlasListPath, replaceSearch, searchWithView, viewFromSearch } from './atlasLayerState.ts';
 
 import type { LeafletRef } from '../../utils/leaflet.ts';
+import type { Point } from './atlasOceanGeometry.ts';
+
+/** A map point. */
+export interface LatLng {
+  lat: number;
+  lng: number;
+}
 
 export interface AtlasLayerMapOptions {
   /** the map container */
@@ -44,6 +51,23 @@ export interface AtlasLayerMapController {
    * line with the new route.
    */
   route(): void;
+  /**
+   * The map is on screen through a window (atlasOcean.ts): the box keeps its
+   * size, a clip shows part of it. Build the map on the first call. With
+   * `center`, set the view so `center` sits `offset` px from the box centre (the
+   * window centre). A parked view stays parked for the next `show()` after a
+   * `park()`; a `show()` straight from a window keeps the window's view.
+   */
+  frame(center: LatLng | null, offset: Point): void;
+  /** Where `latLng` is now, from the box centre, in px. `null` before the build. */
+  offsetOf(latLng: LatLng): Point | null;
+  /** Move the view by `dx`, `dy` px, with no animation. */
+  panBy(dx: number, dy: number): void;
+  /**
+   * In a window, a place selection (a marker, a shape, a key press) calls `fn`
+   * and does not open the place's tag page. `null` sets the tag-page move back.
+   */
+  setWindowTap(fn: (() => void) | null): void;
   destroy(): void;
 }
 
@@ -77,6 +101,11 @@ export function mountAtlasLayerMap(
   let parked: { center: unknown; zoom: number } | null = null;
   // The last call was show() (true) or park()/warm() (false).
   let shown = false;
+  // The last call was frame(): the map shows through a window.
+  let windowed = false;
+  // A frame() before the build: applied when the map is built.
+  let pendingFrame: { center: LatLng | null; offset: Point } | null = null;
+  let windowTap: (() => void) | null = null;
   const isAlive = () => !dead;
 
   const writeView = () => {
@@ -94,8 +123,20 @@ export function mountAtlasLayerMap(
     map.setView(kept.center, kept.zoom, { animate: false });
   };
 
+  /** Put `center` at `offset` px from the box centre, at the current zoom. */
+  const centerAt = (center: LatLng, offset: Point) => {
+    const z = map.getZoom();
+    const p = map.project([center.lat, center.lng], z);
+    map.setView(map.unproject([p.x - offset.x, p.y - offset.y], z), z, { animate: false });
+  };
+
   const onResize = () => {
     if (!map) return;
+    // A window shows the map at its own view; the parked view waits for show().
+    if (windowed) {
+      map.invalidateSize({ pan: false });
+      return;
+    }
     if (!parked) {
       map.invalidateSize();
       return;
@@ -144,8 +185,15 @@ export function mountAtlasLayerMap(
       map,
       root: opts.container,
       isAlive,
-      // The picked geo-tag opens as a tag page; clearing it goes home.
-      onSelect: (tag) => openPlace(tag?.slug ?? null),
+      // The picked geo-tag opens as a tag page; clearing it goes home. In a
+      // window, a pick opens the full map instead (windowTap).
+      onSelect: (tag) => {
+        if (windowed && windowTap) {
+          if (tag) windowTap();
+          return;
+        }
+        openPlace(tag?.slug ?? null);
+      },
     });
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
@@ -153,11 +201,15 @@ export function mountAtlasLayerMap(
     // low zoom `maxBounds` can move the URL centre for it, and a fit-to-places
     // fits the wrong box. So the first show() sets the view: the URL view is
     // kept for it, or the fit waits for it.
-    if (!shown) {
+    // A window build sets its own view (frame); it does not fit to places.
+    if (windowed) places._didFitBounds = true;
+    else if (!shown) {
       if (view) parked = { center: [view.lat, view.lng], zoom: view.zoom };
       else places.holdFit();
     }
     map.invalidateSize();
+    if (windowed && pendingFrame?.center) centerAt(pendingFrame.center, pendingFrame.offset);
+    pendingFrame = null;
     ro = new ResizeObserver(onResize);
     ro.observe(opts.container);
     void places.start();
@@ -167,11 +219,19 @@ export function mountAtlasLayerMap(
     show() {
       if (dead) return;
       shown = true;
+      pendingFrame = null;
       if (!map) {
+        windowed = false;
         void build();
         return;
       }
-      if (parked) {
+      if (windowed) {
+        // From a window to a full map: the clip grew over the same box, so
+        // the window's view stays. The parked view is no longer needed.
+        windowed = false;
+        parked = null;
+        map.invalidateSize({ pan: false });
+      } else if (parked) {
         // The box can differ from the one the map left (the window changed
         // size). Re-measure, then put the kept view back.
         const kept = parked;
@@ -186,12 +246,38 @@ export function mountAtlasLayerMap(
       // Keep the view only when a shown map goes off screen. A map that was
       // never shown (a warm build) is not parked here: its fit-to-places can
       // land after this call, and the first show() must keep that fit.
-      if (map && shown && !parked) parked = { center: map.getCenter(), zoom: map.getZoom() };
+      if (map && (shown || windowed) && !parked) parked = { center: map.getCenter(), zoom: map.getZoom() };
       shown = false;
+      windowed = false;
+      pendingFrame = null;
     },
     warm() {
       if (dead || map) return;
       void build();
+    },
+    frame(center, offset) {
+      if (dead) return;
+      windowed = true;
+      shown = false;
+      if (!map) {
+        pendingFrame = { center, offset };
+        void build();
+        return;
+      }
+      map.invalidateSize({ pan: false });
+      if (center) centerAt(center, offset);
+    },
+    offsetOf(latLng) {
+      if (!map) return null;
+      const p = map.latLngToContainerPoint([latLng.lat, latLng.lng]);
+      const size = map.getSize();
+      return { x: p.x - size.x / 2, y: p.y - size.y / 2 };
+    },
+    panBy(dx, dy) {
+      map?.panBy([dx, dy], { animate: false });
+    },
+    setWindowTap(fn) {
+      windowTap = fn;
     },
     route() {
       places?.syncToRoute();
