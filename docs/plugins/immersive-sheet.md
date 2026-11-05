@@ -51,5 +51,7 @@ with the sheet open (no slide). The map stays on screen over the post until the
 map slot has its first layout. Then the map shrinks from the whole screen into
 the slot and the place pans back to the slot centre. After the shrink, the zoom
 changes back to the slot zoom (10). With `prefers-reduced-motion: reduce` the
-change is instant. A post that the map layer opened keeps its way back to the
-list: a close of the post after this round trip still goes to the list URL.
+change is instant. The widget shows the place, not the cloud that was open on
+the tag page. A post that the map layer opened keeps its way back to the list: a
+close of the post after this round trip still goes to the list URL, and the
+list shows the viewport of that URL (`?at=`), not the view of the widget.

@@ -351,6 +351,12 @@ export class AtlasPlaces {
     this._restoreFromUrl();
   }
 
+  /** Close the open cloud and drop a pending focus (the map goes into a post's window). */
+  clearSelection(): void {
+    this._focusOnRestore = null;
+    if (this._activeTag) this._clearSelection();
+  }
+
   /** The hint and the legend; the legend toggles hide a node type. */
   _mountOverlays(): void {
     const hint = document.createElement("div");

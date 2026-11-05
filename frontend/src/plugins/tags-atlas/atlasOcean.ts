@@ -51,7 +51,7 @@
  * warms; Leaflet loads on the first `mapList` or `full`.
  */
 
-import { getAtlasLayerState, isAtlasListPath, setAtlasLayerState, stateFromSearchOrNull } from './atlasLayerState.ts';
+import { getAtlasLayerState, isAtlasListPath, setAtlasLayerState, stateFromSearchOrNull, viewFromSearch } from './atlasLayerState.ts';
 import { mountAtlasLayerLayout } from './atlasLayerLayout.ts';
 import { mountAtlasLayerMap } from './atlasLayerMap.ts';
 import { isSheetReturn, syncFromPostChip } from './atlasFromPost.ts';
@@ -500,6 +500,10 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         ctl.setView(exp.center, exp.zoom);
         ctl.route(exp.focusPostSlug);
       } else {
+        // A return from another page: the URL viewport is the list's own view
+        // (the return URL). The parked view can be a post widget's view.
+        const urlView = returning ? viewFromSearch(new URL(deps.path(), 'http://x').search) : null;
+        if (urlView) ctl.useView(urlView);
         // A new page: the selection and the URL viewport follow the new route.
         if (newRoute) ctl.route();
         present(presentationForState(getAtlasLayerState(body)));

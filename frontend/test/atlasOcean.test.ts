@@ -70,6 +70,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
         park: () => log.push('park'),
         route: (focus) => log.push(focus ? `route ${focus}` : 'route'),
         setView: (c, z) => log.push(`setView ${c.lat},${c.lng} z${z}`),
+        useView: (v) => log.push(`useView ${v.lat},${v.lng} z${v.zoom}`),
         warm: () => log.push('warm'),
         frame: (c, o, z) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}${z == null ? '' : ` z${z}`}`),
         offsetOf: () => ({ x: 0, y: 0 }),
@@ -207,6 +208,24 @@ describe('atlasOcean', () => {
     p.ocean.detach('/tags/france');
     p.ocean.attach();
     assert.equal(p.body.getAttribute('data-atlas-layer'), 'mapList');
+  });
+
+  test('a return from a post takes the viewport of the list URL, before the route', () => {
+    const p = fakePage('map');
+    p.ocean.attach();
+    p.ocean.detach('/posts/a-post');
+    p.setPath('/?view=map&at=48.5,2.25,5');
+    p.ocean.attach();
+    assert.deepEqual(p.log.slice(-3), ['useView 48.5,2.25 z5', 'route', 'show']);
+  });
+
+  test('a move between list pages does not take the URL viewport', () => {
+    const p = fakePage('map');
+    p.ocean.attach();
+    p.setPath('/tags/france?view=map&at=1,2,3');
+    p.ocean.detach('/tags/france?view=map&at=1,2,3');
+    p.ocean.attach();
+    assert.ok(!p.log.some((l) => l.startsWith('useView')));
   });
 
   test('list → post → list: the map is hidden, kept, and shown again', () => {

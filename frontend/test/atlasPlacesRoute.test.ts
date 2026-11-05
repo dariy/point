@@ -72,3 +72,20 @@ describe('AtlasPlaces.syncToRoute', () => {
     assert.equal(p._focusOnRestore, null);
   });
 });
+
+describe('AtlasPlaces.clearSelection', () => {
+  test('the open cloud closes and a pending focus is dropped', () => {
+    const { p, calls } = fakePlaces({ active: 'paris' });
+    p._focusOnRestore = 'a-post';
+    p.clearSelection();
+    assert.deepEqual(calls, ['clear']);
+    assert.equal(p._activeTag, null);
+    assert.equal(p._focusOnRestore, null);
+  });
+
+  test('with no selection, nothing is cleared', () => {
+    const { p, calls } = fakePlaces();
+    p.clearSelection();
+    assert.deepEqual(calls, []);
+  });
+});
