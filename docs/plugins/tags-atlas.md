@@ -60,7 +60,10 @@ A move between list pages (`/` and `/tags/<slug>`) does not rebuild the map. Thi
 also true for Back, Forward and a tag link. The same map stays, with the same viewport
 and tiles, and it does not fit to the places again. A move to any other page (a post,
 search, admin) hides the map and keeps it. A return to the list page shows the same map
-at the same viewport. Leaflet loads on the first change out of `list`, not before.
+at the same viewport. One move is different: a Back from the full map to a post whose
+sheet map opened it. Then the map stays on screen and shrinks into the sheet's map slot
+(see [immersive-sheet.md](immersive-sheet.md)). While the full map's history entry has
+`fromPost`, a "‹ <post title>" chip at the top goes back to that post. Leaflet loads on the first change out of `list`, not before.
 
 When the layer map is less than 320px high (a phone on its side), the legend is one
 button to the right of the zoom control. The button opens the filters in one row.

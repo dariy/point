@@ -1,14 +1,14 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { createAtlasOcean, defaultIdle, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
+import { SETTLE_FRAMES, createAtlasOcean, defaultIdle, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
 import { isAtlasListPath, setAtlasLayerState } from '../src/plugins/tags-atlas/atlasLayerState.ts';
 
 /**
  * A fake page. `log` records what the ocean did to the map and the layout;
  * `maps` counts the map controllers (one controller = one Leaflet map at most).
  */
-function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?: boolean; reducedMotion?: boolean } = {}) {
+function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?: boolean; reducedMotion?: boolean; sheetReturn?: boolean } = {}) {
   const attrs = new Map<string, string>();
   const observers = new Set<() => void>();
   const body = {
@@ -47,6 +47,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   const frames = new Set<(now: number) => void>();
   let clock = 0;
   let windowTap: (() => void) | null = null;
+  // The "‹ <post title>" chip: what the ocean asked for last.
+  let chip = false;
   const log: string[] = [];
   let maps = 0;
   let urlState = initial;
@@ -88,6 +90,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     reducedMotion: () => !!opts.reducedMotion,
     frame: (fn) => { frames.add(fn); return () => { frames.delete(fn); }; },
     now: () => clock,
+    sheetReturn: () => !!opts.sheetReturn,
+    fromPostChip: (show) => { chip = show; },
   });
   return {
     ocean,
@@ -113,6 +117,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
       for (const fn of fns) fn(ms);
     },
     get pendingFrames() { return frames.size; },
+    get chip() { return chip; },
     /** the state the next page reads from its URL */
     setUrlState(s: 'list' | 'mapList' | 'map') { urlState = s; },
   };
@@ -520,6 +525,145 @@ describe('atlasOcean', () => {
         p.log.length = 0;
         p.ocean.attach();
         assert.deepEqual(p.log, ['show']);
+      });
+    });
+
+    describe('collapse (the full map goes back into the sheet widget)', () => {
+      const back = { kind: 'window' as const, rect: slot, center: paris, zoom: 10 };
+
+      test('a Back to the open sheet holds the full map over the box; collapse shrinks it into the slot', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        // Held: a window over the whole box, no hide, no park.
+        assert.equal(p.ocean.presentation(), 'window');
+        assert.equal(p.container.style.clipPath, 'inset(0px 0px 0px 0px)');
+        assert.ok(!p.log.includes('park'));
+        p.log.length = 0;
+        // The slot is inside the sheet's scroller box (its clip).
+        const done = p.ocean.collapse(() => ({ ...back, clip: { left: 0, top: 150, width: 400, height: 650 } }), 100);
+        assert.equal(p.container.style.clipPath, 'inset(0px 0px 0px 0px)', 'the tween starts at the box, not at the scroller');
+        p.tick(0);
+        assert.equal(p.container.style.clipPath, 'inset(0px 0px 0px 0px)');
+        p.tick(50);
+        assert.equal(p.container.style.clipPath, 'inset(250px 10px 50px 10px)');
+        assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,100', 'the place pans back with the clip');
+        assert.ok(!p.log.some((l) => /z\d/.test(l)), 'no zoom change during the tween');
+        p.tick(100);
+        await done;
+        assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+        assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,200 z10', 'the slot zoom after the tween');
+        assert.equal(p.maps, 1, 'no second map');
+      });
+
+      test('collapse waits for the slot\'s first layout: no tween from a zero rect', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        let laidOut = false;
+        const done = p.ocean.collapse(() => (laidOut ? back : { ...back, rect: { left: 0, top: 0, width: 0, height: 0 } }), 100);
+        p.tick(10);
+        p.tick(20);
+        assert.equal(p.container.style.clipPath, 'inset(0px 0px 0px 0px)', 'the map holds');
+        laidOut = true;
+        p.tick(30);
+        p.tick(80);
+        assert.equal(p.container.style.clipPath, 'inset(250px 10px 50px 10px)', 'the tween starts at the layout');
+        p.tick(130);
+        await done;
+        assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+      });
+
+      test('a slot off screen is not a layout', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        const below = { ...back, rect: { left: 20, top: 900, width: 360, height: 200 } };
+        const done = p.ocean.collapse(() => below, 100);
+        for (let i = 1; i <= SETTLE_FRAMES; i++) p.tick(i);
+        await done;
+        // No layout in time: the held map goes.
+        assert.equal(p.ocean.presentation(), 'hidden');
+      });
+
+      test('a second collapse during the tween goes on from the clip on screen, not from the box', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        void p.ocean.collapse(() => back, 100);
+        p.tick(0);
+        p.tick(50);
+        assert.equal(p.container.style.clipPath, 'inset(250px 10px 50px 10px)');
+        // The post re-renders: its new viewer asks again.
+        const done = p.ocean.collapse(() => back, 100);
+        assert.equal(p.container.style.clipPath, 'inset(250px 10px 50px 10px)', 'no jump back to the box');
+        p.tick(100);
+        p.tick(200);
+        await done;
+        assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+      });
+
+      test('reduced motion: instant', async () => {
+        const p = fakePage('map', { sheetReturn: true, reducedMotion: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        await p.ocean.collapse(() => back);
+        assert.equal(p.pendingFrames, 0);
+        assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+      });
+
+      test('from a hidden map (a reload of the post), collapse shows the window at once', async () => {
+        const p = fakePage('list');
+        await p.ocean.collapse(() => back, 100);
+        assert.equal(p.pendingFrames, 0);
+        assert.equal(p.ocean.presentation(), 'window');
+        assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
+      });
+
+      test('a move to a post that is not a sheet return hides the map', () => {
+        const p = fakePage('map');
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        assert.equal(p.ocean.presentation(), 'hidden');
+      });
+
+      test('a hidden map is not held', () => {
+        const p = fakePage('list', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        assert.equal(p.ocean.presentation(), 'hidden');
+      });
+
+      test('a held map that no sheet takes is hidden after the timeout', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post', 5);
+        assert.equal(p.ocean.presentation(), 'window');
+        await new Promise((r) => setTimeout(r, 20));
+        assert.equal(p.ocean.presentation(), 'hidden');
+      });
+
+      test('a present during the wait cancels the collapse and resolves it', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        const done = p.ocean.collapse(() => null, 100);
+        p.ocean.present('hidden');
+        await done;
+        assert.equal(p.pendingFrames, 0);
+        assert.equal(p.ocean.presentation(), 'hidden');
+      });
+
+      test('the chip shows only on a list page in full', () => {
+        const p = fakePage('map');
+        p.ocean.attach();
+        assert.equal(p.chip, true);
+        p.body.setAttribute('data-atlas-layer', 'mapList');
+        assert.equal(p.chip, false);
+        p.body.setAttribute('data-atlas-layer', 'map');
+        assert.equal(p.chip, true);
+        p.ocean.detach('/search');
+        assert.equal(p.chip, false, 'gone on another page');
       });
     });
 

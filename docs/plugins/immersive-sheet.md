@@ -35,6 +35,17 @@ grows from the slot to the whole screen and brings the place to the centre,
 while the viewer and its header fade (0.28 s). Then the tag page opens on the
 same map, the zoom changes to 6, the place is selected, its cloud opens and the
 chip of the post you came from is focused. The new history entry has the state
-`{ fromPost: <post slug>, sheet: 'open' }`. With `prefers-reduced-motion:
+`{ fromPost: <post slug>, fromTitle: <post title>, sheet: 'open' }`, and the
+post's own entry gets `{ sheet: 'open' }`. With `prefers-reduced-motion:
 reduce` the change is instant. A place that is not on the map (hidden, or out
 of the year range) opens the same page, centred on it, with no selection.
+
+The way back is the same motion in reverse. Use the browser Back, or the
+"‹ <post title>" chip at the top of the full map. The chip shows only while the
+history entry has `fromPost`; a tap on it is `history.back()`. The post opens
+with the sheet open (no slide). The map stays on screen over the post until the
+map slot has its first layout. Then the map shrinks from the whole screen into
+the slot and the place pans back to the slot centre. After the shrink, the zoom
+changes back to the slot zoom (10). With `prefers-reduced-motion: reduce` the
+change is instant. A post that the map layer opened keeps its way back to the
+list: a close of the post after this round trip still goes to the list URL.

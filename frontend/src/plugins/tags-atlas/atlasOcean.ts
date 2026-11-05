@@ -30,6 +30,15 @@
  * attaches (the tag page in `map` state). That attach shows `full`, sets the
  * zoom, selects the route's place and focuses the post's chip.
  *
+ * `collapse` is the way back (atlasFromPost.ts). A detach to a post whose
+ * history entry asks for the open sheet does not hide a shown map: it holds as
+ * a window over the whole box until the post's sheet calls `collapse`. That
+ * waits for the slot's first layout (a rect with a size, on screen), then
+ * tweens the clip from the box to the slot and pans the place back to the
+ * slot centre; the slot's zoom comes after the tween. Nothing calls `collapse`
+ * in DETACH_MS: the map is hidden. While a list page in `full` has an entry
+ * with `fromPost`, the ocean shows the "‹ <post title>" chip.
+ *
  * On a list page the presentation follows `body[data-atlas-layer]`. A detach to
  * any other page (a post, search, admin) sets `hidden` and keeps the map. The
  * next list page shows the same map at the same viewport: no new `L.map`, no
@@ -45,9 +54,10 @@
 import { getAtlasLayerState, isAtlasListPath } from './atlasLayerState.ts';
 import { mountAtlasLayerLayout } from './atlasLayerLayout.ts';
 import { mountAtlasLayerMap } from './atlasLayerMap.ts';
+import { isSheetReturn, syncFromPostChip } from './atlasFromPost.ts';
 
 import {
-  clipInsets, createTapGate, easeInOut, insetCss, intersectRect, tweenPoint, tweenRect, windowOffset,
+  clipInsets, createTapGate, easeInOut, insetCss, insetsEmpty, intersectRect, tweenPoint, tweenRect, windowOffset,
 } from './atlasOceanGeometry.ts';
 
 import type { AtlasLayerState } from './atlasLayerState.ts';
@@ -100,6 +110,9 @@ export const ATLAS_MAP_CLASS = 'atlas-layer-map';
  */
 const DETACH_MS = 10_000;
 
+/** `collapse` waits at most this many frames for the slot's first layout. */
+export const SETTLE_FRAMES = 60;
+
 /** The presentation for a layer state on a list page. */
 export function presentationForState(state: AtlasLayerState): Exclude<AtlasPresentation, 'window'> {
   if (state === 'mapList') return 'mapList';
@@ -132,6 +145,10 @@ export interface AtlasOceanDeps {
   frame(fn: (now: number) => void): () => void;
   /** The current time in ms, on the same clock as `frame`. */
   now(): number;
+  /** True when a move to `path` is a Back to a post's open sheet (atlasFromPost.ts). */
+  sheetReturn(path: string): boolean;
+  /** Show the "‹ <post title>" chip, or remove it (atlasFromPost.ts::syncFromPostChip). */
+  fromPostChip(show: boolean): void;
 }
 
 export interface AtlasOcean {
@@ -146,6 +163,13 @@ export interface AtlasOcean {
    * attach finishes the move (see the file comment); a `present` cancels it.
    */
   expand(target: AtlasExpand, ms?: number): Promise<void>;
+  /**
+   * The way back from the full map: wait until `slot()` gives a window with a
+   * size, then tween to it (from the held box; instant from `hidden` or under
+   * reduced motion). Resolves when the window is in place, or replaced, or
+   * when no layout came in SETTLE_FRAMES (the held map is hidden then).
+   */
+  collapse(slot: () => AtlasWindow | null, ms?: number): Promise<void>;
   presentation(): AtlasPresentation;
   destroy(): void;
 }
@@ -204,6 +228,8 @@ function defaultDeps(): AtlasOceanDeps {
     reducedMotion: () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
     frame: defaultFrame,
     now: () => (typeof requestAnimationFrame === 'function' ? performance.now() : Date.now()),
+    sheetReturn: (path) => isSheetReturn(path, history.state),
+    fromPostChip: (show) => syncFromPostChip(show),
   };
 }
 
@@ -233,6 +259,16 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   let stopInput: (() => void) | null = null;
   // An expand that waits for the next attach.
   let expanding: AtlasExpand | null = null;
+  // A held map on a post (the way back): hidden when no collapse comes in time.
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const clearHold = () => {
+    clearTimeout(holdTimer);
+    holdTimer = undefined;
+  };
+
+  /** The chip shows on a list page's full map (its entry decides the rest). */
+  const syncChip = () => deps.fromPostChip(current === 'full' && !!layout);
 
   const stopTween = () => {
     cancelTween?.();
@@ -282,7 +318,10 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     return { el: container, ctl: map };
   };
 
+  // The clip rect on screen now (a tween step included), or null for no clip.
+  let clipRect: Rect | null = null;
   const setClip = (rect: Rect | null, box: Rect) => {
+    clipRect = rect;
     if (container) container.style.clipPath = rect ? insetCss(clipInsets(rect, box)) : '';
   };
 
@@ -291,7 +330,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
 
   /** The rect on screen now: the window, the whole box, or nothing (hidden). */
   const shownRect = (box: Rect): Rect | null => {
-    if (current === 'window') return win ? visibleRect(win) : null;
+    // A tween that a new tween replaces goes on from where its clip is.
+    if (current === 'window') return clipRect ?? (win ? visibleRect(win) : null);
     return current === 'hidden' ? null : box;
   };
 
@@ -299,6 +339,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     if (current !== 'window') return;
     win = null;
     map?.setWindowTap(null);
+    clipRect = null;
     if (container) container.style.clipPath = '';
   };
 
@@ -344,6 +385,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
 
   const present = (req: AtlasPresentationRequest) => {
     expanding = null;
+    clearHold();
     stopTween();
     show(req);
   };
@@ -366,9 +408,11 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       warmed = true;
       map?.show();
     }
+    syncChip();
   };
 
   const animateTo = (req: AtlasPresentationRequest, ms = TWEEN_MS): Promise<void> => {
+    clearHold();
     stopTween();
     const box = container ? deps.box(container) : null;
     const from = box ? shownRect(box) : null;
@@ -382,8 +426,9 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     // window centre, in step with the clip. The zoom does not change.
     const fromOff = target?.center ? map?.offsetOf(target.center) ?? null : null;
     const toOff = target ? windowOffset(target.rect, box) : null;
-    // The tween runs in window mode: the clip moves, the box stays.
-    presentWindow({ ...(target ?? win ?? { kind: 'window' }), kind: 'window', rect: from, center: undefined }, false);
+    // The tween runs in window mode: the clip moves, the box stays. It starts
+    // at `from` as it is; the target's clip is for the end, not the start.
+    presentWindow({ ...(target ?? win ?? { kind: 'window' }), kind: 'window', rect: from, clip: undefined, center: undefined }, false);
     const start = deps.now();
     return new Promise<void>((resolve) => {
       endTween = resolve;
@@ -416,6 +461,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
 
   return {
     attach() {
+      clearHold();
       clearTimeout(timer);
       timer = undefined;
       const newRoute = moved;
@@ -462,8 +508,23 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         return;
       }
       stopWarm();
+      const hold = current !== 'hidden' && deps.sheetReturn(path);
       releaseLayout();
-      present('hidden');
+      if (!hold) {
+        present('hidden');
+        return;
+      }
+      // A Back to the post's open sheet: the map stays on screen, over the
+      // whole box, until the sheet's slot takes it (collapse).
+      expanding = null;
+      stopTween();
+      // Window mode first: without the layout, the `list` rules move the
+      // container off screen (translateY(-100%)), and the box must not be read there.
+      const { el } = ensure();
+      el.dataset.atlasOcean = 'window';
+      presentWindow({ kind: 'window', rect: deps.box(el) }, false);
+      syncChip();
+      holdTimer = setTimeout(() => present('hidden'), ms);
     },
 
     present,
@@ -479,10 +540,41 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       return done;
     },
 
+    collapse(slot, ms = TWEEN_MS) {
+      expanding = null;
+      stopTween();
+      let frames = 0;
+      return new Promise<void>((resolve) => {
+        endTween = resolve;
+        const step = () => {
+          const w = slot();
+          // The slot's first layout: a rect with a size, inside the box.
+          const box = w ? deps.box(ensure().el) : null;
+          if (w && box && w.rect.width > 0 && w.rect.height > 0 && !insetsEmpty(clipInsets(visibleRect(w), box), box)) {
+            cancelTween = null;
+            endTween = null;
+            // animateTo resolves on its own end; the hold ends with it.
+            void animateTo(w, ms).then(resolve);
+            return;
+          }
+          if (++frames >= SETTLE_FRAMES) {
+            cancelTween = null;
+            endTween = null;
+            if (holdTimer !== undefined) present('hidden');
+            resolve();
+            return;
+          }
+          cancelTween = deps.frame(step);
+        };
+        step();
+      });
+    },
+
     presentation: () => current,
 
     destroy() {
       expanding = null;
+      clearHold();
       stopTween();
       stopWarm();
       leaveWindow();
@@ -496,6 +588,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       container = null;
       current = 'hidden';
       moved = false;
+      deps.fromPostChip(false);
     },
   };
 }
@@ -538,6 +631,12 @@ export function animateAtlasOcean(presentation: AtlasPresentationRequest, ms?: n
 export function expandAtlasOcean(target: AtlasExpand, ms?: number): Promise<void> {
   ocean ??= createAtlasOcean(defaultDeps());
   return ocean.expand(target, ms);
+}
+
+/** The way back from the full map into the sheet's slot. See `AtlasOcean.collapse`. */
+export function collapseAtlasOcean(slot: () => AtlasWindow | null, ms?: number): Promise<void> {
+  ocean ??= createAtlasOcean(defaultDeps());
+  return ocean.collapse(slot, ms);
 }
 
 /** The current presentation. `hidden` before the first attach. */
