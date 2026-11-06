@@ -115,6 +115,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     const tags = (post.tags || []).filter(t => !t.inherited);
     const tagsHtml = tags.length ? html`<div class="immersive-sheet-tags">${tags.map(t => renderTagLink(t))}</div>` : '';
     // An empty slot: the atlas ocean shows the map through it (_syncMapWindow).
+    // It floats right in the EXIF column, under the EXIF block; the text flows on the left.
     const geo = this._mapGeoTag();
     const mapHtml = geo ? html`<div class="immersive-sheet-map" role="img" aria-label="${`Map: ${geo.name}`}"></div>` : '';
     return html`
@@ -123,12 +124,12 @@ export class ImmersiveSheetViewer extends MediaViewer {
         <div class="immersive-sheet-scroll">
           <div class="immersive-sheet-body">
             <aside class="immersive-sheet-exif hidden" aria-label="Camera data"></aside>
+            ${mapHtml}
             <div class="immersive-sheet-main">
               ${breadcrumb}
               ${viewsLine}
               ${excerpt}
               ${tagsHtml}
-              ${mapHtml}
               ${this._renderActions()}
             </div>
             <div class="immersive-sheet-comments"></div>
@@ -300,6 +301,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
         clip: this.$('.immersive-sheet-scroll')?.getBoundingClientRect(),
         center,
         zoom: SHEET_MAP_ZOOM,
+        place: { slug: geo.slug },
         onTap: () => this._onMapTap()
       };
     };
@@ -420,6 +422,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
       clip: scroller,
       center: this._mapShown ? undefined : { lat: geo.latitude, lng: geo.longitude },
       zoom: this._mapShown ? undefined : SHEET_MAP_ZOOM,
+      place: this._mapShown ? undefined : { slug: geo.slug },
       onTap: () => this._onMapTap()
     });
     this._mapShown = true;

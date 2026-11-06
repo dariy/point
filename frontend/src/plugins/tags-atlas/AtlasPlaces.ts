@@ -109,6 +109,13 @@ interface SelectOptions {
   pan?: boolean;
   /** focus this post's chip once the cloud is built */
   focusPostSlug?: string;
+  /**
+   * A post's map widget: the cloud has this many rings only, and chips
+   * outside `bounds` are not drawn. `bounds` is in px from the place (the
+   * anchor), so a window that slides after the request keeps its bounds.
+   */
+  maxRings?: number;
+  bounds?: Box | null;
 }
 
 /** The fields that hold a cached boundary file. */
@@ -193,16 +200,18 @@ export function concealedTitle(node: ConcealMarks, name: string): string {
 
 /**
  * Place `count` chips on concentric rings around the origin (pixel space).
- * Inner rings fill first; arc spacing keeps pills from colliding.
+ * Inner rings fill first; arc spacing keeps pills from colliding. With
+ * `maxRings`, the layout stops after that many rings: it can return fewer
+ * than `count` offsets (the chips that do not fit are not drawn).
  */
-function ringLayout(
+export function ringLayout(
   count: number,
-  { startR = 66, ringGap = 46, minArc = 92 }: { startR?: number; ringGap?: number; minArc?: number } = {},
+  { startR = 66, ringGap = 46, minArc = 92, maxRings = Infinity }: { startR?: number; ringGap?: number; minArc?: number; maxRings?: number } = {},
 ): Offset[] {
   const out: Offset[] = [];
   let i = 0;
   let ring = 0;
-  while (i < count) {
+  while (i < count && ring < maxRings) {
     const radius = startR + ring * ringGap;
     const cap = Math.max(1, Math.floor((2 * Math.PI * radius) / minArc));
     const n = Math.min(cap, count - i);
@@ -215,6 +224,16 @@ function ringLayout(
     ring++;
   }
   return out;
+}
+
+/** A chip's box: `size` centred on (`x`, `y`), the way atlas.css centres `.atlas-node`. */
+export function chipBox(x: number, y: number, [w, h]: [number, number]): Box {
+  return { left: x - w / 2, top: y - h / 2, width: w, height: h };
+}
+
+/** `a` is fully inside `b`. */
+export function boxInside(a: Box, b: Box): boolean {
+  return a.left >= b.left && a.top >= b.top && a.left + a.width <= b.left + b.width && a.top + a.height <= b.top + b.height;
 }
 
 export interface AtlasPlacesOptions {
@@ -270,6 +289,10 @@ export class AtlasPlaces {
   _tagsById: Map<number, AtlasTag> = new Map();
   /** The post chip to focus when the route's place is selected next (a move from a post's map widget). */
   _focusOnRestore: string | null = null;
+  /** A window asks for this place's cloud; it waits until the places load (`openWindowPlace`). */
+  _windowPlace: { slug: string; bounds: Box | null } | null = null;
+  /** The ring limit and the chip bounds of the open cloud (a window's cloud), or `null`. */
+  _activeLimit: { maxRings: number; bounds: Box | null } | null = null;
   _data: { tags?: AtlasTag[] } | null = null;
   _hint: HTMLElement | null = null;
   _legend: HTMLElement | null = null;
@@ -350,6 +373,7 @@ export class AtlasPlaces {
     this._buildIndexes(data);
     await this._drawLayers(L);
     this._restoreFromUrl();
+    this._openWindowPlace();
   }
 
   _currentScopeKey(): string {
@@ -403,7 +427,9 @@ export class AtlasPlaces {
     if (focusPostSlug) this._focusOnRestore = focusPostSlug;
     const vc = ViewContext.current();
     const slug = vc.path.startsWith('/tags/') ? vc.tag : null;
-    if (this._activeTag && this._activeTag.slug === slug && !this._focusOnRestore) return;
+    // A window's cloud (one ring) is not the tag page's cloud: open it again.
+    if (this._activeTag && this._activeTag.slug === slug && !this._focusOnRestore && !this._activeLimit) return;
+    this._windowPlace = null;
     if (this._activeTag) this._clearSelection();
     this._restoreFromUrl();
   }
@@ -411,7 +437,32 @@ export class AtlasPlaces {
   /** Close the open cloud and drop a pending focus (the map goes into a post's window). */
   clearSelection(): void {
     this._focusOnRestore = null;
+    this._windowPlace = null;
     if (this._activeTag) this._clearSelection();
+  }
+
+  /**
+   * A post's map widget opens the cloud of its place with one ring. Chips
+   * outside `bounds` (the window, in px from the place) are not drawn. Before the
+   * places load, the request waits for start(). A cloud of the same place
+   * that is open in a window stays. `null` drops a waiting request.
+   */
+  openWindowPlace(slug: string | null, bounds: Box | null = null): void {
+    this._windowPlace = slug ? { slug, bounds } : null;
+    this._openWindowPlace();
+  }
+
+  _openWindowPlace(): void {
+    const req = this._windowPlace;
+    if (!req || !this._data) return;
+    this._windowPlace = null;
+    if (this._activeTag?.slug === req.slug && this._activeLimit) return;
+    for (const [id, tag] of this._tagsById) {
+      if (tag.slug !== req.slug) continue;
+      if (this._activeTag) this._clearSelection();
+      this._selectPlaceById(id, { pan: false, maxRings: 1, bounds: req.bounds });
+      return;
+    }
   }
 
   /** The hint and the legend; the legend toggles hide a node type. */
@@ -963,6 +1014,7 @@ export class AtlasPlaces {
     this._activeKey = key;
     this._activeTag = tag;
     this._activeAnchor = anchorLatLng;
+    this._activeLimit = opts.maxRings != null ? { maxRings: opts.maxRings, bounds: opts.bounds ?? null } : null;
 
     setActive(true);
     this._activeSetActive = setActive;
@@ -1103,8 +1155,11 @@ export class AtlasPlaces {
     const otherTags = tagSats.filter((n) => n.kind !== "geo");
     const ordered = [...places, ...otherTags, ...postSats];
 
+    const limit = this._activeLimit;
+    const placed = ringLayout(ordered.length || 1, { maxRings: limit?.maxRings });
+    // A window's cloud: the chips past the last ring are not drawn.
+    ordered.length = Math.min(ordered.length, placed.length);
     const nodePos: Map<string, Offset> = new Map([[centerKey, { dx: 0, dy: 0 }]]);
-    const placed = ringLayout(ordered.length || 1);
     ordered.forEach((n, i) => nodePos.set(n.key, placed[i]));
 
     const anchorPt = this._map.latLngToContainerPoint(anchorLatLng);
@@ -1211,6 +1266,37 @@ export class AtlasPlaces {
     };
     sats.forEach((s) => measure(s.key, s.marker));
     measure(centerKey, centerMarker);
+
+    // A window's cloud: a chip that the window edge cuts is not drawn, nor
+    // are its links.
+    const bounds = limit?.bounds;
+    if (bounds) {
+      const out = new Set<string>();
+      for (const s of sats) {
+        const pos = nodePos.get(s.key);
+        const size = chipSize.get(s.key);
+        if (!pos || !size) continue;
+        if (!boxInside(chipBox(pos.dx, pos.dy, size), bounds)) out.add(s.key);
+      }
+      if (out.size) {
+        for (let i = sats.length - 1; i >= 0; i--) {
+          if (!out.has(sats[i].key)) continue;
+          this._cloudMarkers.removeLayer(sats[i].marker);
+          sats.splice(i, 1);
+        }
+        for (let i = edges.length - 1; i >= 0; i--) {
+          if (!out.has(edges[i].a) && !out.has(edges[i].b)) continue;
+          this._cloudLines.removeLayer(edges[i].line);
+          edges.splice(i, 1);
+        }
+        for (const key of out) {
+          nodePos.delete(key);
+          chipSize.delete(key);
+          cloudNeighbors.delete(key);
+        }
+        for (const set of cloudNeighbors.values()) for (const key of out) set.delete(key);
+      }
+    }
 
     this._cloud = {
       anchorLatLng,
@@ -1418,6 +1504,7 @@ export class AtlasPlaces {
     this._activeKey = null;
     this._activeTag = null;
     this._activeAnchor = null;
+    this._activeLimit = null;
     this.$("#atlas-hint")?.classList.remove("is-hidden");
   }
 }

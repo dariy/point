@@ -119,6 +119,11 @@ place moves to the new centre. The zoom does not change during the motion. Leafl
 with `zoomAnimation: false`, and the new zoom comes after the clip motion stops. With
 `prefers-reduced-motion: reduce`, each change of presentation is instant.
 
+A window that a page puts on a place (`AtlasWindow.place`, with `center`) opens that
+place's cloud with one ring (`maxRings: 1`); chips outside the window are not drawn. The
+move into a window first closes the cloud that was open. A tag page of the same place
+opens the full cloud again: a one-ring cloud never counts as the route's selection.
+
 After a tap in the window, the tag page selects the place and opens its cloud. Until the
 tag page attaches, only `hidden` stops this. A new window from the post (a re-render, a
 resize) or a state change does not stop it. For 500 ms after the tag page attaches, the

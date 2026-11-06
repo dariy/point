@@ -70,9 +70,11 @@ export interface AtlasLayerMapController {
    * window centre), at `zoom` when given. A parked view stays parked for the next `show()` after a
    * `park()`; a `show()` straight from a window keeps the window's view.
    * The move into a window clears the place selection: the widget shows the
-   * post's place, not the cloud of the tag page before it.
+   * post's place, not the cloud of the tag page before it. With `place`, the
+   * place's cloud opens after that, with one ring; chips outside
+   * `place.bounds` (px from the place) are not drawn.
    */
-  frame(center: LatLng | null, offset: Point, zoom?: number): void;
+  frame(center: LatLng | null, offset: Point, zoom?: number, place?: { slug: string; bounds: Rect | null }): void;
   /** Where `latLng` is now, from the box centre, in px. `null` before the build. */
   offsetOf(latLng: LatLng): Point | null;
   /** Move the view by `dx`, `dy` px, with no animation. */
@@ -124,6 +126,8 @@ export function mountAtlasLayerMap(
   let windowed = false;
   // A frame() before the build: applied when the map is built.
   let pendingFrame: { center: LatLng | null; offset: Point; zoom?: number } | null = null;
+  // A window's place cloud asked for before the build.
+  let pendingPlace: { slug: string; bounds: Rect | null } | null = null;
   let windowTap: (() => void) | null = null;
   let labelBounds: Rect | null = null;
   const isAlive = () => !dead;
@@ -216,6 +220,9 @@ export function mountAtlasLayerMap(
       },
     });
     places.setLabelBounds(labelBounds);
+    // It opens when the places load.
+    if (windowed && pendingPlace) places.openWindowPlace(pendingPlace.slug, pendingPlace.bounds);
+    pendingPlace = null;
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
     // A warm build is off screen, in a box larger than the mapList box. At a
@@ -241,6 +248,8 @@ export function mountAtlasLayerMap(
       if (dead) return;
       shown = true;
       pendingFrame = null;
+      pendingPlace = null;
+      places?.openWindowPlace(null);
       if (!map) {
         windowed = false;
         void build();
@@ -271,12 +280,14 @@ export function mountAtlasLayerMap(
       shown = false;
       windowed = false;
       pendingFrame = null;
+      pendingPlace = null;
+      places?.openWindowPlace(null);
     },
     warm() {
       if (dead || map) return;
       void build();
     },
-    frame(center, offset, zoom) {
+    frame(center, offset, zoom, place) {
       if (dead) return;
       if (!windowed) places?.clearSelection();
       windowed = true;
@@ -285,11 +296,14 @@ export function mountAtlasLayerMap(
         // A second frame() before the build keeps the first centre (a slot
         // that moves while Leaflet loads keeps its point).
         pendingFrame = { center: center ?? pendingFrame?.center ?? null, offset, zoom: zoom ?? pendingFrame?.zoom };
+        if (place) pendingPlace = place;
         void build();
         return;
       }
       map.invalidateSize({ pan: false });
       if (center) centerAt(center, offset, zoom);
+      // After the view: the chips are laid out at the window's zoom.
+      if (place) places?.openWindowPlace(place.slug, place.bounds);
     },
     offsetOf(latLng) {
       if (!map) return null;

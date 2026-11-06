@@ -383,6 +383,75 @@ describe('Atlas layer map', () => {
     });
   });
 
+  // The widget shows the place's cloud with one ring, inside the slot. A
+  // return from the full map closes the tag page cloud, then opens the
+  // widget cloud again (p-atlas-ocean-o6wyh.14).
+  describe('sheet widget cloud', () => {
+    before(async () => {
+      const on = await api('/api/plugins/immersive-sheet', { enabled: true }, 'PATCH');
+      assert.ok(on.ok, 'immersive-sheet on: ' + on.status);
+    });
+    after(async () => {
+      await api('/api/plugins/immersive-sheet', { enabled: false }, 'PATCH');
+    });
+
+    const widgetCloud = async () => {
+      // The cloud can open again on a return: wait for the place chip first.
+      await page.waitForFunction(() => /Mapton/.test(document.querySelector('.atlas-layer-map .atlas-node--center')?.textContent ?? ''), null, { timeout: 5000 });
+      await page.waitForTimeout(300);
+      return cloudNow();
+    };
+    const cloudNow = () => page.evaluate(() => {
+      const slot = document.querySelector('.immersive-sheet-map')!.getBoundingClientRect();
+      const chips = [...document.querySelectorAll('.atlas-layer-map .atlas-node')].map((el) => el.getBoundingClientRect());
+      return {
+        slot: { w: Math.round(slot.width), h: Math.round(slot.height) },
+        nodes: chips.length,
+        center: document.querySelector('.atlas-layer-map .atlas-node--center')?.textContent ?? null,
+        outside: chips.filter((r) => r.left < slot.left - 1 || r.top < slot.top - 1 || r.right > slot.right + 1 || r.bottom > slot.bottom + 1).length,
+      };
+    });
+
+    it('shows the place cloud with one ring in the slot, and again after a return', async () => {
+      const viewport = page.viewportSize();
+      const size = { width: 820, height: 1180 };
+      try {
+        await page.setViewportSize(size);
+        await page.goto(BASE + '/posts/map-probe-two');
+        await page.locator('.immersive-toggle-btn').first().click();
+        await page.locator('.immersive-sheet-hint').click();
+        await page.locator('.immersive-sheet-map').waitFor();
+        await page.locator('.atlas-layer-map .atlas-node--center').waitFor({ timeout: 5000 });
+        await page.waitForTimeout(500);
+        const first = await widgetCloud();
+        assert.equal(first.slot.w, first.slot.h, 'a square slot: ' + JSON.stringify(first));
+        assert.equal(first.slot.w, 288, 'at 18rem: ' + JSON.stringify(first));
+        assert.match(first.center ?? '', /Mapton/);
+        // The centre and one ring (4 chips at most at the first radius).
+        assert.ok(first.nodes >= 2 && first.nodes <= 5, JSON.stringify(first));
+        assert.equal(first.outside, 0, 'no chip is cut by the slot edge: ' + JSON.stringify(first));
+
+        const slot = (await page.locator('.immersive-sheet-map').boundingBox())!;
+        if (onIpad) await page.touchscreen.tap(slot.x + 10, slot.y + slot.height - 10);
+        else await page.mouse.click(slot.x + 10, slot.y + slot.height - 10);
+        await page.waitForURL(/\/tags\/mapton\?/);
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'full');
+        await page.locator('.atlas-layer-map .atlas-node--post.atlas-node--sel').waitFor({ timeout: 5000 });
+
+        await page.goBack();
+        await page.waitForURL(/\/posts\/map-probe-two/);
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'window');
+        await page.waitForTimeout(800);
+        const back = await widgetCloud();
+        assert.match(back.center ?? '', /Mapton/);
+        assert.ok(back.nodes >= 2 && back.nodes <= 5, 'the widget cloud, not the tag page cloud: ' + JSON.stringify(back));
+        assert.equal(back.outside, 0, JSON.stringify(back));
+      } finally {
+        if (viewport) await page.setViewportSize(viewport);
+      }
+    });
+  });
+
   // A rotation (landscape ↔ portrait) on an iPad: the map follows its box
   // (p-atlas-ocean-o6wyh.11). Each test starts in portrait and turns twice.
   describe('rotation', () => {
@@ -481,10 +550,24 @@ describe('Atlas layer map', () => {
           assert.ok(Math.abs(w.marker.x - w.centre.x) <= 2 && Math.abs(w.marker.y - w.centre.y) <= 2,
             'the place is at the slot centre: ' + text);
         };
-        check(await widget(), 'portrait');
+        // WebKit can deliver the resize late under load: wait up to 3 s for the window to settle.
+        const settled = async (label: string) => {
+          const end = Date.now() + 3000;
+          for (;;) {
+            const w = await widget();
+            try {
+              check(w, label);
+              return;
+            } catch (e) {
+              if (Date.now() > end) throw e;
+              await page.waitForTimeout(100);
+            }
+          }
+        };
+        await settled('portrait');
         for (const size of [LANDSCAPE, PORTRAIT]) {
           await turn(size);
-          check(await widget(), `${size.width}x${size.height}`);
+          await settled(`${size.width}x${size.height}`);
         }
       } finally {
         await api('/api/plugins/immersive-sheet', { enabled: false }, 'PATCH');

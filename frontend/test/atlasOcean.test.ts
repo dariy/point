@@ -77,7 +77,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
         setView: (c, z) => log.push(`setView ${c.lat},${c.lng} z${z}`),
         useView: (v) => log.push(`useView ${v.lat},${v.lng} z${v.zoom}`),
         warm: () => log.push('warm'),
-        frame: (c, o, z) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}${z == null ? '' : ` z${z}`}`),
+        frame: (c, o, z, place) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}${z == null ? '' : ` z${z}`}${place ? ` place ${place.slug} ${place.bounds ? `${place.bounds.left},${place.bounds.top},${place.bounds.width}x${place.bounds.height}` : '-'}` : ''}`),
         offsetOf: () => ({ x: 0, y: 0 }),
         panBy: (dx, dy) => log.push(`panBy ${dx},${dy}`),
         setWindowTap: (fn) => { windowTap = fn; },
@@ -420,6 +420,17 @@ describe('atlasOcean', () => {
       assert.deepEqual(p.log, ['frame 48.85,2.35 0,200 z10']);
     });
 
+    test('a window with a place opens its cloud, with the whole slot as the chip bounds', () => {
+      const p = fakePage('list');
+      // The clip cuts the slot; the cloud bounds are the whole slot, in px from its centre.
+      const clip = { left: 0, top: 600, width: 400, height: 200 };
+      p.ocean.present({ kind: 'window', rect: slot, clip, center: paris, zoom: 10, place: { slug: 'paris' } });
+      assert.deepEqual(p.log, ['frame 48.85,2.35 0,200 z10 place paris -180,-100,360x200']);
+      // A move with no centre (a scroll) does not open the cloud again.
+      p.ocean.present({ kind: 'window', rect: { ...slot, top: 450 }, clip, place: { slug: 'paris' } });
+      assert.ok(!p.log.slice(1).some((l) => l.includes('place')));
+    });
+
     test('a clip shows only the slot inside it; the view follows the whole slot', () => {
       const p = fakePage('list');
       // The slot runs 100 px under the top of the sheet's scroller.
@@ -709,6 +720,20 @@ describe('atlasOcean', () => {
         assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
         assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,200 z10', 'the slot zoom after the tween');
         assert.equal(p.maps, 1, 'no second map');
+      });
+
+      test('collapse opens the place cloud only after the tween, at the slot zoom', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        p.log.length = 0;
+        const done = p.ocean.collapse(() => ({ ...back, place: { slug: 'paris' } }), 100);
+        p.tick(0);
+        p.tick(50);
+        assert.ok(!p.log.some((l) => l.includes('place')), 'no cloud during the tween');
+        p.tick(100);
+        await done;
+        assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,200 z10 place paris -180,-100,360x200');
       });
 
       test('collapse waits for the slot\'s first layout: no tween from a zero rect', async () => {

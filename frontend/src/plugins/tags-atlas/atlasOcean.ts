@@ -91,6 +91,12 @@ export interface AtlasWindow {
   clip?: Rect;
   /** A tap in the window (not a drag or a pinch), or a tap on a place. */
   onTap?: () => void;
+  /**
+   * The place at `center` (a post's geo-tag). A present with `center` opens
+   * its cloud with one ring; chips outside `rect` are not drawn (the rect is
+   * read when the cloud is asked for: a slot that slides keeps its size).
+   */
+  place?: { slug: string };
 }
 
 /** What a page asks the ocean to show. */
@@ -418,7 +424,13 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     ctl.setLabelBounds({ left: vis.left - box.left, top: vis.top - box.top, width: vis.width, height: vis.height });
     const offset = windowOffset(w.rect, box);
     if (!recenter) ctl.frame(null, offset);
-    else if (w.center) ctl.frame(w.center, offset, w.zoom);
+    else if (w.center) {
+      const place = w.place
+        // The place is at the window centre: the window in px from the place.
+        ? { slug: w.place.slug, bounds: { left: -w.rect.width / 2, top: -w.rect.height / 2, width: w.rect.width, height: w.rect.height } }
+        : undefined;
+      ctl.frame(w.center, offset, w.zoom, place);
+    }
     else if (prev && prevBox) {
       // The slot moved (a sheet drag or scroll), or it and the box changed
       // size (a rotation): the map moves with the slot centre. Leaflet keeps

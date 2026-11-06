@@ -184,13 +184,51 @@ body.ui-hidden .immersive-sheet-hint {
 /* ── Map slot (the atlas ocean shows its map through it) ───────────────────── */
 /* An empty box. atlasOcean.ts clips its map to this rect (the map sits above
    the viewer), so the box has no content of its own; the background shows only
-   while the tiles load. flow-root keeps it beside the floated EXIF block, not
-   under it, so the map never covers the camera data. */
+   while the tiles load. A square in the EXIF column: it floats right, under the
+   EXIF block (clear: right), and the text of the sheet flows on the left. The
+   window's cloud has one ring (AtlasPlaces.ts::openWindowPlace); at 18rem the
+   ring fits in the square. At 480px and less it is full width, at most 16rem
+   high (an explicit width, so max-height does not narrow it through the
+   aspect ratio), and after the text. */
 .immersive-sheet-map {
-    display: flow-root;
-    height: clamp(10rem, 28vh, 16rem);
-    margin-bottom: var(--spacing-lg);
+    float: right;
+    clear: right;
+    box-sizing: border-box;
+    width: min(50%, 18rem);
+    aspect-ratio: 1;
+    margin: 0 0 var(--spacing-md) var(--spacing-lg);
     background: var(--bg-tertiary);
+}
+
+/* With a map, the EXIF block takes the same width: one column. */
+.immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-exif {
+    box-sizing: border-box;
+    width: min(50%, 18rem);
+}
+
+/* On a phone the map goes after the text (order), not at the top of the sheet:
+   at the top, the map (above the viewer) covers the close and share buttons. */
+@media (max-width: 480px) {
+    .immersive-sheet-body:has(.immersive-sheet-map) {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .immersive-sheet-map {
+        order: 1;
+        float: none;
+        width: 100%;
+        max-height: 16rem;
+        margin: var(--spacing-lg) 0;
+    }
+
+    .immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-comments {
+        order: 2;
+    }
+
+    .immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-exif {
+        width: auto;
+    }
 }
 
 /* A tap on the map opens the full map (ImmersiveSheetViewer.ts::_onMapTap). The
