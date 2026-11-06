@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { boxesOverlap, declutter, type LabelItem } from '../src/plugins/tags-atlas/atlasLabels.ts';
+import { boxesOverlap, clusterDots, declutter, dotsMerge, type DotItem, type LabelItem } from '../src/plugins/tags-atlas/atlasLabels.ts';
 
 const bounds = { left: 0, top: 0, width: 1000, height: 800 };
 
@@ -99,5 +99,70 @@ describe('atlasLabels', () => {
         );
       }
     }
+  });
+});
+
+describe('atlasLabels clusterDots', () => {
+  const dot = (id: number, x: number, y: number, weight = 1, r = 6, pinned = false): DotItem => ({ id, x, y, r, weight, pinned });
+
+  test('dotsMerge: an overlap of more than half the smaller radius merges', () => {
+    // Two 6 px dots: they merge below 12 - 3 = 9 px apart.
+    assert.equal(dotsMerge(dot(1, 0, 0), dot(2, 8.9, 0)), true);
+    assert.equal(dotsMerge(dot(1, 0, 0), dot(2, 9, 0)), false);
+    assert.equal(dotsMerge(dot(1, 0, 0), dot(2, 11, 0)), false, 'a small overlap is no merge');
+    // A 15 px dot and a 6 px dot: below 21 - 3 = 18 px.
+    assert.equal(dotsMerge(dot(1, 0, 0, 1, 15), dot(2, 0, 17.9)), true);
+    assert.equal(dotsMerge(dot(1, 0, 0, 1, 15), dot(2, 0, 18)), false);
+  });
+
+  test('dots apart: no cluster', () => {
+    assert.deepEqual(clusterDots([dot(1, 0, 0), dot(2, 40, 0), dot(3, 0, 40)]), []);
+    assert.deepEqual(clusterDots([dot(1, 0, 0)]), []);
+    assert.deepEqual(clusterDots([]), []);
+  });
+
+  test('a stack becomes one cluster, the largest place first', () => {
+    const items = [dot(1, 100, 100, 1), dot(2, 101, 102, 5), dot(3, 99, 98, 2), dot(4, 300, 300, 9)];
+    assert.deepEqual(clusterDots(items), [[2, 3, 1]]);
+  });
+
+  test('equal weights: the lower id leads', () => {
+    assert.deepEqual(clusterDots([dot(7, 0, 0), dot(3, 2, 0), dot(5, 4, 0)]), [[3, 5, 7]]);
+  });
+
+  test('a leader takes only the dots that overlap its own dot', () => {
+    // 1 - 2 - 3 in a row, 8 px apart: 1 takes 2; 3 is 16 px from 1 and stays a dot.
+    assert.deepEqual(clusterDots([dot(1, 0, 0, 3), dot(2, 8, 0, 2), dot(3, 16, 0, 1)]), [[1, 2]]);
+  });
+
+  test('a pinned place is in no cluster and starts none', () => {
+    const items = [dot(1, 0, 0, 9, 6, true), dot(2, 2, 0, 1), dot(3, 4, 0, 1)];
+    assert.deepEqual(clusterDots(items), [[2, 3]]);
+    assert.deepEqual(clusterDots([dot(1, 0, 0, 9, 6, true), dot(2, 2, 0, 1)]), []);
+  });
+
+  test('two stacks give two clusters; the cell edge does not split a stack', () => {
+    const items = [dot(1, 29.5, 29.5), dot(2, 30.5, 30.5), dot(3, 500, 500), dot(4, 503, 500)];
+    assert.deepEqual(clusterDots(items), [[1, 2], [3, 4]]);
+  });
+
+  test('far projected points (a high zoom) keep their own cells', () => {
+    const big = 60_000_000;
+    const items = [dot(1, big, big), dot(2, big + 2, big), dot(3, big, big + 2 * 8388608 * 30)];
+    assert.deepEqual(clusterDots(items), [[1, 2]]);
+  });
+
+  test('2000 places: a pass is fast', () => {
+    const items: DotItem[] = [];
+    for (let i = 0; i < 2000; i++) items.push(dot(i, (i * 37) % 1200, (i * 53) % 900, i % 7));
+    const t0 = performance.now();
+    const out = clusterDots(items);
+    const ms = performance.now() - t0;
+    const seen = new Set<number>();
+    for (const g of out) for (const id of g) {
+      assert.ok(!seen.has(id), 'a place is in one cluster only');
+      seen.add(id);
+    }
+    assert.ok(ms < 50, `a pass took ${ms.toFixed(1)} ms`);
   });
 });

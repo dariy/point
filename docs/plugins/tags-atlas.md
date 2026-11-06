@@ -74,6 +74,8 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
   change.
 - **Tap on empty map** (the sea, or a country with no geo-tag): the selection is cleared.
   On `/tags/<slug>`, the home page `/` opens. On `/`, only the selection is cleared.
+- **Tap on a cluster dot**: the map fits the places of the cluster. No place is selected,
+  and the route does not change. See [Clusters](#clusters).
 
 When the layer map is 320 px high or less (a short window, or a small phone on its side), the
 legend is one button to the right of the zoom control. The button opens the filters in one row.
@@ -96,6 +98,26 @@ label position. With a mouse, the peek shows on hover and goes on leave. On touc
 long press does not open the cloud and does not pan the map. A short tap works as before. The
 sheet window shows no peek: all its taps open the full map. The timer is
 `atlasPeek.ts::createLongPress`.
+
+### Clusters
+
+At a low zoom the dots of a dense area overlap. Two dots that overlap by more than half the
+radius of the smaller dot merge into one cluster dot. The cluster dot shows the number of
+places. Its size follows the sum of the post counts, with the same rule as a place dot. It sits
+at its largest place. Its label is `<largest place> +N` (N = the other places), and the label
+pass gives it space like a place label. On hover, the cluster shows `<n> places · <n> posts`.
+
+- The pass is greedy: the places go largest first. A place that is in no cluster starts one
+  and takes each free place whose dot overlaps its own dot.
+- The pass runs on each zoom, not on a move: a pan does not change the distance between two
+  dots. It runs again when a place opens or closes and when a window gets its place.
+- A tap on a cluster fits the map to its places. At the maximum zoom (18) no cluster forms,
+  so a tap always splits a cluster. Places at the same point stay stacked at zoom 18.
+- The open place (its cloud is open) is never inside a cluster. In the sheet window, the
+  post's own place is never inside a cluster.
+- In the sheet window, a tap on a cluster opens the full map, as all window taps do.
+
+The pass is `atlasLabels.ts::clusterDots`; `AtlasPlaces.ts::_applyClusters` draws it.
 
 ## One map for the visit
 

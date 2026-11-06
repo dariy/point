@@ -20,7 +20,7 @@ import { html, navigate, raw, safeUrl } from "../../utils/helpers.ts";
 import { tagKind } from "../../utils/tagLinks.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
 import { isRevelioOn } from "../../utils/revelio.ts";
-import { declutter } from "./atlasLabels.ts";
+import { clusterDots, declutter } from "./atlasLabels.ts";
 import { createLongPress, peekText } from "./atlasPeek.ts";
 import {
   COUNTRIES_GEOJSON,
@@ -29,7 +29,7 @@ import {
 } from "../../utils/leaflet.ts";
 
 import type { LeafletRef } from "../../utils/leaflet.ts";
-import type { Box, LabelItem, RelBox } from "./atlasLabels.ts";
+import type { Box, DotItem, LabelItem, RelBox } from "./atlasLabels.ts";
 import type { LongPress } from "./atlasPeek.ts";
 
 
@@ -89,6 +89,16 @@ interface PlaceLabel {
   label: RelBox;
   dot: RelBox | null;
   weight: number;
+}
+
+/** A cluster dot: the places whose dots overlap at this zoom (atlasLabels.ts::clusterDots). */
+interface PlaceCluster {
+  /** the place ids, the largest place first */
+  ids: number[];
+  /** the cluster marker, at the largest place */
+  marker: LeafletRef;
+  /** the cluster's own label entry (a negative id) */
+  label: PlaceLabel;
 }
 
 /** The open on-map cloud. */
@@ -257,6 +267,15 @@ export class AtlasPlaces {
   _onSelect: ((tag: AtlasTag | null) => void) | undefined;
   _countryLayer: LeafletRef = null;
   _markerLayer: LeafletRef = null;
+  /** cluster dots (places whose dots overlap at a low zoom), above the place markers */
+  _clusterLayer: LeafletRef = null;
+  /** the clusters of the current zoom */
+  _clusters: PlaceCluster[] = [];
+  /** the ids of the places inside a cluster (their markers are off the map) */
+  _clustered: Set<number> = new Set();
+  /** the place slug of a window (the post's own geo-tag): never inside a cluster */
+  _windowSlug: string | null = null;
+  _recluster: () => void;
   /** shape labels (label-only markers), above the place markers */
   _labelLayer: LeafletRef = null;
   /** every place's label, by tag id; measured once per draw */
@@ -317,6 +336,7 @@ export class AtlasPlaces {
     this._isAlive = isAlive;
     this._reposition = () => this._repositionCloud();
     this._relabel = () => this._applyLabels();
+    this._recluster = () => this._applyClusters();
     this._peek = createLongPress({
       onPeek: (id) => this._setPeek(id, true),
       onHide: (id) => this._setPeek(id, false),
@@ -339,6 +359,7 @@ export class AtlasPlaces {
     this._countryLayer = L.layerGroup().addTo(map); // polygons (lowest)
     this._cloudLines = L.layerGroup().addTo(map); // connectors, below markers
     this._markerLayer = L.layerGroup().addTo(map);
+    this._clusterLayer = L.layerGroup().addTo(map);
     this._labelLayer = L.layerGroup().addTo(map);
     this._cloudMarkers = L.layerGroup().addTo(map);
 
@@ -362,6 +383,9 @@ export class AtlasPlaces {
 
     // Keep the cloud pinned to its place as the zoom level changes.
     map.on("zoomend viewreset", this._reposition);
+    // A zoom decides again which dots merge into a cluster (before the labels:
+    // a pan does not change the distance between two dots).
+    map.on("zoomend", this._recluster);
     // Each view change decides again which places show their name.
     map.on("zoomend moveend viewreset", this._relabel);
     // Clicking empty map dismisses the current cloud.
@@ -461,7 +485,17 @@ export class AtlasPlaces {
    */
   openWindowPlace(slug: string | null, bounds: Box | null = null): void {
     this._windowPlace = slug ? { slug, bounds } : null;
+    if (slug !== this._windowSlug) {
+      this._windowSlug = slug;
+      if (this._clusterLayer) this._reclusterNow();
+    }
     this._openWindowPlace();
+  }
+
+  /** Decide the clusters, then the labels (outside a zoom). */
+  _reclusterNow(): void {
+    this._applyClusters();
+    this._applyLabels();
   }
 
   _openWindowPlace(): void {
@@ -550,6 +584,9 @@ export class AtlasPlaces {
     this._clearSelection();
     this._countryLayer?.clearLayers();
     this._markerLayer?.clearLayers();
+    this._clusterLayer?.clearLayers();
+    this._clusters = [];
+    this._clustered.clear();
     this._labelLayer?.clearLayers();
     this._labels.clear();
     this._placeActivators.clear();
@@ -568,6 +605,7 @@ export class AtlasPlaces {
     this._unwatchRoute?.();
     this._unwatchRoute = null;
     this._map.off("zoomend viewreset", this._reposition);
+    this._map.off("zoomend", this._recluster);
     this._map.off("zoomend moveend viewreset", this._relabel);
     this._peek.cancel();
     this._unlistenPeek?.();
@@ -897,6 +935,7 @@ export class AtlasPlaces {
     }
 
     this._updateHint(bounds.length);
+    this._applyClusters();
     this._applyLabels();
 
     // If we arrived here by closing a post that was opened from the Atlas,
@@ -925,6 +964,7 @@ export class AtlasPlaces {
       this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
       this._didFitBounds = true;
     }
+    this._applyClusters();
     this._applyLabels();
   }
 
@@ -963,14 +1003,107 @@ export class AtlasPlaces {
     const size = map.getSize();
     const view: Box = this._labelBounds ?? { left: 0, top: 0, width: size.x, height: size.y };
     const items: LabelItem[] = [];
-    for (const l of this._labels.values()) {
+    const all = [...this._labels.values()].filter((l) => !this._clustered.has(l.id));
+    for (const c of this._clusters) all.push(c.label);
+    for (const l of all) {
       const p = map.latLngToContainerPoint(l.latLng);
       items.push({ id: l.id, x: p.x, y: p.y, label: l.label, dot: l.dot, weight: l.weight });
     }
     const on = declutter(items, view, this._cloudBoxes());
-    for (const l of this._labels.values()) {
+    for (const l of all) {
       l.marker._icon?.classList.toggle("atlas-marker--labelled", on.has(l.id));
     }
+  }
+
+  /**
+   * Merge the place dots that overlap at this zoom into cluster dots
+   * (atlasLabels.ts::clusterDots). It runs on `zoomend`, not on `moveend`: a
+   * pan does not change the distance between two dots. At the maximum zoom no
+   * cluster forms. The open place and a window's own place are never inside a
+   * cluster. A cluster marker sits at its largest place and shows the place
+   * count; its size follows the sum of the post counts (`markerRadius`).
+   */
+  _applyClusters(): void {
+    if (!this._markerLayer || !this._clusterLayer || this._dead) return;
+    const map = this._map;
+    const L = this._L;
+    const zoom = map.getZoom();
+    const pinnedSlug = this._windowSlug;
+    const groups: number[][] = [];
+    if (zoom < map.getMaxZoom()) {
+      const items: DotItem[] = [];
+      for (const l of this._labels.values()) {
+        if (!l.dot) continue;
+        const tag = this._tagsById.get(l.id);
+        const p = map.project(l.latLng, zoom);
+        items.push({
+          id: l.id,
+          x: p.x,
+          y: p.y,
+          r: l.dot.width / 2,
+          weight: l.weight,
+          pinned: l.id === this._activeTag?.id || (!!pinnedSlug && tag?.slug === pinnedSlug),
+        });
+      }
+      groups.push(...clusterDots(items));
+    }
+
+    const next: Set<number> = new Set();
+    for (const g of groups) for (const id of g) next.add(id);
+    // The places that leave a cluster come back on the map; the new members go off it.
+    for (const id of this._clustered) {
+      if (!next.has(id)) this._labels.get(id)?.marker.addTo(this._markerLayer);
+    }
+    for (const id of next) {
+      if (!this._clustered.has(id)) this._markerLayer.removeLayer(this._labels.get(id)?.marker);
+    }
+    this._clustered = next;
+
+    this._clusterLayer.clearLayers();
+    this._clusters = groups.map((ids, i) => {
+      const lead = this._labels.get(ids[0]!)!;
+      const leadTag = this._tagsById.get(lead.id);
+      const leadName = leadTag?.name ?? "";
+      let sum = 0;
+      for (const id of ids) sum += this._labels.get(id)?.weight ?? 0;
+      const r = markerRadius(sum);
+      const text = `${truncate(leadName, LABEL_MAX)} +${ids.length - 1}`;
+      const w = this._measureLabel(text);
+      const hiddenLabel = leadTag && isConcealed(leadTag) ? " atlas-label--hidden" : "";
+      const icon = L.divIcon({
+        className: "atlas-marker atlas-cluster",
+        html: String(html`<span class="atlas-marker__dot atlas-cluster__dot" style="width:${r}px;height:${r}px;">${ids.length}</span><span class="atlas-marker__label${hiddenLabel}">${text}</span><span class="atlas-marker__peek">${peekText(`${ids.length} places`, sum)}</span>`),
+        iconSize: [r, r],
+        iconAnchor: [r / 2, r / 2],
+      });
+      const marker = L.marker(lead.latLng, { icon }).addTo(this._clusterLayer);
+      const nameIcon = () => {
+        const el = marker._icon as HTMLElement | null;
+        if (!el) return;
+        el.setAttribute("aria-label", `${ids.length} places: ${leadTag ? concealedTitle(leadTag, leadName) : leadName} and ${ids.length - 1} more`);
+        el.dataset.clusterSize = String(ids.length);
+      };
+      nameIcon();
+      marker.on("add", nameIcon);
+      // A tap fits the cluster's places. It is no place tap: the selection stays.
+      marker.on("click", (e: LeafletRef) => {
+        L.DomEvent.stop(e);
+        const pts = ids.map((id) => this._labels.get(id)!.latLng);
+        map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: map.getMaxZoom() });
+      });
+      return {
+        ids,
+        marker,
+        label: {
+          id: -(i + 1),
+          latLng: lead.latLng,
+          marker,
+          label: { dx: r / 2 + LABEL_GAP, dy: -LABEL_H / 2, width: w, height: LABEL_H },
+          dot: { dx: -r / 2, dy: -r / 2, width: r, height: r },
+          weight: sum,
+        },
+      };
+    });
   }
 
   /** Show or hide the peek of place `id`. A peek holds the map still. */
@@ -1106,6 +1239,8 @@ export class AtlasPlaces {
     this._activeAnchor = anchorLatLng;
     this._activeLimit = opts.maxRings != null ? { maxRings: opts.maxRings, bounds: opts.bounds ?? null } : null;
 
+    // The open place leaves its cluster (its marker comes back) before it is marked active.
+    if (this._clustered.has(tag.id)) this._reclusterNow();
     setActive(true);
     this._activeSetActive = setActive;
     if (opts.pan !== false) this._onSelect?.(tag);
@@ -1586,6 +1721,7 @@ export class AtlasPlaces {
   }
 
   _clearSelection(): void {
+    const had = !!this._activeTag;
     this._clearCloud();
     this._cloudData = null;
     this._cloudReq++; // invalidate any in-flight cloud fetch for the cleared place
@@ -1596,5 +1732,7 @@ export class AtlasPlaces {
     this._activeAnchor = null;
     this._activeLimit = null;
     this.$("#atlas-hint")?.classList.remove("is-hidden");
+    // The place that was open can join a cluster again.
+    if (had) this._reclusterNow();
   }
 }

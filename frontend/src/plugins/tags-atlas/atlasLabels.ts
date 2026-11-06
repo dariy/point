@@ -11,6 +11,10 @@
  * Pure: boxes are container px, nothing here touches the DOM or Leaflet. A
  * spatial grid keeps a pass near O(n) (the same idea as the collision grid in
  * tags-graph/forceLayout.ts).
+ *
+ * `clusterDots` is the step before: at a low zoom the dots of a dense area
+ * overlap, and the dots that overlap by more than half a radius become one
+ * cluster dot with a count.
  */
 
 /** A box in container px. */
@@ -138,6 +142,84 @@ export function declutter(items: readonly LabelItem[], bounds: Box, taken: reado
     if (grid.hits(box, it.id)) continue;
     grid.add({ box, owner: it.id });
     out.add(it.id);
+  }
+  return out;
+}
+
+/** One place dot for a cluster pass. */
+export interface DotItem {
+  id: number;
+  /** the dot centre in px; any origin that does not move with a pan (the projected point at the zoom) */
+  x: number;
+  y: number;
+  /** the dot radius, px */
+  r: number;
+  /** larger first: the post count */
+  weight: number;
+  /** a pinned place (the open cloud, a window's own place) is never inside a cluster */
+  pinned?: boolean;
+}
+
+/** A group of overlapping dots: the ids, the largest place first. */
+export type DotCluster = number[];
+
+/**
+ * Whether two dots overlap by more than half a radius (of the smaller dot):
+ * `ra + rb - d > min(ra, rb) / 2`.
+ */
+export function dotsMerge(a: DotItem, b: DotItem): boolean {
+  const reach = a.r + b.r - Math.min(a.r, b.r) / 2;
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return dx * dx + dy * dy < reach * reach;
+}
+
+/**
+ * Group the dots that overlap (`dotsMerge`). The pass is greedy: the places go
+ * largest first (by weight, then by id). A place that is in no group yet starts
+ * one and takes each free place whose dot overlaps its own dot. A pinned place
+ * is in no group and starts none. Only groups of two places or more are
+ * returned. A spatial grid keeps the pass near O(n).
+ */
+export function clusterDots(items: readonly DotItem[]): DotCluster[] {
+  const free = items.filter((it) => !it.pinned);
+  if (free.length < 2) return [];
+  free.sort((a, b) => b.weight - a.weight || a.id - b.id);
+
+  // A cell as wide as the longest reach: a merge partner is in the 3×3 cells around.
+  let maxR = 0;
+  for (const it of free) maxR = Math.max(maxR, it.r);
+  const cell = Math.max(1, 2 * maxR);
+  const cells: Map<number, DotItem[]> = new Map();
+  // Projected points at a high zoom are far past 16 bits: a wide key.
+  const key = (gx: number, gy: number) => gx * 8388608 + gy;
+  const cellOf = (it: DotItem): [number, number] => [Math.floor(it.x / cell), Math.floor(it.y / cell)];
+  for (const it of free) {
+    const [gx, gy] = cellOf(it);
+    const k = key(gx, gy);
+    const list = cells.get(k);
+    if (list) list.push(it);
+    else cells.set(k, [it]);
+  }
+
+  const taken: Set<number> = new Set();
+  const out: DotCluster[] = [];
+  for (const lead of free) {
+    if (taken.has(lead.id)) continue;
+    const [gx, gy] = cellOf(lead);
+    const group: DotItem[] = [];
+    for (let x = gx - 1; x <= gx + 1; x++) {
+      for (let y = gy - 1; y <= gy + 1; y++) {
+        for (const it of cells.get(key(x, y)) ?? []) {
+          if (it.id !== lead.id && !taken.has(it.id) && dotsMerge(lead, it)) group.push(it);
+        }
+      }
+    }
+    if (!group.length) continue;
+    group.sort((a, b) => b.weight - a.weight || a.id - b.id);
+    taken.add(lead.id);
+    for (const it of group) taken.add(it.id);
+    out.push([lead.id, ...group.map((it) => it.id)]);
   }
   return out;
 }

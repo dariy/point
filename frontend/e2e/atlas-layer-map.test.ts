@@ -736,18 +736,32 @@ describe('Atlas layer map', () => {
       }
     };
 
-    it('shows the largest place of a dense area with a label, and a zoom in adds labels', async () => {
+    // A cluster dot: its count, its label, its mode.
+    const cluster = () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.atlas-layer-map .atlas-cluster')].map((m) => ({
+      size: Number(m.dataset.clusterSize),
+      count: m.querySelector('.atlas-cluster__dot')?.textContent ?? '',
+      label: m.querySelector('.atlas-marker__label')?.textContent ?? '',
+      labelled: m.classList.contains('atlas-marker--labelled'),
+      name: m.getAttribute('aria-label') ?? '',
+    })));
+    const zoomOf = () => page.evaluate(() => Number(new URL(location.href).searchParams.get('at')?.split(',')[2]));
+
+    it('merges the overlapping dots into one cluster at zoom 2, and a zoom in splits it and adds labels', async () => {
       // 800 px is less than the world at zoom 2 (1024 px): maxBounds keeps lng 30 at the centre.
       await page.setViewportSize({ width: 800, height: 600 });
       await page.goto(BASE + '/?view=map&at=10.75,30,2');
-      await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]').waitFor();
+      await page.locator('.atlas-layer-map .atlas-cluster[data-cluster-size="4"]').waitFor();
       await page.waitForTimeout(400);
       const far = await read();
-      assert.equal(far.pointer, 'none', 'a label takes no taps');
-      assert.equal(far.labelled['Lbl Alpha'], true, 'the largest place has a label: ' + JSON.stringify(far.labelled));
-      for (const name of ['Lbl Beta', 'Lbl Gamma', 'Lbl Delta']) {
-        assert.equal(far.labelled[name], false, `${name} is a dot at zoom 2: ` + JSON.stringify(far.labelled));
+      for (const [name] of column) {
+        assert.equal(far.labelled[name], undefined, `${name} is inside the cluster: ` + JSON.stringify(far.labelled));
       }
+      const [c, ...rest] = await cluster();
+      assert.equal(rest.length, 0, 'one cluster');
+      assert.equal(c!.count, '4', 'the cluster shows the place count');
+      assert.equal(c!.label, 'Lbl Alpha +3', 'the label names the largest place');
+      assert.equal(c!.labelled, true, 'the cluster label has space: ' + JSON.stringify(c));
+      assert.equal(far.pointer, 'none', 'a label takes no taps');
       assert.ok(far.boxes.some((b) => b.text === 'France'), 'a tagged country shape has a label');
       noOverlap(far.boxes);
 
@@ -761,9 +775,40 @@ describe('Atlas layer map', () => {
         assert.equal(near.labelled[name], true, `${name} has a label at zoom 7: ` + JSON.stringify(near.labelled));
       }
       noOverlap(near.boxes);
+      assert.deepEqual(await cluster(), [], 'no cluster at zoom 7');
+    });
+
+    it('a tap on a cluster fits its places', async () => {
+      await page.goto(BASE + '/?view=map&at=10.75,30,2');
+      const dot = page.locator('.atlas-layer-map .atlas-cluster .atlas-cluster__dot');
+      await dot.waitFor();
+      await page.waitForTimeout(400);
+      if (onIpad) await dot.tap();
+      else await dot.click();
+      await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]').waitFor({ timeout: 5000 });
+      await page.waitForTimeout(600);
+      assert.deepEqual(await cluster(), [], 'the fit splits the cluster');
+      assert.ok((await zoomOf()) >= 7, 'the map zooms in to the places: ' + page.url());
+      assert.equal(new URL(page.url()).pathname, '/', 'a cluster tap selects no place');
+      const near = await read();
+      for (const [name] of column) assert.equal(near.labelled[name], true, `${name} has a label after the fit: ` + JSON.stringify(near.labelled));
+    });
+
+    it('the open place is never inside a cluster', async () => {
+      await page.goto(BASE + '/tags/lbl-beta?view=map&at=10.75,30,2');
+      await page.locator('.atlas-layer-map .atlas-node--center', { hasText: 'Lbl Beta' }).waitFor();
+      await page.waitForTimeout(400);
+      const beta = page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Beta"]');
+      assert.equal(await beta.count(), 1, 'the open place keeps its own dot');
+      assert.ok(await beta.evaluate((el) => el.classList.contains('atlas-marker--active')), 'its dot is active');
+      const groups = await cluster();
+      assert.deepEqual(groups.map((g) => g.size), [3], 'the other three places are one cluster: ' + JSON.stringify(groups));
     });
 
     it('a tap on a labelled dot still selects the place', async () => {
+      await page.goto(BASE + '/?view=map&at=10.75,30,7');
+      await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Beta"]').waitFor();
+      await page.waitForTimeout(400);
       await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Beta"] .atlas-marker__dot').click();
       await page.locator('.atlas-node--center', { hasText: 'Lbl Beta' }).waitFor();
       // The open cloud is taken space: no label is shown below a chip.
@@ -782,7 +827,8 @@ describe('Atlas layer map', () => {
 
     // A fine pointer: a hover shows `<name> · <n> posts` at the label position (child .21).
     it('shows the name and the post count on hover; the peek goes on leave', { skip: onIpad && 'hover needs a fine pointer' }, async () => {
-      await page.goto(BASE + '/?view=map&at=10.75,30,2');
+      // At zoom 5 the dots are about 11 px apart: no cluster, but the labels collide.
+      await page.goto(BASE + '/?view=map&at=10.75,30,5');
       await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]').waitFor();
       await page.waitForTimeout(400);
       assert.equal(await page.locator('.atlas-layer-map .atlas-marker[title]').count(), 0, 'no native title');
@@ -806,7 +852,7 @@ describe('Atlas layer map', () => {
       }, [x, y]);
       const dot = await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"] .atlas-marker__dot').boundingBox();
       assert.ok(dot);
-      // Above the top of the stack: a dot-mode place (Delta, Gamma or Beta at zoom 2).
+      // Above the top of the stack: a dot-mode place (Delta at zoom 5).
       const x = dot.x + dot.width / 2, y = dot.y + 2;
       await page.mouse.move(x, y);
       const hover = await under(x, y);
