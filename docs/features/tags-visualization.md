@@ -37,6 +37,23 @@ list in the `map` state, and every post list page carries a three-state map laye
 [Tags Atlas](../plugins/tags-atlas.md)). The place cloud and the `AtlasSheet` bottom
 sheet of the old page are gone.
 
+**One map for the visit.** One module (`atlasOcean.ts`) owns the Leaflet map, its tiles
+and its places until the page unloads or `tags-atlas` is off. Pages do not make or
+destroy it. A page asks for a presentation: `hidden` (the `list` state, and every page
+that is not a list page), `mapList`, `full` (the `map` state), or `window`. A list page
+in `list` builds the map when the browser is idle, after the first grid render, with the
+map hidden. Then the first change to `mapList` or `map` only shows it. When the browser
+asks to save data (`navigator.connection.saveData`), there is no warm-up. A post sets
+`hidden` and keeps the map, so a return to the list shows the same viewport.
+
+**The map in the post sheet.** On a post with its own place tag, the Details sheet of
+[`immersive-sheet`](../plugins/immersive-sheet.md) has a map slot. The slot is a
+`window`: the same map, clipped to the slot rectangle, not a second map. A tap in it
+grows the clip to the full map on the place's tag page. Back, or the "‹ <post title>"
+chip, shrinks it into the slot again. The zoom changes only after the motion. With
+`prefers-reduced-motion: reduce`, each change is instant. With `tags-atlas` off, the
+sheet has no map.
+
 Two endpoints feed it, both year-scopable:
 
 - `GET /api/pages/graph?posts=0` — the places themselves. The Atlas skips the full post
@@ -154,6 +171,11 @@ fallback; `prefers-reduced-motion` is respected.
   only on wide windows, so a phone got the cloud's few recent posts and nothing more.
   One sheet gives every width the full list, as one row of cards that pages like the
   home grid, and it keeps the map visible above it.
+
+- **One map under every page, not a map per page** — a map per list page rebuilt Leaflet,
+  the tiles and the places on each visit, and a post sheet map would have been a second
+  map. One owner keeps the viewport, and the sheet widget is a clipped window on it, so
+  the change between the widget and the full map is one motion with no resize.
 
 ## Out of scope
 

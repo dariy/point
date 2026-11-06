@@ -113,8 +113,10 @@ test("helpers", async (t) => {
     const handler = (e: Event) => navEvent = (e as CustomEvent).detail;
     window.addEventListener("app:navigate", handler);
     navigate("/foo", { replace: true });
-    window.removeEventListener("app:navigate", handler);
     assert.deepEqual(navEvent, { path: "/foo", replace: true });
+    navigate("/tags/paris?view=map", { state: { fromPost: "a-post", sheet: "open" } });
+    window.removeEventListener("app:navigate", handler);
+    assert.deepEqual(navEvent, { path: "/tags/paris?view=map", replace: false, state: { fromPost: "a-post", sheet: "open" } });
   });
 
   await t.test("setCanonical / removeCanonical", async (t) => {

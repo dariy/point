@@ -946,3 +946,51 @@ body[data-atlas-settling] #grid-mount {
         transition: none;
     }
 }
+
+/* The window (atlasOcean.ts): the map keeps its box and shows through the
+   clip-path the ocean sets. It sits above the post viewer (the sheet and the
+   header are z-index 50; layout.css has 110) and below the menus and modals.
+   The clip also clips hit-testing, so the page under the rest of the box gets
+   its clicks. `body` makes these rules win over the layer-state rules. */
+body .atlas-layer-map[data-atlas-ocean="window"] {
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    z-index: 115;
+    transition: none;
+    touch-action: none;
+}
+
+/* A window is too small for the controls and the overlays: a tap opens the full map. */
+body .atlas-layer-map[data-atlas-ocean="window"] :is(.leaflet-control-container, .atlas-hint, .atlas-legend) {
+    display: none;
+}
+
+/* The way back to the post the full map came from (atlasFromPost.ts). Above the
+   map (z-index 100) and its controls, below the header's menus; top centre, so
+   it does not cover the zoom control (top left) or the legend. */
+.atlas-from-post {
+    position: fixed;
+    top: calc(var(--atlas-layer-top, 0px) + var(--spacing-sm, 8px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 105;
+    max-width: min(80vw, 24rem);
+    padding: 6px 14px;
+    overflow: hidden;
+    border: 1px solid var(--border-primary, rgba(0, 0, 0, 0.12));
+    border-radius: 999px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    box-shadow: 0 2px 9px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+}
+
+.atlas-from-post:hover,
+.atlas-from-post:focus-visible {
+    background: var(--bg-secondary, var(--bg-primary));
+}

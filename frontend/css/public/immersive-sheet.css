@@ -181,6 +181,35 @@ body.ui-hidden .immersive-sheet-hint {
     margin-bottom: var(--spacing-lg);
 }
 
+/* ── Map slot (the atlas ocean shows its map through it) ───────────────────── */
+/* An empty box. atlasOcean.ts clips its map to this rect (the map sits above
+   the viewer), so the box has no content of its own; the background shows only
+   while the tiles load. flow-root keeps it beside the floated EXIF block, not
+   under it, so the map never covers the camera data. */
+.immersive-sheet-map {
+    display: flow-root;
+    height: clamp(10rem, 28vh, 16rem);
+    margin-bottom: var(--spacing-lg);
+    background: var(--bg-tertiary);
+}
+
+/* A tap on the map opens the full map (ImmersiveSheetViewer.ts::_onMapTap). The
+   viewer and its header fade while the ocean grows the window to the screen.
+   0.28s is atlasOcean.ts::TWEEN_MS. */
+.immersive-map-leaving,
+.immersive-layout:has(.immersive-map-leaving) :is(.site-header-group, .site-footer) {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .immersive-map-leaving,
+    .immersive-layout:has(.immersive-map-leaving) :is(.site-header-group, .site-footer) {
+        transition: none;
+    }
+}
+
 /* ── Inline EXIF (second column) ──────────────────────────────────────────── */
 .immersive-sheet-exif {
     float: right;

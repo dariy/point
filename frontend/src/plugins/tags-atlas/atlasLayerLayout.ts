@@ -1,7 +1,8 @@
 /**
  * atlasLayerLayout — the geometry of the map layer in `mapList` and `map`.
  *
- * It owns one map container on `document.body`. CSS reads the state from
+ * The map container on `document.body` belongs to the ocean (atlasOcean.ts),
+ * which mounts this layout for each list page. CSS reads the state from
  * `body[data-atlas-layer]` and places the map, the card row and the handle.
  * This module only measures what CSS cannot know, and publishes it as
  * custom properties on `body`:
@@ -13,27 +14,14 @@
  *
  * It also keeps the state in the URL (`?view=…`, by `history.replaceState`), reads
  * it on mount, and leaves the list URL for the post page when a card opens a post.
- *
- * The map container starts empty. The map itself loads later, on the first
- * change out of `list`.
  */
 
 import { getAtlasLayerState, replaceSearch, searchWithState, saveState, setAtlasLayerState, initialState, stateFromSearchOrNull } from './atlasLayerState.ts';
 import { markAtlasOpen } from '../../utils/atlasReturn.ts';
 import { CARD_ASPECT, SHEET_GAP_PX } from './AtlasSheet.ts';
 
-const MAP_CLASS = 'atlas-layer-map';
-
-/** Create the map container and start tracking the header. Returns a cleanup. */
+/** Read the state from the URL and start tracking the header. Returns a cleanup. */
 export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => void {
-  const existing = body.querySelector<HTMLElement>(`:scope > .${MAP_CLASS}`);
-  const map = existing ?? document.createElement('div');
-  if (!existing) {
-    map.className = MAP_CLASS;
-    map.setAttribute('aria-label', 'Map of the posts in this list');
-    body.append(map);
-  }
-
   body.style.setProperty('--atlas-layer-gap', `${SHEET_GAP_PX}px`);
   body.style.setProperty('--atlas-layer-aspect', String(CARD_ASPECT));
 
@@ -87,7 +75,6 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
     ro?.disconnect();
     domObserver.disconnect();
     window.removeEventListener('resize', measure);
-    map.remove();
     // Leaving the list page must not leave the footer hidden on the next page.
     if (body.hasAttribute('data-atlas-layer')) setAtlasLayerState('list', body);
     body.style.removeProperty('--atlas-layer-header-h');

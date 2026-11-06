@@ -272,7 +272,7 @@ The `SchedulerService` manages recurring and deferred tasks:
 ## Development Workflow
 
 ### Prerequisites
-- Go 1.25+
+- Go 1.27.3+ (the version in `api/go.mod`)
 - SQLC (for generating repository code)
 
 ### Running the API

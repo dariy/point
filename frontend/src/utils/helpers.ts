@@ -183,10 +183,10 @@ export function dropBrokenImages(root: HTMLElement) {
  * Dispatches a custom 'navigate' event so the router can handle it without
  * coupling to the router module directly.
  */
-export function navigate(path: string, { replace = false }: { replace?: boolean } = {}) {
-  window.dispatchEvent(
-    new CustomEvent('app:navigate', { detail: { path, replace } })
-  );
+export function navigate(path: string, { replace = false, state }: { replace?: boolean; state?: unknown } = {}) {
+  // `state` goes into the new history entry; the detail has it only when given.
+  const detail = state === undefined ? { path, replace } : { path, replace, state };
+  window.dispatchEvent(new CustomEvent('app:navigate', { detail }));
 }
 
 /**

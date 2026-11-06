@@ -1,6 +1,6 @@
 # Agent Instructions
 
-Point is a self-hosted photo blog engine: Go 1.26 + Echo v4 backend, SQLite (pure-Go
+Point is a self-hosted photo blog engine: Go 1.27 + Echo v4 backend, SQLite (pure-Go
 `modernc.org/sqlite`, no CGO), and a vanilla-JS SPA with no runtime dependencies. One binary serves
 the API, the SPA, and media bytes.
 

@@ -62,7 +62,14 @@ func buildPostResponse(post models.Post, tags []models.Tag, htmlContent string, 
 		if excludeIDs != nil && excludeIDs[t.ID] {
 			continue
 		}
-		tagObjs = append(tagObjs, map[string]interface{}{"name": t.Name, "slug": t.Slug})
+		tagObj := map[string]interface{}{"name": t.Name, "slug": t.Slug, "kind": t.Kind}
+		// The same geo fields as postToResponse: the immersive sheet finds the
+		// post's place tag by them and shows its map.
+		if t.Latitude.Valid && t.Longitude.Valid {
+			tagObj["latitude"] = t.Latitude.Float64
+			tagObj["longitude"] = t.Longitude.Float64
+		}
+		tagObjs = append(tagObjs, tagObj)
 	}
 
 	mediaObjs := make([]map[string]interface{}, 0, len(media))

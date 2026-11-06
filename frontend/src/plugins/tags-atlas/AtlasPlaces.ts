@@ -211,7 +211,12 @@ export class AtlasPlaces {
   _reposition: () => void;
   _drawSeq = 0;
   _didFitBounds = false;
+  /** While true, the opening fit waits in `_heldFit` (a map built off screen). */
+  _holdFit = false;
+  _heldFit: Array<[number, number]> | null = null;
   _tagsById: Map<number, AtlasTag> = new Map();
+  /** The post chip to focus when the route's place is selected next (a move from a post's map widget). */
+  _focusOnRestore: string | null = null;
   _data: { tags?: AtlasTag[] } | null = null;
   _hint: HTMLElement | null = null;
   _legend: HTMLElement | null = null;
@@ -317,12 +322,39 @@ export class AtlasPlaces {
     const vc = ViewContext.current();
     const slug = vc.path.startsWith('/tags/') ? vc.tag : null;
     if (!slug || this._activeTag) return;
+    // Before the places load, the focus waits for start() to call again.
+    if (!this._data) return;
+    const focusPostSlug = this._focusOnRestore ?? undefined;
     for (const [id, tag] of this._tagsById) {
       if (tag.slug === slug) {
-        this._selectPlaceById(id, { pan: false });
+        // A place that is not drawn yet keeps the focus for the next call.
+        if (this._selectPlaceById(id, { pan: false, focusPostSlug })) this._focusOnRestore = null;
         return;
       }
     }
+    // Not a place on the map (hidden, or out of the year scope): no selection.
+    this._focusOnRestore = null;
+  }
+
+  /**
+   * Match the selection to the route after the map moved to a new list page:
+   * `/` has no selection, `/tags/<slug>` selects that place. A selection that
+   * already matches stays as it is (no new cloud, no pan). `focusPostSlug`
+   * selects the place again and focuses that post's chip when its cloud loads.
+   */
+  syncToRoute(focusPostSlug?: string): void {
+    if (focusPostSlug) this._focusOnRestore = focusPostSlug;
+    const vc = ViewContext.current();
+    const slug = vc.path.startsWith('/tags/') ? vc.tag : null;
+    if (this._activeTag && this._activeTag.slug === slug && !this._focusOnRestore) return;
+    if (this._activeTag) this._clearSelection();
+    this._restoreFromUrl();
+  }
+
+  /** Close the open cloud and drop a pending focus (the map goes into a post's window). */
+  clearSelection(): void {
+    this._focusOnRestore = null;
+    if (this._activeTag) this._clearSelection();
   }
 
   /** The hint and the legend; the legend toggles hide a node type. */
@@ -683,8 +715,11 @@ export class AtlasPlaces {
     // user's own pan and zoom — refitting on every handle drag would fling the
     // map around while they are reading it.
     if (bounds.length && !this._didFitBounds) {
-      this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
-      this._didFitBounds = true;
+      if (this._holdFit) this._heldFit = bounds;
+      else {
+        this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+        this._didFitBounds = true;
+      }
     }
 
     this._updateHint(bounds.length);
@@ -698,6 +733,25 @@ export class AtlasPlaces {
    * The idle hint doubles as the empty state: a timeline range can leave the map
    * with no places at all, which otherwise reads as a failed load.
    */
+  /**
+   * Hold the opening fit-to-places: the map is built off screen, in a box of
+   * another size. `releaseFit` runs the held fit when the map is shown.
+   */
+  holdFit(): void {
+    this._holdFit = true;
+  }
+
+  releaseFit(): void {
+    if (!this._holdFit) return;
+    this._holdFit = false;
+    const bounds = this._heldFit;
+    this._heldFit = null;
+    if (bounds && !this._didFitBounds) {
+      this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+      this._didFitBounds = true;
+    }
+  }
+
   _updateHint(placeCount: number): void {
     const hint = this.$("#atlas-hint");
     if (!hint) return;

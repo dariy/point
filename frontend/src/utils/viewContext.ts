@@ -1,12 +1,19 @@
 import { getRoute } from '../store.ts';
 import { navigate } from './helpers.ts';
+import { isAtlasListPath, VIEW_PARAM } from '../plugins/tags-atlas/atlasLayerState.ts';
 
-/** `url` plus the `atlas` and `view` parameters of the current location. */
+/**
+ * `url` plus the `atlas` and `view` parameters of the current location. The map
+ * viewport (`at`) rides along too, but only when `url` is still a list page that
+ * has the map layer.
+ */
 function carryAtlasParams(url: string): string {
   const from = new URLSearchParams(window.location.search);
   const [path = '', search = ''] = url.split('?');
   const params = new URLSearchParams(search);
-  for (const key of ['atlas', 'view']) {
+  const keys = ['atlas', 'view'];
+  if (isAtlasListPath(url)) keys.push(VIEW_PARAM);
+  for (const key of keys) {
     const value = from.get(key);
     if (value !== null) params.set(key, value);
   }
@@ -135,7 +142,9 @@ export class ViewContext {
     // Perform navigation. The map layer's state and viewport ride on the URL
     // through a page or fit change of the same list; a new filter starts in `list`.
     const url = next.toUrl();
-    navigate(filtersChanged ? url : carryAtlasParams(url), { replace });
+    // A replace keeps the entry's history state (a `fromPost` entry keeps its chip).
+    const target = filtersChanged ? url : carryAtlasParams(url);
+    navigate(target, replace ? { replace, state: history.state } : { replace });
   }
 
   /** Serialize context back to a URL. */
