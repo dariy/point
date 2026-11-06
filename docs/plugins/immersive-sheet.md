@@ -89,6 +89,14 @@ same as a tap. The focus ring is outside the slot edge, so the map above the
 slot does not cover it. In window mode the map has `aria-hidden="true"`, so a
 screen reader reads the slot name once.
 
+An expand icon (two diagonal arrows, 24 px, on a soft background in the theme's
+colours) is in the top-right corner of the window. It tells that a tap opens
+the full map. The icon is in the map container, above the map
+(`atlasOcean.ts`, `.atlas-window-hint` in `atlas.css`), and it takes no taps: a
+tap on it is a tap on the map. It fades out while the window grows into the
+full map and fades in again when the window is back on the slot. With
+`prefers-reduced-motion: reduce` it does not fade.
+
 The way back is the same motion in reverse. Use the browser Back, or the
 "‹ <post title>" chip at the top of the full map. The chip shows only while the
 history entry has `fromPost`; a tap on it is `history.back()`. The post opens

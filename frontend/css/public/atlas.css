@@ -1151,6 +1151,51 @@ body .atlas-layer-map[data-atlas-ocean="window"] :is(.leaflet-control-container,
     display: none;
 }
 
+/* The expand hint: a tap on the window opens the full map. It sits in the
+   window's top-right corner (atlasOcean.ts sets --atlas-window-top/-right in
+   box px) above the Leaflet panes, and it takes no taps: the tap goes to the
+   map, which opens the full map. Off outside a window and during a tween, so
+   it fades out as the window grows and back in on the slot. 0.28s is
+   atlasOcean.ts::TWEEN_MS. */
+.atlas-window-hint {
+    position: absolute;
+    top: calc(var(--atlas-window-top, 0px) + 8px);
+    right: calc(var(--atlas-window-right, 0px) + 8px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--bg-primary, #fff) 82%, transparent);
+    color: var(--text-primary, #222);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.28s ease, visibility 0s linear 0.28s;
+}
+
+.atlas-window-hint svg {
+    width: 14px;
+    height: 14px;
+}
+
+body .atlas-layer-map[data-atlas-ocean="window"][data-atlas-window-hint="on"] .atlas-window-hint {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.28s ease, visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-window-hint,
+    body .atlas-layer-map[data-atlas-ocean="window"][data-atlas-window-hint="on"] .atlas-window-hint {
+        transition: none;
+    }
+}
+
 /* The way back to the post the full map came from (atlasFromPost.ts). Above the
    map (z-index 100) and its controls, below the header's menus; top centre, so
    it does not cover the zoom control (top left) or the legend. */

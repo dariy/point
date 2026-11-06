@@ -24,6 +24,12 @@
  * clip (and the window centre) from one presentation to the next, at a fixed
  * zoom; under `prefers-reduced-motion: reduce` it is instant.
  *
+ * A window with an `onTap` shows the expand hint (ATLAS_WINDOW_HINT_CLASS) in
+ * the top-right corner of its rect: `data-atlas-window-hint="on"` on the
+ * container and the rect corner in `--atlas-window-top` and
+ * `--atlas-window-right` (box px). The hint is off during a tween, so it fades
+ * out when the window grows and comes back when the window is on its slot.
+ *
  * A box change (a rotation) puts the window on the new box at once: a new clip
  * and a new offset, and the point at the window centre stays there. A present
  * with no centre after a size change pans the map by the move of the slot
@@ -64,6 +70,8 @@ import { getAtlasLayerState, isAtlasListPath, setAtlasLayerState, stateFromSearc
 import { mountAtlasLayerLayout } from './atlasLayerLayout.ts';
 import { mountAtlasLayerMap } from './atlasLayerMap.ts';
 import { isSheetReturn, syncFromPostChip } from './atlasFromPost.ts';
+import { EXPAND_SVG } from '../../utils/icons.ts';
+import { raw, setHTML } from '../../utils/helpers.ts';
 
 import {
   clipInsets, createTapGate, easeInOut, insetCss, insetsEmpty, intersectRect, tweenPoint, tweenRect, windowOffset,
@@ -117,6 +125,8 @@ export const TWEEN_MS = 280;
 
 /** The map container's class. CSS and the layer gesture find the map by it. */
 export const ATLAS_MAP_CLASS = 'atlas-layer-map';
+/** The expand hint in a window's corner (atlas.css). It takes no taps. */
+export const ATLAS_WINDOW_HINT_CLASS = 'atlas-window-hint';
 
 /**
  * A list page that replaces a list page (`/` ↔ `/tags/<slug>`) keeps the layout
@@ -205,6 +215,12 @@ function defaultContainer(body: HTMLElement): HTMLElement {
   const el = document.createElement('div');
   el.className = ATLAS_MAP_CLASS;
   el.setAttribute('aria-label', 'Map of the posts in this list');
+  // Before Leaflet: Leaflet adds its panes and keeps this child.
+  const hint = document.createElement('span');
+  hint.className = ATLAS_WINDOW_HINT_CLASS;
+  hint.setAttribute('aria-hidden', 'true');
+  setHTML(hint, raw(EXPAND_SVG));
+  el.append(hint);
   body.append(el);
   return el;
 }
@@ -290,6 +306,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   // The tween in progress: a cancel, and the resolve of its promise.
   let cancelTween: (() => void) | null = null;
   let endTween: (() => void) | null = null;
+  // A tween is in progress: the window hint is off.
+  let tweening = false;
   const gate = createTapGate();
   let stopInput: (() => void) | null = null;
   // An expand that waits for the next attach.
@@ -308,6 +326,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   const syncChip = () => deps.fromPostChip(current === 'full' && !!layout);
 
   const stopTween = () => {
+    tweening = false;
     cancelTween?.();
     cancelTween = null;
     const end = endTween;
@@ -378,6 +397,15 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     return { el: container, ctl: map };
   };
 
+  /** The expand hint: on for a window that a tap opens, off during a tween. */
+  const syncHint = (el: HTMLElement, w: AtlasWindow | null, box: Rect | null) => {
+    const on = !!w?.onTap && !!box && !tweening;
+    el.dataset.atlasWindowHint = on ? 'on' : 'off';
+    if (!on || !w || !box) return;
+    el.style.setProperty('--atlas-window-top', `${w.rect.top - box.top}px`);
+    el.style.setProperty('--atlas-window-right', `${box.left + box.width - (w.rect.left + w.rect.width)}px`);
+  };
+
   // The clip rect on screen now (a tween step included), or null for no clip.
   let clipRect: Rect | null = null;
   const setClip = (rect: Rect | null, box: Rect) => {
@@ -405,6 +433,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     if (container) {
       container.style.clipPath = '';
       container.removeAttribute('aria-hidden');
+      syncHint(container, null, null);
     }
   };
 
@@ -425,6 +454,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     winBox = box;
     const vis = visibleRect(w);
     setClip(vis, box);
+    syncHint(el, w, box);
     // The labels count only the places in the visible part (box px).
     ctl.setLabelBounds({ left: vis.left - box.left, top: vis.top - box.top, width: vis.width, height: vis.height });
     const offset = windowOffset(w.rect, box);
@@ -510,6 +540,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     const toOff = target ? windowOffset(target.rect, box) : null;
     // The tween runs in window mode: the clip moves, the box stays. It starts
     // at `from` as it is; the target's clip is for the end, not the start.
+    tweening = true;
     presentWindow({ ...(target ?? win ?? { kind: 'window' }), kind: 'window', rect: from, clip: undefined, center: undefined }, false);
     const start = deps.now();
     return new Promise<void>((resolve) => {
@@ -525,6 +556,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         }
         cancelTween = null;
         endTween = null;
+        tweening = false;
         show(req);
         resolve();
       };

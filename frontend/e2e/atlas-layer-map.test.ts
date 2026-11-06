@@ -436,6 +436,65 @@ describe('Atlas layer map', () => {
     });
   });
 
+  // The widget shows an expand hint in its top-right corner, above the map.
+  // A tap on the hint opens the full map, as a tap on the widget does
+  // (p-atlas-ocean-o6wyh.20).
+  describe('sheet widget expand hint', () => {
+    before(async () => {
+      const on = await api('/api/plugins/immersive-sheet', { enabled: true }, 'PATCH');
+      assert.ok(on.ok, 'immersive-sheet on: ' + on.status);
+    });
+    after(async () => {
+      await api('/api/plugins/immersive-sheet', { enabled: false }, 'PATCH');
+    });
+
+    it('shows the hint on the slot corner; a tap on it opens the full map; it comes back on Back', async () => {
+      const viewport = page.viewportSize();
+      try {
+        await page.setViewportSize({ width: 820, height: 1180 });
+        await page.goto(BASE + '/posts/map-probe-two');
+        await page.locator('.immersive-toggle-btn').first().click();
+        await page.locator('.immersive-sheet-hint').click();
+        const slot = page.locator('.immersive-sheet-map');
+        await slot.waitFor();
+        const hint = page.locator('body > .atlas-layer-map > .atlas-window-hint');
+        await page.waitForFunction(() => {
+          const el = document.querySelector('body > .atlas-layer-map > .atlas-window-hint');
+          return !!el && getComputedStyle(el).opacity === '1';
+        });
+        // The sheet slides in: read both boxes in one frame, once the slot stops.
+        const corner = await page.waitForFunction(() => {
+          const s = document.querySelector('.immersive-sheet-map')!.getBoundingClientRect();
+          const h = document.querySelector('body > .atlas-layer-map > .atlas-window-hint')!.getBoundingClientRect();
+          const w = window as unknown as { __slotY?: number };
+          const still = w.__slotY === s.top;
+          w.__slotY = s.top;
+          return still && { right: s.right - h.right, top: h.top - s.top, width: h.width };
+        }, undefined, { polling: 100 }).then((h) => h.jsonValue() as Promise<{ right: number; top: number; width: number }>);
+        assert.equal(Math.round(corner.width), 24, 'a 24 px hint');
+        assert.ok(Math.abs(corner.right - 8) <= 1, `8 px from the right: ${JSON.stringify(corner)}`);
+        assert.ok(Math.abs(corner.top - 8) <= 1, `8 px from the top: ${JSON.stringify(corner)}`);
+        const hintBox = (await hint.boundingBox())!;
+        assert.equal(await hint.evaluate((el) => getComputedStyle(el).pointerEvents), 'none', 'the hint takes no taps');
+        // The hint is the top element at its centre: above the map panes.
+        const top = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('.atlas-window-hint') != null,
+          { x: hintBox.x + hintBox.width / 2, y: hintBox.y + hintBox.height / 2 });
+        assert.equal(top, false, 'pointer-events none: the hit goes through to the map');
+        await page.mouse.click(hintBox.x + hintBox.width / 2, hintBox.y + hintBox.height / 2);
+        await page.waitForURL(/\/tags\/mapton\?/);
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'full');
+        assert.equal(await hint.evaluate((el) => getComputedStyle(el).visibility), 'hidden', 'no hint on the full map');
+        await page.goBack();
+        await page.waitForFunction(() => {
+          const el = document.querySelector<HTMLElement>('body > .atlas-layer-map');
+          return el?.dataset.atlasOcean === 'window' && el.dataset.atlasWindowHint === 'on';
+        });
+      } finally {
+        if (viewport) await page.setViewportSize(viewport);
+      }
+    });
+  });
+
   // The widget shows the place's cloud with one ring, inside the slot. A
   // return from the full map closes the tag page cloud, then opens the
   // widget cloud again (p-atlas-ocean-o6wyh.14).

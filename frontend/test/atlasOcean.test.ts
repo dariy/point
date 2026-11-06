@@ -27,7 +27,10 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     getAttribute: (n: string) => containerAttrs.get(n) ?? null,
     setAttribute: (n: string, v: string) => { containerAttrs.set(n, v); },
     removeAttribute: (n: string) => { containerAttrs.delete(n); },
-    style: { transition: '', clipPath: '' },
+    style: {
+      transition: '', clipPath: '', props: {} as Record<string, string>,
+      setProperty(n: string, v: string) { this.props[n] = v; },
+    },
     offsetHeight: 0,
     remove: () => log.push('container.remove'),
     addEventListener: (type: string, fn: (e: any) => void) => {
@@ -570,6 +573,60 @@ describe('atlasOcean', () => {
       assert.equal(p.pendingFrames, 0);
       assert.equal(p.ocean.presentation(), 'full');
       assert.equal(p.container.style.clipPath, '');
+    });
+
+    describe('the expand hint', () => {
+      test('a window with onTap shows the hint at the rect\'s top-right corner', () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => {} });
+        assert.equal(p.container.dataset.atlasWindowHint, 'on');
+        // Box 400x800; slot 20..380 x 500..700: 500 px from the top, 20 px from the right.
+        assert.equal(p.container.style.props['--atlas-window-top'], '500px');
+        assert.equal(p.container.style.props['--atlas-window-right'], '20px');
+      });
+
+      test('a window with no onTap has no hint; a hidden map has none', () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => {} });
+        p.ocean.present('hidden');
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+      });
+
+      test('the hint goes off for the expand tween and stays off on the full box', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => {} });
+        const done = p.ocean.expand({ center: paris, zoom: 6, focusPostSlug: 'a-post' }, 100);
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+        p.tick(50);
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+        p.tick(100);
+        await done;
+        assert.equal(p.container.dataset.atlasWindowHint, 'off', 'the full-box window opens nothing');
+      });
+
+      test('the hint comes back after the collapse tween, not during it', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        assert.equal(p.container.dataset.atlasWindowHint, 'off', 'the held map is not a slot');
+        const done = p.ocean.collapse(() => ({ kind: 'window', rect: slot, center: paris, onTap: () => {} }), 100);
+        p.tick(0);
+        p.tick(50);
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+        p.tick(100);
+        await done;
+        assert.equal(p.container.dataset.atlasWindowHint, 'on');
+      });
+
+      test('reduced motion: the hint is on the slot at once after the collapse', async () => {
+        const p = fakePage('map', { sheetReturn: true, reducedMotion: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        await p.ocean.collapse(() => ({ kind: 'window', rect: slot, center: paris, onTap: () => {} }));
+        assert.equal(p.container.dataset.atlasWindowHint, 'on');
+      });
     });
 
     describe('expand (the sheet widget opens the full map)', () => {
