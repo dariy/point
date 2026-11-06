@@ -13,6 +13,34 @@ cannot be switched off — a post rendered immersively has nothing else to show.
 
 See [Immersive Mode & Media Viewer](../features/immersive.md) for details.
 
+## Touch landscape
+
+With touch input in landscape, the viewer uses a side layout: the photo is on
+the left, and the sheet is a column on the right. The test is the same as the
+map layer's side split ([`tags-atlas`](tags-atlas.md), Touch landscape): no
+fine pointer, and a landscape viewport (`atlasLayerLayout.ts::onAtlasSide`).
+The viewer wrapper then has the class `immersive-sheet-side`.
+
+- The column is `clamp(18rem, 38vw, 26rem)` wide and as tall as the screen. It
+  is always open, and it scrolls. It has no grip and no "Details" hint.
+- The column has one flow: the text, then the map, then the camera data and
+  the comments. The map is a square, at most 18rem wide.
+- There is no sheet drag. A touch that starts in the column starts no swipe,
+  so the column scrolls. On the photo, a swipe left or right goes to the
+  next or the previous photo or post, and a swipe down closes the viewer.
+  Up and Down keys scroll the column.
+- The photo, the nav panels, the dots and the buttons at the top right (close,
+  share, slideshow) use the area on the left of the column.
+  `MediaViewer.ts::_stageWidth` gives the width of that area, so a slide moves by
+  the stage width, not the screen width.
+- A rotation changes the layout with no reload. A turn back to portrait gives
+  the sheet the state it had before the side layout (open or shut). The map
+  window follows the slot after a turn.
+- The full map round trip works the same way: the return shrinks the map
+  into the slot in the column.
+
+Portrait, and any device with a mouse or a trackpad, keep the bottom sheet.
+
 ## The map in the sheet
 
 A post with its own place tag (a tag with `latitude` and `longitude`, not an

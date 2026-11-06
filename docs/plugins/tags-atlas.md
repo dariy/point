@@ -29,6 +29,8 @@ width. The list is a grid of square cards that scrolls. `gridFit.ts::computePerP
 page to the column: whole rows, enough to fill its height. A rotation or a change of input
 changes the layout without a reload, and the map keeps its centre. `list` and `map` keep the
 layout of the table above; in `map` the handle is the vertical bar on the right edge.
+The post viewer (`immersive-sheet`) uses the same test for its own side layout: see
+[Touch landscape](immersive-sheet.md#touch-landscape) there.
 
 The map shows only the posts of the current list (same filter as the cards). The page
 does not wait for the map: see [Warm-up](#warm-up).

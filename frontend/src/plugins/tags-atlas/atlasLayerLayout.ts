@@ -46,13 +46,14 @@ function defaultSideEnv(): AtlasSideEnv {
     landscape: () => window.matchMedia?.(LANDSCAPE_QUERY).matches === true,
     observe(fn) {
       // pointerMode.ts moves the `pointer-fine` class on <html> with the input in use.
-      const mo = new MutationObserver(fn);
-      mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      // A test DOM can lack MutationObserver: then only the queries and resize count.
+      const mo = typeof MutationObserver === 'function' ? new MutationObserver(fn) : null;
+      mo?.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
       const queries = [LANDSCAPE_QUERY, FINE_QUERY].map((q) => window.matchMedia?.(q)).filter(Boolean) as MediaQueryList[];
       for (const q of queries) q.addEventListener?.('change', fn);
       window.addEventListener('resize', fn);
       return () => {
-        mo.disconnect();
+        mo?.disconnect();
         for (const q of queries) q.removeEventListener?.('change', fn);
         window.removeEventListener('resize', fn);
       };
@@ -83,6 +84,24 @@ export function watchAtlasSide(body: HTMLElement = document.body, env: AtlasSide
     stop();
     body.removeAttribute(ATLAS_SIDE_ATTR);
   };
+}
+
+/**
+ * Call `fn(side)` at once, and again each time the side verdict changes (a
+ * rotation, or a change of input). The post viewer uses it for its own touch
+ * landscape layout (ImmersiveSheetViewer.ts), with the same test as the map
+ * layer. Returns a stop.
+ */
+export function onAtlasSide(fn: (side: boolean) => void, env: AtlasSideEnv = defaultSideEnv()): () => void {
+  let last: boolean | null = null;
+  const sync = () => {
+    const side = atlasSide(env);
+    if (side === last) return;
+    last = side;
+    fn(side);
+  };
+  sync();
+  return env.observe(sync);
 }
 
 /** Read the state from the URL and start tracking the header. Returns a cleanup. */

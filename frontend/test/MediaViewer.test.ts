@@ -197,6 +197,33 @@ describe('ImmersiveSheetViewer', () => {
     fire(dom.document, 'keydown', { key: 'ArrowUp' });
     assert.strictEqual(viewer._sheetOpen, true);
   });
+
+  test('the side layout keeps the column open and gives the portrait state back', () => {
+    const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }];
+    const viewer = new ImmersiveSheetViewer(dom.document.body, { items, post: mock<Post>({}), startIndex: 0 });
+    viewer.mount();
+    const wrapper = must(dom.document.querySelector('.media-viewer-wrapper'), '.media-viewer-wrapper');
+    const sheet = must(dom.document.querySelector<HTMLElement>('.immersive-sheet'), '.immersive-sheet');
+    assert.strictEqual(viewer._side, false);
+
+    viewer._applySide(true);
+    assert.ok(wrapper.classList.contains('immersive-sheet-side'));
+    assert.ok(wrapper.classList.contains('sheet-open'));
+    assert.strictEqual(viewer._sheetOpen, true);
+    assert.strictEqual(sheet.style.transform, '', 'no slide in the side layout');
+    assert.strictEqual(viewer._gestureIgnoreSelector(), '.immersive-sheet-side .immersive-sheet');
+
+    // No swipe or grip closes the column.
+    viewer._closeSheet();
+    viewer._onSwipeCommit('up');
+    assert.strictEqual(viewer._sheetOpen, true);
+    assert.strictEqual(sheet.style.transform, '');
+
+    viewer._applySide(false);
+    assert.ok(!wrapper.classList.contains('immersive-sheet-side'));
+    assert.strictEqual(viewer._sheetOpen, false, 'the sheet was shut before the side layout');
+    assert.ok(!wrapper.classList.contains('sheet-open'));
+  });
 });
 
 // Slide markup is written straight to innerHTML. Every media URL reaching it

@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { atlasSide, watchAtlasSide, ATLAS_SIDE_ATTR, type AtlasSideEnv } from '../src/plugins/tags-atlas/atlasLayerLayout.ts';
+import { atlasSide, onAtlasSide, watchAtlasSide, ATLAS_SIDE_ATTR, type AtlasSideEnv } from '../src/plugins/tags-atlas/atlasLayerLayout.ts';
 
 function fakeBody() {
   const attrs = new Map<string, string>();
@@ -73,6 +73,24 @@ describe('watchAtlasSide', () => {
     const stop = watchAtlasSide(body, env);
     stop();
     assert.equal(body.hasAttribute(ATLAS_SIDE_ATTR), false);
+    assert.equal(state.stopped, true);
+  });
+});
+
+describe('onAtlasSide', () => {
+  test('calls back at once, then only on a change', () => {
+    const { env, state } = fakeEnv(false, true);
+    const calls: boolean[] = [];
+    const stop = onAtlasSide((side) => calls.push(side), env);
+    assert.deepEqual(calls, [true]);
+    state.fn!();
+    assert.deepEqual(calls, [true], 'no change, no call');
+    state.landscape = false;
+    state.fn!();
+    state.landscape = true;
+    state.fn!();
+    assert.deepEqual(calls, [true, false, true]);
+    stop();
     assert.equal(state.stopped, true);
   });
 });

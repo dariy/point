@@ -174,6 +174,20 @@ export class MediaViewer extends Component<MediaViewerProps> {
     return '';
   }
 
+  /**
+   * Hook: the width of the photo stage. The stage fills the viewport here; a
+   * subclass with a narrower stage (the sheet viewer in touch landscape)
+   * returns its own width, so a slide moves by the stage width.
+   */
+  _stageWidth() {
+    return window.innerWidth;
+  }
+
+  /** Hook: a region where a touch starts no swipe (GestureController `ignoreSelector`). */
+  _gestureIgnoreSelector(): string | undefined {
+    return undefined;
+  }
+
   /** Hook: whether to create the floating EXIF flyout control. Subclasses that
    *  surface EXIF elsewhere (inline) override this to skip it. */
   _useFloatingExif() {
@@ -365,6 +379,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
     // the immersive sheet) can override vertical-swipe behaviour while keeping
     // the rest of the gesture machinery intact.
     this._gesture = new GestureController(wrapper, {
+      ignoreSelector: this._gestureIgnoreSelector(),
       onSwipeMove: (dx, dy) => this._onSwipeMove(dx, dy),
       onSwipeCancel: () => this._onSwipeCancel(),
       onSwipeCommit: dir => this._onSwipeCommit(dir),
@@ -381,7 +396,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
         // viewport with a centre transform-origin, so measure against the window
         // rather than the wrapper (which is 0-height — the sized box is the
         // absolutely-positioned .immersive-visuals).
-        const rx = cx - window.innerWidth / 2;
+        const rx = cx - this._stageWidth() / 2;
         const ry = cy - window.innerHeight / 2;
         this._zoomState.x -= (rx - this._zoomState.x) * (newScale / oldScale - 1);
         this._zoomState.y -= (ry - this._zoomState.y) * (newScale / oldScale - 1);
@@ -401,7 +416,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
         if (this._zoomState.scale > 1) return this._resetZoom();
         const max = this._getMaxScale();
         if (max <= 1) return;
-        const W = window.innerWidth,
+        const W = this._stageWidth(),
           H = window.innerHeight;
         this._zoomState.scale = max;
         this._zoomState.x = (W / 2 - x) * (max - 1);
@@ -603,7 +618,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
       this._navigatePost(dir);
       return;
     }
-    const W = window.innerWidth;
+    const W = this._stageWidth();
     const active = this._slides[this._index];
     const T = 'transform 0.28s ease-out, opacity 0.28s ease-out';
     if (active) {
@@ -676,7 +691,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
     const el = this._peekEl;
     const dir = this._peekDir;
     if (!el) return;
-    const W = window.innerWidth;
+    const W = this._stageWidth();
     el.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
     el.style.transform = `translateX(${dir === 'fwd' ? W : -W}px)`;
     el.style.opacity = '0';
@@ -734,7 +749,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
       scale
     } = this._zoomState;
     if (scale <= 1) return this._resetZoom();
-    const maxX = (scale - 1) * window.innerWidth / 2;
+    const maxX = (scale - 1) * this._stageWidth() / 2;
     const maxY = (scale - 1) * window.innerHeight / 2;
     this._zoomState.x = Math.max(-maxX, Math.min(maxX, this._zoomState.x));
     this._zoomState.y = Math.max(-maxY, Math.min(maxY, this._zoomState.y));
@@ -798,7 +813,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
    * mirrored (rising) opacity — the "infinite stripe" feel.
    */
   _horizontalDrag(active: HTMLElement, tx: number) {
-    const W = window.innerWidth;
+    const W = this._stageWidth();
     const dir = tx < 0 ? 'fwd' : 'back';
     const neighbor = this._neighborEl(dir);
     const ratio = Math.min(1, Math.abs(tx) / W);
@@ -823,7 +838,7 @@ export class MediaViewer extends Component<MediaViewerProps> {
     if (!img) return 2;
     const rect = img.getBoundingClientRect();
     const nw = ('naturalWidth' in img ? img.naturalWidth : img.videoWidth) || rect.width * 2;
-    return Math.max(window.innerWidth / rect.width, window.innerHeight / rect.height, nw / rect.width, 2);
+    return Math.max(this._stageWidth() / rect.width, window.innerHeight / rect.height, nw / rect.width, 2);
   }
   _panelClick(e: MouseEvent, navFn: () => void) {
     // While zoomed the edge panels don't navigate — an edge tap is part of
