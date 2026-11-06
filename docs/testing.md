@@ -30,6 +30,12 @@ The recommended way to run tests is using the provided script from the project r
 *   **Goal:** Verify the interplay between services and the actual repository/SQL layer.
 *   **Execution:** Run via `go test ./...` or `./scripts/run-tests.sh` (included by default).
 
+## Browser (E2E) Tests
+
+*   **Location:** `frontend/e2e/*.test.ts` (Playwright). [`frontend/e2e/README.md`](../frontend/e2e/README.md) names the environment variables.
+*   **Execution:** `./scripts/run-e2e.sh [file…]`. It starts a server on an empty database for the run.
+*   **iPad (WebKit):** `E2E_DEVICE=ipad ./scripts/run-e2e.sh frontend/e2e/atlas-layer-map.test.ts` runs a file on WebKit with an iPad touch context. Only a file that gets its browser from `frontend/e2e/devices.ts::launchFor` follows `E2E_DEVICE`. CI runs that file on Chromium and on the iPad context.
+
 ## Service Pattern
 
 *   **Dependency Injection:** All services MUST accept the `repository.Repository` **interface** in their constructors.

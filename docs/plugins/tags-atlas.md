@@ -14,7 +14,7 @@ reads only that attribute.
 | State | `?view=` | What you see |
 |-------|-----------|--------------|
 | `list` | `list` | The page as it is, plus the handle. The footer shows. |
-| `mapList` | `split` | The map comes down from behind the header. The post list is one row of cards on the footer, `clamp(96px, 22dvh, 220px)` high (`--atlas-layer-row-h`). The cards fill the row width. The footer is one line at the bottom, with the paginator in it. The edge page arrows do not show. |
+| `mapList` | `split` | The map comes down from behind the header (the stack layout; for touch landscape, see below). The post list is one row of cards on the footer, `clamp(96px, 22dvh, 220px)` high (`--atlas-layer-row-h`). The cards fill the row width. The footer is one line at the bottom, with the paginator in it. The edge page arrows do not show. |
 | `map` | `map` | The map fills the space below the header. The post list is only the handle, on the footer. The footer is one line at the bottom, without the paginator. |
 
 ### Touch landscape
@@ -73,8 +73,8 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
 - **Tap on empty map** (the sea, or a country with no geo-tag): the selection is cleared.
   On `/tags/<slug>`, the home page `/` opens. On `/`, only the selection is cleared.
 
-When the layer map is less than 320px high (a phone on its side), the legend is one
-button to the right of the zoom control. The button opens the filters in one row.
+When the layer map is 320 px high or less (a short window, or a small phone on its side), the
+legend is one button to the right of the zoom control. The button opens the filters in one row.
 
 ### Labels
 
