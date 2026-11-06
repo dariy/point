@@ -67,6 +67,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   // The box: a 400×800 viewport. `setBox` changes it and tells the box observers.
   let box = { left: 0, top: 0, width: 400, height: 800 };
   const boxObservers = new Set<() => void>();
+  // The route watchers (deps.onRoute); `routeTo` tells them.
+  const routeWatchers = new Set<(pathname: string) => void>();
   const ocean = createAtlasOcean({
     body,
     container: () => container as unknown as HTMLElement,
@@ -107,6 +109,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     now: () => clock,
     sheetReturn: () => !!opts.sheetReturn,
     fromPostChip: (show) => { chip = show; },
+    onRoute: (fn) => { routeWatchers.add(fn); return () => { routeWatchers.delete(fn); }; },
   });
   return {
     ocean,
@@ -144,6 +147,9 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     setUrlState(s: 'list' | 'mapList' | 'map') { urlState = s; },
     /** the path and query that the ocean reads (deps.path) */
     setPath(p: string) { path = p; },
+    /** The router changes the route to `pathname`. */
+    routeTo(pathname: string) { for (const fn of [...routeWatchers]) fn(pathname); },
+    get routeWatchers() { return routeWatchers.size; },
   };
 }
 
@@ -604,6 +610,7 @@ describe('atlasOcean', () => {
         p.tick(100);
         await done;
         assert.equal(p.container.dataset.atlasWindowHint, 'off', 'the full-box window opens nothing');
+        p.ocean.destroy();
       });
 
       test('the hint comes back after the collapse tween, not during it', async () => {
@@ -734,6 +741,77 @@ describe('atlasOcean', () => {
         p.tick(100 + EXPAND_CLICK_GUARD_MS);
         const later = p.dispatch('click');
         assert.ok(!later.stopped && !later.prevented, 'a click after the guard goes to the map');
+      });
+
+      describe('release (the tag page does not come)', () => {
+        const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        /** A window, then an expand to /tags/france that holds for `holdMs`. */
+        const held = async (holdMs: number) => {
+          const p = fakePage('list', { reducedMotion: true });
+          let released = 0;
+          p.ocean.present({ kind: 'window', rect: slot, center: paris });
+          await p.ocean.expand({ ...target, path: '/tags/france', onRelease: () => released++ }, 100, holdMs);
+          return { p, released: () => released };
+        };
+
+        test('no attach in the hold time: the map is hidden and onRelease runs', async () => {
+          const { p, released } = await held(20);
+          p.routeTo('/tags/france');
+          assert.equal(p.ocean.presentation(), 'window');
+          await wait(40);
+          assert.equal(p.ocean.presentation(), 'hidden');
+          assert.equal(released(), 1);
+          assert.equal(p.routeWatchers, 0, 'the route watch stops');
+          // A late attach of the tag page is a plain attach: no expand to finish.
+          p.log.length = 0;
+          p.setUrlState('map');
+          p.ocean.attach();
+          assert.equal(p.ocean.presentation(), 'full');
+          assert.ok(!p.log.includes('route a-post'));
+        });
+
+        test('a route to another page releases the hold at once', async () => {
+          const { p, released } = await held(10_000);
+          p.routeTo('/tags/france');
+          assert.equal(p.ocean.presentation(), 'window', 'the target route keeps the hold');
+          p.routeTo('/search');
+          assert.equal(p.ocean.presentation(), 'hidden');
+          assert.equal(released(), 1);
+          p.ocean.releaseExpand();
+          assert.equal(released(), 1, 'a second release does nothing');
+        });
+
+        test('the error path releases the hold at once', async () => {
+          const { p, released } = await held(10_000);
+          p.routeTo('/tags/france');
+          p.ocean.releaseExpand();
+          assert.equal(p.ocean.presentation(), 'hidden');
+          assert.equal(released(), 1);
+        });
+
+        test('a slow but good load keeps the hold until the attach', async () => {
+          const { p, released } = await held(60);
+          p.routeTo('/tags/france');
+          await wait(20);
+          assert.equal(p.ocean.presentation(), 'window');
+          p.log.length = 0;
+          p.setUrlState('map');
+          p.ocean.attach();
+          assert.deepEqual(p.log, ['layout', 'show', 'setView 48.85,2.35 z6', 'route a-post']);
+          assert.equal(p.routeWatchers, 0);
+          // The hold timer is gone with the attach: the full map stays.
+          await wait(80);
+          assert.equal(p.ocean.presentation(), 'full');
+          p.routeTo('/search');
+          assert.equal(released(), 0);
+        });
+
+        test('a release with no expand does nothing', () => {
+          const p = fakePage('map');
+          p.ocean.attach();
+          p.ocean.releaseExpand();
+          assert.equal(p.ocean.presentation(), 'full');
+        });
       });
 
       test('a plain attach sets no click guard', () => {

@@ -182,6 +182,12 @@ tag page attaches, only `hidden` stops this. A new window from the post (a re-re
 resize) or a state change does not stop it. For 500 ms after the tag page attaches, the
 full map ignores clicks, so a late click of the tap does not clear the place.
 
+If the tag page does not come, the map does not stay over the page. The ocean hides it
+when one of these occurs: no attach in 8 s (`EXPAND_HOLD_MS`), a route to a page that
+is not the tag page, or a tag page load error (`TagPage.ts` calls
+`releaseAtlasExpand`). The user sees the tag page's error. A viewer that is still on
+screen removes its fade and puts the window back on its slot.
+
 A Back from the full map to a post whose sheet map opened it does not hide the map. The
 map stays on screen and shrinks into the sheet's map slot. While the full map's history
 entry has `fromPost`, a "‹ <post title>" chip at the top goes back to that post.

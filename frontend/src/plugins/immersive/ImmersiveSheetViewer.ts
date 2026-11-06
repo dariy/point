@@ -498,7 +498,8 @@ export class ImmersiveSheetViewer extends MediaViewer {
    * (`immersive-map-leaving`); then the move. The tag page's attach sets the
    * zoom, selects the place and focuses this post's chip
    * (atlasOcean.ts::expand). The history entry carries `fromPost` (the way
-   * back to this post) and `sheet: 'open'`.
+   * back to this post) and `sheet: 'open'`. A tag page that does not come
+   * releases the hold (atlasOcean.ts::releaseExpand).
    */
   _onMapTap() {
     const geo = this._mapGeoTag();
@@ -512,9 +513,22 @@ export class ImmersiveSheetViewer extends MediaViewer {
     this.container.classList.add('immersive-map-leaving');
     const center = { lat: geo.latitude, lng: geo.longitude };
     const search = searchWithView(searchWithState('', 'map'), { ...center, zoom: FULL_MAP_ZOOM });
-    const path = `/tags/${encodeURIComponent(geo.slug)}${search}`;
+    const tagPath = `/tags/${encodeURIComponent(geo.slug)}`;
+    const path = `${tagPath}${search}`;
     const title = this.props.post?.title || '';
-    void expandAtlasOcean({ center, zoom: FULL_MAP_ZOOM, focusPostSlug: postSlug }).then(() => {
+    // The tag page did not come (an error, no attach in time, another route):
+    // the ocean hides the held map. A viewer that is still here drops its fade
+    // and puts the widget back on the slot.
+    const onRelease = () => {
+      if (!this._mapLeaving) return;
+      this._mapLeaving = false;
+      this.container.classList.remove('immersive-map-leaving');
+      this._syncMapWindow();
+    };
+    const target = { center, zoom: FULL_MAP_ZOOM, focusPostSlug: postSlug, path: tagPath, onRelease };
+    void expandAtlasOcean(target).then(() => {
+      // A release or an unmount during the tween: the user is not going there.
+      if (!this._mapLeaving) return;
       // Back to this entry opens the sheet and shrinks the map into the slot.
       // The post page drops the list URL marker when it unmounts; the entry keeps it.
       history.replaceState(sheetReturnState(history.state, takeAtlasReturn()), '');

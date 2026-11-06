@@ -38,6 +38,7 @@ import {
   removeCanonical,
 } from "../../utils/helpers.ts";
 import { GridPager } from "../../core/gridPager.ts";
+import { releaseAtlasExpand } from "../../plugins/tags-atlas/atlasOcean.ts";
 import { clearAtlasOpen } from "../../utils/atlasReturn.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
 import { setPageTitle } from "../../utils/documentTitle.ts";
@@ -194,6 +195,8 @@ export default class TagPage extends Component<PageProps> {
       const err = e as { status?: number; message?: string };
       const msg =
         err.status === 404 ? "Not found." : err.message || "Failed to load.";
+      // A map held over the page by a widget tap must not cover the error.
+      releaseAtlasExpand();
       this.setState({ loading: false, data: null, post: null, error: msg });
       return;
     }
@@ -728,6 +731,7 @@ export default class TagPage extends Component<PageProps> {
     const { slug } = this.props.params || {};
 
     if (!slug) {
+      releaseAtlasExpand();
       this.setState({ loading: false, error: "Invalid tag URL." });
       return;
     }
@@ -774,6 +778,8 @@ export default class TagPage extends Component<PageProps> {
       const err = e as { status?: number; message?: string };
       const msg =
         err.status === 404 ? "Not found." : err.message || "Failed to load.";
+      // A map held over the page by a widget tap must not cover the error.
+      releaseAtlasExpand();
       this.setState({ loading: false, data: null, post: null, error: msg });
     }
   }

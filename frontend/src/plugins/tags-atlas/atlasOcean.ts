@@ -45,6 +45,12 @@
  * For EXPAND_CLICK_GUARD_MS after that attach, the full map ignores clicks: a
  * late click of the tap must not clear the place it opens.
  *
+ * A pending expand also ends when the tag page does not come (`releaseExpand`):
+ * no attach in EXPAND_HOLD_MS, a route to a page that is not `target.path`, or
+ * the tag page's error path (TagPage.ts calls `releaseAtlasExpand`). The map is
+ * hidden and `target.onRelease` runs (the viewer, if it is still there, drops
+ * its fade).
+ *
  * `collapse` is the way back (atlasFromPost.ts). A detach to a post whose
  * history entry asks for the open sheet does not hide a shown map: it holds as
  * a window over the whole box until the post's sheet calls `collapse`. That
@@ -72,6 +78,7 @@ import { mountAtlasLayerMap } from './atlasLayerMap.ts';
 import { isSheetReturn, syncFromPostChip } from './atlasFromPost.ts';
 import { EXPAND_SVG } from '../../utils/icons.ts';
 import { raw, setHTML } from '../../utils/helpers.ts';
+import { onRoute } from '../../store.ts';
 
 import {
   clipInsets, createTapGate, easeInOut, insetCss, insetsEmpty, intersectRect, tweenPoint, tweenRect, windowOffset,
@@ -118,6 +125,10 @@ export interface AtlasExpand {
   zoom: number;
   /** The post whose chip the full map focuses in the place's cloud. */
   focusPostSlug?: string;
+  /** The tag page's pathname. A route to another pathname releases the hold. */
+  path?: string;
+  /** Runs when the hold is released with no attach (`releaseExpand`). */
+  onRelease?: () => void;
 }
 
 /** The clip tween, in ms (the same as the layer slide in atlas.css). */
@@ -134,6 +145,9 @@ export const ATLAS_WINDOW_HINT_CLASS = 'atlas-window-hint';
  * failed to load), the layout is released and the map is hidden.
  */
 const DETACH_MS = 10_000;
+
+/** An expand with no attach in this time (ms) is released: the map is hidden. */
+export const EXPAND_HOLD_MS = 8000;
 
 /** After an expand's attach, the full map ignores clicks for this time (ms). */
 export const EXPAND_CLICK_GUARD_MS = 500;
@@ -184,6 +198,8 @@ export interface AtlasOceanDeps {
   sheetReturn(path: string): boolean;
   /** Show the "‹ <post title>" chip, or remove it (atlasFromPost.ts::syncFromPostChip). */
   fromPostChip(show: boolean): void;
+  /** Call `fn` with the pathname on each route change. Returns a stop. */
+  onRoute(fn: (pathname: string) => void): () => void;
 }
 
 export interface AtlasOcean {
@@ -196,8 +212,11 @@ export interface AtlasOcean {
    * Grow the window to the whole box, with `target.center` at the centre and
    * no zoom change. Resolves when the tween ends: navigate then. The next
    * attach finishes the move (see the file comment); a `present('hidden')` cancels it.
+   * With no attach in `holdMs`, or on a route to another page, `releaseExpand` runs.
    */
-  expand(target: AtlasExpand, ms?: number): Promise<void>;
+  expand(target: AtlasExpand, ms?: number, holdMs?: number): Promise<void>;
+  /** The tag page did not come: hide a held expand and call its `onRelease`. No-op with no expand. */
+  releaseExpand(): void;
   /**
    * The way back from the full map: wait until `slot()` gives a window with a
    * size, then tween to it (from the held box; instant from `hidden` or under
@@ -279,6 +298,10 @@ function defaultDeps(): AtlasOceanDeps {
     now: () => (typeof requestAnimationFrame === 'function' ? performance.now() : Date.now()),
     sheetReturn: (path) => isSheetReturn(path, history.state),
     fromPostChip: (show) => syncFromPostChip(show),
+    onRoute: (fn) => {
+      const stop = onRoute((r: { pathname?: string } | null) => fn(r?.pathname ?? location.pathname));
+      return () => { stop(); };
+    },
   };
 }
 
@@ -310,8 +333,27 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   let tweening = false;
   const gate = createTapGate();
   let stopInput: (() => void) | null = null;
-  // An expand that waits for the next attach.
+  // An expand that waits for the next attach, and its release timer and route watch.
   let expanding: AtlasExpand | null = null;
+  let expandTimer: ReturnType<typeof setTimeout> | undefined;
+  let stopRouteWatch: (() => void) | null = null;
+
+  /** End a pending expand: no hold timer, no route watch. */
+  const dropExpand = () => {
+    expanding = null;
+    clearTimeout(expandTimer);
+    expandTimer = undefined;
+    stopRouteWatch?.();
+    stopRouteWatch = null;
+  };
+
+  /** The tag page did not come: hide the held map and tell the caller. */
+  const releaseExpand = () => {
+    const exp = expanding;
+    if (!exp) return;
+    present('hidden');
+    exp.onRelease?.();
+  };
   // The end of the click guard after an expand's attach (deps.now() time).
   let guardUntil = -Infinity;
   // A held map on a post (the way back): hidden when no collapse comes in time.
@@ -496,7 +538,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   const present = (req: AtlasPresentationRequest) => {
     // A pending expand ends only on `hidden` (the user went to another page).
     // A window from the post or a state change before the attach keeps it.
-    if (req === 'hidden') expanding = null;
+    if (req === 'hidden') dropExpand();
     clearHold();
     stopTween();
     show(req);
@@ -605,7 +647,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         else clear();
       }
       const exp = expanding;
-      expanding = null;
+      dropExpand();
       if (exp) {
         // The end of an expand: the window covers the box, so the map is
         // already where `full` shows it. Then the zoom, then the selection.
@@ -644,7 +686,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       }
       // A Back to the post's open sheet: the map stays on screen, over the
       // whole box, until the sheet's slot takes it (collapse).
-      expanding = null;
+      dropExpand();
       stopTween();
       // Window mode first: without the layout, the `list` rules move the
       // container off screen (translateY(-100%)), and the box must not be read there.
@@ -659,17 +701,26 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
 
     animateTo,
 
-    expand(target, ms = TWEEN_MS) {
+    expand(target, ms = TWEEN_MS, holdMs = EXPAND_HOLD_MS) {
       const box = container && current === 'window' ? deps.box(container) : null;
       const done = box
         ? animateTo({ kind: 'window', rect: box, center: target.center }, ms)
         : Promise.resolve();
+      dropExpand();
       expanding = target;
+      expandTimer = setTimeout(releaseExpand, holdMs);
+      // The tag page's route keeps the hold; any other route releases it.
+      if (target.path) {
+        const want = target.path;
+        stopRouteWatch = deps.onRoute((pathname) => { if (pathname !== want) releaseExpand(); });
+      }
       return done;
     },
 
+    releaseExpand,
+
     collapse(slot, ms = TWEEN_MS) {
-      expanding = null;
+      dropExpand();
       stopTween();
       let frames = 0;
       return new Promise<void>((resolve) => {
@@ -701,7 +752,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     presentation: () => current,
 
     destroy() {
-      expanding = null;
+      dropExpand();
       guardUntil = -Infinity;
       clearHold();
       stopTween();
@@ -760,6 +811,11 @@ export function animateAtlasOcean(presentation: AtlasPresentationRequest, ms?: n
 export function expandAtlasOcean(target: AtlasExpand, ms?: number): Promise<void> {
   ocean ??= createAtlasOcean(defaultDeps());
   return ocean.expand(target, ms);
+}
+
+/** The tag page failed to load: release a held expand (see `AtlasOcean.releaseExpand`). */
+export function releaseAtlasExpand(): void {
+  ocean?.releaseExpand();
 }
 
 /** The way back from the full map into the sheet's slot. See `AtlasOcean.collapse`. */

@@ -564,6 +564,36 @@ describe('Atlas layer map', () => {
     });
   });
 
+  // The tag page fails to load after a widget tap (p-atlas-ocean-o6wyh.24):
+  // the held map goes, and the error page shows.
+  describe('a failed tag page after a widget tap', () => {
+    it('releases the held map and shows the error', async () => {
+      const block = /\/api\/pages\/tags\/mapton/;
+      await page.route(block, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"boom"}' }));
+      const viewport = page.viewportSize();
+      try {
+        // The header shows the immersive toggle at a tablet width.
+        await page.setViewportSize({ width: 820, height: 1180 });
+        await page.goto(BASE + '/posts/map-probe-two');
+        await page.locator('.immersive-toggle-btn').first().click();
+        await page.locator('.immersive-sheet-hint').click();
+        await page.locator('.immersive-sheet-map').waitFor();
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'window');
+        await page.waitForTimeout(400);
+        const slot = (await page.locator('.immersive-sheet-map').boundingBox())!;
+        if (onIpad) await page.touchscreen.tap(slot.x + 10, slot.y + slot.height - 10);
+        else await page.mouse.click(slot.x + 10, slot.y + slot.height - 10);
+        await page.waitForURL(/\/tags\/mapton\?/);
+        await page.locator('.error-message').waitFor({ timeout: 5000 });
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'hidden', null, { timeout: 2000 });
+        assert.equal(await page.locator('.immersive-map-leaving').count(), 0, 'no viewer fade is left');
+      } finally {
+        await page.unroute(block);
+        if (viewport) await page.setViewportSize(viewport);
+      }
+    });
+  });
+
   // A rotation (landscape ↔ portrait) on an iPad: the map follows its box
   // (p-atlas-ocean-o6wyh.11). Each test starts in portrait and turns twice.
   describe('rotation', () => {
