@@ -1000,6 +1000,77 @@ body[data-atlas-settling] #grid-mount {
     }
 }
 
+/* ── Touch landscape: map left, list column right ───────────────────────────
+   atlasLayerLayout.ts::watchAtlasSide sets body[data-atlas-side] for touch
+   input in landscape. In `mapList` the map is a square on the left, from the
+   top to the bottom of the viewport. The column is at least 20rem wide. The
+   header, the handle, the list and the footer (css/public/footer.css) are in
+   the column. A drag, `list` and `map` keep the stack layout above. */
+body[data-atlas-side] {
+    --atlas-layer-map-w: min(100dvh, 100vw - 20rem);
+}
+
+body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) .atlas-layer-map {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: var(--atlas-layer-map-w);
+}
+
+body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) .atlas-layer-handle {
+    top: var(--atlas-layer-header-h, 0px);
+    bottom: auto;
+    left: var(--atlas-layer-map-w);
+    right: 0;
+}
+
+/* The list column: a grid of square cards that scrolls. gridFit.ts::sidePerPage
+   fits the page to the column: whole rows, enough to fill its height. */
+body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #grid-mount {
+    top: calc(var(--atlas-layer-header-h, 0px) + var(--atlas-layer-handle-h));
+    bottom: var(--atlas-layer-footer-h, 0px);
+    left: var(--atlas-layer-map-w);
+    right: 0;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    touch-action: pan-y;
+}
+
+body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #grid-mount .posts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    gap: var(--atlas-layer-gap, 8px);
+    height: auto;
+}
+
+body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #grid-mount .post-card-slot {
+    flex: none;
+    width: auto;
+    height: auto;
+    max-width: none;
+    aspect-ratio: 1;
+}
+
+body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #grid-mount .post-card {
+    height: 100%;
+}
+
+/* The header goes right of the map; HeaderFold folds it for the column width. */
+body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #header-mount {
+    width: auto;
+    margin-left: var(--atlas-layer-map-w);
+}
+
+body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) .atlas-from-post {
+    top: var(--spacing-sm, 8px);
+    left: calc(var(--atlas-layer-map-w) / 2);
+    max-width: calc(var(--atlas-layer-map-w) - 2 * var(--spacing-md, 16px));
+}
+
 /* The window (atlasOcean.ts): the map keeps its box and shows through the
    clip-path the ocean sets. It sits above the post viewer (the sheet and the
    header are z-index 50; layout.css has 110) and below the menus and modals.

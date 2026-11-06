@@ -12,6 +12,10 @@
  *   --atlas-layer-gap        gap between two cards (SHEET_GAP_PX)
  *   --atlas-layer-aspect     card width over card height (CARD_ASPECT)
  *
+ * Touch input in landscape sets `body[data-atlas-side]` (watchAtlasSide). In
+ * `mapList` CSS then puts a square map on the left, and the header, the list
+ * column and the footer on the right (`--atlas-layer-map-w`, atlas.css).
+ *
  * It also keeps the state in the URL (`?view=…`, by `history.replaceState`), reads
  * it on mount, and leaves the list URL for the post page when a card opens a post.
  */
@@ -19,11 +23,73 @@
 import { getAtlasLayerState, replaceSearch, searchWithState, saveState, setAtlasLayerState, initialState, stateFromSearchOrNull } from './atlasLayerState.ts';
 import { markAtlasOpen } from '../../utils/atlasReturn.ts';
 import { CARD_ASPECT, SHEET_GAP_PX } from './AtlasSheet.ts';
+import { hasFinePointer } from '../../utils/pointerMode.ts';
+
+/** The body attribute of the touch landscape layout. */
+export const ATLAS_SIDE_ATTR = 'data-atlas-side';
+
+const LANDSCAPE_QUERY = '(orientation: landscape)';
+const FINE_QUERY = '(hover: hover) and (pointer: fine)';
+
+/** What watchAtlasSide reads. Tests replace it. */
+export interface AtlasSideEnv {
+  /** True when a mouse or a trackpad drives the page (pointerMode.ts::hasFinePointer). */
+  fine(): boolean;
+  landscape(): boolean;
+  /** Call `fn` when one of the two can change. Returns a stop. */
+  observe(fn: () => void): () => void;
+}
+
+function defaultSideEnv(): AtlasSideEnv {
+  return {
+    fine: hasFinePointer,
+    landscape: () => window.matchMedia?.(LANDSCAPE_QUERY).matches === true,
+    observe(fn) {
+      // pointerMode.ts moves the `pointer-fine` class on <html> with the input in use.
+      const mo = new MutationObserver(fn);
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      const queries = [LANDSCAPE_QUERY, FINE_QUERY].map((q) => window.matchMedia?.(q)).filter(Boolean) as MediaQueryList[];
+      for (const q of queries) q.addEventListener?.('change', fn);
+      window.addEventListener('resize', fn);
+      return () => {
+        mo.disconnect();
+        for (const q of queries) q.removeEventListener?.('change', fn);
+        window.removeEventListener('resize', fn);
+      };
+    },
+  };
+}
+
+/** True for the touch landscape layout: no fine pointer, and a landscape viewport. */
+export function atlasSide(env: Pick<AtlasSideEnv, 'fine' | 'landscape'>): boolean {
+  return !env.fine() && env.landscape();
+}
+
+/**
+ * Keep `body[data-atlas-side]` in step with the input and the orientation.
+ * A rotation or a change of input moves the layout without a reload.
+ * Returns a stop, which removes the attribute.
+ */
+export function watchAtlasSide(body: HTMLElement = document.body, env: AtlasSideEnv = defaultSideEnv()): () => void {
+  const sync = () => {
+    const side = atlasSide(env);
+    if (side === body.hasAttribute(ATLAS_SIDE_ATTR)) return;
+    if (side) body.setAttribute(ATLAS_SIDE_ATTR, '');
+    else body.removeAttribute(ATLAS_SIDE_ATTR);
+  };
+  sync();
+  const stop = env.observe(sync);
+  return () => {
+    stop();
+    body.removeAttribute(ATLAS_SIDE_ATTR);
+  };
+}
 
 /** Read the state from the URL and start tracking the header. Returns a cleanup. */
 export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => void {
   body.style.setProperty('--atlas-layer-gap', `${SHEET_GAP_PX}px`);
   body.style.setProperty('--atlas-layer-aspect', String(CARD_ASPECT));
+  const stopSide = watchAtlasSide(body);
 
   // The URL names the state on arrival. A state change after that rewrites the
   // query in place: one history entry, however many swipes.
@@ -70,6 +136,7 @@ export function mountAtlasLayerLayout(body: HTMLElement = document.body): () => 
   window.addEventListener('resize', measure);
 
   return () => {
+    stopSide();
     mo.disconnect();
     document.removeEventListener('click', onCardClick, true);
     ro?.disconnect();

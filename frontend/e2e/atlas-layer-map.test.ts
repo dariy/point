@@ -471,6 +471,7 @@ describe('Atlas layer map', () => {
         box: { left: box.left, top: box.top, width: box.width, height: box.height },
         marker: { x: m.left + m.width / 2, y: m.top + m.height / 2 },
         at: (new URLSearchParams(location.search).get('at') ?? '').split(',').map(Number),
+        side: document.body.hasAttribute('data-atlas-side'),
       };
     });
 
@@ -499,7 +500,11 @@ describe('Atlas layer map', () => {
           assert.equal(now.inner, size.width, label);
           assert.equal(now.client, size.width, 'no wide layout viewport: ' + label);
           assert.equal(now.scroll, size.width, 'nothing is wider than the viewport: ' + label);
-          assert.equal(Math.round(now.box.width), size.width, 'the map is as wide as the viewport: ' + label);
+          // Touch in landscape (the iPad) puts mapList on the side: a square map, a 20rem column.
+          const sideMap = state === 'mapList' && now.side;
+          assert.equal(now.side, onIpad && size.width > size.height, 'the side layout is for touch in landscape: ' + label);
+          const width = sideMap ? Math.min(size.height, size.width - 320) : size.width;
+          assert.equal(Math.round(now.box.width), width, 'the map width: ' + label);
           const a = fromCentre(start);
           const b = fromCentre(now);
           assert.ok(Math.abs(a.x - b.x) <= 2 && Math.abs(a.y - b.y) <= 2, 'the map keeps its centre: ' + label);

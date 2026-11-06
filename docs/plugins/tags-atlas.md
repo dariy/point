@@ -17,6 +17,18 @@ reads only that attribute.
 | `mapList` | `split` | The map comes down from behind the header. The post list is one row of cards on the footer, `clamp(96px, 22dvh, 220px)` high (`--atlas-layer-row-h`). The cards fill the row width. The footer is one line at the bottom, with the paginator in it. The edge page arrows do not show. |
 | `map` | `map` | The map fills the space below the header. The post list is only the handle, on the footer. The footer is one line at the bottom, without the paginator. |
 
+### Touch landscape
+
+With touch input (`html:not(.pointer-fine)`, and no mouse by the media query) in landscape,
+`atlasLayerLayout.ts::watchAtlasSide` sets `body[data-atlas-side]`. Then `mapList` is a side
+layout: the map is a square on the left, from the top to the bottom of the viewport, with the
+width `--atlas-layer-map-w = min(100dvh, 100vw - 20rem)`. The header, the handle, the list
+and the footer are in the column on the right. HeaderFold folds the header for the column
+width. The list is a grid of square cards that scrolls. `gridFit.ts::computePerPage` fits the
+page to the column: whole rows, enough to fill its height. A rotation or a change of input
+changes the layout without a reload, and the map keeps its centre. `list`, `map` and a drag
+keep the layout of the table above.
+
 The map shows only the posts of the current list (same filter as the cards). The page
 does not wait for the map: see [Warm-up](#warm-up).
 
