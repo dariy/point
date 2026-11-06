@@ -24,6 +24,10 @@ slides and scrolls. Drag and pinch in the slot move the map, not the sheet.
 
 - With `tags-atlas` off, or with no place tag on the post, there is no slot and
   Leaflet does not load.
+- There is one map for the visit. A list page builds it when the browser is
+  idle (the warm-up, not when the browser asks to save data), and a post sets it
+  to `hidden` and keeps it. The window shows that same map, with no new tiles
+  and no new places request.
 - A post that is the first page of the visit builds the map when the sheet
   opens on it.
 - The ocean goes back to `hidden` when the sheet closes and when the viewer
@@ -47,5 +51,7 @@ with the sheet open (no slide). The map stays on screen over the post until the
 map slot has its first layout. Then the map shrinks from the whole screen into
 the slot and the place pans back to the slot centre. After the shrink, the zoom
 changes back to the slot zoom (10). With `prefers-reduced-motion: reduce` the
-change is instant. A post that the map layer opened keeps its way back to the
-list: a close of the post after this round trip still goes to the list URL.
+change is instant. The widget shows the place, not the cloud that was open on
+the tag page. A post that the map layer opened keeps its way back to the list: a
+close of the post after this round trip still goes to the list URL, and the
+list shows the viewport of that URL (`?at=`), not the view of the widget.

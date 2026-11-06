@@ -13,6 +13,13 @@ Full-screen, distraction-free post viewing. The viewer is a plugin family around
   are the two candidates for the `post-viewer` slot, whose cardinality is `1`
   (`SlotCardinality` in the registry): exactly one is active, and enabling one is what
   switches the other off.
+  On a post with its own place tag, the Details sheet shows a map widget. The widget is
+  a window on the one [`tags-atlas`](../plugins/tags-atlas.md) map of the visit, not a
+  second map: the list pages warm that map when the browser is idle (not when the
+  browser asks to save data), and a post keeps it `hidden`. A tap on the widget grows
+  it into the full map on the place's tag page. Back shrinks it into the widget again.
+  With `prefers-reduced-motion: reduce` each change is instant. With `tags-atlas` off
+  there is no widget. See [The map in the sheet](../plugins/immersive-sheet.md#the-map-in-the-sheet).
 - **`immersive-share`** — a small slot plugin injected into the viewer wrapper: native
   `navigator.share` where available, copy-link + toast fallback; shares the current
   slide URL.

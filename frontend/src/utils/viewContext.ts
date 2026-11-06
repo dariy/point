@@ -142,7 +142,9 @@ export class ViewContext {
     // Perform navigation. The map layer's state and viewport ride on the URL
     // through a page or fit change of the same list; a new filter starts in `list`.
     const url = next.toUrl();
-    navigate(filtersChanged ? url : carryAtlasParams(url), { replace });
+    // A replace keeps the entry's history state (a `fromPost` entry keeps its chip).
+    const target = filtersChanged ? url : carryAtlasParams(url);
+    navigate(target, replace ? { replace, state: history.state } : { replace });
   }
 
   /** Serialize context back to a URL. */

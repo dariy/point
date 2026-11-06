@@ -51,7 +51,7 @@
  * warms; Leaflet loads on the first `mapList` or `full`.
  */
 
-import { getAtlasLayerState, isAtlasListPath } from './atlasLayerState.ts';
+import { getAtlasLayerState, isAtlasListPath, setAtlasLayerState, stateFromSearchOrNull, viewFromSearch } from './atlasLayerState.ts';
 import { mountAtlasLayerLayout } from './atlasLayerLayout.ts';
 import { mountAtlasLayerMap } from './atlasLayerMap.ts';
 import { isSheetReturn, syncFromPostChip } from './atlasFromPost.ts';
@@ -468,18 +468,27 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       moved = false;
       const returning = !!map && !layout;
       const { el, ctl } = ensure();
+      // A kept layout read the URL of the page before (a list page, or
+      // /search, which arms a grid too). A Back can restore an entry with
+      // another view: the URL of this page wins.
+      const fromUrl = layout ? stateFromSearchOrNull(new URL(deps.path(), 'http://x').search) : null;
+      const restore = !!fromUrl && fromUrl !== getAtlasLayerState(body);
+      // A return from another page, or a restored view: the container sits in
+      // its `list` place. The state from the URL must not slide the map in
+      // (a slide resizes Leaflet and moves the viewport); it is just there.
+      const still = returning || (restore && !!map);
+      if (still) el.style.transition = 'none';
       if (!layout) {
-        // A return from another page: the container sits in its `list` place.
-        // The state from the URL must not slide the map in; it is just there.
-        if (returning) el.style.transition = 'none';
         layout = deps.mountLayout(body);
         stopObserve = deps.observeState(body, () => present(presentationForState(getAtlasLayerState(body))));
-        if (returning) {
-          void el.offsetHeight;
-          const clear = () => { el.style.transition = ''; };
-          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(clear));
-          else clear();
-        }
+      } else if (restore) {
+        setAtlasLayerState(fromUrl, body);
+      }
+      if (still) {
+        void el.offsetHeight;
+        const clear = () => { el.style.transition = ''; };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(clear));
+        else clear();
       }
       const exp = expanding;
       expanding = null;
@@ -491,6 +500,10 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         ctl.setView(exp.center, exp.zoom);
         ctl.route(exp.focusPostSlug);
       } else {
+        // A return from another page: the URL viewport is the list's own view
+        // (the return URL). The parked view can be a post widget's view.
+        const urlView = returning ? viewFromSearch(new URL(deps.path(), 'http://x').search) : null;
+        if (urlView) ctl.useView(urlView);
         // A new page: the selection and the URL viewport follow the new route.
         if (newRoute) ctl.route();
         present(presentationForState(getAtlasLayerState(body)));

@@ -16,6 +16,7 @@ import { getAtlasLayerState, isAtlasListPath, replaceSearch, searchWithView, vie
 
 import type { LeafletRef } from '../../utils/leaflet.ts';
 import type { Point } from './atlasOceanGeometry.ts';
+import type { AtlasView } from './atlasLayerState.ts';
 
 /** A map point. */
 export interface LatLng {
@@ -55,11 +56,21 @@ export interface AtlasLayerMapController {
   /** Put `center` at the box centre at `zoom`, with no animation. Nothing before the build. */
   setView(center: LatLng, zoom: number): void;
   /**
+   * A return to a list page from another page: the viewport in the page's URL
+   * (`?at=`) is the view to show. A parked view that is the same (to the URL's
+   * 4 decimals) stays, so the map does not move by the rounding. Another
+   * parked view (one from a post's map widget) is replaced. Nothing before
+   * the build: the build reads the URL.
+   */
+  useView(view: AtlasView): void;
+  /**
    * The map is on screen through a window (atlasOcean.ts): the box keeps its
    * size, a clip shows part of it. Build the map on the first call. With
    * `center`, set the view so `center` sits `offset` px from the box centre (the
    * window centre), at `zoom` when given. A parked view stays parked for the next `show()` after a
    * `park()`; a `show()` straight from a window keeps the window's view.
+   * The move into a window clears the place selection: the widget shows the
+   * post's place, not the cloud of the tag page before it.
    */
   frame(center: LatLng | null, offset: Point, zoom?: number): void;
   /** Where `latLng` is now, from the box centre, in px. `null` before the build. */
@@ -260,6 +271,7 @@ export function mountAtlasLayerMap(
     },
     frame(center, offset, zoom) {
       if (dead) return;
+      if (!windowed) places?.clearSelection();
       windowed = true;
       shown = false;
       if (!map) {
@@ -286,6 +298,18 @@ export function mountAtlasLayerMap(
     },
     setView(center, zoom) {
       map?.setView([center.lat, center.lng], zoom, { animate: false });
+    },
+    useView(view) {
+      if (!map) return;
+      const key = (lat: number, lng: number, z: number) => `${lat.toFixed(4)},${lng.toFixed(4)},${z}`;
+      const want = key(view.lat, view.lng, view.zoom);
+      const kept = parked as { center: { lat: number; lng: number }; zoom: number } | null;
+      if (kept) {
+        if (key(kept.center.lat, kept.center.lng, kept.zoom) !== want) parked = { center: [view.lat, view.lng], zoom: view.zoom };
+        return;
+      }
+      const c = map.getCenter();
+      if (key(c.lat, c.lng, map.getZoom()) !== want) map.setView([view.lat, view.lng], view.zoom, { animate: false });
     },
     route(focusPostSlug) {
       places?.syncToRoute(focusPostSlug);
