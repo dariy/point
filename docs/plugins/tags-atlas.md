@@ -54,6 +54,18 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
 When the layer map is less than 320px high (a phone on its side), the legend is one
 button to the right of the zoom control. The button opens the filters in one row.
 
+### Labels
+
+A place shows its name next to its dot (`● Berlin`) when the label has space. Else the
+place shows the dot only. A tagged country or state shows its name at the place's own
+point. The places with more posts go first: a label shows only if it does not cover a
+label that is already shown, or the dot of another place. A zoom in thus adds labels.
+The decision runs again after each zoom and move, on the full map, in `mapList` and in
+the sheet window. In a window, only the places in the visible part of the window count.
+An open cloud is taken space: a label below a chip of the cloud is hidden. A label takes
+no taps; a tap goes to the dot or the shape below it. The label of a hidden place is
+dimmed. The pass is `atlasLabels.ts::declutter`.
+
 ## One map for the visit
 
 One module owns the map: `atlasOcean.ts`. It keeps the container, the Leaflet map, the

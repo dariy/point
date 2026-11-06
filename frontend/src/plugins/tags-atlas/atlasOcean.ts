@@ -394,6 +394,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     win = null;
     winBox = null;
     map?.setWindowTap(null);
+    map?.setLabelBounds(null);
     clipRect = null;
     if (container) container.style.clipPath = '';
   };
@@ -411,7 +412,10 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     const box = deps.box(el);
     const prevBox = winBox;
     winBox = box;
-    setClip(visibleRect(w), box);
+    const vis = visibleRect(w);
+    setClip(vis, box);
+    // The labels count only the places in the visible part (box px).
+    ctl.setLabelBounds({ left: vis.left - box.left, top: vis.top - box.top, width: vis.width, height: vis.height });
     const offset = windowOffset(w.rect, box);
     if (!recenter) ctl.frame(null, offset);
     else if (w.center) ctl.frame(w.center, offset, w.zoom);

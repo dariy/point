@@ -20,6 +20,7 @@ import { html, navigate, raw, safeUrl } from "../../utils/helpers.ts";
 import { tagKind } from "../../utils/tagLinks.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
 import { isRevelioOn } from "../../utils/revelio.ts";
+import { declutter } from "./atlasLabels.ts";
 import {
   COUNTRIES_GEOJSON,
   CA_PROVINCES_GEOJSON,
@@ -27,6 +28,7 @@ import {
 } from "../../utils/leaflet.ts";
 
 import type { LeafletRef } from "../../utils/leaflet.ts";
+import type { Box, LabelItem, RelBox } from "./atlasLabels.ts";
 
 
 /** A geo-tag node from GET /api/pages/graph, with the owner-only marks. */
@@ -76,6 +78,17 @@ interface CloudEdge {
   baseOpacity: number;
 }
 
+/** One place's name on the map: a marker's label, or a shape's label marker. */
+interface PlaceLabel {
+  id: number;
+  latLng: LeafletRef;
+  /** the marker whose icon carries the `--labelled` class */
+  marker: LeafletRef;
+  label: RelBox;
+  dot: RelBox | null;
+  weight: number;
+}
+
 /** The open on-map cloud. */
 interface Cloud {
   anchorLatLng: LeafletRef;
@@ -86,6 +99,8 @@ interface Cloud {
   centerKey: string;
   centerMarker: LeafletRef;
   focusKey: string | null;
+  /** chip sizes in px (key → [width, height]), measured once when the cloud opens */
+  chipSize: Map<string, [number, number]>;
 }
 
 /** Options for a place selection. */
@@ -99,6 +114,34 @@ interface SelectOptions {
 /** The fields that hold a cached boundary file. */
 type GeojsonCacheKey = "_geojson" | "_caProvinces" | "_usStates";
 
+
+/** Label height in px: `.atlas-marker__label` and `.atlas-shape-label` (line-height + padding). */
+export const LABEL_H = 18;
+/** Horizontal padding plus border of a label, px (both sides). */
+const LABEL_PAD_X = 10;
+/** Gap between a dot and its label, px. */
+const LABEL_GAP = 3;
+/** The longest name a label shows. */
+const LABEL_MAX = 24;
+
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * Width in px of a label's text, by a canvas measure (no layout). `font` is the
+ * label font. Without a canvas, an estimate.
+ */
+function labelWidth(text: string, font: string): number {
+  if (measureCtx === undefined) {
+    try {
+      measureCtx = document.createElement("canvas").getContext("2d");
+    } catch {
+      measureCtx = null;
+    }
+  }
+  if (!measureCtx) return Math.ceil(text.length * 6.6) + LABEL_PAD_X;
+  measureCtx.font = font;
+  return Math.ceil(measureCtx.measureText(text).width) + LABEL_PAD_X;
+}
 
 /** Marker radius in px for a geo-tag, scaled by post count. */
 function markerRadius(postCount: number): number {
@@ -193,6 +236,16 @@ export class AtlasPlaces {
   _onSelect: ((tag: AtlasTag | null) => void) | undefined;
   _countryLayer: LeafletRef = null;
   _markerLayer: LeafletRef = null;
+  /** shape labels (label-only markers), above the place markers */
+  _labelLayer: LeafletRef = null;
+  /** every place's label, by tag id; measured once per draw */
+  _labels: Map<number, PlaceLabel> = new Map();
+  /** the label widths by text: measured once per name */
+  _labelWidths: Map<string, number> = new Map();
+  _labelFont = "";
+  /** the visible area in container px (a window); `null` = the whole map */
+  _labelBounds: Box | null = null;
+  _relabel: () => void;
   _cloudMarkers: LeafletRef = null;
   _cloudLines: LeafletRef = null;
   _geojson: unknown = null;
@@ -233,6 +286,7 @@ export class AtlasPlaces {
     this._root = root;
     this._isAlive = isAlive;
     this._reposition = () => this._repositionCloud();
+    this._relabel = () => this._applyLabels();
   }
 
   get _dead(): boolean {
@@ -251,6 +305,7 @@ export class AtlasPlaces {
     this._countryLayer = L.layerGroup().addTo(map); // polygons (lowest)
     this._cloudLines = L.layerGroup().addTo(map); // connectors, below markers
     this._markerLayer = L.layerGroup().addTo(map);
+    this._labelLayer = L.layerGroup().addTo(map);
     this._cloudMarkers = L.layerGroup().addTo(map);
 
     this._mountOverlays();
@@ -272,6 +327,8 @@ export class AtlasPlaces {
 
     // Keep the cloud pinned to its place as the zoom level changes.
     map.on("zoomend viewreset", this._reposition);
+    // Each view change decides again which places show their name.
+    map.on("zoomend moveend viewreset", this._relabel);
     // Clicking empty map dismisses the current cloud.
     map.on("click", () => {
       if (this._activeKey) this._onSelect?.(null);
@@ -430,6 +487,8 @@ export class AtlasPlaces {
     this._clearSelection();
     this._countryLayer?.clearLayers();
     this._markerLayer?.clearLayers();
+    this._labelLayer?.clearLayers();
+    this._labels.clear();
     this._placeActivators.clear();
     this._tagsById.clear();
     if (this._data) this._buildIndexes(this._data);
@@ -446,6 +505,7 @@ export class AtlasPlaces {
     this._unwatchRoute?.();
     this._unwatchRoute = null;
     this._map.off("zoomend viewreset", this._reposition);
+    this._map.off("zoomend moveend viewreset", this._relabel);
     this._hint?.remove();
     this._legend?.remove();
     this._hint = this._legend = null;
@@ -563,6 +623,32 @@ export class AtlasPlaces {
     // opts.only: null → all features; true → only matched; false → only
     //   unmatched (used to split subdivisions across the country in z-order).
     // opts.interactive: false → decorative path that never intercepts clicks.
+    // A tagged shape's name: a label-only marker at the tag's own point (the
+    // place's centre; a bounding-box centre can be in the sea for a country
+    // with far islands). It takes no taps.
+    const addShapeLabel = (tag: GeoTag) => {
+      const text = truncate(tag.name, LABEL_MAX);
+      const w = this._measureLabel(text);
+      const concealed = isConcealed(tag);
+      const marker = L.marker([tag.latitude, tag.longitude], {
+        icon: L.divIcon({
+          className: "atlas-shape-label",
+          html: String(html`<span class="atlas-shape-label__text${concealed ? " atlas-label--hidden" : ""}">${text}</span>`),
+          iconSize: [0, 0],
+        }),
+        interactive: false,
+        keyboard: false,
+      }).addTo(this._labelLayer);
+      this._labels.set(tag.id, {
+        id: tag.id,
+        latLng: marker.getLatLng(),
+        marker,
+        label: { dx: -w / 2, dy: -LABEL_H / 2, width: w, height: LABEL_H },
+        dot: null,
+        weight: tag.post_count || 0,
+      });
+    };
+
     const drawShapeLayer = (
       geojson: unknown,
       nameProps: string[],
@@ -624,6 +710,7 @@ export class AtlasPlaces {
         onEachFeature: (feature: LeafletRef, layer: LeafletRef) => {
           const tag = matchTag(feature.properties || {});
           if (!tag) return;
+          if (!shapeTagIds.has(tag.id)) addShapeLabel(tag);
           shapeTagIds.add(tag.id);
           bounds.push([tag.latitude, tag.longitude]);
 
@@ -684,9 +771,13 @@ export class AtlasPlaces {
       if (shapeTagIds.has(tag.id)) return;
       const r = markerRadius(tag.post_count);
       const concealed = isConcealed(tag);
+      const text = truncate(tag.name, LABEL_MAX);
+      const w = this._measureLabel(text);
+      // The label sits right of the dot. It shows only in label mode
+      // (`atlas-marker--labelled`, set by _applyLabels) and takes no taps.
       const icon = L.divIcon({
         className: "atlas-marker",
-        html: `<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span>`,
+        html: String(html`<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span><span class="atlas-marker__label${concealed ? " atlas-label--hidden" : ""}">${text}</span>`),
         iconSize: [r, r],
         iconAnchor: [r / 2, r / 2],
       });
@@ -694,6 +785,14 @@ export class AtlasPlaces {
         icon,
         title: concealedTitle(tag, tag.name),
       }).addTo(this._markerLayer);
+      this._labels.set(tag.id, {
+        id: tag.id,
+        latLng: marker.getLatLng(),
+        marker,
+        label: { dx: r / 2 + LABEL_GAP, dy: -LABEL_H / 2, width: w, height: LABEL_H },
+        dot: { dx: -r / 2, dy: -r / 2, width: r, height: r },
+        weight: tag.post_count || 0,
+      });
 
       const setActive = (on: boolean) =>
         marker._icon?.classList.toggle("atlas-marker--active", on);
@@ -723,6 +822,7 @@ export class AtlasPlaces {
     }
 
     this._updateHint(bounds.length);
+    this._applyLabels();
 
     // If we arrived here by closing a post that was opened from the Atlas,
     // reselect its place and highlight the post chip.
@@ -750,6 +850,66 @@ export class AtlasPlaces {
       this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
       this._didFitBounds = true;
     }
+    this._applyLabels();
+  }
+
+  /** Width of a label's text in px, measured once per text. */
+  _measureLabel(text: string): number {
+    let w = this._labelWidths.get(text);
+    if (w === undefined) {
+      if (!this._labelFont) {
+        const fam = getComputedStyle(this._root).fontFamily || "sans-serif";
+        this._labelFont = `600 11px ${fam}`;
+      }
+      w = labelWidth(text, this._labelFont);
+      this._labelWidths.set(text, w);
+    }
+    return w;
+  }
+
+  /**
+   * Only places inside `rect` (container px) count for the labels: the part of
+   * the map that a window shows. `null` = the whole map.
+   */
+  setLabelBounds(rect: Box | null): void {
+    const a = this._labelBounds;
+    if (a === rect || (a && rect && a.left === rect.left && a.top === rect.top && a.width === rect.width && a.height === rect.height)) return;
+    this._labelBounds = rect;
+    this._applyLabels();
+  }
+
+  /**
+   * Decide label mode or dot mode for each place (atlasLabels.ts::declutter).
+   * An open cloud's chips are taken space: a label below a chip is hidden.
+   */
+  _applyLabels(): void {
+    if (this._dead || !this._labels.size) return;
+    const map = this._map;
+    const size = map.getSize();
+    const view: Box = this._labelBounds ?? { left: 0, top: 0, width: size.x, height: size.y };
+    const items: LabelItem[] = [];
+    for (const l of this._labels.values()) {
+      const p = map.latLngToContainerPoint(l.latLng);
+      items.push({ id: l.id, x: p.x, y: p.y, label: l.label, dot: l.dot, weight: l.weight });
+    }
+    const on = declutter(items, view, this._cloudBoxes());
+    for (const l of this._labels.values()) {
+      l.marker._icon?.classList.toggle("atlas-marker--labelled", on.has(l.id));
+    }
+  }
+
+  /** The open cloud's chip boxes in container px. */
+  _cloudBoxes(): Box[] {
+    const cloud = this._cloud;
+    if (!cloud) return [];
+    const anchor = this._map.latLngToContainerPoint(cloud.anchorLatLng);
+    const out: Box[] = [];
+    for (const [key, [w, h]] of cloud.chipSize) {
+      const pos = cloud.nodePos.get(key);
+      if (!pos) continue;
+      out.push({ left: anchor.x + pos.dx - w / 2, top: anchor.y + pos.dy - h / 2, width: w, height: h });
+    }
+    return out;
   }
 
   _updateHint(placeCount: number): void {
@@ -1042,6 +1202,16 @@ export class AtlasPlaces {
     });
     this._cloudMarkers.addLayer(centerMarker);
 
+    // Measure each chip once (offsetWidth does not include the open
+    // animation's transform), for the label pass.
+    const chipSize: Map<string, [number, number]> = new Map();
+    const measure = (key: string, marker: LeafletRef) => {
+      const el = marker._icon?.firstElementChild as HTMLElement | null | undefined;
+      if (el) chipSize.set(key, [el.offsetWidth, el.offsetHeight]);
+    };
+    sats.forEach((s) => measure(s.key, s.marker));
+    measure(centerKey, centerMarker);
+
     this._cloud = {
       anchorLatLng,
       nodePos,
@@ -1051,7 +1221,9 @@ export class AtlasPlaces {
       centerKey,
       centerMarker,
       focusKey: null,
+      chipSize,
     };
+    this._applyLabels();
 
     // Open the cloud as a full overview — every chip the place touches is lit.
     // Dimming only kicks in once the user focuses a specific chip.
@@ -1232,7 +1404,9 @@ export class AtlasPlaces {
   _clearCloud(): void {
     this._cloudMarkers?.clearLayers();
     this._cloudLines?.clearLayers();
+    const had = !!this._cloud;
     this._cloud = null;
+    if (had) this._applyLabels();
   }
 
   _clearSelection(): void {

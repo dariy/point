@@ -491,4 +491,93 @@ describe('Atlas layer map', () => {
       }
     });
   });
+
+  // Epic decision 13: a place shows its name when the label has space, else the dot only.
+  describe('labels', () => {
+    // Four places in a column, 0.5° apart: one point at zoom 2, about 45 px apart at zoom 7.
+    const column: Array<[string, number, number]> = [['Lbl Alpha', 10, 3], ['Lbl Beta', 10.5, 1], ['Lbl Gamma', 11, 1], ['Lbl Delta', 11.5, 1]];
+
+    before(async () => {
+      for (const [name, lat, n] of column) {
+        const slug = name.toLowerCase().replace(/ /g, '-');
+        const res = await api('/api/tags', { name, slug, kind: 'place', latitude: lat, longitude: 30 });
+        if (!res.ok) throw new Error('Tag creation failed: ' + (await res.text()));
+        for (let i = 0; i < n; i++) {
+          const post = await api('/api/posts', {
+            title: `${name} post ${i}`, slug: `${slug}-post-${i}`, content: 'Body.', excerpt: 'Card.', status: 'published', tags: [slug],
+          });
+          if (!post.ok) throw new Error('Post creation failed: ' + (await post.text()));
+        }
+      }
+    });
+
+    const read = () => page.evaluate(() => {
+      const labelled: Record<string, boolean> = {};
+      for (const m of document.querySelectorAll<HTMLElement>('.atlas-layer-map .atlas-marker')) {
+        labelled[m.title] = m.classList.contains('atlas-marker--labelled');
+      }
+      const boxes = [...document.querySelectorAll<HTMLElement>(
+        '.atlas-layer-map .atlas-marker--labelled .atlas-marker__label, .atlas-layer-map .atlas-marker--labelled .atlas-shape-label__text',
+      )].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { text: el.textContent, left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      });
+      const label = document.querySelector('.atlas-layer-map .atlas-marker__label');
+      return { labelled, boxes, pointer: label ? getComputedStyle(label).pointerEvents : '' };
+    });
+
+    const noOverlap = (boxes: Awaited<ReturnType<typeof read>>['boxes']) => {
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const a = boxes[i]!, b = boxes[j]!;
+          const hit = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+          assert.ok(!hit, `labels overlap: ${JSON.stringify(a)} ${JSON.stringify(b)}`);
+        }
+      }
+    };
+
+    it('shows the largest place of a dense area with a label, and a zoom in adds labels', async () => {
+      // 800 px is less than the world at zoom 2 (1024 px): maxBounds keeps lng 30 at the centre.
+      await page.setViewportSize({ width: 800, height: 600 });
+      await page.goto(BASE + '/?view=map&at=10.75,30,2');
+      await page.locator('.atlas-layer-map .atlas-marker[title="Lbl Delta"]').waitFor();
+      await page.waitForTimeout(400);
+      const far = await read();
+      assert.equal(far.pointer, 'none', 'a label takes no taps');
+      assert.equal(far.labelled['Lbl Alpha'], true, 'the largest place has a label: ' + JSON.stringify(far.labelled));
+      for (const name of ['Lbl Beta', 'Lbl Gamma', 'Lbl Delta']) {
+        assert.equal(far.labelled[name], false, `${name} is a dot at zoom 2: ` + JSON.stringify(far.labelled));
+      }
+      assert.ok(far.boxes.some((b) => b.text === 'France'), 'a tagged country shape has a label');
+      noOverlap(far.boxes);
+
+      for (let i = 0; i < 5; i++) {
+        await page.locator('.atlas-layer-map .leaflet-control-zoom-in').click();
+        await page.waitForTimeout(150);
+      }
+      await page.waitForTimeout(300);
+      const near = await read();
+      for (const [name] of column) {
+        assert.equal(near.labelled[name], true, `${name} has a label at zoom 7: ` + JSON.stringify(near.labelled));
+      }
+      noOverlap(near.boxes);
+    });
+
+    it('a tap on a labelled dot still selects the place', async () => {
+      await page.locator('.atlas-layer-map .atlas-marker[title="Lbl Beta"] .atlas-marker__dot').click();
+      await page.locator('.atlas-node--center', { hasText: 'Lbl Beta' }).waitFor();
+      // The open cloud is taken space: no label is shown below a chip.
+      const after = await read();
+      const chips = await page.evaluate(() => [...document.querySelectorAll('.atlas-layer-map .atlas-node')].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      }));
+      for (const b of after.boxes) {
+        for (const c of chips) {
+          const hit = b.left < c.right && c.left < b.right && b.top < c.bottom && c.top < b.bottom;
+          assert.ok(!hit, `a label under a chip: ${JSON.stringify(b)} ${JSON.stringify(c)}`);
+        }
+      }
+    });
+  });
 });

@@ -47,6 +47,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   const frames = new Set<(now: number) => void>();
   let clock = 0;
   let windowTap: (() => void) | null = null;
+  // The label bounds the ocean gave the map last (undefined: never).
+  let labelBounds: { left: number; top: number; width: number; height: number } | null | undefined;
   // The "‹ <post title>" chip: what the ocean asked for last.
   let chip = false;
   const log: string[] = [];
@@ -79,6 +81,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
         offsetOf: () => ({ x: 0, y: 0 }),
         panBy: (dx, dy) => log.push(`panBy ${dx},${dy}`),
         setWindowTap: (fn) => { windowTap = fn; },
+        setLabelBounds: (rect) => { labelBounds = rect; },
         destroy: () => log.push('map.destroy'),
       };
     },
@@ -114,6 +117,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     dispatch,
     /** A place pick in the map (AtlasPlaces → onSelect), as the controller sees it. */
     get windowTap() { return windowTap; },
+    get labelBounds() { return labelBounds; },
     /** Run the pending frames at time `ms`. */
     tick(ms: number) {
       clock = ms;
@@ -427,6 +431,17 @@ describe('atlasOcean', () => {
       p.ocean.present({ kind: 'window', rect: { ...slot, top: 450 }, clip });
       assert.equal(p.container.style.clipPath, 'inset(600px 20px 150px 20px)');
       assert.deepEqual(p.log.slice(-2), ['frame - 0,150', 'panBy 0,50']);
+    });
+
+    test('the labels count only the visible part of the window, in box px', () => {
+      const p = fakePage('list');
+      // The box starts at y 56 (below a header); the clip cuts the slot top.
+      p.setBox({ left: 0, top: 56, width: 400, height: 744 });
+      const clip = { left: 0, top: 600, width: 400, height: 200 };
+      p.ocean.present({ kind: 'window', rect: slot, clip, center: paris });
+      assert.deepEqual(p.labelBounds, { left: 20, top: 544, width: 360, height: 100 });
+      p.ocean.present('hidden');
+      assert.equal(p.labelBounds, null, 'out of the window: the whole box counts');
     });
 
     test('a move out of the window removes the clip and the tap', () => {

@@ -15,7 +15,7 @@ import { AtlasPlaces } from './AtlasPlaces.ts';
 import { getAtlasLayerState, isAtlasListPath, replaceSearch, searchWithView, viewFromSearch } from './atlasLayerState.ts';
 
 import type { LeafletRef } from '../../utils/leaflet.ts';
-import type { Point } from './atlasOceanGeometry.ts';
+import type { Point, Rect } from './atlasOceanGeometry.ts';
 import type { AtlasView } from './atlasLayerState.ts';
 
 /** A map point. */
@@ -82,6 +82,11 @@ export interface AtlasLayerMapController {
    * and does not open the place's tag page. `null` sets the tag-page move back.
    */
   setWindowTap(fn: (() => void) | null): void;
+  /**
+   * The part of the box on screen, in box px (a window's visible rect), or
+   * `null` for the whole box. Only places inside it count for the labels.
+   */
+  setLabelBounds(rect: Rect | null): void;
   destroy(): void;
 }
 
@@ -120,6 +125,7 @@ export function mountAtlasLayerMap(
   // A frame() before the build: applied when the map is built.
   let pendingFrame: { center: LatLng | null; offset: Point; zoom?: number } | null = null;
   let windowTap: (() => void) | null = null;
+  let labelBounds: Rect | null = null;
   const isAlive = () => !dead;
 
   const writeView = () => {
@@ -209,6 +215,7 @@ export function mountAtlasLayerMap(
         openPlace(tag?.slug ?? null);
       },
     });
+    places.setLabelBounds(labelBounds);
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
     // A warm build is off screen, in a box larger than the mapList box. At a
@@ -295,6 +302,10 @@ export function mountAtlasLayerMap(
     },
     setWindowTap(fn) {
       windowTap = fn;
+    },
+    setLabelBounds(rect) {
+      labelBounds = rect;
+      places?.setLabelBounds(rect);
     },
     setView(center, zoom) {
       map?.setView([center.lat, center.lng], zoom, { animate: false });

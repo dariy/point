@@ -86,6 +86,59 @@
     transition: opacity 0.18s ease;
 }
 
+/* ── Place labels ──────────────────────────────────────────────────────────────
+   A place shows its name only in label mode (`--labelled`, set per place by
+   AtlasPlaces._applyLabels when the label has space); else the dot only. The
+   box is 18px high: AtlasPlaces.ts LABEL_H and LABEL_PAD_X follow these sizes.
+   Labels take no taps: a tap goes to the dot or the shape below. */
+.atlas-marker__label,
+.atlas-shape-label__text {
+    position: absolute;
+    top: 50%;
+    box-sizing: border-box;
+    height: 18px;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+    color: var(--text-primary, #1a1a1a);
+    background: color-mix(in srgb, var(--bg-primary, #fff) 82%, transparent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.atlas-marker__label {
+    left: calc(100% + 3px);
+    transform: translateY(-50%);
+}
+
+.leaflet-marker-icon.atlas-shape-label {
+    background: transparent;
+    border: 0;
+    pointer-events: none;
+}
+
+.atlas-shape-label__text {
+    left: 0;
+    transform: translate(-50%, -50%);
+}
+
+.atlas-marker--labelled .atlas-marker__label,
+.atlas-marker--labelled .atlas-shape-label__text {
+    visibility: visible;
+}
+
+/* An owner-only place: its label is dimmed, with the dashed edge of its dot. */
+.atlas-label--hidden {
+    opacity: 0.6;
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--atlas-geo, #1f9e8e) 60%, transparent);
+}
+
 /* ── Cloud chips (satellite tags / posts) ──────────────────────────────────── */
 
 /* Leaflet sizes this wrapper to 0×0; the chip centres itself on the latlng. */
