@@ -132,6 +132,62 @@
     visibility: visible;
 }
 
+/* ── Place peek ────────────────────────────────────────────────────────────────
+   `<name> · <n> posts` at the label position, above the label. It shows on
+   hover with a fine pointer, and on a long press on touch (`--peek`, set by
+   AtlasPlaces._setPeek). A window (the sheet widget) shows no peek: all its
+   taps open the full map. */
+.atlas-marker__peek {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 3px);
+    transform: translateY(-50%);
+    box-sizing: border-box;
+    height: 18px;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+    color: var(--text-primary, #1a1a1a);
+    background: var(--bg-primary, #fff);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.leaflet-marker-icon.atlas-marker {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+html.pointer-fine .atlas-marker:hover .atlas-marker__peek,
+.atlas-marker--peek .atlas-marker__peek {
+    visibility: visible;
+}
+
+html.pointer-fine .atlas-marker:hover .atlas-marker__label,
+.atlas-marker--peek .atlas-marker__label {
+    visibility: hidden;
+}
+
+/* The peek goes above the other markers and their labels. */
+html.pointer-fine .leaflet-marker-icon.atlas-marker:hover,
+.leaflet-marker-icon.atlas-marker--peek {
+    z-index: 9000 !important;
+}
+
+[data-atlas-ocean="window"] .atlas-marker .atlas-marker__peek {
+    visibility: hidden !important;
+}
+
+html.pointer-fine [data-atlas-ocean="window"] .atlas-marker--labelled:hover .atlas-marker__label {
+    visibility: visible;
+}
+
 /* An owner-only place: its label is dimmed, with the dashed edge of its dot. */
 .atlas-label--hidden {
     opacity: 0.6;

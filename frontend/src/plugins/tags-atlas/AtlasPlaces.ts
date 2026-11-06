@@ -21,6 +21,7 @@ import { tagKind } from "../../utils/tagLinks.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
 import { isRevelioOn } from "../../utils/revelio.ts";
 import { declutter } from "./atlasLabels.ts";
+import { createLongPress, peekText } from "./atlasPeek.ts";
 import {
   COUNTRIES_GEOJSON,
   CA_PROVINCES_GEOJSON,
@@ -29,6 +30,7 @@ import {
 
 import type { LeafletRef } from "../../utils/leaflet.ts";
 import type { Box, LabelItem, RelBox } from "./atlasLabels.ts";
+import type { LongPress } from "./atlasPeek.ts";
 
 
 /** A geo-tag node from GET /api/pages/graph, with the owner-only marks. */
@@ -265,6 +267,11 @@ export class AtlasPlaces {
   /** the visible area in container px (a window); `null` = the whole map */
   _labelBounds: Box | null = null;
   _relabel: () => void;
+  /** The long press that shows a place's peek on touch (atlasPeek.ts). */
+  _peek: LongPress;
+  _unlistenPeek: (() => void) | null = null;
+  /** A peek disabled the map drag; the release enables it again. */
+  _peekHeldDrag = false;
   _cloudMarkers: LeafletRef = null;
   _cloudLines: LeafletRef = null;
   _geojson: unknown = null;
@@ -310,6 +317,10 @@ export class AtlasPlaces {
     this._isAlive = isAlive;
     this._reposition = () => this._repositionCloud();
     this._relabel = () => this._applyLabels();
+    this._peek = createLongPress({
+      onPeek: (id) => this._setPeek(id, true),
+      onHide: (id) => this._setPeek(id, false),
+    });
   }
 
   get _dead(): boolean {
@@ -332,6 +343,7 @@ export class AtlasPlaces {
     this._cloudMarkers = L.layerGroup().addTo(map);
 
     this._mountOverlays();
+    this._unlistenPeek = this._listenPeek();
 
     // A video post's chip asks for a poster frame that may not exist; when the
     // request 404s, collapse the chip back to a plain label. `error` does not
@@ -557,6 +569,9 @@ export class AtlasPlaces {
     this._unwatchRoute = null;
     this._map.off("zoomend viewreset", this._reposition);
     this._map.off("zoomend moveend viewreset", this._relabel);
+    this._peek.cancel();
+    this._unlistenPeek?.();
+    this._unlistenPeek = null;
     this._hint?.remove();
     this._legend?.remove();
     this._hint = this._legend = null;
@@ -826,16 +841,25 @@ export class AtlasPlaces {
       const w = this._measureLabel(text);
       // The label sits right of the dot. It shows only in label mode
       // (`atlas-marker--labelled`, set by _applyLabels) and takes no taps.
+      // The peek (name and post count) sits at the same place: it shows on
+      // hover or on a long press (atlasPeek.ts). It replaces the native title.
+      const hiddenLabel = concealed ? " atlas-label--hidden" : "";
       const icon = L.divIcon({
         className: "atlas-marker",
-        html: String(html`<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span><span class="atlas-marker__label${concealed ? " atlas-label--hidden" : ""}">${text}</span>`),
+        html: String(html`<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span><span class="atlas-marker__label${hiddenLabel}">${text}</span><span class="atlas-marker__peek${hiddenLabel}">${peekText(concealedTitle(tag, tag.name), tag.post_count || 0)}</span>`),
         iconSize: [r, r],
         iconAnchor: [r / 2, r / 2],
       });
-      const marker = L.marker([tag.latitude, tag.longitude], {
-        icon,
-        title: concealedTitle(tag, tag.name),
-      }).addTo(this._markerLayer);
+      const marker = L.marker([tag.latitude, tag.longitude], { icon }).addTo(this._markerLayer);
+      // The accessible name and the place id for the peek's touch input.
+      const nameIcon = () => {
+        const el = marker._icon as HTMLElement | null;
+        if (!el) return;
+        el.setAttribute("aria-label", concealedTitle(tag, tag.name));
+        el.dataset.placeId = String(tag.id);
+      };
+      nameIcon();
+      marker.on("add", nameIcon);
       this._labels.set(tag.id, {
         id: tag.id,
         latLng: marker.getLatLng(),
@@ -947,6 +971,72 @@ export class AtlasPlaces {
     for (const l of this._labels.values()) {
       l.marker._icon?.classList.toggle("atlas-marker--labelled", on.has(l.id));
     }
+  }
+
+  /** Show or hide the peek of place `id`. A peek holds the map still. */
+  _setPeek(id: number, on: boolean): void {
+    this._labels.get(id)?.marker._icon?.classList.toggle("atlas-marker--peek", on);
+    const drag = this._map.dragging;
+    if (on && drag?.enabled()) {
+      drag.disable();
+      this._peekHeldDrag = true;
+    }
+  }
+
+  /** Enable the map drag that a peek disabled. */
+  _releasePeekDrag(): void {
+    if (!this._peekHeldDrag) return;
+    this._peekHeldDrag = false;
+    if (!this._dead) this._map.dragging?.enable();
+  }
+
+  /**
+   * Touch input for the peek. A long press on a place marker shows its peek
+   * and does not open its cloud. A window (the sheet widget) shows no peek:
+   * all its taps open the full map.
+   */
+  _listenPeek(): () => void {
+    const root = this._root;
+    const peek = this._peek;
+    const down = (e: PointerEvent) => {
+      const el = e.target instanceof HTMLElement ? e.target.closest<HTMLElement>(".atlas-marker[data-place-id]") : null;
+      if (!el || e.pointerType === "mouse" || !e.isPrimary || root.dataset.atlasOcean === "window") {
+        peek.cancel();
+        return;
+      }
+      peek.down(Number(el.dataset.placeId), e.pointerId, e.clientX, e.clientY);
+    };
+    const move = (e: PointerEvent) => peek.move(e.pointerId, e.clientX, e.clientY);
+    const up = (e: PointerEvent) => {
+      peek.up(e.pointerId);
+      // The release frees the map; the peek stays a moment (PEEK_HOLD).
+      this._releasePeekDrag();
+    };
+    // Before Leaflet's marker click: a peek press is no tap.
+    const click = (e: MouseEvent) => {
+      if (!peek.consumeClick()) return;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    // No system menu or callout on a long press on a marker.
+    const menu = (e: Event) => {
+      if (e.target instanceof HTMLElement && e.target.closest(".atlas-marker")) e.preventDefault();
+    };
+    const opts = { capture: true, passive: true };
+    root.addEventListener("pointerdown", down, opts);
+    root.addEventListener("pointermove", move, opts);
+    root.addEventListener("pointerup", up, opts);
+    root.addEventListener("pointercancel", up, opts);
+    root.addEventListener("click", click, true);
+    root.addEventListener("contextmenu", menu);
+    return () => {
+      root.removeEventListener("pointerdown", down, opts);
+      root.removeEventListener("pointermove", move, opts);
+      root.removeEventListener("pointerup", up, opts);
+      root.removeEventListener("pointercancel", up, opts);
+      root.removeEventListener("click", click, true);
+      root.removeEventListener("contextmenu", menu);
+    };
   }
 
   /** The open cloud's chip boxes in container px. */

@@ -714,7 +714,7 @@ describe('Atlas layer map', () => {
     const read = () => page.evaluate(() => {
       const labelled: Record<string, boolean> = {};
       for (const m of document.querySelectorAll<HTMLElement>('.atlas-layer-map .atlas-marker')) {
-        labelled[m.title] = m.classList.contains('atlas-marker--labelled');
+        labelled[m.getAttribute('aria-label') ?? ''] = m.classList.contains('atlas-marker--labelled');
       }
       const boxes = [...document.querySelectorAll<HTMLElement>(
         '.atlas-layer-map .atlas-marker--labelled .atlas-marker__label, .atlas-layer-map .atlas-marker--labelled .atlas-shape-label__text',
@@ -740,7 +740,7 @@ describe('Atlas layer map', () => {
       // 800 px is less than the world at zoom 2 (1024 px): maxBounds keeps lng 30 at the centre.
       await page.setViewportSize({ width: 800, height: 600 });
       await page.goto(BASE + '/?view=map&at=10.75,30,2');
-      await page.locator('.atlas-layer-map .atlas-marker[title="Lbl Delta"]').waitFor();
+      await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]').waitFor();
       await page.waitForTimeout(400);
       const far = await read();
       assert.equal(far.pointer, 'none', 'a label takes no taps');
@@ -764,7 +764,7 @@ describe('Atlas layer map', () => {
     });
 
     it('a tap on a labelled dot still selects the place', async () => {
-      await page.locator('.atlas-layer-map .atlas-marker[title="Lbl Beta"] .atlas-marker__dot').click();
+      await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Beta"] .atlas-marker__dot').click();
       await page.locator('.atlas-node--center', { hasText: 'Lbl Beta' }).waitFor();
       // The open cloud is taken space: no label is shown below a chip.
       const after = await read();
@@ -778,6 +778,60 @@ describe('Atlas layer map', () => {
           assert.ok(!hit, `a label under a chip: ${JSON.stringify(b)} ${JSON.stringify(c)}`);
         }
       }
+    });
+
+    // A fine pointer: a hover shows `<name> · <n> posts` at the label position (child .21).
+    it('shows the name and the post count on hover; the peek goes on leave', { skip: onIpad && 'hover needs a fine pointer' }, async () => {
+      await page.goto(BASE + '/?view=map&at=10.75,30,2');
+      await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]').waitFor();
+      await page.waitForTimeout(400);
+      assert.equal(await page.locator('.atlas-layer-map .atlas-marker[title]').count(), 0, 'no native title');
+      const counts: Record<string, number> = { 'Lbl Alpha': 3, 'Lbl Beta': 1, 'Lbl Gamma': 1, 'Lbl Delta': 1 };
+      // The marker under the pointer, its mode, and what it shows.
+      const under = (x: number, y: number) => page.evaluate(([px, py]) => {
+        const m = document.elementFromPoint(px!, py!)?.closest<HTMLElement>('.atlas-marker');
+        if (!m) return null;
+        const peek = m.querySelector<HTMLElement>('.atlas-marker__peek')!;
+        const label = m.querySelector<HTMLElement>('.atlas-marker__label')!;
+        const pr = peek.getBoundingClientRect();
+        const dr = m.querySelector('.atlas-marker__dot')!.getBoundingClientRect();
+        return {
+          name: m.getAttribute('aria-label') ?? '',
+          labelled: m.classList.contains('atlas-marker--labelled'),
+          peek: getComputedStyle(peek).visibility,
+          label: getComputedStyle(label).visibility,
+          text: peek.textContent,
+          right: pr.left >= dr.right && Math.abs((pr.top + pr.bottom) / 2 - (dr.top + dr.bottom) / 2) < 2,
+        };
+      }, [x, y]);
+      const dot = await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"] .atlas-marker__dot').boundingBox();
+      assert.ok(dot);
+      // Above the top of the stack: a dot-mode place (Delta, Gamma or Beta at zoom 2).
+      const x = dot.x + dot.width / 2, y = dot.y + 2;
+      await page.mouse.move(x, y);
+      const hover = await under(x, y);
+      assert.ok(hover, 'a marker under the pointer');
+      assert.equal(hover.labelled, false, 'a dot-mode place: ' + JSON.stringify(hover));
+      assert.equal(hover.peek, 'visible', 'the peek shows on hover');
+      assert.equal(hover.text, `${hover.name} · ${counts[hover.name]} post`);
+      assert.ok(hover.right, 'the peek sits right of the dot');
+
+      await page.mouse.move(5, 300);
+      const left = await under(x, y);
+      assert.equal(left?.peek, 'hidden', 'the peek goes on leave');
+
+      // A labelled place (Alpha, the largest) shows the count on hover.
+      const alpha = await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Alpha"] .atlas-marker__dot').boundingBox();
+      assert.ok(alpha);
+      const ax = alpha.x + alpha.width / 2, ay = alpha.y + alpha.height - 2;
+      await page.mouse.move(ax, ay);
+      const lab = await under(ax, ay);
+      assert.equal(lab?.name, 'Lbl Alpha');
+      assert.equal(lab.labelled, true);
+      assert.equal(lab.peek, 'visible');
+      assert.equal(lab.label, 'hidden', 'the peek replaces the label');
+      assert.equal(lab.text, 'Lbl Alpha · 3 posts');
+      await page.mouse.move(5, 300);
     });
   });
 });

@@ -90,6 +90,13 @@ An open cloud is taken space: a label below a chip of the cloud is hidden. A lab
 no taps; a tap goes to the dot or the shape below it. The label of a hidden place is
 dimmed. The pass is `atlasLabels.ts::declutter`.
 
+A place marker has no native tooltip. It shows a peek instead: `Berlin · 12 posts`, at the
+label position. With a mouse, the peek shows on hover and goes on leave. On touch, a press of
+450 ms with less than 6 px of movement shows the peek. The release hides it after 1.5 s. A
+long press does not open the cloud and does not pan the map. A short tap works as before. The
+sheet window shows no peek: all its taps open the full map. The timer is
+`atlasPeek.ts::createLongPress`.
+
 ## One map for the visit
 
 One module owns the map: `atlasOcean.ts`. It keeps the container, the Leaflet map, the
