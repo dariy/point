@@ -83,6 +83,12 @@ post's own entry gets `{ sheet: 'open' }`. With `prefers-reduced-motion:
 reduce` the change is instant. A place that is not on the map (hidden, or out
 of the year range) opens the same page, centred on it, with no selection.
 
+The slot is also a keyboard control: `role="button"`, `tabindex="0"` and the
+name "Open on the map: <place>". Enter and Space on the focused slot do the
+same as a tap. The focus ring is outside the slot edge, so the map above the
+slot does not cover it. In window mode the map has `aria-hidden="true"`, so a
+screen reader reads the slot name once.
+
 The way back is the same motion in reverse. Use the browser Back, or the
 "‹ <post title>" chip at the top of the full map. The chip shows only while the
 history entry has `fromPost`; a tap on it is `history.back()`. The post opens

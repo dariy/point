@@ -21,8 +21,12 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   } as unknown as HTMLElement;
   // The container's listeners, by type (the ocean listens in the capture phase).
   const listeners = new Map<string, Set<(e: any) => void>>();
+  const containerAttrs = new Map<string, string>();
   const container = {
     dataset: {} as Record<string, string>,
+    getAttribute: (n: string) => containerAttrs.get(n) ?? null,
+    setAttribute: (n: string, v: string) => { containerAttrs.set(n, v); },
+    removeAttribute: (n: string) => { containerAttrs.delete(n); },
     style: { transition: '', clipPath: '' },
     offsetHeight: 0,
     remove: () => log.push('container.remove'),
@@ -366,6 +370,7 @@ describe('atlasOcean', () => {
       p.ocean.present({ kind: 'window', rect: slot, center: paris });
       assert.equal(p.ocean.presentation(), 'window');
       assert.equal(p.container.dataset.atlasOcean, 'window');
+      assert.equal(p.container.getAttribute('aria-hidden'), 'true', 'the slot under the window is the control');
       assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
       // The point goes 200 px below the box centre: the slot centre.
       assert.deepEqual(p.log, ['frame 48.85,2.35 0,200']);
@@ -462,6 +467,7 @@ describe('atlasOcean', () => {
       p.ocean.present('hidden');
       assert.equal(p.container.style.clipPath, '');
       assert.equal(p.container.dataset.atlasOcean, 'hidden');
+      assert.equal(p.container.getAttribute('aria-hidden'), null);
       assert.equal(p.windowTap, null);
       assert.equal(p.log[p.log.length - 1], 'park');
       // A click on a hidden ocean goes on to the map as before.

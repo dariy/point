@@ -387,6 +387,55 @@ describe('Atlas layer map', () => {
     });
   });
 
+  // The slot is a keyboard control: Tab to it, Enter opens the full map
+  // (p-atlas-ocean-o6wyh.19). The ocean above it is aria-hidden in window mode.
+  describe('sheet widget keyboard', () => {
+    before(async () => {
+      const on = await api('/api/plugins/immersive-sheet', { enabled: true }, 'PATCH');
+      assert.ok(on.ok, 'immersive-sheet on: ' + on.status);
+    });
+    after(async () => {
+      await api('/api/plugins/immersive-sheet', { enabled: false }, 'PATCH');
+    });
+
+    it('opens the full map on Enter on the focused slot', async () => {
+      const viewport = page.viewportSize();
+      try {
+        await page.setViewportSize({ width: 820, height: 1180 });
+        await page.goto(BASE + '/posts/map-probe-two');
+        await page.locator('.immersive-toggle-btn').first().click();
+        await page.locator('.immersive-sheet-hint').click();
+        const slot = page.locator('.immersive-sheet-map');
+        await slot.waitFor();
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'window');
+        assert.equal(await slot.getAttribute('role'), 'button');
+        assert.equal(await slot.getAttribute('aria-label'), 'Open on the map: Mapton');
+        assert.equal(await page.locator('body > .atlas-layer-map').getAttribute('aria-hidden'), 'true', 'one name for a screen reader');
+        // Tab from the control before the slot in the sheet.
+        await page.locator('.immersive-sheet-grip').focus();
+        let focused = false;
+        for (let i = 0; i < 20 && !focused; i++) {
+          await page.keyboard.press('Tab');
+          focused = await slot.evaluate((el) => el === document.activeElement);
+        }
+        assert.ok(focused, 'Tab reaches the slot');
+        const ring = await slot.evaluate((el) => {
+          const cs = getComputedStyle(el);
+          return { style: cs.outlineStyle, offset: parseFloat(cs.outlineOffset) };
+        });
+        assert.equal(ring.style, 'solid', 'a focus ring: ' + JSON.stringify(ring));
+        assert.ok(ring.offset > 0, 'the ring is outside the clip: ' + JSON.stringify(ring));
+        await page.keyboard.press('Enter');
+        await page.waitForURL(/\/tags\/mapton\?/);
+        assert.equal(new URL(page.url()).searchParams.get('view'), 'map', page.url());
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'full');
+        assert.equal(await page.locator('body > .atlas-layer-map').getAttribute('aria-hidden'), null, 'the full map is not hidden');
+      } finally {
+        if (viewport) await page.setViewportSize(viewport);
+      }
+    });
+  });
+
   // The widget shows the place's cloud with one ring, inside the slot. A
   // return from the full map closes the tag page cloud, then opens the
   // widget cloud again (p-atlas-ocean-o6wyh.14).

@@ -402,7 +402,10 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     map?.setWindowTap(null);
     map?.setLabelBounds(null);
     clipRect = null;
-    if (container) container.style.clipPath = '';
+    if (container) {
+      container.style.clipPath = '';
+      container.removeAttribute('aria-hidden');
+    }
   };
 
   /** Show the map through `w`. `recenter` false: keep the view (a tween step). */
@@ -411,6 +414,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     const prev = current === 'window' ? win : null;
     current = 'window';
     el.dataset.atlasOcean = 'window';
+    // The slot under the window is the control (role=button): one name for a screen reader.
+    el.setAttribute('aria-hidden', 'true');
     stopWarm();
     warmed = true;
     win = w;

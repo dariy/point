@@ -200,6 +200,13 @@ body.ui-hidden .immersive-sheet-hint {
     background: var(--bg-tertiary);
 }
 
+/* The slot is the control that opens the full map. The map (atlas.css, z-index
+   115) is above the slot and clipped to it, so the ring goes outside the clip. */
+.immersive-sheet-map:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+}
+
 /* With a map, the EXIF block takes the same width: one column. */
 .immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-exif {
     box-sizing: border-box;

@@ -129,8 +129,10 @@ export class ImmersiveSheetViewer extends MediaViewer {
     const tagsHtml = tags.length ? html`<div class="immersive-sheet-tags">${tags.map(t => renderTagLink(t))}</div>` : '';
     // An empty slot: the atlas ocean shows the map through it (_syncMapWindow).
     // It floats right in the EXIF column, under the EXIF block; the text flows on the left.
+    // It is the control that opens the full map (Enter, Space: _wireSheetMap);
+    // the ocean above it is aria-hidden in window mode.
     const geo = this._mapGeoTag();
-    const mapHtml = geo ? html`<div class="immersive-sheet-map" role="img" aria-label="${`Map: ${geo.name}`}"></div>` : '';
+    const mapHtml = geo ? html`<div class="immersive-sheet-map" role="button" tabindex="0" aria-label="${`Open on the map: ${geo.name}`}"></div>` : '';
     return html`
       <div class="immersive-sheet" aria-hidden="true">
         <button class="immersive-sheet-grip" type="button" aria-label="Collapse details"></button>
@@ -436,6 +438,13 @@ export class ImmersiveSheetViewer extends MediaViewer {
     this.on(this._wrapper, 'touchstart', e => {
       this._swipeInMap = !!(e.target as Element).closest?.('.immersive-sheet-map');
     }, { capture: true, passive: true });
+    // The keyboard way to the full map: a pointer tap goes through the ocean (onTap).
+    this.on(this.$('.immersive-sheet-map'), 'keydown', e => {
+      const key = (e as KeyboardEvent).key;
+      if (key !== 'Enter' && key !== ' ') return;
+      e.preventDefault();
+      this._onMapTap();
+    });
   }
 
   /**
