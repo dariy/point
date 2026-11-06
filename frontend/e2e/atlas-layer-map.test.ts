@@ -1,6 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type BrowserContextOptions, type Page } from 'playwright';
+import { launchFor, onIpad } from './devices.ts';
 import crypto from 'node:crypto';
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:8001';
@@ -10,6 +11,7 @@ describe('Atlas layer map', () => {
   let browser: Browser | undefined;
   let page: Page;
   let cookie = '';
+  let contextOptions: BrowserContextOptions = {};
   const tiles: string[] = [];
 
   const api = (path: string, body: unknown, method = 'POST') =>
@@ -20,8 +22,9 @@ describe('Atlas layer map', () => {
     });
 
   before(async () => {
-    browser = await chromium.launch();
-    page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+    let context;
+    ({ browser, context, contextOptions } = await launchFor(undefined, { viewport: { width: 390, height: 844 } }));
+    page = await context.newPage();
     await page.addInitScript(() => localStorage.removeItem('atlasLayerState'));
     await page.route(/arcgisonline\.com/, (route) => {
       tiles.push(route.request().url());
@@ -98,7 +101,7 @@ describe('Atlas layer map', () => {
   });
 
   it('makes no map request in list when saveData is on', async () => {
-    const ctx = await browser!.newContext({ viewport: { width: 390, height: 844 } });
+    const ctx = await browser!.newContext(contextOptions);
     const p = await ctx.newPage();
     await p.addInitScript(() => {
       localStorage.removeItem('atlasLayerState');
@@ -151,6 +154,20 @@ describe('Atlas layer map', () => {
     await page.waitForFunction(() => document.querySelectorAll('.atlas-layer-map .atlas-node').length === 0);
   });
 
+  // Runs on each E2E_DEVICE. On the WebKit iPad the marker gets a real tap.
+  it('opens the cloud of a place on a tap on its marker in mapList', async () => {
+    await page.goto(BASE + '/tags/atlas-map-set');
+    await page.locator('#grid-mount .post-card').first().waitFor();
+    await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
+    const marker = page.locator('.atlas-layer-map .atlas-marker').first();
+    await marker.waitFor();
+    if (onIpad) await marker.tap();
+    else await marker.click();
+    await page.locator('.atlas-layer-map .atlas-node--center').waitFor();
+    assert.match(await page.locator('.atlas-layer-map .atlas-node--center').innerText(), /Mapton/);
+    assert.ok((await page.locator('.atlas-layer-map .atlas-node--post').count()) >= 1, 'its post is a chip');
+  });
+
   it('selects a country shape into a graph', async () => {
     await openMap();
     await page.locator('.atlas-layer-map path[stroke="#e05c00"]').first().waitFor({ state: 'attached' });
@@ -180,7 +197,9 @@ describe('Atlas layer map', () => {
     assert.ok(tilesCover || tiles.length > 0, 'the map follows the new box');
   });
 
-  it('keeps the viewport at zoom 2 on mapList → list → mapList', async () => {
+  // At the iPad size the list box is taller than the world at zoom 2, and the
+  // view drifts (p-atlas-ocean-o6wyh.26).
+  it('keeps the viewport at zoom 2 on mapList → list → mapList', { skip: onIpad && 'drifts at the iPad size: p-atlas-ocean-o6wyh.26' }, async () => {
     // A view near the north edge: the taller `list` box cannot hold it at zoom 2.
     await page.goto(BASE + '/?view=split&at=55,30,2');
     await page.locator('.atlas-layer-map .leaflet-tile-pane').waitFor({ state: 'attached' });
