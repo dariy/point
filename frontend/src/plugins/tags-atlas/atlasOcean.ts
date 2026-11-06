@@ -24,6 +24,11 @@
  * clip (and the window centre) from one presentation to the next, at a fixed
  * zoom; under `prefers-reduced-motion: reduce` it is instant.
  *
+ * A box change (a rotation) puts the window on the new box at once: a new clip
+ * and a new offset, and the point at the window centre stays there. A present
+ * with no centre after a size change pans the map by the move of the slot
+ * centre, so the point stays at the centre of the new slot.
+ *
  * `expand` is the move from a post's window to the full map. The clip grows
  * from the window to the whole box and the place comes to the centre, at the
  * window's zoom. The map stays a window over the page until the next list page
@@ -113,6 +118,11 @@ const DETACH_MS = 10_000;
 /** `collapse` waits at most this many frames for the slot's first layout. */
 export const SETTLE_FRAMES = 60;
 
+/** The centre of `rect`, in px from the top-left corner of `box`. */
+function boxCenter(rect: Rect, box: Rect): Point {
+  return { x: rect.left + rect.width / 2 - box.left, y: rect.top + rect.height / 2 - box.top };
+}
+
 /** The presentation for a layer state on a list page. */
 export function presentationForState(state: AtlasLayerState): Exclude<AtlasPresentation, 'window'> {
   if (state === 'mapList') return 'mapList';
@@ -139,6 +149,8 @@ export interface AtlasOceanDeps {
   saveData(): boolean;
   /** The container's box in viewport px. */
   box(container: HTMLElement): Rect;
+  /** Call `fn` when the container's box changes size (a rotation). Returns a stop. */
+  observeBox(container: HTMLElement, fn: () => void): () => void;
   /** True under `prefers-reduced-motion: reduce`. */
   reducedMotion(): boolean;
   /** Run `fn` on the next animation frame with a timestamp in ms. Returns a cancel. */
@@ -184,6 +196,13 @@ function defaultContainer(body: HTMLElement): HTMLElement {
   return el;
 }
 
+function defaultObserveBox(container: HTMLElement, fn: () => void): () => void {
+  if (typeof ResizeObserver !== 'function') return () => {};
+  const ro = new ResizeObserver(() => fn());
+  ro.observe(container);
+  return () => ro.disconnect();
+}
+
 function defaultObserveState(body: HTMLElement, fn: () => void): () => void {
   const mo = new MutationObserver(fn);
   mo.observe(body, { attributes: true, attributeFilter: ['data-atlas-layer'] });
@@ -225,6 +244,7 @@ function defaultDeps(): AtlasOceanDeps {
     idle: defaultIdle,
     saveData: defaultSaveData,
     box: (c) => c.getBoundingClientRect(),
+    observeBox: defaultObserveBox,
     reducedMotion: () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
     frame: defaultFrame,
     now: () => (typeof requestAnimationFrame === 'function' ? performance.now() : Date.now()),
@@ -252,6 +272,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   let warmed = false;
   // The window: its rect, its centre and its tap callback.
   let win: AtlasWindow | null = null;
+  // The box when the window was last put on screen.
+  let winBox: Rect | null = null;
   // The tween in progress: a cancel, and the resolve of its promise.
   let cancelTween: (() => void) | null = null;
   let endTween: (() => void) | null = null;
@@ -308,11 +330,27 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     };
   };
 
+  /**
+   * The box changed size (a rotation, a new viewport). In a window, Leaflet
+   * keeps its top-left corner, and the clip and the window centre are for the
+   * old box. Put the same window on the new box: the point at the window
+   * centre stays there. The page gives the new slot rect when its layout
+   * settles (a present with no centre).
+   */
+  const onBox = () => {
+    if (current !== 'window' || !win || cancelTween || !container || !winBox) return;
+    const box = deps.box(container);
+    if (box.width === winBox.width && box.height === winBox.height) return;
+    presentWindow({ ...win, center: undefined, zoom: undefined });
+  };
+
   /** The container and the map controller, made on the first need. */
   const ensure = () => {
     if (!container) {
       container = deps.container(body);
-      stopInput = listen(container);
+      const stopListen = listen(container);
+      const stopBox = deps.observeBox(container, onBox);
+      stopInput = () => { stopListen(); stopBox(); };
     }
     map ??= deps.mountMap(container, body);
     return { el: container, ctl: map };
@@ -338,6 +376,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   const leaveWindow = () => {
     if (current !== 'window') return;
     win = null;
+    winBox = null;
     map?.setWindowTap(null);
     clipRect = null;
     if (container) container.style.clipPath = '';
@@ -354,15 +393,19 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     win = w;
     ctl.setWindowTap(() => win?.onTap?.());
     const box = deps.box(el);
+    const prevBox = winBox;
+    winBox = box;
     setClip(visibleRect(w), box);
     const offset = windowOffset(w.rect, box);
     if (!recenter) ctl.frame(null, offset);
     else if (w.center) ctl.frame(w.center, offset, w.zoom);
-    else if (prev) {
-      // The slot moved (a sheet drag or scroll): the map moves with it.
+    else if (prev && prevBox) {
+      // The slot moved (a sheet drag or scroll), or it and the box changed
+      // size (a rotation): the map moves with the slot centre. Leaflet keeps
+      // the box's top-left corner on a resize, so the move is in box px.
       ctl.frame(null, offset);
-      const dx = w.rect.left - prev.rect.left;
-      const dy = w.rect.top - prev.rect.top;
+      const dx = boxCenter(w.rect, box).x - boxCenter(prev.rect, prevBox).x;
+      const dy = boxCenter(w.rect, box).y - boxCenter(prev.rect, prevBox).y;
       if (dx || dy) ctl.panBy(-dx, -dy);
     } else ctl.frame(null, offset);
   };

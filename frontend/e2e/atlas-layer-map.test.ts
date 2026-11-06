@@ -332,4 +332,113 @@ describe('Atlas layer map', () => {
       assert.deepEqual(later.filter((u) => /\/api\/pages\/graph(\?|$)/.test(u)), [], 'no second places fetch');
     });
   });
+
+  // A rotation (landscape ↔ portrait) on an iPad: the map follows its box
+  // (p-atlas-ocean-o6wyh.11). Each test starts in portrait and turns twice.
+  describe('rotation', () => {
+    const PORTRAIT = { width: 820, height: 1180 };
+    const LANDSCAPE = { width: 1180, height: 820 };
+    let viewport: { width: number; height: number } | null = null;
+    before(() => { viewport = page.viewportSize(); });
+    after(async () => { if (viewport) await page.setViewportSize(viewport); });
+
+    /** The map box, the viewport widths and the Mapton marker centre. */
+    const measure = () => page.evaluate(() => {
+      const c = document.querySelector<HTMLElement>('body > .atlas-layer-map')!;
+      const box = c.getBoundingClientRect();
+      const m = document.querySelector('.atlas-layer-map .atlas-marker')!.getBoundingClientRect();
+      return {
+        inner: innerWidth, client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth,
+        box: { left: box.left, top: box.top, width: box.width, height: box.height },
+        marker: { x: m.left + m.width / 2, y: m.top + m.height / 2 },
+        at: (new URLSearchParams(location.search).get('at') ?? '').split(',').map(Number),
+      };
+    });
+
+    const turn = async (size: { width: number; height: number }) => {
+      await page.setViewportSize(size);
+      await page.waitForTimeout(700);
+    };
+
+    for (const [state, presentation] of [['mapList', 'mapList'], ['map', 'full']] as const) {
+      it(`keeps the width and the centre of the map in ${state}`, async () => {
+        await page.setViewportSize(PORTRAIT);
+        await page.goto(BASE + '/tags/atlas-map-set');
+        await page.locator('#grid-mount .post-card').first().waitFor();
+        await page.evaluate((st) => document.body.setAttribute('data-atlas-layer', st), state);
+        await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
+        await page.waitForTimeout(700);
+        assert.equal(await page.evaluate(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')!.dataset.atlasOcean), presentation);
+        const start = await measure();
+        const fromCentre = (s: typeof start) => ({
+          x: s.marker.x - (s.box.left + s.box.width / 2), y: s.marker.y - (s.box.top + s.box.height / 2),
+        });
+        for (const size of [LANDSCAPE, PORTRAIT]) {
+          await turn(size);
+          const now = await measure();
+          const label = `${state} at ${size.width}x${size.height}: ${JSON.stringify(now)}`;
+          assert.equal(now.inner, size.width, label);
+          assert.equal(now.client, size.width, 'no wide layout viewport: ' + label);
+          assert.equal(now.scroll, size.width, 'nothing is wider than the viewport: ' + label);
+          assert.equal(Math.round(now.box.width), size.width, 'the map is as wide as the viewport: ' + label);
+          const a = fromCentre(start);
+          const b = fromCentre(now);
+          assert.ok(Math.abs(a.x - b.x) <= 2 && Math.abs(a.y - b.y) <= 2, 'the map keeps its centre: ' + label);
+          // Two px of the Web Mercator world at this zoom (a resize pan rounds to whole px).
+          const tol = (2 * 360) / (256 * 2 ** start.at[2]!);
+          assert.equal(now.at[2], start.at[2], 'same zoom: ' + label);
+          assert.ok(Math.abs(now.at[0]! - start.at[0]!) < tol && Math.abs(now.at[1]! - start.at[1]!) < tol, `the URL view stays: ${start.at.join(',')} → ${label}`);
+        }
+      });
+    }
+
+    it('keeps the place at the centre of the sheet widget', async () => {
+      const on = await api('/api/plugins/immersive-sheet', { enabled: true }, 'PATCH');
+      assert.ok(on.ok, 'immersive-sheet on: ' + on.status);
+      try {
+        await page.setViewportSize(PORTRAIT);
+        await page.goto(BASE + '/posts/map-probe-two');
+        await page.locator('.immersive-toggle-btn').first().click();
+        await page.locator('.immersive-sheet-hint').click();
+        await page.locator('.immersive-sheet-map').waitFor();
+        await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
+        await page.waitForTimeout(800);
+        const widget = () => page.evaluate(() => {
+          const c = document.querySelector<HTMLElement>('body > .atlas-layer-map')!;
+          const box = c.getBoundingClientRect();
+          const slot = document.querySelector('.immersive-sheet-map')!.getBoundingClientRect();
+          const scroller = document.querySelector('.immersive-sheet-scroll')!.getBoundingClientRect();
+          const m = document.querySelector('.atlas-layer-map .atlas-marker')!.getBoundingClientRect();
+          // inset(top right bottom left), with the short forms of CSS.
+          const v = (c.style.clipPath.match(/inset\(([^)]*)\)/)?.[1] ?? '').split(/\s+/).map(parseFloat);
+          const [t, r = t, b = t, l = r] = v;
+          const top = Math.max(slot.top, scroller.top);
+          const bottom = Math.min(slot.bottom, scroller.bottom);
+          return {
+            presentation: c.dataset.atlasOcean,
+            clip: { top: t, right: r, bottom: b, left: l },
+            want: { top: top - box.top, right: box.right - slot.right, bottom: box.bottom - bottom, left: slot.left - box.left },
+            marker: { x: m.left + m.width / 2, y: m.top + m.height / 2 },
+            centre: { x: slot.left + slot.width / 2, y: slot.top + slot.height / 2 },
+          };
+        });
+        const check = (w: Awaited<ReturnType<typeof widget>>, label: string) => {
+          const text = `${label}: ${JSON.stringify(w)}`;
+          assert.equal(w.presentation, 'window', text);
+          for (const k of ['top', 'right', 'bottom', 'left'] as const) {
+            assert.ok(Math.abs(w.clip[k]! - w.want[k]) <= 1, `the clip is the slot (${k}): ${text}`);
+          }
+          assert.ok(Math.abs(w.marker.x - w.centre.x) <= 2 && Math.abs(w.marker.y - w.centre.y) <= 2,
+            'the place is at the slot centre: ' + text);
+        };
+        check(await widget(), 'portrait');
+        for (const size of [LANDSCAPE, PORTRAIT]) {
+          await turn(size);
+          check(await widget(), `${size.width}x${size.height}`);
+        }
+      } finally {
+        await api('/api/plugins/immersive-sheet', { enabled: false }, 'PATCH');
+      }
+    });
+  });
 });

@@ -55,6 +55,9 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   let path = '/';
   // The idle callbacks the ocean asked for; `idle()` runs them.
   const idle = new Set<() => void>();
+  // The box: a 400×800 viewport. `setBox` changes it and tells the box observers.
+  let box = { left: 0, top: 0, width: 400, height: 800 };
+  const boxObservers = new Set<() => void>();
   const ocean = createAtlasOcean({
     body,
     container: () => container as unknown as HTMLElement,
@@ -87,8 +90,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
       return () => { idle.delete(fn); };
     },
     saveData: () => !!opts.saveData,
-    // The box: a 400×800 viewport.
-    box: () => ({ left: 0, top: 0, width: 400, height: 800 }) as DOMRect,
+    box: () => ({ ...box }) as DOMRect,
+    observeBox: (_c, fn) => { boxObservers.add(fn); return () => boxObservers.delete(fn); },
     reducedMotion: () => !!opts.reducedMotion,
     frame: (fn) => { frames.add(fn); return () => { frames.delete(fn); }; },
     now: () => clock,
@@ -120,6 +123,12 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     },
     get pendingFrames() { return frames.size; },
     get chip() { return chip; },
+    /** The container's box changes size (a rotation). */
+    setBox(b: { left: number; top: number; width: number; height: number }) {
+      box = b;
+      for (const fn of boxObservers) fn();
+    },
+    get boxObservers() { return boxObservers.size; },
     /** the state the next page reads from its URL */
     setUrlState(s: 'list' | 'mapList' | 'map') { urlState = s; },
     /** the path and query that the ocean reads (deps.path) */
@@ -365,6 +374,40 @@ describe('atlasOcean', () => {
       p.ocean.present({ kind: 'window', rect: { ...slot, top: 300 } });
       assert.equal(p.container.style.clipPath, 'inset(300px 20px 300px 20px)');
       assert.deepEqual(p.log.slice(-2), ['frame - 0,0', 'panBy 0,200']);
+    });
+
+    test('a box change in window mode recomputes the clip and the offset', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      // A rotation: the box is 800×400 now. The slot is where it was (below the box) until the page syncs.
+      p.setBox({ left: 0, top: 0, width: 800, height: 400 });
+      assert.equal(p.container.style.clipPath, 'inset(400px 420px 0px 20px)');
+      // The offset is from the new box centre; the point stays on screen where it was.
+      assert.deepEqual(p.log.slice(-1), ['frame - -200,400']);
+      // The page syncs: the slot is wider and higher now. The map follows the slot centre.
+      p.ocean.present({ kind: 'window', rect: { left: 20, top: 150, width: 760, height: 180 } });
+      assert.equal(p.container.style.clipPath, 'inset(150px 20px 70px 20px)');
+      assert.deepEqual(p.log.slice(-2), ['frame - 0,40', 'panBy -200,360']);
+    });
+
+    test('a box change outside a window, or with the same size, does nothing', () => {
+      const p = fakePage('map');
+      p.ocean.attach();
+      const n = p.log.length;
+      p.setBox({ left: 0, top: 0, width: 800, height: 400 });
+      assert.equal(p.log.length, n, 'Leaflet re-measures a shown map on its own');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      const m = p.log.length;
+      p.setBox({ left: 0, top: 0, width: 800, height: 400 });
+      assert.equal(p.log.length, m);
+    });
+
+    test('destroy stops the box observer', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      assert.equal(p.boxObservers, 1);
+      p.ocean.destroy();
+      assert.equal(p.boxObservers, 0);
     });
 
     test('a window with a zoom frames the point at that zoom', () => {

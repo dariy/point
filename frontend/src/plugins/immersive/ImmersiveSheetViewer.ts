@@ -59,6 +59,8 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _sheetFlyoutCleanup: (() => void) | null = null;
   _sheetCommentsComps: { unmount?: () => void }[] | null = null;
   _onResize: (() => void) | null = null;
+  /** Stop the frames that measure the sheet again after a resize. */
+  _resizeSettleStop: (() => void) | null = null;
   _sheetObserver: ResizeObserver | null = null;
   _swipeAxis: 'v' | 'h' | null = null;
   /** The current touch started in the map slot: the swipe leaves the sheet alone. */
@@ -222,9 +224,22 @@ export class ImmersiveSheetViewer extends MediaViewer {
     }
     this._wireSheetControls();
     this._wireSheetMap();
-    this._onResize = () => {
+    const resync = () => {
       this._measureSheet();
       if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
+    };
+    // On iOS the resize (a rotation) can come before the layout settles. Sync
+    // now, and again after two frames, when the slot has its new place.
+    this._onResize = () => {
+      resync();
+      this._resizeSettleStop?.();
+      let id = requestAnimationFrame(() => {
+        id = requestAnimationFrame(() => {
+          this._resizeSettleStop = null;
+          resync();
+        });
+      });
+      this._resizeSettleStop = () => cancelAnimationFrame(id);
     };
     window.addEventListener('resize', this._onResize);
     const sheetEl = this.$('.immersive-sheet');
@@ -647,6 +662,8 @@ export class ImmersiveSheetViewer extends MediaViewer {
       window.removeEventListener('resize', this._onResize);
       this._onResize = null;
     }
+    this._resizeSettleStop?.();
+    this._resizeSettleStop = null;
     if (this._sheetObserver) {
       this._sheetObserver.disconnect();
       this._sheetObserver = null;

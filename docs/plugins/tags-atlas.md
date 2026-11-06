@@ -97,6 +97,11 @@ while the sheet drags, slides and scrolls. See
 move the map. A tap, also a tap on a place marker, opens the full map, not the place's
 tag page. With `tags-atlas` off, the sheet has no slot and no map.
 
+A rotation changes the size of the container. Then the map gets a new clip and a new
+offset at once. When the sheet's layout is stable, the sheet gives the new slot, and the
+map moves with the centre of the slot. Thus the point at the centre of the window stays
+at the centre of the new slot.
+
 A change between `window` and `full` is one motion: the clip grows or shrinks, and the
 place moves to the new centre. The zoom does not change during the motion. Leaflet runs
 with `zoomAnimation: false`, and the new zoom comes after the clip motion stops. With
