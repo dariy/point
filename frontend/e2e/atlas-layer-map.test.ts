@@ -333,6 +333,56 @@ describe('Atlas layer map', () => {
     });
   });
 
+  // A tap on the post's sheet widget opens the full map at the place, with its
+  // cloud, and the post's chip has the focus (p-atlas-ocean-o6wyh.12).
+  describe('sheet widget', () => {
+    before(async () => {
+      const on = await api('/api/plugins/immersive-sheet', { enabled: true }, 'PATCH');
+      assert.ok(on.ok, 'immersive-sheet on: ' + on.status);
+    });
+    after(async () => {
+      await api('/api/plugins/immersive-sheet', { enabled: false }, 'PATCH');
+    });
+
+    it('opens the cloud of the place on a tap on the widget, with the focus on the post chip', async () => {
+      const viewport = page.viewportSize();
+      // The header shows the immersive toggle at a tablet width.
+      const size = { width: 820, height: 1180 };
+      try {
+        await page.setViewportSize(size);
+        await page.goto(BASE + '/posts/map-probe-two');
+        await page.locator('.immersive-toggle-btn').first().click();
+        await page.locator('.immersive-sheet-hint').click();
+        await page.locator('.immersive-sheet-map').waitFor();
+        await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
+        await page.waitForTimeout(800);
+        // A tap in the slot, away from the marker.
+        const slot = (await page.locator('.immersive-sheet-map').boundingBox())!;
+        const x = slot.x + slot.width / 2 + 30;
+        const y = slot.y + slot.height / 2 + 20;
+        // A resize during the tween, as the iOS toolbar does (p-atlas-ocean-o6wyh.12).
+        const resize = page.waitForTimeout(150).then(() => page.setViewportSize({ width: size.width, height: size.height - 30 }));
+        if (onIpad) await page.touchscreen.tap(x, y);
+        else await page.mouse.click(x, y);
+        await resize;
+        await page.waitForURL(/\/tags\/mapton\?/);
+        await page.locator('.atlas-layer-map .atlas-node--center').waitFor({ timeout: 5000 });
+        assert.match(await page.locator('.atlas-layer-map .atlas-node--center').innerText(), /Mapton/);
+        await page.waitForTimeout(800);
+        const state = await page.evaluate(() => ({
+          presentation: document.querySelector<HTMLElement>('body > .atlas-layer-map')!.dataset.atlasOcean,
+          nodes: document.querySelectorAll('.atlas-layer-map .atlas-node').length,
+          focus: document.querySelector('.atlas-layer-map .atlas-node--post.atlas-node--sel')?.textContent ?? null,
+        }));
+        assert.equal(state.presentation, 'full', JSON.stringify(state));
+        assert.ok(state.nodes >= 2, 'the place and its post are chips: ' + JSON.stringify(state));
+        assert.match(state.focus ?? '', /Map probe two/, 'the post chip has the focus: ' + JSON.stringify(state));
+      } finally {
+        if (viewport) await page.setViewportSize(viewport);
+      }
+    });
+  });
+
   // A rotation (landscape ↔ portrait) on an iPad: the map follows its box
   // (p-atlas-ocean-o6wyh.11). Each test starts in portrait and turns twice.
   describe('rotation', () => {

@@ -107,6 +107,11 @@ place moves to the new centre. The zoom does not change during the motion. Leafl
 with `zoomAnimation: false`, and the new zoom comes after the clip motion stops. With
 `prefers-reduced-motion: reduce`, each change of presentation is instant.
 
+After a tap in the window, the tag page selects the place and opens its cloud. Until the
+tag page attaches, only `hidden` stops this. A new window from the post (a re-render, a
+resize) or a state change does not stop it. For 500 ms after the tag page attaches, the
+full map ignores clicks, so a late click of the tap does not clear the place.
+
 A Back from the full map to a post whose sheet map opened it does not hide the map. The
 map stays on screen and shrinks into the sheet's map slot. While the full map's history
 entry has `fromPost`, a "‹ <post title>" chip at the top goes back to that post.

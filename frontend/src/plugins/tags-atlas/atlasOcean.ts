@@ -33,7 +33,11 @@
  * from the window to the whole box and the place comes to the centre, at the
  * window's zoom. The map stays a window over the page until the next list page
  * attaches (the tag page in `map` state). That attach shows `full`, sets the
- * zoom, selects the route's place and focuses the post's chip.
+ * zoom, selects the route's place and focuses the post's chip. Only a
+ * `hidden` cancels a pending expand: a late window from the post (a re-render,
+ * a resize) or a state change from a kept layout must not drop the selection.
+ * For EXPAND_CLICK_GUARD_MS after that attach, the full map ignores clicks: a
+ * late click of the tap must not clear the place it opens.
  *
  * `collapse` is the way back (atlasFromPost.ts). A detach to a post whose
  * history entry asks for the open sheet does not hide a shown map: it holds as
@@ -115,6 +119,9 @@ export const ATLAS_MAP_CLASS = 'atlas-layer-map';
  */
 const DETACH_MS = 10_000;
 
+/** After an expand's attach, the full map ignores clicks for this time (ms). */
+export const EXPAND_CLICK_GUARD_MS = 500;
+
 /** `collapse` waits at most this many frames for the slot's first layout. */
 export const SETTLE_FRAMES = 60;
 
@@ -172,7 +179,7 @@ export interface AtlasOcean {
   /**
    * Grow the window to the whole box, with `target.center` at the centre and
    * no zoom change. Resolves when the tween ends: navigate then. The next
-   * attach finishes the move (see the file comment); a `present` cancels it.
+   * attach finishes the move (see the file comment); a `present('hidden')` cancels it.
    */
   expand(target: AtlasExpand, ms?: number): Promise<void>;
   /**
@@ -281,6 +288,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   let stopInput: (() => void) | null = null;
   // An expand that waits for the next attach.
   let expanding: AtlasExpand | null = null;
+  // The end of the click guard after an expand's attach (deps.now() time).
+  let guardUntil = -Infinity;
   // A held map on a post (the way back): hidden when no collapse comes in time.
   let holdTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -310,7 +319,14 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     const move = (e: PointerEvent) => gate.move(e.pointerId, e.clientX, e.clientY);
     const up = (e: PointerEvent) => gate.up(e.pointerId);
     const click = (e: MouseEvent) => {
-      if (current !== 'window') return;
+      if (current !== 'window') {
+        // A late click of the widget tap would clear the place it opened.
+        if (deps.now() < guardUntil) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+        return;
+      }
       e.stopImmediatePropagation();
       e.preventDefault();
       if (gate.isTap()) win?.onTap?.();
@@ -427,7 +443,9 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   };
 
   const present = (req: AtlasPresentationRequest) => {
-    expanding = null;
+    // A pending expand ends only on `hidden` (the user went to another page).
+    // A window from the post or a state change before the attach keeps it.
+    if (req === 'hidden') expanding = null;
     clearHold();
     stopTween();
     show(req);
@@ -542,6 +560,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         show(presentationForState(getAtlasLayerState(body)));
         ctl.setView(exp.center, exp.zoom);
         ctl.route(exp.focusPostSlug);
+        guardUntil = deps.now() + EXPAND_CLICK_GUARD_MS;
       } else {
         // A return from another page: the URL viewport is the list's own view
         // (the return URL). The parked view can be a post widget's view.
@@ -630,6 +649,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
 
     destroy() {
       expanding = null;
+      guardUntil = -Infinity;
       clearHold();
       stopTween();
       stopWarm();

@@ -651,12 +651,14 @@ export class ImmersiveSheetViewer extends MediaViewer {
       this._mapShown = true;
     }
     super.beforeUnmount();
+    this._mapLeaving = false;
+    this.container.classList.remove('immersive-map-leaving');
   }
   _cleanup() {
     super._cleanup();
     this._hideMapWindow();
-    this._mapLeaving = false;
-    this.container.classList.remove('immersive-map-leaving');
+    // A re-render during a leave keeps `_mapLeaving` (beforeUnmount ends it):
+    // the re-wired viewer must not put a window on the expand (atlasOcean.ts).
     this._swipeInMap = false;
     if (this._onResize) {
       window.removeEventListener('resize', this._onResize);

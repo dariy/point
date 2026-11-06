@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { SETTLE_FRAMES, createAtlasOcean, defaultIdle, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
+import { EXPAND_CLICK_GUARD_MS, SETTLE_FRAMES, createAtlasOcean, defaultIdle, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
 import { isAtlasListPath, setAtlasLayerState } from '../src/plugins/tags-atlas/atlasLayerState.ts';
 
 /**
@@ -599,6 +599,59 @@ describe('atlasOcean', () => {
         p.setUrlState('map');
         p.ocean.attach();
         assert.deepEqual(p.log, ['layout', 'show']);
+      });
+
+      test('a window from the post during the tween keeps the expand', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, zoom: 10 });
+        const done = p.ocean.expand(target, 100);
+        p.tick(50);
+        // A re-render or a resize of the post viewer sends its window again.
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, zoom: 10 });
+        await done;
+        p.log.length = 0;
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.equal(p.ocean.presentation(), 'full');
+        assert.deepEqual(p.log, ['layout', 'show', 'setView 48.85,2.35 z6', 'route a-post']);
+      });
+
+      test('a state change before the attach keeps the expand', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        const done = p.ocean.expand(target, 100);
+        p.tick(100);
+        await done;
+        // A kept layout sees `map` before the tag page attaches.
+        p.ocean.present('full');
+        p.log.length = 0;
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.deepEqual(p.log.slice(-2), ['setView 48.85,2.35 z6', 'route a-post']);
+      });
+
+      test('the full map ignores clicks for EXPAND_CLICK_GUARD_MS after the attach', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        const done = p.ocean.expand(target, 100);
+        p.tick(100);
+        await done;
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.equal(p.ocean.presentation(), 'full');
+        // A late click of the tap: stopped before Leaflet clears the place.
+        const late = p.dispatch('click');
+        assert.ok(late.stopped && late.prevented, 'a click in the guard is stopped');
+        p.tick(100 + EXPAND_CLICK_GUARD_MS);
+        const later = p.dispatch('click');
+        assert.ok(!later.stopped && !later.prevented, 'a click after the guard goes to the map');
+      });
+
+      test('a plain attach sets no click guard', () => {
+        const p = fakePage('map');
+        p.ocean.attach();
+        const click = p.dispatch('click');
+        assert.ok(!click.stopped && !click.prevented);
       });
 
       test('a later attach after a finished expand is a plain attach', async () => {
