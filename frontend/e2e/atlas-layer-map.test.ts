@@ -197,11 +197,15 @@ describe('Atlas layer map', () => {
     assert.ok(tilesCover || tiles.length > 0, 'the map follows the new box');
   });
 
-  // At the iPad size the list box is taller than the world at zoom 2, and the
-  // view drifts (p-atlas-ocean-o6wyh.26).
-  it('keeps the viewport at zoom 2 on mapList → list → mapList', { skip: onIpad && 'drifts at the iPad size: p-atlas-ocean-o6wyh.26' }, async () => {
-    // A view near the north edge: the taller `list` box cannot hold it at zoom 2.
-    await page.goto(BASE + '/?view=split&at=55,30,2');
+  it('keeps the viewport at zoom 2 on mapList → list → mapList', async () => {
+    // A view near the north edge: the `mapList` box can hold it at zoom 2, the
+    // taller `list` box cannot. At zoom 2 the world is 1024 px tall. On the
+    // phone the boxes are about 500 and 780 px, so lat 55 fits only the first.
+    // On the iPad the `mapList` box is 795 px (it holds lat 37.3 at most) and
+    // the `list` box (1121 px) is taller than the world. Lat 55 is clamped
+    // there before the first hide, so the iPad starts at lat 30.
+    const lat = onIpad ? 30 : 55;
+    await page.goto(BASE + `/?view=split&at=${lat},30,2`);
     await page.locator('.atlas-layer-map .leaflet-tile-pane').waitFor({ state: 'attached' });
     await page.waitForFunction(() => document.body.dataset.atlasLayer === 'mapList');
     await page.waitForTimeout(800);

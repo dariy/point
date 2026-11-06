@@ -18,6 +18,9 @@ import type { LeafletRef } from '../../utils/leaflet.ts';
 import type { Point, Rect } from './atlasOceanGeometry.ts';
 import type { AtlasView } from './atlasLayerState.ts';
 
+/** The map cannot pan past the world. */
+const WORLD_BOUNDS: [[number, number], [number, number]] = [[-90, -180], [90, 180]];
+
 /** A map point. */
 export interface LatLng {
   lat: number;
@@ -141,10 +144,21 @@ export function mountAtlasLayerMap(
 
   const onTheme = () => tiles?.setUrl(isDarkTheme() ? TILE_DARK : TILE_LIGHT);
 
-  /** Re-measure without a pan, then set the kept view (see `park`). */
+  /**
+   * Re-measure without a pan, then set the kept view (see `park`). The
+   * `maxBounds` check is off until the kept view is set. Each `moveend` starts
+   * an animated pan into the bounds, and the re-measure fires one with a centre
+   * that the new box cannot hold. The `setView` stops that pan, and the stop
+   * fires one more `moveend`. Its pan starts from a centre half-way through,
+   * and it continues after the `setView` (a box taller than the world, at a
+   * low zoom: p-atlas-ocean-o6wyh.26). With the check off, no pan starts. Then
+   * the bounds come back and pan the kept view inside them, if necessary.
+   */
   const restore = (kept: { center: unknown; zoom: number }) => {
+    map.setMaxBounds(null);
     map.invalidateSize({ pan: false });
     map.setView(kept.center, kept.zoom, { animate: false });
+    map.setMaxBounds(WORLD_BOUNDS);
   };
 
   /** Put `center` at `offset` px from the box centre, at `zoom` (default: the current zoom). */
@@ -187,7 +201,7 @@ export function mountAtlasLayerMap(
     // overlay) with a transform that drifts from the tile pane for this map.
     map = L.map(opts.container, {
       minZoom: 2,
-      maxBounds: [[-90, -180], [90, 180]],
+      maxBounds: WORLD_BOUNDS,
       maxBoundsViscosity: 1.0,
       zoomAnimation: false,
     });
