@@ -71,6 +71,15 @@ zoom 10 keeps the other places far from the ring.
   opens on it.
 - The ocean goes back to `hidden` when the sheet closes and when the viewer
   goes (a close, or a move to the previous or next post).
+- A move to the previous or next post keeps the sheet state. The keys, the
+  photo panels and the footer links do this. When the sheet is open, it is open
+  on the next post with no slide, at the top of its scroll, and the window
+  shows the place of the next post. When the next post has no place tag, there
+  is no slot and the ocean stays `hidden`. When the sheet is shut, it stays
+  shut. Each post's history entry keeps its own state (`sheetKept: true`,
+  `atlasFromPost.ts`), so Back and Forward show each post as you left it. The
+  key is not `sheet: 'open'`: that key is the return from the full map, which
+  shrinks the full map into the slot.
 
 A tap on the map (or on a place or a chip in it) opens the place's tag page in the `map`
 state: `/tags/<place>?view=map&at=<lat>,<lng>,6`. It is one motion. The window

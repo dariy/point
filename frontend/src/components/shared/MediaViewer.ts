@@ -561,7 +561,8 @@ export class MediaViewer extends Component<MediaViewerProps> {
       ctx.postSlug = target.slug;
       let url = ctx.toUrl();
       if (startIndex > 0) url += `#${startIndex + 1}`;
-      navigate(url);
+      const state = this._postNavState();
+      navigate(url, state === undefined ? {} : { state });
     };
     if (seamless && this._ghost[dir]) {
       _suppressNextFadeIn = true;
@@ -578,6 +579,10 @@ export class MediaViewer extends Component<MediaViewerProps> {
       setTimeout(go, 300);
     }
     return true;
+  }
+  /** The history state of the next post's entry (prev/next). None by default. */
+  _postNavState(): unknown {
+    return undefined;
   }
   _isBlocked(dir: EdgeDir) {
     const n = (this.props.items || []).length;

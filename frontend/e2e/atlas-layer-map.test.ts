@@ -880,4 +880,107 @@ describe('Atlas layer map', () => {
       await page.mouse.move(5, 300);
     });
   });
+
+  // Prev/next keeps the sheet state (p-atlas-ocean-o6wyh.23): an open sheet is
+  // open on the next post with no slide, and the widget frames that post's place.
+  describe('sheet kept on prev/next', () => {
+    const POSTS: Array<[string, string[]]> = [
+      ['Keep probe a', []],
+      ['Keep probe b', ['keepton']],
+      ['Keep probe c', ['mapton']],
+    ];
+    before(async () => {
+      const tag = await api('/api/tags', { name: 'Keepton', slug: 'keepton', kind: 'place', latitude: 52.5, longitude: 13.4 });
+      if (!tag.ok) throw new Error('Tag creation failed: ' + (await tag.text()));
+      for (const [title, tags] of POSTS) {
+        const res = await api('/api/posts', {
+          title, slug: title.toLowerCase().replace(/ /g, '-'), content: 'Body.', excerpt: 'Card.', status: 'published', tags,
+          // Immersive posts: the footer links open the next post in the viewer too.
+          immersive_mode: 'immersive',
+        });
+        if (!res.ok) throw new Error('Post creation failed: ' + (await res.text()));
+      }
+      const on = await api('/api/plugins/immersive-sheet', { enabled: true }, 'PATCH');
+      assert.ok(on.ok, 'immersive-sheet on: ' + on.status);
+    });
+    after(async () => {
+      await api('/api/plugins/immersive-sheet', { enabled: false }, 'PATCH');
+    });
+
+    const view = (place: string | null) => page.evaluate((name) => {
+      const wrap = document.querySelector('.immersive-sheet-mode');
+      const sheet = document.querySelector<HTMLElement>('.immersive-sheet');
+      const ocean = document.querySelector<HTMLElement>('body > .atlas-layer-map');
+      const slot = document.querySelector('.immersive-sheet-map')?.getBoundingClientRect();
+      const dot = name ? document.querySelector(`.atlas-layer-map .atlas-marker[aria-label="${name}"] .atlas-marker__dot`)?.getBoundingClientRect() : null;
+      return {
+        path: location.pathname,
+        open: !!wrap?.classList.contains('sheet-open'),
+        transition: sheet?.style.transition ?? '',
+        scrollTop: document.querySelector('.immersive-sheet-scroll')?.scrollTop ?? -1,
+        presentation: ocean?.dataset.atlasOcean ?? 'none',
+        slot: !!slot,
+        dx: slot && dot ? dot.left + dot.width / 2 - (slot.left + slot.width / 2) : null,
+        dy: slot && dot ? dot.top + dot.height / 2 - (slot.top + slot.height / 2) : null,
+      };
+    }, place);
+    type View = Awaited<ReturnType<typeof view>>;
+    // Wait up to 5 s for the viewer of `path` to match `ok`.
+    const settle = async (path: string, place: string | null, ok: (v: View) => boolean) => {
+      const end = Date.now() + 5000;
+      for (;;) {
+        const v = await view(place);
+        if (v.path === path && ok(v)) return v;
+        if (Date.now() > end) assert.fail(`${path}: ${JSON.stringify(v)}`);
+        await page.waitForTimeout(100);
+      }
+    };
+    const framed = (v: View) => v.open && v.presentation === 'window' && v.dx !== null && Math.abs(v.dx) <= 2 && Math.abs(v.dy!) <= 2;
+    // The key that steps to `slug`: the footer's left link is the ArrowLeft post.
+    const keyTo = async (slug: string) => {
+      const side = await page.locator(`a.immersive-sheet-postnav[href="/posts/${slug}"]`).getAttribute('class');
+      assert.ok(side, `a footer link to ${slug}`);
+      await page.keyboard.press(/\bleft\b/.test(side) ? 'ArrowLeft' : 'ArrowRight');
+    };
+
+    it('keeps an open sheet open on the next post; the widget frames the new place; Back keeps each entry', async () => {
+      const viewport = page.viewportSize();
+      try {
+        await page.setViewportSize({ width: 820, height: 1180 });
+        await page.goto(BASE + '/posts/keep-probe-b');
+        await page.locator('.immersive-sheet-hint').click();
+        await settle('/posts/keep-probe-b', 'Keepton', framed);
+
+        // The footer link: the sheet is open on c at once, at the top, and frames Mapton.
+        await page.locator('a.immersive-sheet-postnav[href="/posts/keep-probe-c"]').click();
+        const c = await settle('/posts/keep-probe-c', 'Mapton', framed);
+        assert.equal(c.transition, 'none', 'no open slide: ' + JSON.stringify(c));
+        assert.equal(c.scrollTop, 0, 'the top of the sheet: ' + JSON.stringify(c));
+
+        // A key: back to b, open, framed on Keepton.
+        await keyTo('keep-probe-b');
+        await settle('/posts/keep-probe-b', 'Keepton', framed);
+
+        // A post with no geo-tag: open, no slot, the ocean is hidden.
+        await keyTo('keep-probe-a');
+        await settle('/posts/keep-probe-a', null, (v) => v.open && !v.slot && v.presentation === 'hidden');
+
+        // Back keeps the state of each entry.
+        await page.goBack();
+        await settle('/posts/keep-probe-b', 'Keepton', framed);
+        await page.goBack();
+        await settle('/posts/keep-probe-c', 'Mapton', framed);
+
+        // A shut sheet stays shut on the next post, and the entry keeps it.
+        await page.keyboard.press('Escape');
+        await settle('/posts/keep-probe-c', null, (v) => !v.open && v.presentation === 'hidden');
+        await keyTo('keep-probe-b');
+        await settle('/posts/keep-probe-b', null, (v) => !v.open && v.presentation === 'hidden');
+        await page.goBack();
+        await settle('/posts/keep-probe-c', null, (v) => !v.open && v.presentation === 'hidden');
+      } finally {
+        if (viewport) await page.setViewportSize(viewport);
+      }
+    });
+  });
 });

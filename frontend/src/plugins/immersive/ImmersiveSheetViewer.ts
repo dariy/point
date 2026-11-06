@@ -21,6 +21,11 @@
  * mid-way. Swipe up opens, swipe down collapses (or, when already closed,
  * dismisses the viewer).
  *
+ * Prev/next keeps the sheet state. An open sheet stays open on the next post,
+ * with no slide, at the top of its scroll, and the window frames the next
+ * post's geo-tag. The state is in each post's history entry (`sheetKept`,
+ * atlasFromPost.ts), so Back and Forward show each entry as the reader left it.
+ *
  * Touch input in landscape (the same test as the map layer's side split,
  * atlasLayerLayout.ts::onAtlasSide) uses the side layout: the photo is on the
  * left, and the sheet is a right column that is always open and scrolls. There
@@ -41,7 +46,7 @@ import { ViewContext } from '../../utils/viewContext.ts';
 import { renderTagLink, buildTagIndex, parseTagUrl, postGeoTag } from '../../utils/tagLinks.ts';
 import { atlasPresentation, collapseAtlasOcean, expandAtlasOcean, presentAtlasOcean } from '../tags-atlas/atlasOcean.ts';
 import type { AtlasWindow } from '../tags-atlas/atlasOcean.ts';
-import { fromPostState, sheetReturnOf, sheetReturnState } from '../tags-atlas/atlasFromPost.ts';
+import { fromPostState, sheetKeptOf, sheetKeptState, sheetReturnOf, sheetReturnState } from '../tags-atlas/atlasFromPost.ts';
 import { markAtlasOpen, takeAtlasReturn } from '../../utils/atlasReturn.ts';
 import { searchWithState, searchWithView } from '../tags-atlas/atlasLayerState.ts';
 import { onAtlasSide } from '../tags-atlas/atlasLayerLayout.ts';
@@ -240,6 +245,15 @@ export class ImmersiveSheetViewer extends MediaViewer {
     }
     this._wireSheetControls();
     this._wireSheetMap();
+    // The history entry is read once per viewer (a re-render keeps the state).
+    let ret: ReturnType<typeof sheetReturnOf> = null;
+    if (!this._returnChecked) {
+      this._returnChecked = true;
+      ret = sheetReturnOf(history.state);
+      // Prev/next with the sheet open, or Back to an entry with the sheet open:
+      // open at once, with no slide. The offset and the window come below.
+      if (!ret && sheetKeptOf(history.state)) this._showSheetNow();
+    }
     // The map sync waits for the return check below: a return holds the map.
     let sideReady = false;
     this._sideStop = onAtlasSide(side => this._applySide(side, sideReady));
@@ -271,15 +285,11 @@ export class ImmersiveSheetViewer extends MediaViewer {
       this._sheetObserver.observe(sheetEl);
     }
     this._measureSheet();
-    if (!this._returnChecked) {
-      this._returnChecked = true;
-      const ret = sheetReturnOf(history.state);
-      if (ret) {
-        this._returnToSheet(ret.atlasReturn);
-        return;
-      }
+    if (ret) {
+      this._returnToSheet(ret.atlasReturn);
+      return;
     }
-    // A re-render with the sheet open puts the window on the new slot.
+    // A re-render, or a kept open sheet, with the sheet open puts the window on the new slot.
     if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
   }
 
@@ -292,11 +302,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
    */
   _returnToSheet(atlasReturn: string | null) {
     if (atlasReturn) markAtlasOpen({ returnUrl: atlasReturn });
-    this._sheetOpen = true;
-    this._sheetDrag = false;
-    this._showUI();
-    this._wrapper?.classList.add('sheet-open');
-    this.$('.immersive-sheet')?.setAttribute('aria-hidden', 'false');
+    this._showSheetNow();
     const geo = this._mapGeoTag();
     if (!this.$('.immersive-sheet-map') || !geo) {
       // No slot (no geo-tag now, or the atlas is off): a held map must go.
@@ -332,6 +338,33 @@ export class ImmersiveSheetViewer extends MediaViewer {
       this._syncMapWindow();
     });
   }
+  /** The open state with no slide: the caller sets the offset. */
+  _showSheetNow() {
+    this._sheetOpen = true;
+    this._sheetDrag = false;
+    this._showUI();
+    this._wrapper?.classList.add('sheet-open');
+    this.$('.immersive-sheet')?.setAttribute('aria-hidden', 'false');
+  }
+
+  /**
+   * The sheet state that prev/next keeps: the portrait state, also in the side
+   * layout (there the column is always open).
+   */
+  _sheetKept() {
+    return this._side ? this._openBeforeSide ?? false : this._sheetOpen;
+  }
+
+  /** Write the sheet state into this post's history entry, for a Back to it. */
+  _recordSheet() {
+    history.replaceState(sheetKeptState(history.state, this._sheetKept()), '');
+  }
+
+  /** The next post's entry opens the sheet when it is open now. */
+  _postNavState() {
+    return this._sheetKept() ? sheetKeptState(null, true) : undefined;
+  }
+
   /**
    * Turn the side layout on or off. On: the sheet opens, with no slide and no
    * transform (CSS places the column). Off: the sheet goes back to its
@@ -414,6 +447,18 @@ export class ImmersiveSheetViewer extends MediaViewer {
         title: document.title,
         url: window.location.href
       });
+    });
+    // The footer's prev/next links carry the sheet state, as the keys and the
+    // photo panels do (MediaViewer.ts::_navigatePost).
+    this.on(this.$('.immersive-sheet-footer'), 'click', e => {
+      const me = e as MouseEvent;
+      if (me.button !== 0 || me.metaKey || me.ctrlKey || me.shiftKey || me.altKey) return;
+      const link = (e.target as Element).closest<HTMLAnchorElement>('a.immersive-sheet-postnav');
+      const href = link?.getAttribute('href');
+      if (!href) return;
+      e.preventDefault();
+      const state = this._postNavState();
+      navigate(href, state === undefined ? {} : { state });
     });
     this.on(this.$('.immersive-sheet-theme'), 'click', e => {
       e.stopPropagation();
@@ -712,6 +757,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     this._wrapper?.classList.add('sheet-open');
     this.$('.immersive-sheet')?.setAttribute('aria-hidden', 'false');
     this._setSheetOffset(this._sheetHeight, true);
+    this._recordSheet();
   }
   _closeSheet() {
     if (this._side) return;
@@ -720,6 +766,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     this._wrapper?.classList.remove('sheet-open');
     this.$('.immersive-sheet')?.setAttribute('aria-hidden', 'true');
     this._setSheetOffset(0, true);
+    this._recordSheet();
   }
 
   // ── Keep the inline EXIF block pointed at the active slide ──────────────────
