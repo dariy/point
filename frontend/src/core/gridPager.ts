@@ -296,6 +296,9 @@ export class GridPager {
       // Engage the drag a touch sooner than the immersive default so the grid
       // starts tracking the finger promptly instead of feeling laggy.
       commitThresholdPx: 8,
+      // In the touch landscape split the atlas handle owns the horizontal drag
+      // (tags-atlas/atlasLayerGesture.ts): it changes the map width, not the page.
+      ignoreSelector: 'body[data-atlas-side] .atlas-layer-handle',
       onPinchMove: this._o.zoom ? (scaleDelta: number) => this._pinchStep(scaleDelta) : undefined,
       onPinchEnd: this._o.zoom ? () => this._onPinchEnd() : undefined,
       onSwipeMove: (dx: number, dy: number) => {

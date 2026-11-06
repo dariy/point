@@ -305,9 +305,10 @@ body.grid-zoomable .footer-zoom {
     z-index: 106;
 }
 
-/* Touch landscape (body[data-atlas-side], css/public/atlas.css): in `mapList`
-   the footer is the bottom of the list column, right of the map. */
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #footer-mount {
+/* Touch landscape (body[data-atlas-side], css/public/atlas.css): in `mapList`,
+   and in a drag that snaps to `list` or `mapList`, the footer is the bottom of
+   the list column, right of the map. */
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #footer-mount {
     left: var(--atlas-layer-map-w);
 }
 

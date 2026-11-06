@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyRelease, pullOpens, recentVelocity, snapState, lockAxis, stateAfter, stateAfterKey, stateLabel, startsOnControl } from '../src/plugins/tags-atlas/atlasLayerGesture.ts';
+import { classifyRelease, dragAxis, pullOpens, recentVelocity, sidePositions, snapState, lockAxis, stateAfter, stateAfterKey, stateLabel, startsOnControl } from '../src/plugins/tags-atlas/atlasLayerGesture.ts';
 
 describe('lockAxis', () => {
   it('stays open under 8px', () => assert.equal(lockAxis(5, 7), null));
@@ -15,6 +15,51 @@ describe('classifyRelease', () => {
   it('a short slow drag snaps back', () => assert.equal(classifyRelease(0, 20, 400), 'none'));
   it('a short fast fling counts', () => assert.equal(classifyRelease(0, -20, 30), 'prev'));
   it('a horizontal swipe changes nothing', () => assert.equal(classifyRelease(80, 10, 100), 'none'));
+  it('in x, right past 40px is next and left is prev', () => {
+    assert.equal(classifyRelease(50, 3, 400, 'x'), 'next');
+    assert.equal(classifyRelease(-50, 3, 400, 'x'), 'prev');
+  });
+  it('in x, a short fast fling counts and a slow one does not', () => {
+    assert.equal(classifyRelease(-20, 0, 30, 'x'), 'prev');
+    assert.equal(classifyRelease(20, 0, 400, 'x'), 'none');
+  });
+  it('in x, a vertical swipe changes nothing', () => assert.equal(classifyRelease(5, 80, 100, 'x'), 'none'));
+});
+
+describe('dragAxis', () => {
+  it('the stack layout drags only in y', () => {
+    assert.equal(dragAxis(false, 'mapList', 'y'), 'y');
+    assert.equal(dragAxis(false, 'list', 'x'), null);
+  });
+  it('the side layout drags only in x from mapList and map', () => {
+    assert.equal(dragAxis(true, 'mapList', 'x'), 'x');
+    assert.equal(dragAxis(true, 'map', 'y'), null);
+  });
+  it('the side layout takes either axis from list', () => {
+    assert.equal(dragAxis(true, 'list', 'x'), 'x');
+    assert.equal(dragAxis(true, 'list', 'y'), 'y');
+  });
+  it('no axis before the lock', () => assert.equal(dragAxis(true, 'mapList', null), null));
+});
+
+describe('sidePositions', () => {
+  it('gives the handle left edge for each state', () => {
+    // 844x390 phone: the split map is 390 px wide, the handle 30 px.
+    assert.deepEqual(sidePositions(844, 390, 30), { list: 0, mapList: 360, map: 814 });
+  });
+  it('keeps mapList inside the bounds', () => {
+    assert.deepEqual(sidePositions(300, 400, 30), { list: 0, mapList: 270, map: 270 });
+    assert.deepEqual(sidePositions(844, 10, 30), { list: 0, mapList: 0, map: 814 });
+  });
+  it('snaps a drag in x like a drag in y', () => {
+    const pos = sidePositions(844, 390, 30);
+    assert.equal(snapState(200, 'mapList', 0, pos), 'mapList');
+    assert.equal(snapState(150, 'mapList', 0, pos), 'list');
+    assert.equal(snapState(600, 'mapList', 0, pos), 'map');
+    // A fling to the left (map gets smaller) moves one step back.
+    assert.equal(snapState(340, 'mapList', -0.6, pos), 'list');
+    assert.equal(snapState(380, 'mapList', 0.6, pos), 'map');
+  });
 });
 
 describe('stateAfter', () => {
@@ -51,6 +96,11 @@ describe('startsOnControl', () => {
     const n = mk();
     assert.equal(startsOnControl(n.card, n, 'mapList'), true);
     assert.equal(startsOnControl(n.card, n, 'list'), false);
+  });
+  it('in the side layout the list column never does: it scrolls', () => {
+    const n = mk();
+    assert.equal(startsOnControl(n.card, n, 'mapList', true), false);
+    assert.equal(startsOnControl(n.inner, n, 'mapList', true), true);
   });
   it('the map never does', () => {
     const n = mk();
@@ -97,6 +147,12 @@ describe('stateAfterKey', () => {
     assert.equal(stateAfterKey('list', 'ArrowUp'), 'list');
     assert.equal(stateAfterKey('map', 'Escape'), 'list');
     assert.equal(stateAfterKey('list', 'a'), null);
+  });
+  it('ArrowRight and ArrowLeft step only in the side layout', () => {
+    assert.equal(stateAfterKey('list', 'ArrowRight'), null);
+    assert.equal(stateAfterKey('list', 'ArrowRight', true), 'mapList');
+    assert.equal(stateAfterKey('map', 'ArrowLeft', true), 'mapList');
+    assert.equal(stateAfterKey('mapList', 'ArrowDown', true), 'map');
   });
   it('labels each state', () => {
     assert.equal(stateLabel('list'), 'List');

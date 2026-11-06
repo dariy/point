@@ -260,6 +260,183 @@ describe('Atlas layer gestures', () => {
     assert.ok(!(await page.evaluate(() => document.body.hasAttribute('data-atlas-dragging'))));
   });
 
+  describe('touch landscape', () => {
+    let spage: Page;
+    let scdp: CDPSession;
+    const W = 844;
+    const H = 390;
+    const sstate = () => spage.evaluate(() => document.body.dataset.atlasLayer);
+    const waitState = (v: string) => spage.waitForFunction((x) => document.body.dataset.atlasLayer === x, v);
+    const ssettled = () => spage.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
+
+    /** One touch drag from (x, y) by (dx, dy) in steps. `stepMs` > 0 is a slow drag, no flick. */
+    async function sswipe(x: number, y: number, dx: number, dy: number, stepMs = 0) {
+      await ssettled();
+      const t0 = Date.now() / 1000;
+      const gap = stepMs > 0 ? stepMs / 1000 : 0.01;
+      const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', px: number, py: number, i: number) =>
+        scdp.send('Input.dispatchTouchEvent', {
+          type, touchPoints: type === 'touchEnd' ? [] : [{ x: px, y: py }], timestamp: t0 + i * gap,
+        });
+      await touch('touchStart', x, y, 0);
+      for (let i = 1; i <= 6; i++) {
+        await touch('touchMove', x + (dx * i) / 6, y + (dy * i) / 6, i);
+        if (stepMs > 0) await spage.waitForTimeout(stepMs);
+      }
+      await touch('touchEnd', x + dx, y + dy, 7);
+    }
+
+    const box = async (sel: string) => (await settledBox(spage, sel));
+    const centreOf = async (sel: string) => {
+      const b = await box(sel);
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    };
+    const open = async (view: string) => {
+      await spage.goto(`${BASE}/tags/atlas-side?view=${view}`);
+      await spage.locator('.atlas-layer-handle').waitFor();
+      await spage.waitForFunction(() => document.body.hasAttribute('data-atlas-side'));
+      await spage.locator('#grid-mount .post-card').first().waitFor();
+      await spage.waitForTimeout(600); // the column fit may re-render the grid
+    };
+
+    before(async () => {
+      for (let i = 1; i <= 16; i++) {
+        const post = await api('/api/posts', {
+          title: `Atlas side ${i}`, slug: `atlas-side-${i}`, content: 'Body.', excerpt: 'Card.',
+          status: 'published', tags: ['atlas-side'],
+        });
+        if (!post.ok) throw new Error('Post creation failed: ' + (await post.text()));
+      }
+      const ctx = await browser!.newContext({ viewport: { width: W, height: H }, hasTouch: true, isMobile: true });
+      spage = await ctx.newPage();
+      // A mouse event sets pointer-fine and ends the side layout: only touch input here.
+      await spage.addInitScript(() => { localStorage.removeItem('atlasLayerState'); localStorage.removeItem('pointerFine'); });
+      scdp = await ctx.newCDPSession(spage);
+    });
+
+    it('in mapList the handle is a vertical bar on the map right edge', async () => {
+      await open('split');
+      const m = await box('body > .atlas-layer-map');
+      const h = await box('.atlas-layer-handle');
+      const label = JSON.stringify({ m, h });
+      assert.ok(Math.abs(h.x + h.width - (m.x + m.width)) <= 1, 'the handle ends at the map right edge: ' + label);
+      assert.ok(h.width <= 40 && h.height >= H - 1, 'the handle is a vertical bar: ' + label);
+      const g = (await box('.atlas-layer-handle__grip'));
+      assert.ok(g.height > g.width, 'the grip is vertical: ' + JSON.stringify(g));
+      // In map the bar is on the right edge of the full map.
+      await spage.evaluate(() => document.body.setAttribute('data-atlas-layer', 'map'));
+      const m2 = await box('body > .atlas-layer-map');
+      const h2 = await box('.atlas-layer-handle');
+      assert.ok(Math.abs(m2.width - W) <= 1, 'the full map is as wide as the viewport: ' + JSON.stringify(m2));
+      assert.ok(Math.abs(h2.x + h2.width - W) <= 1 && h2.width <= 40, 'the bar is on the right edge: ' + JSON.stringify(h2));
+    });
+
+    it('a horizontal swipe on the handle steps the state', async () => {
+      await open('split');
+      let c = await centreOf('.atlas-layer-handle');
+      await sswipe(c.x, c.y, 120, 0);
+      await waitState('map');
+      c = await centreOf('.atlas-layer-handle');
+      await sswipe(c.x, c.y, -120, 0);
+      await waitState('mapList');
+      c = await centreOf('.atlas-layer-handle');
+      await sswipe(c.x, c.y, -120, 0);
+      await waitState('list');
+      // In list the handle is the bar at the top of the list; a swipe right opens the map.
+      c = await centreOf('.atlas-layer-handle');
+      await sswipe(c.x, c.y, 120, 0);
+      await waitState('mapList');
+      // A vertical swipe on the vertical bar does not change the state.
+      c = await centreOf('.atlas-layer-handle');
+      await sswipe(c.x, c.y, 0, 120);
+      await spage.waitForTimeout(300);
+      assert.equal(await sstate(), 'mapList');
+    });
+
+    it('a free drag follows the finger in x and snaps to the nearest width', async () => {
+      await open('split');
+      const c = await centreOf('.atlas-layer-handle');
+      await ssettled();
+      const t = (type: 'touchStart' | 'touchMove' | 'touchEnd', px: number) =>
+        scdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: px, y: c.y }] });
+      // Slow, to a point nearer map than mapList.
+      const to = c.x + (W - c.x) * 0.7;
+      await t('touchStart', c.x);
+      for (let i = 1; i <= 8; i++) {
+        await t('touchMove', c.x + ((to - c.x) * i) / 8);
+        await spage.waitForTimeout(40);
+      }
+      await spage.waitForTimeout(150);
+      const mid = await spage.evaluate(() => ({
+        dragging: document.body.hasAttribute('data-atlas-dragging'),
+        target: document.body.dataset.atlasDragTarget,
+        map: document.querySelector('body > .atlas-layer-map')!.getBoundingClientRect().toJSON(),
+        handle: document.querySelector('.atlas-layer-handle')!.getBoundingClientRect().toJSON(),
+        grid: document.querySelector('#grid-mount')!.getBoundingClientRect().toJSON(),
+        gridTransform: document.querySelector<HTMLElement>('#grid-mount')!.style.transform,
+      }));
+      await t('touchEnd', to);
+      const label = JSON.stringify(mid);
+      assert.ok(mid.dragging, 'dragging: ' + label);
+      assert.equal(mid.target, 'map', 'the drag shows the layout of the state it snaps to');
+      assert.ok(Math.abs(mid.handle.x + mid.handle.width / 2 - to) < 8, 'the handle follows the finger: ' + label);
+      assert.ok(Math.abs(mid.map.x + mid.map.width - (mid.handle.x + mid.handle.width)) <= 1, 'the map width follows the handle: ' + label);
+      assert.ok(mid.grid.x >= mid.map.x + mid.map.width - 1, 'the list is right of the map: ' + label);
+      // The page swipe (core/gridPager.ts) ignores a gesture on the handle: the list does not slide.
+      assert.equal(mid.gridTransform, '', 'the list does not page: ' + label);
+      assert.ok(Math.abs(mid.grid.x - (mid.map.x + mid.map.width)) <= 1, 'the list starts at the map edge: ' + label);
+      await waitState('map');
+      await spage.waitForFunction(() => !document.body.hasAttribute('data-atlas-dragging'));
+      const m = await box('body > .atlas-layer-map');
+      assert.ok(Math.abs(m.width - W) <= 1, 'the map settles at the full width: ' + JSON.stringify(m));
+      assert.equal(await spage.evaluate(() => document.body.style.getPropertyValue('--atlas-layer-map-w')), '', 'the drag width is gone');
+    });
+
+    it('a swipe on the list column scrolls it, and a swipe on the map pans the map', async () => {
+      await open('split');
+      const g = await box('#grid-mount');
+      assert.ok(await spage.evaluate(() => { const gm = document.querySelector('#grid-mount')!; return gm.scrollHeight > gm.clientHeight; }), 'the column overflows');
+      await sswipe(g.x + g.width / 2, g.y + g.height - 30, 0, -150);
+      await spage.waitForFunction(() => document.querySelector('#grid-mount')!.scrollTop > 0);
+      assert.equal(await sstate(), 'mapList');
+      assert.ok(!(await spage.evaluate(() => document.body.hasAttribute('data-atlas-dragging'))));
+      // A horizontal swipe on the column does not change the state either.
+      await sswipe(g.x + g.width - 30, g.y + g.height / 2, -150, 0);
+      await spage.waitForTimeout(300);
+      assert.equal(await sstate(), 'mapList');
+      const m = await box('body > .atlas-layer-map');
+      const pane = () => spage.evaluate(() => getComputedStyle(document.querySelector('.atlas-layer-map .leaflet-map-pane')!).transform);
+      const before = await pane();
+      await sswipe(m.x + m.width / 2, m.y + m.height / 2, -120, 40);
+      await spage.waitForFunction((b) => getComputedStyle(document.querySelector('.atlas-layer-map .leaflet-map-pane')!).transform !== b, before);
+      assert.equal(await sstate(), 'mapList');
+    });
+
+    it('a pull down on the list at scroll top opens the split', async () => {
+      await open('list');
+      const c = await centreOf('#grid-mount .post-card >> nth=0');
+      await sswipe(c.x, c.y, 0, 150);
+      await waitState('mapList');
+      await spage.waitForFunction(() => !document.body.hasAttribute('data-atlas-dragging'));
+      const m = await box('body > .atlas-layer-map');
+      assert.ok(Math.abs(m.width - Math.min(H, W - 320)) <= 1, 'the split map: ' + JSON.stringify(m));
+    });
+
+    it('a tap on the handle cycles, and the arrow keys step', async () => {
+      await open('split');
+      const c = await centreOf('.atlas-layer-handle');
+      await spage.touchscreen.tap(c.x, c.y);
+      await waitState('map');
+      await spage.locator('.atlas-layer-handle').focus();
+      await spage.keyboard.press('ArrowLeft');
+      await waitState('mapList');
+      await spage.keyboard.press('ArrowRight');
+      await waitState('map');
+      await spage.keyboard.press('Escape');
+      await waitState('list');
+    });
+  });
+
   describe('desktop', () => {
     let dpage: Page;
     const dstate = () => dpage.evaluate(() => document.body.dataset.atlasLayer);

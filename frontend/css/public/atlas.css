@@ -1004,13 +1004,30 @@ body[data-atlas-settling] #grid-mount {
    atlasLayerLayout.ts::watchAtlasSide sets body[data-atlas-side] for touch
    input in landscape. In `mapList` the map is a square on the left, from the
    top to the bottom of the viewport. The column is at least 20rem wide. The
-   header, the handle, the list and the footer (css/public/footer.css) are in
-   the column. A drag, `list` and `map` keep the stack layout above. */
-body[data-atlas-side] {
-    --atlas-layer-map-w: min(100dvh, 100vw - 20rem);
+   header, the list and the footer (css/public/footer.css) are in the column.
+   In `mapList` and `map` the handle is a vertical bar on the map's right edge.
+   A drag (atlasLayerGesture.ts) sets --atlas-layer-map-w inline and moves the
+   handle in x. The drag shows the layout of the state it snaps to
+   (body[data-atlas-drag-target]): the split for `list` and `mapList`, the map
+   under the header for `map`. `list` keeps the full-width list. */
+/* Registered as a length, so atlasLayerGesture.ts::sidePos reads it in px. */
+@property --atlas-layer-split-w {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
 }
 
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) .atlas-layer-map {
+body[data-atlas-side] {
+    --atlas-layer-split-w: min(100dvh, 100vw - 20rem);
+    --atlas-layer-map-w: var(--atlas-layer-split-w);
+}
+
+/* In `map` the map is full width; the handle is on its right edge. */
+body[data-atlas-side][data-atlas-layer="map"] {
+    --atlas-layer-map-w: 100vw;
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .atlas-layer-map {
     top: 0;
     bottom: 0;
     left: 0;
@@ -1018,17 +1035,40 @@ body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not
     width: var(--atlas-layer-map-w);
 }
 
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) .atlas-layer-handle {
-    top: var(--atlas-layer-header-h, 0px);
-    bottom: auto;
-    left: var(--atlas-layer-map-w);
-    right: 0;
+body[data-atlas-side]:is([data-atlas-layer="map"]:not([data-atlas-drag-target]), [data-atlas-drag-target="map"]) .atlas-layer-map {
+    bottom: var(--atlas-layer-footer-h, 0px);
+    left: 0;
+    right: auto;
+    width: var(--atlas-layer-map-w);
+}
+
+/* The handle: a vertical bar over the right edge of the map. */
+body[data-atlas-side]:is([data-atlas-layer="mapList"], [data-atlas-layer="map"], [data-atlas-dragging]) .atlas-layer-handle {
+    top: 0;
+    bottom: 0;
+    left: calc(var(--atlas-layer-map-w) - var(--atlas-layer-handle-h));
+    right: auto;
+    width: var(--atlas-layer-handle-h);
+    height: auto;
+    border-top: none;
+    border-left: var(--border-width) solid var(--border-primary);
+}
+
+body[data-atlas-side]:is([data-atlas-layer="map"]:not([data-atlas-drag-target]), [data-atlas-drag-target="map"]) .atlas-layer-handle {
+    top: var(--atlas-layer-top, var(--atlas-layer-header-h, 0px));
+    bottom: var(--atlas-layer-footer-h, 0px);
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"], [data-atlas-layer="map"], [data-atlas-dragging]) .atlas-layer-handle__grip {
+    width: 4px;
+    height: 40px;
 }
 
 /* The list column: a grid of square cards that scrolls. gridFit.ts::sidePerPage
-   fits the page to the column: whole rows, enough to fill its height. */
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #grid-mount {
-    top: calc(var(--atlas-layer-header-h, 0px) + var(--atlas-layer-handle-h));
+   fits the page to the column: whole rows, enough to fill its height. A finger
+   scrolls it (pan-y): in the side layout it is not a drag surface. */
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount {
+    top: var(--atlas-layer-header-h, 0px);
     bottom: var(--atlas-layer-footer-h, 0px);
     left: var(--atlas-layer-map-w);
     right: 0;
@@ -1038,7 +1078,17 @@ body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not
     touch-action: pan-y;
 }
 
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #grid-mount .posts-grid {
+/* A drag that snaps to `map`: the rest of the list is right of the map. */
+body[data-atlas-side]:is([data-atlas-layer="map"]:not([data-atlas-drag-target]), [data-atlas-drag-target="map"]) #grid-mount {
+    top: var(--atlas-layer-top, var(--atlas-layer-header-h, 0px));
+    bottom: var(--atlas-layer-footer-h, 0px);
+    left: var(--atlas-layer-map-w);
+    right: 0;
+    height: auto;
+    overflow: hidden;
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .posts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
     grid-template-rows: none;
@@ -1047,7 +1097,7 @@ body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not
     height: auto;
 }
 
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #grid-mount .post-card-slot {
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .post-card-slot {
     flex: none;
     width: auto;
     height: auto;
@@ -1055,20 +1105,31 @@ body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not
     aspect-ratio: 1;
 }
 
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #grid-mount .post-card {
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .post-card {
     height: 100%;
 }
 
 /* The header goes right of the map; HeaderFold folds it for the column width. */
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) #header-mount {
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #header-mount {
     width: auto;
     margin-left: var(--atlas-layer-map-w);
 }
 
-body[data-atlas-side][data-atlas-layer="mapList"]:not([data-atlas-dragging]):not([data-atlas-drag-target]) .atlas-from-post {
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .atlas-from-post {
     top: var(--spacing-sm, 8px);
     left: calc(var(--atlas-layer-map-w) / 2);
     max-width: calc(var(--atlas-layer-map-w) - 2 * var(--spacing-md, 16px));
+}
+
+/* After release the map width slides to its snap position. */
+body[data-atlas-side][data-atlas-snapping] :is(.atlas-layer-map, .atlas-layer-handle, #grid-mount, #header-mount, #footer-mount) {
+    transition: width 0.2s ease-out, left 0.2s ease-out, margin-left 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body[data-atlas-side][data-atlas-snapping] :is(.atlas-layer-map, .atlas-layer-handle, #grid-mount, #header-mount, #footer-mount) {
+        transition: none;
+    }
 }
 
 /* The window (atlasOcean.ts): the map keeps its box and shows through the
