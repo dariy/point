@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { createLongPress, peekText, PEEK_DELAY, PEEK_HOLD, PEEK_SLOP } from '../src/plugins/tags-atlas/atlasPeek.ts';
+import { createLongPress, PEEK_DELAY, PEEK_HOLD, PEEK_SLOP } from '../src/plugins/tags-atlas/atlasPeek.ts';
 
 /** A long press on fake timers; `tick(ms)` runs the timers that are due. */
 function harness() {
@@ -33,12 +33,6 @@ function harness() {
 }
 
 describe('atlasPeek', () => {
-  test('peekText: one post, many posts', () => {
-    assert.equal(peekText('Berlin', 1), 'Berlin · 1 post');
-    assert.equal(peekText('Berlin', 12), 'Berlin · 12 posts');
-    assert.equal(peekText('Berlin', 0), 'Berlin · 0 posts');
-  });
-
   test('the defaults: 450 ms, 6 px, 1.5 s', () => {
     assert.equal(PEEK_DELAY, 450);
     assert.equal(PEEK_SLOP, 6);

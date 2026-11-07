@@ -1,11 +1,11 @@
 /**
- * The place peek: a dot-mode place shows `<name> · <n> posts` on demand.
+ * The place peek: a collapsed place pill expands to `[● Berlin]` on demand.
  *
- * A fine pointer gets it on hover (CSS only, atlas.css `.atlas-marker__peek`).
+ * A fine pointer gets it on hover (CSS only, atlas.css `.atlas-marker:hover`).
  * A touch gets it on a long press: this file holds the timer and the slop.
- * A press that stays within `slop` px for `delay` ms shows the peek. The
- * release hides it after `hold` ms. A peek press is no tap: the click after it
- * must not open the cloud (`consumeClick`).
+ * A press that stays within `slop` px for `delay` ms expands the pill. The
+ * release collapses it after `hold` ms. A peek press is no tap: the click after
+ * it must not open the cloud (`consumeClick`).
  */
 
 /** The press time that shows the peek, ms. */
@@ -39,11 +39,6 @@ export interface LongPress {
   active(): boolean;
   /** Stop the timers and hide a peek that shows. */
   cancel(): void;
-}
-
-/** The text of a peek: `Berlin · 1 post`, `Berlin · 12 posts`. */
-export function peekText(name: string, count: number): string {
-  return `${name} · ${count} ${count === 1 ? 'post' : 'posts'}`;
 }
 
 export function createLongPress(opts: LongPressOptions): LongPress {

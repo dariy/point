@@ -57,12 +57,15 @@ sheet has no map. The slot is a square at the size of the camera data (EXIF) blo
 width, at most 16rem high, and after the sheet text. The window shows the place with
 its dot, its label and its cloud with one ring only (`maxRings: 1`).
 
-**Place labels.** A place shows its name next to its dot (`● Berlin`) when the label has
-space; else it shows the dot only. The places with more posts go first. A label shows
-only if it does not cover a label that is already shown, the dot of another place, or a
-chip of the open cloud. A tagged country or state gets its label at the place's own
-point. The pass (`atlasLabels.ts::declutter`) runs again after each zoom and move. In
-the sheet window, only the places in the visible part of the window count.
+**Place labels.** A place marker is one pill: collapsed, the dot only; expanded, the dot
+and the name, `[● Berlin]`. A tap anywhere on the pill selects the place and opens its
+cloud. A pill expands when it has space, on hover or a long press, and while its place is
+selected and the cloud does not show yet. The places with more posts go first. A pill
+expands only if it does not cover a pill that is already expanded, the dot of another
+place, or a chip of the open cloud. The cloud's centre chip is the expanded form of the
+selected place. A tagged country or state gets its label at the place's own point. The
+pass (`atlasLabels.ts::declutter`) runs again after each zoom and move. In the sheet
+window, only the places in the visible part of the window count.
 
 **Touch landscape.** With touch input in landscape, `mapList` is a side layout: the map
 is a square on the left, the full viewport high, and the header, a scrolling grid of

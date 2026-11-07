@@ -102,30 +102,47 @@ moves the map with no animation.
 
 ### Labels
 
-A place shows its name next to its dot (`● Berlin`) when the label has space. Else the
-place shows the dot only. A tagged country or state shows its name at the place's own
-point. The places with more posts go first: a label shows only if it does not cover a
-label that is already shown, or the dot of another place. A zoom in thus adds labels.
-The decision runs again after each zoom and move, on the full map, in `mapList` and in
-the sheet window. In a window, only the places in the visible part of the window count.
-An open cloud is taken space: a label below a chip of the cloud is hidden. A label takes
-no taps; a tap goes to the dot or the shape below it. The label of a hidden place is
-dimmed. The pass is `atlasLabels.ts::declutter`.
+A place marker is one pill. It has two states:
 
-A place marker has no native tooltip. It shows a peek instead: `Berlin · 12 posts`, at the
-label position. With a mouse, the peek shows on hover and goes on leave. On touch, a press of
-450 ms with less than 6 px of movement shows the peek. The release hides it after 1.5 s. A
-long press does not open the cloud and does not pan the map. A short tap works as before. The
-sheet window shows no peek: all its taps open the full map. The timer is
-`atlasPeek.ts::createLongPress`.
+- **Collapsed:** the dot only.
+- **Expanded:** the dot and the name in one pill, `[● Berlin]`.
+
+A tap anywhere on the pill, on the dot or on the name, selects the place and opens its
+cloud. It does not open the tag page. In the sheet window, a tap opens the full map, as
+all window taps do.
+
+A pill expands in these cases:
+
+- **The label pass gives it space.** The pass measures the box of the whole pill. The
+  places with more posts go first: a pill expands only if it does not cover a pill that is
+  already expanded, or the dot of another place. A zoom in thus expands more pills. The
+  pass runs again after each zoom and move, on the full map, in `mapList` and in the sheet
+  window. In a window, only the places in the visible part of the window count. An open
+  cloud is taken space: a pill below a chip of the cloud stays collapsed.
+- **Hover or a long press.** With a mouse, a pill expands on hover and collapses on leave.
+  On touch, a press of 450 ms with less than 6 px of movement expands the pill. The release
+  collapses it after 1.5 s. A long press does not open the cloud and does not pan the map.
+  A short tap works as before. The sheet window expands no pill on hover or a long press.
+  The timer is `atlasPeek.ts::createLongPress`.
+- **The place is selected.** While its cloud does not show (the cloud loads, or there is
+  no cloud), the selected pill goes first in the pass and is always expanded. The other
+  pills go around it. While the cloud shows, the cloud's centre chip is the expanded form
+  of the place: the pill stays collapsed under the chip.
+
+The expanded pill shows the name only, not the post count. A place marker has no native
+tooltip; its accessible name is the place name. A tagged country or state shows its name
+at the place's own point, with the same pass; this label takes no taps, so a tap goes to
+the shape below it. The pill of a hidden place is dimmed. The pass is
+`atlasLabels.ts::declutter`; `AtlasPlaces.ts::pillBox` gives the pill box.
 
 ### Clusters
 
 At a low zoom the dots of a dense area overlap. Two dots that overlap by more than half the
 radius of the smaller dot merge into one cluster dot. The cluster dot shows the number of
 places. Its size follows the sum of the post counts, with the same rule as a place dot. It sits
-at its largest place. Its label is `<largest place> +N` (N = the other places), and the label
-pass gives it space like a place label. On hover, the cluster shows `<n> places · <n> posts`.
+at its largest place. It is a pill like a place marker: expanded, it shows
+`[● <largest place> +N]` (N = the other places). The label pass gives it space like a place
+pill, and it expands on hover.
 
 - The pass is greedy: the places go largest first. A place that is in no cluster starts one
   and takes each free place whose dot overlaps its own dot.

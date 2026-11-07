@@ -53,6 +53,8 @@
 /* ── Geo-tag markers ───────────────────────────────────────────────────────── */
 
 .atlas-marker__dot {
+    position: relative;
+    z-index: 1;
     display: block;
     border-radius: 50%;
     background: rgba(31, 158, 142, 0.72);
@@ -106,11 +108,18 @@
     cursor: pointer;
 }
 
-/* ── Place labels ──────────────────────────────────────────────────────────────
-   A place shows its name only in label mode (`--labelled`, set per place by
-   AtlasPlaces._applyLabels when the label has space); else the dot only. The
-   box is 18px high: AtlasPlaces.ts LABEL_H and LABEL_PAD_X follow these sizes.
-   Labels take no taps: a tap goes to the dot or the shape below. */
+/* ── Place pills and shape labels ─────────────────────────────────────────────
+   A place marker is one pill. Collapsed: the dot only. Expanded: the dot and
+   the title in one pill, `[● Berlin]`. `.atlas-marker__label` draws the whole
+   pill: it starts 3px left of the dot (PILL_INSET) and its left padding holds
+   the dot (100% = the dot size). AtlasPlaces.ts::pillBox measures the same box
+   (LABEL_H, LABEL_PAD_X, LABEL_GAP, PILL_INSET). A pill expands when the label
+   pass gives it room (`--labelled`, AtlasPlaces._applyLabels), on hover with a
+   fine pointer, and on a long press (`--peek`, AtlasPlaces._setPeek). The
+   label pass expands the selected place first while its cloud does not show;
+   an open cloud's centre chip is the selected place's expanded form. The whole expanded pill takes taps: a tap on
+   the title is a tap on the place. A shape label takes no taps: a tap goes to
+   the shape below. */
 .atlas-marker__label,
 .atlas-shape-label__text {
     position: absolute;
@@ -132,8 +141,15 @@
 }
 
 .atlas-marker__label {
-    left: calc(100% + 3px);
+    left: -3px;
+    display: flex;
+    align-items: center;
+    height: max(18px, calc(100% + 6px));
+    padding-left: calc(100% + 10px);
+    border-radius: 999px;
     transform: translateY(-50%);
+    cursor: pointer;
+    pointer-events: auto;
 }
 
 .leaflet-marker-icon.atlas-shape-label {
@@ -148,34 +164,23 @@
 }
 
 .atlas-marker--labelled .atlas-marker__label,
-.atlas-marker--labelled .atlas-shape-label__text {
+.atlas-marker--labelled .atlas-shape-label__text,
+html.pointer-fine .atlas-marker:hover .atlas-marker__label,
+.atlas-marker--peek .atlas-marker__label {
     visibility: visible;
 }
 
-/* ── Place peek ────────────────────────────────────────────────────────────────
-   `<name> · <n> posts` at the label position, above the label. It shows on
-   hover with a fine pointer, and on a long press on touch (`--peek`, set by
-   AtlasPlaces._setPeek). A window (the sheet widget) shows no peek: all its
-   taps open the full map. */
-.atlas-marker__peek {
-    position: absolute;
-    top: 50%;
-    left: calc(100% + 3px);
-    transform: translateY(-50%);
-    box-sizing: border-box;
-    height: 18px;
-    padding: 0 4px;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 16px;
-    white-space: nowrap;
-    color: var(--text-primary, #1a1a1a);
+/* A pill that expands on demand is opaque and goes above the other markers.
+   The z-index stays below #toasts (10020, toastStacking.test.ts). */
+html.pointer-fine .atlas-marker:hover .atlas-marker__label,
+.atlas-marker--peek .atlas-marker__label {
     background: var(--bg-primary, #fff);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
-    pointer-events: none;
-    visibility: hidden;
+}
+
+html.pointer-fine .leaflet-marker-icon.atlas-marker:hover,
+.leaflet-marker-icon.atlas-marker--peek {
+    z-index: 9000 !important;
 }
 
 .leaflet-marker-icon.atlas-marker {
@@ -184,28 +189,10 @@
     user-select: none;
 }
 
-html.pointer-fine .atlas-marker:hover .atlas-marker__peek,
-.atlas-marker--peek .atlas-marker__peek {
-    visibility: visible;
-}
-
-html.pointer-fine .atlas-marker:hover .atlas-marker__label,
-.atlas-marker--peek .atlas-marker__label {
+/* A window (the sheet widget) expands no pill on hover: all its taps open the
+   full map. */
+html.pointer-fine [data-atlas-ocean="window"] .atlas-marker:not(.atlas-marker--labelled):hover .atlas-marker__label {
     visibility: hidden;
-}
-
-/* The peek goes above the other markers and their labels. */
-html.pointer-fine .leaflet-marker-icon.atlas-marker:hover,
-.leaflet-marker-icon.atlas-marker--peek {
-    z-index: 9000 !important;
-}
-
-[data-atlas-ocean="window"] .atlas-marker .atlas-marker__peek {
-    visibility: hidden !important;
-}
-
-html.pointer-fine [data-atlas-ocean="window"] .atlas-marker--labelled:hover .atlas-marker__label {
-    visibility: visible;
 }
 
 /* An owner-only place: its label is dimmed, with the dashed edge of its dot. */

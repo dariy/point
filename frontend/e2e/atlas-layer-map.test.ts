@@ -862,7 +862,7 @@ describe('Atlas layer map', () => {
       assert.equal(c!.count, '4', 'the cluster shows the place count');
       assert.equal(c!.label, 'Lbl Alpha +3', 'the label names the largest place');
       assert.equal(c!.labelled, true, 'the cluster label has space: ' + JSON.stringify(c));
-      assert.equal(far.pointer, 'none', 'a label takes no taps');
+      assert.equal(far.pointer, 'auto', 'the whole pill takes taps');
       assert.ok(far.boxes.some((b) => b.text === 'France'), 'a tagged country shape has a label');
       noOverlap(far.boxes);
 
@@ -912,8 +912,12 @@ describe('Atlas layer map', () => {
       await page.waitForTimeout(400);
       await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Beta"] .atlas-marker__dot').click();
       await page.locator('.atlas-node--center', { hasText: 'Lbl Beta' }).waitFor();
-      // The open cloud is taken space: no label is shown below a chip.
+      // The chips pop in with an overshoot: read the boxes after the animation.
+      await page.waitForFunction(() => [...document.querySelectorAll('.atlas-layer-map .atlas-node')].every((el) => el.getAnimations().length === 0));
+      // The open cloud is taken space: no pill is expanded below a chip. The
+      // centre chip is the expanded form of the selected place (child .28).
       const after = await read();
+      assert.equal(after.labelled['Lbl Beta'], false, 'the selected pill is collapsed under its centre chip');
       const chips = await page.evaluate(() => [...document.querySelectorAll('.atlas-layer-map .atlas-node')].map((el) => {
         const r = el.getBoundingClientRect();
         return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
@@ -926,59 +930,132 @@ describe('Atlas layer map', () => {
       }
     });
 
-    // A fine pointer: a hover shows `<name> · <n> posts` at the label position (child .21).
-    it('shows the name and the post count on hover; the peek goes on leave', { skip: onIpad && 'hover needs a fine pointer' }, async () => {
-      // At zoom 5 the dots are about 11 px apart: no cluster, but the labels collide.
+    // The pill under a point, its mode, and its box against its dot.
+    const pillAt = (x: number, y: number) => page.evaluate(([px, py]) => {
+      const m = document.elementFromPoint(px!, py!)?.closest<HTMLElement>('.atlas-marker');
+      if (!m) return null;
+      const label = m.querySelector<HTMLElement>('.atlas-marker__label')!;
+      const pr = label.getBoundingClientRect();
+      const dr = m.querySelector('.atlas-marker__dot')!.getBoundingClientRect();
+      return {
+        name: m.getAttribute('aria-label') ?? '',
+        labelled: m.classList.contains('atlas-marker--labelled'),
+        expanded: getComputedStyle(label).visibility === 'visible',
+        text: label.textContent,
+        holdsDot: pr.left < dr.left && pr.right > dr.right && pr.top <= dr.top + 1 && pr.bottom >= dr.bottom - 1,
+      };
+    }, [x, y]);
+
+    // A fine pointer: a hover expands a collapsed pill (child .28).
+    it('hover expands a collapsed pill to [● name]; leave collapses it', { skip: onIpad && 'hover needs a fine pointer' }, async () => {
+      // At zoom 5 the dots are about 11 px apart: no cluster, but the pills collide.
       await page.goto(BASE + '/?view=map&at=10.75,30,5');
       await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]').waitFor();
       await page.waitForTimeout(400);
       assert.equal(await page.locator('.atlas-layer-map .atlas-marker[title]').count(), 0, 'no native title');
-      const counts: Record<string, number> = { 'Lbl Alpha': 3, 'Lbl Beta': 1, 'Lbl Gamma': 1, 'Lbl Delta': 1 };
-      // The marker under the pointer, its mode, and what it shows.
-      const under = (x: number, y: number) => page.evaluate(([px, py]) => {
-        const m = document.elementFromPoint(px!, py!)?.closest<HTMLElement>('.atlas-marker');
-        if (!m) return null;
-        const peek = m.querySelector<HTMLElement>('.atlas-marker__peek')!;
-        const label = m.querySelector<HTMLElement>('.atlas-marker__label')!;
-        const pr = peek.getBoundingClientRect();
-        const dr = m.querySelector('.atlas-marker__dot')!.getBoundingClientRect();
-        return {
-          name: m.getAttribute('aria-label') ?? '',
-          labelled: m.classList.contains('atlas-marker--labelled'),
-          peek: getComputedStyle(peek).visibility,
-          label: getComputedStyle(label).visibility,
-          text: peek.textContent,
-          right: pr.left >= dr.right && Math.abs((pr.top + pr.bottom) / 2 - (dr.top + dr.bottom) / 2) < 2,
-        };
-      }, [x, y]);
+      assert.equal(await page.locator('.atlas-layer-map .atlas-marker__peek').count(), 0, 'no separate peek');
       const dot = await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"] .atlas-marker__dot').boundingBox();
       assert.ok(dot);
-      // Above the top of the stack: a dot-mode place (Delta at zoom 5).
+      // Above the top of the stack: a collapsed place (Delta at zoom 5).
       const x = dot.x + dot.width / 2, y = dot.y + 2;
+      const before = await pillAt(x, y);
+      assert.equal(before?.expanded, false, 'collapsed before the hover: ' + JSON.stringify(before));
       await page.mouse.move(x, y);
-      const hover = await under(x, y);
+      const hover = await pillAt(x, y);
       assert.ok(hover, 'a marker under the pointer');
-      assert.equal(hover.labelled, false, 'a dot-mode place: ' + JSON.stringify(hover));
-      assert.equal(hover.peek, 'visible', 'the peek shows on hover');
-      assert.equal(hover.text, `${hover.name} · ${counts[hover.name]} post`);
-      assert.ok(hover.right, 'the peek sits right of the dot');
+      assert.equal(hover.labelled, false, 'the label pass gave it no room: ' + JSON.stringify(hover));
+      assert.equal(hover.expanded, true, 'the hover expands the pill');
+      assert.equal(hover.text, hover.name, 'the pill shows the title');
+      assert.ok(hover.holdsDot, 'the pill holds the dot');
 
       await page.mouse.move(5, 300);
-      const left = await under(x, y);
-      assert.equal(left?.peek, 'hidden', 'the peek goes on leave');
+      assert.equal((await pillAt(x, y))?.expanded, false, 'the pill collapses on leave');
+    });
 
-      // A labelled place (Alpha, the largest) shows the count on hover.
-      const alpha = await page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Alpha"] .atlas-marker__dot').boundingBox();
-      assert.ok(alpha);
-      const ax = alpha.x + alpha.width / 2, ay = alpha.y + alpha.height - 2;
-      await page.mouse.move(ax, ay);
-      const lab = await under(ax, ay);
-      assert.equal(lab?.name, 'Lbl Alpha');
-      assert.equal(lab.labelled, true);
-      assert.equal(lab.peek, 'visible');
-      assert.equal(lab.label, 'hidden', 'the peek replaces the label');
-      assert.equal(lab.text, 'Lbl Alpha · 3 posts');
-      await page.mouse.move(5, 300);
+    // A touch: a long press expands a collapsed pill and opens no cloud (child .28).
+    it('a long press expands a collapsed pill; the release opens no cloud', async () => {
+      await page.goto(BASE + '/?view=map&at=10.75,30,5');
+      const delta = page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]');
+      await delta.waitFor();
+      await page.waitForTimeout(400);
+      const expanded = () => delta.evaluate((m) => getComputedStyle(m.querySelector('.atlas-marker__label')!).visibility === 'visible');
+      assert.equal(await expanded(), false, 'collapsed before the press');
+      // A touch press on the dot that stays still for longer than PEEK_DELAY (450 ms).
+      const press = (type: string) => delta.evaluate((m, t) => {
+        const r = m.querySelector('.atlas-marker__dot')!.getBoundingClientRect();
+        const init = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 };
+        m.querySelector('.atlas-marker__dot')!.dispatchEvent(new PointerEvent(t, init));
+      }, type);
+      await press('pointerdown');
+      await page.waitForTimeout(700);
+      assert.equal(await expanded(), true, 'the long press expands the pill');
+      await press('pointerup');
+      assert.equal(await expanded(), true, 'the pill stays a moment after the release');
+      await page.waitForTimeout(1800);
+      assert.equal(await expanded(), false, 'the pill collapses after PEEK_HOLD');
+      assert.equal(await page.locator('.atlas-layer-map .atlas-node--center').count(), 0, 'no cloud');
+    });
+
+    it('the selected pill stays expanded after a pan until its cloud shows; then the centre chip is its expanded form', async () => {
+      // Hold the cloud request: the place is selected, its cloud does not show yet.
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const cloudUrl = /\/api\/pages\/graph\/tag\//;
+      await page.route(cloudUrl, async (route) => { await held; await route.continue(); });
+      try {
+        await page.goto(BASE + '/?view=map&at=10.75,30,5');
+        const delta = page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]');
+        await delta.waitFor();
+        await page.waitForTimeout(400);
+        assert.equal((await read()).labelled['Lbl Delta'], false, 'Delta has no room at zoom 5');
+        const dot = await delta.locator('.atlas-marker__dot').boundingBox();
+        assert.ok(dot);
+        const x = dot.x + dot.width / 2, y = dot.y + 2;
+        if (onIpad) await page.touchscreen.tap(x, y);
+        else await page.mouse.click(x, y);
+        await page.waitForFunction(() => document.querySelector('.atlas-layer-map .atlas-marker[aria-label="Lbl Delta"]')?.classList.contains('atlas-marker--active'));
+        const selected = await read();
+        assert.equal(selected.labelled['Lbl Delta'], true, 'the selected pill is expanded: ' + JSON.stringify(selected.labelled));
+        noOverlap(selected.boxes);
+
+        // A pan with the arrow keys.
+        const before = page.url();
+        await page.evaluate(() => document.querySelector<HTMLElement>('.leaflet-container')!.focus());
+        await page.keyboard.press('ArrowLeft');
+        await page.keyboard.press('ArrowUp');
+        await page.waitForFunction((u) => location.href !== u, before);
+        await page.waitForTimeout(400);
+        const panned = await read();
+        assert.equal(panned.labelled['Lbl Delta'], true, 'the selected pill stays expanded after the pan');
+        noOverlap(panned.boxes);
+
+        release();
+        await page.locator('.atlas-layer-map .atlas-node--center', { hasText: 'Lbl Delta' }).waitFor({ timeout: 5000 });
+        await page.waitForTimeout(400);
+        assert.equal((await read()).labelled['Lbl Delta'], false, 'the centre chip replaces the expanded pill');
+      } finally {
+        release();
+        await page.unroute(cloudUrl);
+      }
+    });
+
+    it('a tap on the title part of an expanded pill selects the place', async () => {
+      await page.goto(BASE + '/?view=map&at=10.75,30,7');
+      const beta = page.locator('.atlas-layer-map .atlas-marker[aria-label="Lbl Beta"]');
+      await beta.waitFor();
+      await page.waitForTimeout(400);
+      assert.ok(await beta.evaluate((m) => m.classList.contains('atlas-marker--labelled')), 'Beta is expanded at zoom 7');
+      const label = await beta.locator('.atlas-marker__label').boundingBox();
+      const dot = await beta.locator('.atlas-marker__dot').boundingBox();
+      assert.ok(label && dot);
+      // A point on the title, right of the dot.
+      const x = (dot.x + dot.width + label.x + label.width) / 2, y = label.y + label.height / 2;
+      assert.equal(await pillAt(x, y).then((p) => p?.name), 'Lbl Beta', 'the title is on top at the tap point');
+      if (onIpad) await page.touchscreen.tap(x, y);
+      else await page.mouse.click(x, y);
+      await page.locator('.atlas-layer-map .atlas-node--center', { hasText: 'Lbl Beta' }).waitFor({ timeout: 5000 });
+      assert.ok(await beta.evaluate((m) => m.classList.contains('atlas-marker--active')), 'the place is selected');
+      assert.equal(new URL(page.url()).searchParams.get('view'), 'map', 'the map stays: no tag page: ' + page.url());
     });
   });
 

@@ -5,12 +5,15 @@ import { boxesOverlap, clusterDots, declutter, dotsMerge, type DotItem, type Lab
 
 const bounds = { left: 0, top: 0, width: 1000, height: 800 };
 
-/** A place with a 12 px dot and a `w`×18 label to the right of the dot. */
+/**
+ * A place with a 12 px dot and a pill box: 3 px left of the dot, then the dot,
+ * a 3 px gap and a `w`×18 title (the whole pill, as AtlasPlaces measures it).
+ */
 function place(id: number, x: number, y: number, weight: number, w = 80): LabelItem {
   return {
     id, x, y, weight,
     dot: { dx: -6, dy: -6, width: 12, height: 12 },
-    label: { dx: 9, dy: -9, width: w, height: 18 },
+    label: { dx: -9, dy: -9, width: 3 + 12 + 3 + w, height: 18 },
   };
 }
 
@@ -67,9 +70,38 @@ describe('atlasLabels', () => {
     assert.deepEqual(ids(declutter(items, bounds, [chip])), []);
   });
 
+  test('a pill box holds its own dot: the own dot does not stop it', () => {
+    assert.deepEqual(ids(declutter([place(1, 100, 100, 1)], bounds)), [1]);
+  });
+
+  test('the pinned place goes first: a larger place goes around it', () => {
+    const items = [place(1, 100, 100, 9), place(2, 100, 118, 1)];
+    assert.deepEqual(ids(declutter(items, bounds)), [1]);
+    assert.deepEqual(ids(declutter(items, bounds, [], 2)), [2]);
+  });
+
+  test('the pinned place expands under a taken box; other pills go around it', () => {
+    const chip = { left: 120, top: 90, width: 60, height: 20 };
+    const items = [place(1, 100, 100, 1), place(2, 100, 300, 5)];
+    assert.deepEqual(ids(declutter(items, bounds, [chip], 1)), [1, 2]);
+  });
+
+  test('a pinned id out of view or not in the items changes nothing', () => {
+    const items = [place(1, 100, 100, 9), place(2, 100, 118, 1)];
+    assert.deepEqual(ids(declutter(items, bounds, [], 99)), [1]);
+    const view = { left: 0, top: 0, width: 1000, height: 110 };
+    assert.deepEqual(ids(declutter(items, view, [], 2)), [1]);
+  });
+
+  test('a cluster pill (id -1) holds its own dot; a taken box still stops it', () => {
+    assert.deepEqual(ids(declutter([place(-1, 100, 100, 6)], bounds)), [-1]);
+    const chip = { left: 120, top: 90, width: 60, height: 20 };
+    assert.deepEqual(ids(declutter([place(-1, 100, 100, 6)], bounds, [chip])), []);
+  });
+
   test('negative coordinates work (a box above the left edge)', () => {
     const view = { left: -500, top: -500, width: 1000, height: 1000 };
-    const items = [place(1, -300, -300, 2), place(2, -300, -285, 1)];
+    const items = [place(1, -300, -300, 2), place(2, -300, -282, 1)];
     assert.deepEqual(ids(declutter(items, view)), [1]);
   });
 

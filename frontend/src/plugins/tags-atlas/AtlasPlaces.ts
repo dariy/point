@@ -21,7 +21,7 @@ import { tagKind } from "../../utils/tagLinks.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
 import { isRevelioOn } from "../../utils/revelio.ts";
 import { clusterDots, declutter } from "./atlasLabels.ts";
-import { createLongPress, peekText } from "./atlasPeek.ts";
+import { createLongPress } from "./atlasPeek.ts";
 import { matchPlaces } from "./atlasSearch.ts";
 import {
   COUNTRIES_GEOJSON,
@@ -145,6 +145,8 @@ export const LABEL_H = 18;
 const LABEL_PAD_X = 10;
 /** Gap between a dot and its label, px. */
 const LABEL_GAP = 3;
+/** Pill edge around the dot, px: left of the dot, and the least above and below it. */
+const PILL_INSET = 3;
 /** The longest name a label shows. */
 const LABEL_MAX = 24;
 /** The magnifier on the place search button. */
@@ -170,6 +172,16 @@ function labelWidth(text: string, font: string): number {
   if (!measureCtx) return Math.ceil(text.length * 6.6) + LABEL_PAD_X;
   measureCtx.font = font;
   return Math.ceil(measureCtx.measureText(text).width) + LABEL_PAD_X;
+}
+
+/**
+ * The box of a place pill, `[● Berlin]`, relative to the dot centre: the dot
+ * (`r` px) and the title (`w` px, `_measureLabel`). It is as tall as a label
+ * or as the dot and its inset. atlas.css `.atlas-marker__label` draws this box.
+ */
+function pillBox(r: number, w: number): RelBox {
+  const height = Math.max(LABEL_H, r + 2 * PILL_INSET);
+  return { dx: -r / 2 - PILL_INSET, dy: -height / 2, width: PILL_INSET + r + LABEL_GAP + w, height };
 }
 
 /**
@@ -1084,14 +1096,17 @@ export class AtlasPlaces {
       const concealed = isConcealed(tag);
       const text = truncate(tag.name, LABEL_MAX);
       const w = this._measureLabel(text);
-      // The label sits right of the dot. It shows only in label mode
-      // (`atlas-marker--labelled`, set by _applyLabels) and takes no taps.
-      // The peek (name and post count) sits at the same place: it shows on
-      // hover or on a long press (atlasPeek.ts). It replaces the native title.
+      // The marker is one pill: collapsed = the dot only; expanded = the dot
+      // and the title, `[● Berlin]`. The label span draws the pill around the
+      // dot. It expands when the label pass gives it room
+      // (`atlas-marker--labelled`, _applyLabels), on hover or a long press
+      // (`atlas-marker--peek`, atlasPeek.ts), and when the place is selected
+      // and its cloud does not show yet (_applyLabels). A tap anywhere on the
+      // pill selects the place.
       const hiddenLabel = concealed ? " atlas-label--hidden" : "";
       const icon = L.divIcon({
         className: "atlas-marker",
-        html: String(html`<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span><span class="atlas-marker__label${hiddenLabel}">${text}</span><span class="atlas-marker__peek${hiddenLabel}">${peekText(concealedTitle(tag, tag.name), tag.post_count || 0)}</span>`),
+        html: String(html`<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span><span class="atlas-marker__label${hiddenLabel}">${text}</span>`),
         iconSize: [r, r],
         iconAnchor: [r / 2, r / 2],
       });
@@ -1109,7 +1124,7 @@ export class AtlasPlaces {
         id: tag.id,
         latLng: marker.getLatLng(),
         marker,
-        label: { dx: r / 2 + LABEL_GAP, dy: -LABEL_H / 2, width: w, height: LABEL_H },
+        label: pillBox(r, w),
         dot: { dx: -r / 2, dy: -r / 2, width: r, height: r },
         weight: tag.post_count || 0,
       });
@@ -1201,8 +1216,12 @@ export class AtlasPlaces {
   }
 
   /**
-   * Decide label mode or dot mode for each place (atlasLabels.ts::declutter).
-   * An open cloud's chips are taken space: a label below a chip is hidden.
+   * Expand or collapse each place pill (atlasLabels.ts::declutter). The pass
+   * measures the whole pill. While no cloud shows (it loads, or there is
+   * none), the selected place goes first and is always expanded; the other
+   * pills go around it. While a cloud shows, its centre chip is the expanded
+   * form of the selected place: the chips are taken space, so the selected
+   * pill stays collapsed under its chip and the other pills go around them.
    */
   _applyLabels(): void {
     if (this._dead || !this._labels.size) return;
@@ -1216,7 +1235,8 @@ export class AtlasPlaces {
       const p = map.latLngToContainerPoint(l.latLng);
       items.push({ id: l.id, x: p.x, y: p.y, label: l.label, dot: l.dot, weight: l.weight });
     }
-    const on = declutter(items, view, this._cloudBoxes());
+    const pinned = this._cloud ? null : (this._activeTag?.id ?? null);
+    const on = declutter(items, view, this._cloudBoxes(), pinned);
     for (const l of all) {
       l.marker._icon?.classList.toggle("atlas-marker--labelled", on.has(l.id));
     }
@@ -1279,7 +1299,7 @@ export class AtlasPlaces {
       const hiddenLabel = leadTag && isConcealed(leadTag) ? " atlas-label--hidden" : "";
       const icon = L.divIcon({
         className: "atlas-marker atlas-cluster",
-        html: String(html`<span class="atlas-marker__dot atlas-cluster__dot" style="width:${r}px;height:${r}px;">${ids.length}</span><span class="atlas-marker__label${hiddenLabel}">${text}</span><span class="atlas-marker__peek">${peekText(`${ids.length} places`, sum)}</span>`),
+        html: String(html`<span class="atlas-marker__dot atlas-cluster__dot" style="width:${r}px;height:${r}px;">${ids.length}</span><span class="atlas-marker__label${hiddenLabel}">${text}</span>`),
         iconSize: [r, r],
         iconAnchor: [r / 2, r / 2],
       });
@@ -1305,7 +1325,7 @@ export class AtlasPlaces {
           id: -(i + 1),
           latLng: lead.latLng,
           marker,
-          label: { dx: r / 2 + LABEL_GAP, dy: -LABEL_H / 2, width: w, height: LABEL_H },
+          label: pillBox(r, w),
           dot: { dx: -r / 2, dy: -r / 2, width: r, height: r },
           weight: sum,
         },
@@ -1313,7 +1333,7 @@ export class AtlasPlaces {
     });
   }
 
-  /** Show or hide the peek of place `id`. A peek holds the map still. */
+  /** Expand or collapse the pill of place `id` for a peek. A peek holds the map still. */
   _setPeek(id: number, on: boolean): void {
     this._labels.get(id)?.marker._icon?.classList.toggle("atlas-marker--peek", on);
     const drag = this._map.dragging;
@@ -1331,8 +1351,8 @@ export class AtlasPlaces {
   }
 
   /**
-   * Touch input for the peek. A long press on a place marker shows its peek
-   * and does not open its cloud. A window (the sheet widget) shows no peek:
+   * Touch input for the peek. A long press on a place pill expands it and does
+   * not open its cloud. A window (the sheet widget) shows no peek:
    * all its taps open the full map.
    */
   _listenPeek(): () => void {
@@ -1450,6 +1470,8 @@ export class AtlasPlaces {
     if (this._clustered.has(tag.id)) this._reclusterNow();
     setActive(true);
     this._activeSetActive = setActive;
+    // Until its cloud shows, the selected pill is expanded and goes first in the label pass.
+    this._applyLabels();
     if (opts.pan !== false) this._onSelect?.(tag);
 
     this.$("#atlas-hint")?.classList.add("is-hidden");

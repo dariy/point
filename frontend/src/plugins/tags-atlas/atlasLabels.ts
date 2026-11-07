@@ -1,10 +1,12 @@
 /**
  * atlasLabels.ts — which places on the atlas map show their name.
  *
- * A place shows `● Berlin` (label mode) when its label box has space, else the
- * dot only (dot mode). The pass is greedy: the places go largest first (by
- * post count, then by id for a stable order). A label is placed when its box
- * does not overlap a label that is already placed, the dot of another place,
+ * A place marker is one pill. It is expanded, `[● Berlin]`, when the box of
+ * the whole pill has space, else collapsed to the dot only. The `label` box of
+ * an item is the pill box: it holds the place's own dot. The pass is greedy:
+ * the selected place (`pinned`) goes first, then the places go largest first
+ * (by post count, then by id for a stable order). A pill expands when its box
+ * does not overlap a pill that is already placed, the dot of another place,
  * or a taken box (an open cloud's chips). Only places inside `bounds` count:
  * a place out of view takes no space.
  *
@@ -39,7 +41,7 @@ export interface LabelItem {
   /** the anchor point (the dot centre, or a shape's label point), container px */
   x: number;
   y: number;
-  /** the label box, relative to the anchor */
+  /** the label box, relative to the anchor: for a place marker, the whole pill (dot and title) */
   label: RelBox;
   /** the dot box, relative to the anchor; `null` for a shape (no dot) */
   dot: RelBox | null;
@@ -70,8 +72,8 @@ const inside = (x: number, y: number, b: Box): boolean =>
 
 interface Entry {
   box: Box;
-  /** the place id that owns the box, or -1 for a taken box */
-  owner: number;
+  /** the place id that owns the box, or `null` for a taken box (a cluster has a negative id) */
+  owner: number | null;
 }
 
 /** A spatial hash of boxes. */
@@ -105,14 +107,14 @@ class Grid {
   }
 
   /** Whether `b` overlaps a box that `self` does not own. */
-  hits(b: Box, self: number): boolean {
+  hits(b: Box, self: number | null): boolean {
     const [x0, y0, x1, y1] = this._range(b);
     for (let gx = x0; gx <= x1; gx++) {
       for (let gy = y0; gy <= y1; gy++) {
         const list = this.cells.get(Grid.key(gx, gy));
         if (!list) continue;
         for (const e of list) {
-          if (e.owner === self && self !== -1) continue;
+          if (self !== null && e.owner === self) continue;
           if (boxesOverlap(b, e.box, LABEL_PAD)) return true;
         }
       }
@@ -127,17 +129,25 @@ class Grid {
  * @param items - the places, in any order
  * @param bounds - the visible area; a place whose anchor is outside it does not count
  * @param taken - boxes that no label may cover (an open cloud's chips)
+ * @param pinned - the selected place: its label is placed first, with no check,
+ *   and is then a taken box for all other labels
  */
-export function declutter(items: readonly LabelItem[], bounds: Box, taken: readonly Box[] = []): Set<number> {
+export function declutter(items: readonly LabelItem[], bounds: Box, taken: readonly Box[] = [], pinned: number | null = null): Set<number> {
   const shown = items.filter((it) => inside(it.x, it.y, bounds));
   shown.sort((a, b) => b.weight - a.weight || a.id - b.id);
 
   const grid = new Grid();
-  for (const box of taken) grid.add({ box, owner: -1 });
+  for (const box of taken) grid.add({ box, owner: null });
   for (const it of shown) if (it.dot) grid.add({ box: abs(it.x, it.y, it.dot), owner: it.id });
 
   const out: Set<number> = new Set();
+  const first = pinned === null ? undefined : shown.find((it) => it.id === pinned);
+  if (first) {
+    grid.add({ box: abs(first.x, first.y, first.label), owner: first.id });
+    out.add(first.id);
+  }
   for (const it of shown) {
+    if (it === first) continue;
     const box = abs(it.x, it.y, it.label);
     if (grid.hits(box, it.id)) continue;
     grid.add({ box, owner: it.id });
