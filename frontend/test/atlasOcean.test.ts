@@ -399,6 +399,21 @@ describe('atlasOcean', () => {
       assert.deepEqual(p.log.slice(-2), ['frame - 0,0', 'panBy 0,200']);
     });
 
+    test('fractional slot moves pan whole px and keep the rest (Leaflet rounds panBy)', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      // A sheet animation: ten moves of 0.4 px up. Each one alone rounds to 0.
+      for (let i = 1; i <= 10; i++) p.ocean.present({ kind: 'window', rect: { ...slot, top: slot.top - 0.4 * i } });
+      const pans = p.log.filter((l) => l.startsWith('panBy')).map((l) => l.slice(6).split(',').map(Number));
+      for (const [dx, dy] of pans) assert.ok(Number.isInteger(dx) && Number.isInteger(dy), 'whole px: ' + pans);
+      // The map moved 4 px in total, as the slot centre did.
+      assert.equal(pans.reduce((sum, [, dy]) => sum + dy, 0), 4);
+      // A new centre starts again from no rest.
+      p.ocean.present({ kind: 'window', rect: { ...slot, top: 200.3 }, center: paris });
+      p.ocean.present({ kind: 'window', rect: { ...slot, top: 200 } });
+      assert.equal(p.log[p.log.length - 1], 'frame - 0,-100', 'a 0.3 px move with no rest: no pan');
+    });
+
     test('a box change in window mode recomputes the clip and the offset', () => {
       const p = fakePage('list');
       p.ocean.present({ kind: 'window', rect: slot, center: paris });

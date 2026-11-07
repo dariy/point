@@ -365,6 +365,11 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   let win: AtlasWindow | null = null;
   // The box when the window was last put on screen.
   let winBox: Rect | null = null;
+  // The part of the slot moves that the map did not pan yet (px under 0.5).
+  // Leaflet's panBy rounds to whole px: without this carry, the error of each
+  // move adds up and the place leaves the window centre (a sheet animation
+  // moves a fractional slot many times).
+  let panRest: Point = { x: 0, y: 0 };
   // The tween in progress: a cancel, and the resolve of its promise.
   let cancelTween: (() => void) | null = null;
   let endTween: (() => void) | null = null;
@@ -510,6 +515,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     if (current !== 'window') return;
     win = null;
     winBox = null;
+    panRest = { x: 0, y: 0 };
     map?.setWindowTap(null);
     map?.setLabelBounds(null);
     clipRect = null;
@@ -550,6 +556,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
         // The place is at the window centre: the window in px from the place.
         ? { slug: w.place.slug, bounds: { left: -w.rect.width / 2, top: -w.rect.height / 2, width: w.rect.width, height: w.rect.height } }
         : undefined;
+      panRest = { x: 0, y: 0 };
       ctl.frame(w.center, offset, w.zoom, place);
     }
     else if (prev && prevBox) {
@@ -557,10 +564,17 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       // size (a rotation): the map moves with the slot centre. Leaflet keeps
       // the box's top-left corner on a resize, so the move is in box px.
       ctl.frame(null, offset);
-      const dx = boxCenter(w.rect, box).x - boxCenter(prev.rect, prevBox).x;
-      const dy = boxCenter(w.rect, box).y - boxCenter(prev.rect, prevBox).y;
+      const x = boxCenter(w.rect, box).x - boxCenter(prev.rect, prevBox).x + panRest.x;
+      const y = boxCenter(w.rect, box).y - boxCenter(prev.rect, prevBox).y + panRest.y;
+      // Pan whole px (as Leaflet does) and keep the rest for the next move.
+      const dx = Math.round(x);
+      const dy = Math.round(y);
+      panRest = { x: x - dx, y: y - dy };
       if (dx || dy) ctl.panBy(-dx, -dy);
-    } else ctl.frame(null, offset);
+    } else {
+      panRest = { x: 0, y: 0 };
+      ctl.frame(null, offset);
+    }
   };
 
   const stopWarm = () => {
