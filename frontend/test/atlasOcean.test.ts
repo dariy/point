@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { EXPAND_CLICK_GUARD_MS, SETTLE_FRAMES, createAtlasOcean, defaultIdle, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
+import { EXPAND_CLICK_GUARD_MS, SETTLE_FRAMES, createAtlasOcean, defaultIdle, inertChildren, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
 import { isAtlasListPath, setAtlasLayerState } from '../src/plugins/tags-atlas/atlasLayerState.ts';
 
 /**
@@ -58,6 +58,8 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   let labelBounds: { left: number; top: number; width: number; height: number } | null | undefined;
   // The "‹ <post title>" chip: what the ocean asked for last.
   let chip = false;
+  // The inert stops that are open (deps.inert): 1 in a window, 0 out of it.
+  let inert = 0;
   const log: string[] = [];
   let maps = 0;
   let urlState = initial;
@@ -110,6 +112,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     sheetReturn: () => !!opts.sheetReturn,
     fromPostChip: (show) => { chip = show; },
     onRoute: (fn) => { routeWatchers.add(fn); return () => { routeWatchers.delete(fn); }; },
+    inert: () => { inert++; return () => { inert--; }; },
   });
   return {
     ocean,
@@ -137,6 +140,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     },
     get pendingFrames() { return frames.size; },
     get chip() { return chip; },
+    get inert() { return inert; },
     /** The container's box changes size (a rotation). */
     setBox(b: { left: number; top: number; width: number; height: number }) {
       box = b;
@@ -380,6 +384,7 @@ describe('atlasOcean', () => {
       assert.equal(p.ocean.presentation(), 'window');
       assert.equal(p.container.dataset.atlasOcean, 'window');
       assert.equal(p.container.getAttribute('aria-hidden'), 'true', 'the slot under the window is the control');
+      assert.equal(p.inert, 1, 'the aria-hidden map is out of the Tab order');
       assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
       // The point goes 200 px below the box centre: the slot centre.
       assert.deepEqual(p.log, ['frame 48.85,2.35 0,200']);
@@ -477,6 +482,7 @@ describe('atlasOcean', () => {
       assert.equal(p.container.style.clipPath, '');
       assert.equal(p.container.dataset.atlasOcean, 'hidden');
       assert.equal(p.container.getAttribute('aria-hidden'), null);
+      assert.equal(p.inert, 0, 'the markers are in the Tab order again');
       assert.equal(p.windowTap, null);
       assert.equal(p.log[p.log.length - 1], 'park');
       // A click on a hidden ocean goes on to the map as before.
@@ -1001,6 +1007,49 @@ describe('atlasOcean', () => {
 
 describe('atlasOcean default deps', () => {
   const g = globalThis as Record<string, unknown>;
+
+  test('inertChildren takes the container and each child, also a later one, out of the focus order until the stop', () => {
+    const prevMo = g.MutationObserver;
+    let notify: ((records: Array<{ addedNodes: unknown[] }>) => void) | null = null;
+    let disconnected = false;
+    g.MutationObserver = class {
+      constructor(fn: typeof notify) { notify = fn; }
+      observe(_el: unknown, opts: { childList: boolean }) {
+        assert.deepEqual(opts, { childList: true, attributes: true, attributeFilter: ['tabindex'] });
+      }
+      disconnect() { disconnected = true; }
+    };
+    try {
+      const pane = { nodeType: 1, inert: false };
+      const text = { nodeType: 3 } as { nodeType: number; inert?: boolean };
+      const attrs = new Map<string, string>();
+      const el = {
+        children: [pane],
+        getAttribute: (n: string) => attrs.get(n) ?? null,
+        setAttribute: (n: string, v: string) => { attrs.set(n, v); },
+        removeAttribute: (n: string) => { attrs.delete(n); },
+      } as unknown as HTMLElement & { children: unknown[] };
+      const stop = inertChildren(el);
+      assert.equal(pane.inert, true);
+      assert.equal(attrs.get('tabindex'), '-1', 'Leaflet keyboard focus on the container is off');
+      const legend = { nodeType: 1, inert: false };
+      el.children.push(legend);
+      notify!([{ addedNodes: [legend, text] }]);
+      assert.equal(legend.inert, true, 'a child added in the window');
+      assert.equal(text.inert, undefined, 'a text node is no element');
+      // Leaflet builds the map later and sets its keyboard tabindex.
+      attrs.set('tabindex', '0');
+      notify!([]);
+      assert.equal(attrs.get('tabindex'), '-1', 'a later tabindex is off too');
+      stop();
+      assert.ok(disconnected);
+      assert.equal(pane.inert, false);
+      assert.equal(legend.inert, false);
+      assert.equal(attrs.get('tabindex'), '0', 'the Leaflet tabindex is back');
+    } finally {
+      g.MutationObserver = prevMo;
+    }
+  });
 
   test('defaultIdle uses requestIdleCallback and its cancel', () => {
     const calls: string[] = [];

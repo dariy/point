@@ -200,6 +200,8 @@ export interface AtlasOceanDeps {
   fromPostChip(show: boolean): void;
   /** Call `fn` with the pathname on each route change. Returns a stop. */
   onRoute(fn: (pathname: string) => void): () => void;
+  /** Take the container and its content out of the focus order (`inertChildren`). Returns a stop. */
+  inert(container: HTMLElement): () => void;
 }
 
 export interface AtlasOcean {
@@ -242,6 +244,42 @@ function defaultContainer(body: HTMLElement): HTMLElement {
   el.append(hint);
   body.append(el);
   return el;
+}
+
+/**
+ * Take `el` and its content out of the focus order until the stop: each child
+ * is inert (also a child added later), and `el` gets `tabindex=-1` (Leaflet's
+ * keyboard handler gives it 0). An aria-hidden map must not take focus. `el`
+ * itself stays live: its capture listeners see the window input, and Leaflet
+ * gets the drag and the pinch on it.
+ */
+export function inertChildren(el: HTMLElement): () => void {
+  const set = (n: Node, on: boolean) => {
+    if (n.nodeType === 1) (n as HTMLElement).inert = on;
+  };
+  for (const n of Array.from(el.children)) set(n, true);
+  // The tabindex to put back. Leaflet can set one later (an async map build).
+  let tabindex = el.getAttribute('tabindex');
+  const offTab = () => {
+    const now = el.getAttribute('tabindex');
+    if (now === '-1') return;
+    tabindex = now;
+    el.setAttribute('tabindex', '-1');
+  };
+  offTab();
+  const mo = typeof MutationObserver === 'function'
+    ? new MutationObserver((records) => {
+      for (const r of records) r.addedNodes.forEach((n) => set(n, true));
+      offTab();
+    })
+    : null;
+  mo?.observe(el, { childList: true, attributes: true, attributeFilter: ['tabindex'] });
+  return () => {
+    mo?.disconnect();
+    for (const n of Array.from(el.children)) set(n, false);
+    if (tabindex === null) el.removeAttribute('tabindex');
+    else el.setAttribute('tabindex', tabindex);
+  };
 }
 
 function defaultObserveBox(container: HTMLElement, fn: () => void): () => void {
@@ -302,6 +340,7 @@ function defaultDeps(): AtlasOceanDeps {
       const stop = onRoute((r: { pathname?: string } | null) => fn(r?.pathname ?? location.pathname));
       return () => { stop(); };
     },
+    inert: inertChildren,
   };
 }
 
@@ -337,6 +376,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
   let expanding: AtlasExpand | null = null;
   let expandTimer: ReturnType<typeof setTimeout> | undefined;
   let stopRouteWatch: (() => void) | null = null;
+  // The window keeps the map out of the Tab order: a stop, or null.
+  let stopInert: (() => void) | null = null;
 
   /** End a pending expand: no hold timer, no route watch. */
   const dropExpand = () => {
@@ -477,6 +518,8 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       container.removeAttribute('aria-hidden');
       syncHint(container, null, null);
     }
+    stopInert?.();
+    stopInert = null;
   };
 
   /** Show the map through `w`. `recenter` false: keep the view (a tween step). */
@@ -487,6 +530,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
     el.dataset.atlasOcean = 'window';
     // The slot under the window is the control (role=button): one name for a screen reader.
     el.setAttribute('aria-hidden', 'true');
+    stopInert ??= deps.inert(el);
     stopWarm();
     warmed = true;
     win = w;

@@ -434,6 +434,48 @@ describe('Atlas layer map', () => {
         if (viewport) await page.setViewportSize(viewport);
       }
     });
+
+    // The window map is aria-hidden: nothing in it takes focus. The full map
+    // gives the markers back to the Tab order (p-atlas-ocean-o6wyh.27).
+    it('keeps the window map out of the Tab order; the full map has its markers in it', async () => {
+      const viewport = page.viewportSize();
+      const inMap = () => page.evaluate(() => {
+        const el = document.activeElement;
+        return el && el.closest('body > .atlas-layer-map') ? el.outerHTML.slice(0, 120) : false;
+      });
+      const onMarker = () => page.evaluate(() => !!document.activeElement?.closest('.leaflet-marker-icon'));
+      try {
+        await page.setViewportSize({ width: 820, height: 1180 });
+        await page.goto(BASE + '/posts/map-probe-two');
+        await page.locator('.immersive-toggle-btn').first().click();
+        await page.locator('.immersive-sheet-hint').click();
+        const slot = page.locator('.immersive-sheet-map');
+        await slot.waitFor();
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'window');
+        await page.locator('body > .atlas-layer-map .leaflet-marker-icon').first().waitFor({ state: 'attached' });
+        await slot.focus();
+        for (let i = 0; i < 40; i++) {
+          await page.keyboard.press('Tab');
+          assert.equal(await inMap(), false, 'Tab ' + (i + 1) + ' from the slot focuses an element in the window map');
+        }
+        await slot.focus();
+        await page.keyboard.press('Enter');
+        await page.waitForURL(/\/tags\/mapton\?/);
+        await page.waitForFunction(() => document.querySelector<HTMLElement>('body > .atlas-layer-map')?.dataset.atlasOcean === 'full');
+        assert.equal(
+          await page.locator('body > .atlas-layer-map [inert]').count(), 0, 'nothing in the full map is inert');
+        assert.equal(await page.locator('body > .atlas-layer-map').getAttribute('tabindex'), '0', 'the map keyboard is back');
+        await page.locator('body').focus();
+        let reached = false;
+        for (let i = 0; i < 80 && !reached; i++) {
+          await page.keyboard.press('Tab');
+          reached = await onMarker();
+        }
+        assert.ok(reached, 'Tab reaches a marker on the full map');
+      } finally {
+        if (viewport) await page.setViewportSize(viewport);
+      }
+    });
   });
 
   // The widget shows an expand hint in its top-right corner, above the map.

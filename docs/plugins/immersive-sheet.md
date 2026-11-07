@@ -96,7 +96,10 @@ The slot is also a keyboard control: `role="button"`, `tabindex="0"` and the
 name "Open on the map: <place>". Enter and Space on the focused slot do the
 same as a tap. The focus ring is outside the slot edge, so the map above the
 slot does not cover it. In window mode the map has `aria-hidden="true"`, so a
-screen reader reads the slot name once.
+screen reader reads the slot name once. The map is also out of the Tab order:
+its children are `inert` and the container has `tabindex="-1"`
+(`atlasOcean.ts::inertChildren`). Drag, pinch and tap still work on the
+container. The full map and the map beside the list are in the Tab order again.
 
 An expand icon (two diagonal arrows, 24 px, on a soft background in the theme's
 colours) is in the top-right corner of the window. It tells that a tap opens
