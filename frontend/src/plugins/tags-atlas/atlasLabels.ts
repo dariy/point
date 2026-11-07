@@ -66,6 +66,17 @@ export function boxesOverlap(a: Box, b: Box, pad = 0): boolean {
   );
 }
 
+/**
+ * An optional count of the inner checks of a pass: `boxes` for the box
+ * comparisons in `declutter`, `merges` for the `dotsMerge` checks in
+ * `clusterDots`. A test asserts a limit on it: the count does not depend on
+ * the machine load, and a pass that goes O(n²) shows in it.
+ */
+export interface PassOps {
+  boxes: number;
+  merges: number;
+}
+
 /** Whether point `x`, `y` is inside `b`. */
 const inside = (x: number, y: number, b: Box): boolean =>
   x >= b.left && x <= b.left + b.width && y >= b.top && y <= b.top + b.height;
@@ -79,6 +90,11 @@ interface Entry {
 /** A spatial hash of boxes. */
 class Grid {
   cells: Map<number, Entry[]> = new Map();
+  ops: PassOps | null;
+
+  constructor(ops: PassOps | null = null) {
+    this.ops = ops;
+  }
 
   _range(b: Box): [number, number, number, number] {
     return [
@@ -115,6 +131,7 @@ class Grid {
         if (!list) continue;
         for (const e of list) {
           if (self !== null && e.owner === self) continue;
+          if (this.ops) this.ops.boxes++;
           if (boxesOverlap(b, e.box, LABEL_PAD)) return true;
         }
       }
@@ -131,12 +148,19 @@ class Grid {
  * @param taken - boxes that no label may cover (an open cloud's chips)
  * @param pinned - the selected place: its label is placed first, with no check,
  *   and is then a taken box for all other labels
+ * @param ops - when given, the box comparisons of the pass are added to `ops.boxes`
  */
-export function declutter(items: readonly LabelItem[], bounds: Box, taken: readonly Box[] = [], pinned: number | null = null): Set<number> {
+export function declutter(
+  items: readonly LabelItem[],
+  bounds: Box,
+  taken: readonly Box[] = [],
+  pinned: number | null = null,
+  ops: PassOps | null = null,
+): Set<number> {
   const shown = items.filter((it) => inside(it.x, it.y, bounds));
   shown.sort((a, b) => b.weight - a.weight || a.id - b.id);
 
-  const grid = new Grid();
+  const grid = new Grid(ops);
   for (const box of taken) grid.add({ box, owner: null });
   for (const it of shown) if (it.dot) grid.add({ box: abs(it.x, it.y, it.dot), owner: it.id });
 
@@ -190,8 +214,10 @@ export function dotsMerge(a: DotItem, b: DotItem): boolean {
  * one and takes each free place whose dot overlaps its own dot. A pinned place
  * is in no group and starts none. Only groups of two places or more are
  * returned. A spatial grid keeps the pass near O(n).
+ *
+ * @param ops - when given, the merge checks of the pass are added to `ops.merges`
  */
-export function clusterDots(items: readonly DotItem[]): DotCluster[] {
+export function clusterDots(items: readonly DotItem[], ops: PassOps | null = null): DotCluster[] {
   const free = items.filter((it) => !it.pinned);
   if (free.length < 2) return [];
   free.sort((a, b) => b.weight - a.weight || a.id - b.id);
@@ -221,7 +247,9 @@ export function clusterDots(items: readonly DotItem[]): DotCluster[] {
     for (let x = gx - 1; x <= gx + 1; x++) {
       for (let y = gy - 1; y <= gy + 1; y++) {
         for (const it of cells.get(key(x, y)) ?? []) {
-          if (it.id !== lead.id && !taken.has(it.id) && dotsMerge(lead, it)) group.push(it);
+          if (it.id === lead.id || taken.has(it.id)) continue;
+          if (ops) ops.merges++;
+          if (dotsMerge(lead, it)) group.push(it);
         }
       }
     }

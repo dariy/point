@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { boxesOverlap, clusterDots, declutter, dotsMerge, type DotItem, type LabelItem } from '../src/plugins/tags-atlas/atlasLabels.ts';
+import { boxesOverlap, clusterDots, declutter, dotsMerge, type DotItem, type LabelItem, type PassOps } from '../src/plugins/tags-atlas/atlasLabels.ts';
 
 const bounds = { left: 0, top: 0, width: 1000, height: 800 };
 
@@ -105,17 +105,16 @@ describe('atlasLabels', () => {
     assert.deepEqual(ids(declutter(items, view)), [1]);
   });
 
-  test('a pass for 500 places takes under 4 ms', () => {
+  // A count of box comparisons, not a time: a time limit fails on a loaded
+  // machine (check.sh runs the test files in parallel). The pass does about
+  // 1800 comparisons for these 500 places; an O(n²) pass does about 125 000.
+  test('a pass for 500 places stays near O(n) box comparisons', () => {
     let seed = 1;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const items = Array.from({ length: 500 }, (_, i) => place(i + 1, rnd() * 1000, rnd() * 800, Math.floor(rnd() * 200), 40 + rnd() * 80));
-    for (let i = 0; i < 20; i++) declutter(items, bounds); // warm the JIT
-    const runs = 50;
-    const t0 = performance.now();
-    let shown = 0;
-    for (let i = 0; i < runs; i++) shown = declutter(items, bounds).size;
-    const per = (performance.now() - t0) / runs;
-    assert.ok(per < 4, `a pass took ${per.toFixed(2)} ms`);
+    const ops: PassOps = { boxes: 0, merges: 0 };
+    const shown = declutter(items, bounds, [], null, ops).size;
+    assert.ok(ops.boxes < 10 * items.length, `a pass did ${ops.boxes} box comparisons`);
     assert.ok(shown > 0 && shown < 500);
     // No two shown labels overlap.
     const labelled = items.filter((it) => declutter(items, bounds).has(it.id));
@@ -184,17 +183,19 @@ describe('atlasLabels clusterDots', () => {
     assert.deepEqual(clusterDots(items), [[1, 2]]);
   });
 
-  test('2000 places: a pass is fast', () => {
+  // A count of merge checks, not a time (see the declutter test above). The
+  // pass does about 3800 checks for these 2000 places; an O(n²) pass does
+  // about 2 000 000.
+  test('2000 places: a pass stays near O(n) merge checks', () => {
     const items: DotItem[] = [];
     for (let i = 0; i < 2000; i++) items.push(dot(i, (i * 37) % 1200, (i * 53) % 900, i % 7));
-    const t0 = performance.now();
-    const out = clusterDots(items);
-    const ms = performance.now() - t0;
+    const ops: PassOps = { boxes: 0, merges: 0 };
+    const out = clusterDots(items, ops);
     const seen = new Set<number>();
     for (const g of out) for (const id of g) {
       assert.ok(!seen.has(id), 'a place is in one cluster only');
       seen.add(id);
     }
-    assert.ok(ms < 50, `a pass took ${ms.toFixed(1)} ms`);
+    assert.ok(ops.merges < 5 * items.length, `a pass did ${ops.merges} merge checks`);
   });
 });
