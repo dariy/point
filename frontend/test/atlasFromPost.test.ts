@@ -3,7 +3,7 @@ import assert from 'node:assert';
 
 import { setupDOM } from './helpers/dom.ts';
 import {
-  FROM_POST_CHIP_CLASS, fromPostOf, fromPostState, isSheetReturn, sheetReturnOf, sheetReturnState, syncFromPostChip,
+  FROM_POST_CHIP_CLASS, fromPostOf, fromPostState, isSheetReturn, sheetKeptOf, sheetKeptState, sheetReturnOf, sheetReturnState, syncFromPostChip,
 } from '../src/plugins/tags-atlas/atlasFromPost.ts';
 
 describe('atlasFromPost', () => {
@@ -21,6 +21,18 @@ describe('atlasFromPost', () => {
     assert.deepEqual(sheetReturnOf(sheetReturnState(null, null)), { atlasReturn: null });
     // A second tap with no marker drops the old one.
     assert.equal('atlasReturn' in sheetReturnState(s, null), false);
+  });
+
+  test('the kept sheet state is a key of its own, not a sheet return', () => {
+    const open = sheetKeptState({ other: 1 }, true);
+    assert.deepEqual(open, { other: 1, sheetKept: true });
+    assert.equal(sheetKeptOf(open), true);
+    assert.equal(sheetReturnOf(open), null, 'prev/next does not shrink the map into the slot');
+    assert.equal(isSheetReturn('/posts/a-post', open), false);
+    assert.deepEqual(sheetKeptState(open, false), { other: 1 });
+    assert.equal(sheetKeptOf(null), false);
+    assert.equal(sheetKeptOf({ sheet: 'open' }), false);
+    assert.equal(sheetKeptOf({ sheetKept: 'yes' }), false);
   });
 
   test('the full map entry is not a sheet return (it has fromPost)', () => {

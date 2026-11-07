@@ -16,10 +16,13 @@
 import { getTagsGraph, getTagCloud } from "../../api/pages.ts";
 import { getUser, onRoute } from "../../store.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
-import { html, navigate, raw, safeUrl } from "../../utils/helpers.ts";
+import { html, navigate, raw, safeUrl, setHTML } from "../../utils/helpers.ts";
 import { tagKind } from "../../utils/tagLinks.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
 import { isRevelioOn } from "../../utils/revelio.ts";
+import { clusterDots, declutter } from "./atlasLabels.ts";
+import { createLongPress, liftPill, PEEK_DROP_MS } from "./atlasPeek.ts";
+import { matchPlaces } from "./atlasSearch.ts";
 import {
   COUNTRIES_GEOJSON,
   CA_PROVINCES_GEOJSON,
@@ -27,6 +30,8 @@ import {
 } from "../../utils/leaflet.ts";
 
 import type { LeafletRef } from "../../utils/leaflet.ts";
+import type { Box, DotItem, LabelItem, RelBox } from "./atlasLabels.ts";
+import type { LongPress } from "./atlasPeek.ts";
 
 
 /** A geo-tag node from GET /api/pages/graph, with the owner-only marks. */
@@ -54,6 +59,8 @@ interface PlaceActivator {
   latLng: LeafletRef;
   setActive: (on: boolean) => void;
   key: string;
+  /** a shape's bounds (LatLngBounds): a search pick fits them */
+  bounds?: LeafletRef;
 }
 
 /** One satellite chip, before it is placed on the map. */
@@ -76,6 +83,27 @@ interface CloudEdge {
   baseOpacity: number;
 }
 
+/** One place's name on the map: a marker's label, or a shape's label marker. */
+interface PlaceLabel {
+  id: number;
+  latLng: LeafletRef;
+  /** the marker whose icon carries the `--labelled` class */
+  marker: LeafletRef;
+  label: RelBox;
+  dot: RelBox | null;
+  weight: number;
+}
+
+/** A cluster dot: the places whose dots overlap at this zoom (atlasLabels.ts::clusterDots). */
+interface PlaceCluster {
+  /** the place ids, the largest place first */
+  ids: number[];
+  /** the cluster marker, at the largest place */
+  marker: LeafletRef;
+  /** the cluster's own label entry (a negative id) */
+  label: PlaceLabel;
+}
+
 /** The open on-map cloud. */
 interface Cloud {
   anchorLatLng: LeafletRef;
@@ -86,6 +114,8 @@ interface Cloud {
   centerKey: string;
   centerMarker: LeafletRef;
   focusKey: string | null;
+  /** chip sizes in px (key → [width, height]), measured once when the cloud opens */
+  chipSize: Map<string, [number, number]>;
 }
 
 /** Options for a place selection. */
@@ -94,11 +124,90 @@ interface SelectOptions {
   pan?: boolean;
   /** focus this post's chip once the cloud is built */
   focusPostSlug?: string;
+  /**
+   * A post's map widget: the cloud has this many rings only, and chips
+   * outside `bounds` are not drawn. `bounds` is in px from the place (the
+   * anchor), so a window that slides after the request keeps its bounds.
+   */
+  maxRings?: number;
+  bounds?: Box | null;
+  /** a search pick: the map flies to the place, so no `panInside` */
+  fly?: boolean;
 }
 
 /** The fields that hold a cached boundary file. */
 type GeojsonCacheKey = "_geojson" | "_caProvinces" | "_usStates";
 
+
+/** Label height in px: `.atlas-marker__label` and `.atlas-shape-label` (line-height + padding). */
+export const LABEL_H = 18;
+/** Horizontal padding plus border of a label, px (both sides). */
+const LABEL_PAD_X = 10;
+/** Gap between a dot and its label, px. */
+const LABEL_GAP = 3;
+/** Pill edge around the dot, px: left of the dot, and the least above and below it. */
+const PILL_INSET = 3;
+/** The longest name a label shows. */
+const LABEL_MAX = 24;
+/** The magnifier on the place search button. */
+const SEARCH_SVG =
+  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>';
+/** The zoom a search pick flies to (a marker), and the most a shape fit zooms in. */
+const PICK_ZOOM = 10;
+
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * Width in px of a label's text, by a canvas measure (no layout). `font` is the
+ * label font. Without a canvas, an estimate.
+ */
+function labelWidth(text: string, font: string): number {
+  if (measureCtx === undefined) {
+    try {
+      measureCtx = document.createElement("canvas").getContext("2d");
+    } catch {
+      measureCtx = null;
+    }
+  }
+  if (!measureCtx) return Math.ceil(text.length * 6.6) + LABEL_PAD_X;
+  measureCtx.font = font;
+  return Math.ceil(measureCtx.measureText(text).width) + LABEL_PAD_X;
+}
+
+/**
+ * The box of a place pill, `[● Berlin]`, relative to the dot centre: the dot
+ * (`r` px) and the title (`w` px, `_measureLabel`). It is as tall as a label
+ * or as the dot and its inset. atlas.css `.atlas-marker__label` draws this box.
+ */
+function pillBox(r: number, w: number): RelBox {
+  const height = Math.max(LABEL_H, r + 2 * PILL_INSET);
+  return { dx: -r / 2 - PILL_INSET, dy: -height / 2, width: PILL_INSET + r + LABEL_GAP + w, height };
+}
+
+/**
+ * The bounds of the part of a shape that holds `at` (the tag's own point). A
+ * country with far parts (France and French Guiana) then fits its main part
+ * only. Without such a part, the bounds of the whole shape.
+ */
+function partBounds(L: LeafletRef, layer: LeafletRef, at: LeafletRef): LeafletRef {
+  if (typeof layer.getBounds !== "function") return null;
+  const whole = layer.getBounds();
+  if (typeof layer.getLatLngs !== "function") return whole;
+  // Polygon: [outer ring, holes…]; MultiPolygon: [[outer ring, holes…], …].
+  const parts: LeafletRef[] = [];
+  const walk = (arr: LeafletRef[]) => {
+    if (!arr.length) return;
+    if (L.LineUtil?.isFlat ? L.LineUtil.isFlat(arr) : arr[0]?.lat != null) parts.push(arr);
+    else if (Array.isArray(arr[0]) && arr[0].length && (L.LineUtil?.isFlat ? L.LineUtil.isFlat(arr[0]) : arr[0][0]?.lat != null)) parts.push(arr[0]);
+    else arr.forEach(walk);
+  };
+  walk(layer.getLatLngs());
+  for (const ring of parts) {
+    const b = L.latLngBounds(ring);
+    if (b.contains(at)) return b;
+  }
+  return whole;
+}
 
 /** Marker radius in px for a geo-tag, scaled by post count. */
 function markerRadius(postCount: number): number {
@@ -150,16 +259,18 @@ export function concealedTitle(node: ConcealMarks, name: string): string {
 
 /**
  * Place `count` chips on concentric rings around the origin (pixel space).
- * Inner rings fill first; arc spacing keeps pills from colliding.
+ * Inner rings fill first; arc spacing keeps pills from colliding. With
+ * `maxRings`, the layout stops after that many rings: it can return fewer
+ * than `count` offsets (the chips that do not fit are not drawn).
  */
-function ringLayout(
+export function ringLayout(
   count: number,
-  { startR = 66, ringGap = 46, minArc = 92 }: { startR?: number; ringGap?: number; minArc?: number } = {},
+  { startR = 66, ringGap = 46, minArc = 92, maxRings = Infinity }: { startR?: number; ringGap?: number; minArc?: number; maxRings?: number } = {},
 ): Offset[] {
   const out: Offset[] = [];
   let i = 0;
   let ring = 0;
-  while (i < count) {
+  while (i < count && ring < maxRings) {
     const radius = startR + ring * ringGap;
     const cap = Math.max(1, Math.floor((2 * Math.PI * radius) / minArc));
     const n = Math.min(cap, count - i);
@@ -172,6 +283,16 @@ function ringLayout(
     ring++;
   }
   return out;
+}
+
+/** A chip's box: `size` centred on (`x`, `y`), the way atlas.css centres `.atlas-node`. */
+export function chipBox(x: number, y: number, [w, h]: [number, number]): Box {
+  return { left: x - w / 2, top: y - h / 2, width: w, height: h };
+}
+
+/** `a` is fully inside `b`. */
+export function boxInside(a: Box, b: Box): boolean {
+  return a.left >= b.left && a.top >= b.top && a.left + a.width <= b.left + b.width && a.top + a.height <= b.top + b.height;
 }
 
 export interface AtlasPlacesOptions {
@@ -193,6 +314,30 @@ export class AtlasPlaces {
   _onSelect: ((tag: AtlasTag | null) => void) | undefined;
   _countryLayer: LeafletRef = null;
   _markerLayer: LeafletRef = null;
+  /** cluster dots (places whose dots overlap at a low zoom), above the place markers */
+  _clusterLayer: LeafletRef = null;
+  /** the clusters of the current zoom */
+  _clusters: PlaceCluster[] = [];
+  /** the ids of the places inside a cluster (their markers are off the map) */
+  _clustered: Set<number> = new Set();
+  /** the place slug of a window (the post's own geo-tag): never inside a cluster */
+  _windowSlug: string | null = null;
+  _recluster: () => void;
+  /** shape labels (label-only markers), above the place markers */
+  _labelLayer: LeafletRef = null;
+  /** every place's label, by tag id; measured once per draw */
+  _labels: Map<number, PlaceLabel> = new Map();
+  /** the label widths by text: measured once per name */
+  _labelWidths: Map<string, number> = new Map();
+  _labelFont = "";
+  /** the visible area in container px (a window); `null` = the whole map */
+  _labelBounds: Box | null = null;
+  _relabel: () => void;
+  /** The long press that shows a place's peek on touch (atlasPeek.ts). */
+  _peek: LongPress;
+  _unlistenPeek: (() => void) | null = null;
+  /** A peek disabled the map drag; the release enables it again. */
+  _peekHeldDrag = false;
   _cloudMarkers: LeafletRef = null;
   _cloudLines: LeafletRef = null;
   _geojson: unknown = null;
@@ -217,6 +362,10 @@ export class AtlasPlaces {
   _tagsById: Map<number, AtlasTag> = new Map();
   /** The post chip to focus when the route's place is selected next (a move from a post's map widget). */
   _focusOnRestore: string | null = null;
+  /** A window asks for this place's cloud; it waits until the places load (`openWindowPlace`). */
+  _windowPlace: { slug: string; bounds: Box | null } | null = null;
+  /** The ring limit and the chip bounds of the open cloud (a window's cloud), or `null`. */
+  _activeLimit: { maxRings: number; bounds: Box | null } | null = null;
   _data: { tags?: AtlasTag[] } | null = null;
   _hint: HTMLElement | null = null;
   _legend: HTMLElement | null = null;
@@ -233,6 +382,16 @@ export class AtlasPlaces {
     this._root = root;
     this._isAlive = isAlive;
     this._reposition = () => this._repositionCloud();
+    this._relabel = () => this._applyLabels();
+    this._recluster = () => this._applyClusters();
+    this._peek = createLongPress({
+      onPeek: (id, x, y) => {
+        this._setPeek(id, true);
+        this._liftPeek(id, x, y);
+      },
+      onDrop: (id) => this._dropPeek(id),
+      onHide: (id) => this._setPeek(id, false),
+    });
   }
 
   get _dead(): boolean {
@@ -251,9 +410,12 @@ export class AtlasPlaces {
     this._countryLayer = L.layerGroup().addTo(map); // polygons (lowest)
     this._cloudLines = L.layerGroup().addTo(map); // connectors, below markers
     this._markerLayer = L.layerGroup().addTo(map);
+    this._clusterLayer = L.layerGroup().addTo(map);
+    this._labelLayer = L.layerGroup().addTo(map);
     this._cloudMarkers = L.layerGroup().addTo(map);
 
     this._mountOverlays();
+    this._unlistenPeek = this._listenPeek();
 
     // A video post's chip asks for a poster frame that may not exist; when the
     // request 404s, collapse the chip back to a plain label. `error` does not
@@ -272,6 +434,11 @@ export class AtlasPlaces {
 
     // Keep the cloud pinned to its place as the zoom level changes.
     map.on("zoomend viewreset", this._reposition);
+    // A zoom decides again which dots merge into a cluster (before the labels:
+    // a pan does not change the distance between two dots).
+    map.on("zoomend", this._recluster);
+    // Each view change decides again which places show their name.
+    map.on("zoomend moveend viewreset", this._relabel);
     // Clicking empty map dismisses the current cloud.
     map.on("click", () => {
       if (this._activeKey) this._onSelect?.(null);
@@ -293,6 +460,7 @@ export class AtlasPlaces {
     this._buildIndexes(data);
     await this._drawLayers(L);
     this._restoreFromUrl();
+    this._openWindowPlace();
   }
 
   _currentScopeKey(): string {
@@ -346,7 +514,9 @@ export class AtlasPlaces {
     if (focusPostSlug) this._focusOnRestore = focusPostSlug;
     const vc = ViewContext.current();
     const slug = vc.path.startsWith('/tags/') ? vc.tag : null;
-    if (this._activeTag && this._activeTag.slug === slug && !this._focusOnRestore) return;
+    // A window's cloud (one ring) is not the tag page's cloud: open it again.
+    if (this._activeTag && this._activeTag.slug === slug && !this._focusOnRestore && !this._activeLimit) return;
+    this._windowPlace = null;
     if (this._activeTag) this._clearSelection();
     this._restoreFromUrl();
   }
@@ -354,7 +524,42 @@ export class AtlasPlaces {
   /** Close the open cloud and drop a pending focus (the map goes into a post's window). */
   clearSelection(): void {
     this._focusOnRestore = null;
+    this._windowPlace = null;
     if (this._activeTag) this._clearSelection();
+  }
+
+  /**
+   * A post's map widget opens the cloud of its place with one ring. Chips
+   * outside `bounds` (the window, in px from the place) are not drawn. Before the
+   * places load, the request waits for start(). A cloud of the same place
+   * that is open in a window stays. `null` drops a waiting request.
+   */
+  openWindowPlace(slug: string | null, bounds: Box | null = null): void {
+    this._windowPlace = slug ? { slug, bounds } : null;
+    if (slug !== this._windowSlug) {
+      this._windowSlug = slug;
+      if (this._clusterLayer) this._reclusterNow();
+    }
+    this._openWindowPlace();
+  }
+
+  /** Decide the clusters, then the labels (outside a zoom). */
+  _reclusterNow(): void {
+    this._applyClusters();
+    this._applyLabels();
+  }
+
+  _openWindowPlace(): void {
+    const req = this._windowPlace;
+    if (!req || !this._data) return;
+    this._windowPlace = null;
+    if (this._activeTag?.slug === req.slug && this._activeLimit) return;
+    for (const [id, tag] of this._tagsById) {
+      if (tag.slug !== req.slug) continue;
+      if (this._activeTag) this._clearSelection();
+      this._selectPlaceById(id, { pan: false, maxRings: 1, bounds: req.bounds });
+      return;
+    }
   }
 
   /** The hint and the legend; the legend toggles hide a node type. */
@@ -389,7 +594,7 @@ export class AtlasPlaces {
       const open = legend.classList.toggle("is-open");
       more.setAttribute("aria-expanded", String(open));
     });
-    legend.append(more);
+    legend.append(more, this._mountSearch());
     for (const [type, dot, label] of kinds) {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -413,6 +618,174 @@ export class AtlasPlaces {
     this._wireToggles();
   }
 
+  /**
+   * The place search: a button that opens a field. The list shows the drawn
+   * places that match (atlasSearch.ts::matchPlaces), so a place that the
+   * "Hidden" filter removes is not found. Arrow keys move, Enter or a tap
+   * picks (`pickPlace`), Escape closes.
+   */
+  _mountSearch(): HTMLElement {
+    const box = document.createElement("div");
+    box.className = "atlas-search";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "atlas-search__open";
+    open.setAttribute("aria-label", "Search places");
+    open.setAttribute("aria-expanded", "false");
+    setHTML(open, raw(SEARCH_SVG));
+    const input = document.createElement("input");
+    input.type = "search";
+    input.className = "atlas-search__input";
+    input.placeholder = "Find a place";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-label", "Find a place");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-expanded", "false");
+    const list = document.createElement("ul");
+    list.className = "atlas-search__list";
+    list.id = "atlas-search-list";
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", "Places");
+    list.hidden = true;
+    input.setAttribute("aria-controls", list.id);
+    box.append(open, input, list);
+
+    let results: AtlasTag[] = [];
+    let active = -1;
+    const mark = () => {
+      list.querySelectorAll<HTMLElement>(".atlas-search__item").forEach((li, i) => {
+        li.classList.toggle("is-active", i === active);
+        li.setAttribute("aria-selected", String(i === active));
+      });
+      if (active >= 0) input.setAttribute("aria-activedescendant", "atlas-search-opt-" + active);
+      else input.removeAttribute("aria-activedescendant");
+    };
+    const closeList = () => {
+      results = [];
+      active = -1;
+      list.hidden = true;
+      list.replaceChildren();
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+    };
+    const update = () => {
+      const drawn = [...this._placeActivators.keys()]
+        .map((id) => this._tagsById.get(id))
+        .filter((t): t is AtlasTag => !!t);
+      results = matchPlaces(input.value, drawn);
+      active = results.length ? 0 : -1;
+      if (!results.length) {
+        closeList();
+        return;
+      }
+      list.replaceChildren(
+        ...results.map((tag, i) => {
+          const li = document.createElement("li");
+          li.className = "atlas-search__item" + (isConcealed(tag) ? " atlas-search__item--hidden" : "");
+          li.id = "atlas-search-opt-" + i;
+          li.setAttribute("role", "option");
+          li.dataset.placeId = String(tag.id);
+          const name = document.createElement("span");
+          name.className = "atlas-search__name";
+          name.textContent = tag.name;
+          const count = document.createElement("span");
+          count.className = "atlas-search__count";
+          count.textContent = String(tag.post_count || 0);
+          li.append(name, count);
+          // pointerdown would blur the field first; the pick runs on click.
+          li.addEventListener("mousedown", (e) => e.preventDefault());
+          li.addEventListener("click", (e) => {
+            // The pick removes this item; Leaflet then cannot see that the
+            // click came from the legend and would clear the selection.
+            e.stopPropagation();
+            pick(i);
+          });
+          return li;
+        }),
+      );
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      mark();
+    };
+    const setOpen = (on: boolean) => {
+      box.classList.toggle("is-open", on);
+      open.setAttribute("aria-expanded", String(on));
+      if (on) input.focus();
+      else {
+        input.value = "";
+        closeList();
+      }
+    };
+    const pick = (i: number) => {
+      const tag = results[i];
+      if (!tag) return;
+      setOpen(false);
+      this.pickPlace(tag.id);
+    };
+
+    open.addEventListener("click", () => setOpen(!box.classList.contains("is-open")));
+    input.addEventListener("input", update);
+    input.addEventListener("keydown", (e) => {
+      // Keys in the field are for the field: not for the map or the page.
+      e.stopPropagation();
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (!results.length) return;
+        e.preventDefault();
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        active = (active + step + results.length) % results.length;
+        mark();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (active >= 0) pick(active);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        open.focus();
+      }
+    });
+    // A wheel or a drag on the list scrolls the list, not the map.
+    this._L.DomEvent.disableScrollPropagation(box);
+    return box;
+  }
+
+  /**
+   * A search pick: the map flies to the place (a shape: it fits its bounds),
+   * and the place opens its cloud as for a tap (the URL changes the same way).
+   */
+  pickPlace(tagId: number): boolean {
+    const a = this._placeActivators.get(tagId);
+    const tag = this._tagsById.get(tagId);
+    if (!a || !tag) return false;
+    const map = this._map;
+    const animate = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // A list page that attaches during the fly re-measures the map, which
+    // fires `moveend`; the `maxBounds` check then pans and stops the fly. The
+    // check is off for the fly and comes back at its end (`zoomend`), on a
+    // drag, or after a timeout.
+    const maxBounds = map.options?.maxBounds;
+    if (animate && maxBounds && typeof map.setMaxBounds === "function") {
+      map.setMaxBounds(null);
+      let timer = 0;
+      const back = () => {
+        map.off("zoomend dragstart", back);
+        clearTimeout(timer);
+        if (!this._dead) map.setMaxBounds(maxBounds);
+      };
+      map.on("zoomend dragstart", back);
+      timer = window.setTimeout(back, 2000);
+    }
+    if (a.bounds && typeof map.flyToBounds === "function") {
+      map.flyToBounds(a.bounds, { padding: [40, 40], maxZoom: PICK_ZOOM, animate, duration: 0.8 });
+    } else if (typeof map.flyTo === "function") {
+      const zoom = Math.min(map.getMaxZoom(), Math.max(map.getZoom(), PICK_ZOOM));
+      map.flyTo(a.latLng, zoom, { animate, duration: 0.8 });
+    }
+    if (this._activeKey !== a.key) this._select(tag, a.latLng, a.setActive, a.key, { fly: true });
+    return true;
+  }
+
   /** Query params carrying the active timeline scope, if any. */
   _scopeParams(): { year_from?: number; year_to?: number } {
     const vc = ViewContext.current();
@@ -430,6 +803,11 @@ export class AtlasPlaces {
     this._clearSelection();
     this._countryLayer?.clearLayers();
     this._markerLayer?.clearLayers();
+    this._clusterLayer?.clearLayers();
+    this._clusters = [];
+    this._clustered.clear();
+    this._labelLayer?.clearLayers();
+    this._labels.clear();
     this._placeActivators.clear();
     this._tagsById.clear();
     if (this._data) this._buildIndexes(this._data);
@@ -446,6 +824,11 @@ export class AtlasPlaces {
     this._unwatchRoute?.();
     this._unwatchRoute = null;
     this._map.off("zoomend viewreset", this._reposition);
+    this._map.off("zoomend", this._recluster);
+    this._map.off("zoomend moveend viewreset", this._relabel);
+    this._peek.cancel();
+    this._unlistenPeek?.();
+    this._unlistenPeek = null;
     this._hint?.remove();
     this._legend?.remove();
     this._hint = this._legend = null;
@@ -563,6 +946,32 @@ export class AtlasPlaces {
     // opts.only: null → all features; true → only matched; false → only
     //   unmatched (used to split subdivisions across the country in z-order).
     // opts.interactive: false → decorative path that never intercepts clicks.
+    // A tagged shape's name: a label-only marker at the tag's own point (the
+    // place's centre; a bounding-box centre can be in the sea for a country
+    // with far islands). It takes no taps.
+    const addShapeLabel = (tag: GeoTag) => {
+      const text = truncate(tag.name, LABEL_MAX);
+      const w = this._measureLabel(text);
+      const concealed = isConcealed(tag);
+      const marker = L.marker([tag.latitude, tag.longitude], {
+        icon: L.divIcon({
+          className: "atlas-shape-label",
+          html: String(html`<span class="atlas-shape-label__text${concealed ? " atlas-label--hidden" : ""}">${text}</span>`),
+          iconSize: [0, 0],
+        }),
+        interactive: false,
+        keyboard: false,
+      }).addTo(this._labelLayer);
+      this._labels.set(tag.id, {
+        id: tag.id,
+        latLng: marker.getLatLng(),
+        marker,
+        label: { dx: -w / 2, dy: -LABEL_H / 2, width: w, height: LABEL_H },
+        dot: null,
+        weight: tag.post_count || 0,
+      });
+    };
+
     const drawShapeLayer = (
       geojson: unknown,
       nameProps: string[],
@@ -624,6 +1033,7 @@ export class AtlasPlaces {
         onEachFeature: (feature: LeafletRef, layer: LeafletRef) => {
           const tag = matchTag(feature.properties || {});
           if (!tag) return;
+          if (!shapeTagIds.has(tag.id)) addShapeLabel(tag);
           shapeTagIds.add(tag.id);
           bounds.push([tag.latitude, tag.longitude]);
 
@@ -637,10 +1047,14 @@ export class AtlasPlaces {
           // Centroid anchor for programmatic reselection (a click uses e.latlng;
           // returning from a post has no click point, so fall back to the tag's
           // own coordinates).
+          // A tag can match more than one feature: the bounds take all of them.
+          const prev = this._placeActivators.get(tag.id)?.bounds;
+          const shapeBounds = partBounds(L, layer, L.latLng(tag.latitude, tag.longitude));
           this._placeActivators.set(tag.id, {
             latLng: L.latLng(tag.latitude, tag.longitude),
             setActive,
             key: "c" + tag.id,
+            bounds: prev && shapeBounds ? prev.extend(shapeBounds) : (shapeBounds ?? prev),
           });
 
           layer.on("click", (e: LeafletRef) => {
@@ -684,16 +1098,40 @@ export class AtlasPlaces {
       if (shapeTagIds.has(tag.id)) return;
       const r = markerRadius(tag.post_count);
       const concealed = isConcealed(tag);
+      const text = truncate(tag.name, LABEL_MAX);
+      const w = this._measureLabel(text);
+      // The marker is one pill: collapsed = the dot only; expanded = the dot
+      // and the title, `[● Berlin]`. The label span draws the pill around the
+      // dot. It expands when the label pass gives it room
+      // (`atlas-marker--labelled`, _applyLabels), on hover or a long press
+      // (`atlas-marker--peek`, atlasPeek.ts), and when the place is selected
+      // and its cloud does not show yet (_applyLabels). A tap anywhere on the
+      // pill selects the place.
+      const hiddenLabel = concealed ? " atlas-label--hidden" : "";
       const icon = L.divIcon({
         className: "atlas-marker",
-        html: `<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span>`,
+        html: String(html`<span class="atlas-marker__dot${concealed ? " atlas-marker__dot--hidden" : ""}" style="width:${r}px;height:${r}px;"></span><span class="atlas-marker__label${hiddenLabel}">${text}</span>`),
         iconSize: [r, r],
         iconAnchor: [r / 2, r / 2],
       });
-      const marker = L.marker([tag.latitude, tag.longitude], {
-        icon,
-        title: concealedTitle(tag, tag.name),
-      }).addTo(this._markerLayer);
+      const marker = L.marker([tag.latitude, tag.longitude], { icon }).addTo(this._markerLayer);
+      // The accessible name and the place id for the peek's touch input.
+      const nameIcon = () => {
+        const el = marker._icon as HTMLElement | null;
+        if (!el) return;
+        el.setAttribute("aria-label", concealedTitle(tag, tag.name));
+        el.dataset.placeId = String(tag.id);
+      };
+      nameIcon();
+      marker.on("add", nameIcon);
+      this._labels.set(tag.id, {
+        id: tag.id,
+        latLng: marker.getLatLng(),
+        marker,
+        label: pillBox(r, w),
+        dot: { dx: -r / 2, dy: -r / 2, width: r, height: r },
+        weight: tag.post_count || 0,
+      });
 
       const setActive = (on: boolean) =>
         marker._icon?.classList.toggle("atlas-marker--active", on);
@@ -723,6 +1161,8 @@ export class AtlasPlaces {
     }
 
     this._updateHint(bounds.length);
+    this._applyClusters();
+    this._applyLabels();
 
     // If we arrived here by closing a post that was opened from the Atlas,
     // reselect its place and highlight the post chip.
@@ -750,6 +1190,287 @@ export class AtlasPlaces {
       this._map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
       this._didFitBounds = true;
     }
+    this._applyClusters();
+    this._applyLabels();
+  }
+
+  /** Width of a label's text in px, measured once per text. */
+  _measureLabel(text: string): number {
+    let w = this._labelWidths.get(text);
+    if (w === undefined) {
+      if (!this._labelFont) {
+        const fam = getComputedStyle(this._root).fontFamily || "sans-serif";
+        this._labelFont = `600 11px ${fam}`;
+      }
+      w = labelWidth(text, this._labelFont);
+      this._labelWidths.set(text, w);
+    }
+    return w;
+  }
+
+  /**
+   * Only places inside `rect` (container px) count for the labels: the part of
+   * the map that a window shows. `null` = the whole map.
+   */
+  setLabelBounds(rect: Box | null): void {
+    const a = this._labelBounds;
+    if (a === rect || (a && rect && a.left === rect.left && a.top === rect.top && a.width === rect.width && a.height === rect.height)) return;
+    this._labelBounds = rect;
+    this._applyLabels();
+  }
+
+  /**
+   * Expand or collapse each place pill (atlasLabels.ts::declutter). The pass
+   * measures the whole pill. While no cloud shows (it loads, or there is
+   * none), the selected place goes first and is always expanded; the other
+   * pills go around it. While a cloud shows, its centre chip is the expanded
+   * form of the selected place: the chips are taken space, so the selected
+   * pill stays collapsed under its chip and the other pills go around them.
+   */
+  _applyLabels(): void {
+    if (this._dead || !this._labels.size) return;
+    const map = this._map;
+    const size = map.getSize();
+    const view: Box = this._labelBounds ?? { left: 0, top: 0, width: size.x, height: size.y };
+    const items: LabelItem[] = [];
+    const all = [...this._labels.values()].filter((l) => !this._clustered.has(l.id));
+    for (const c of this._clusters) all.push(c.label);
+    for (const l of all) {
+      const p = map.latLngToContainerPoint(l.latLng);
+      items.push({ id: l.id, x: p.x, y: p.y, label: l.label, dot: l.dot, weight: l.weight });
+    }
+    const pinned = this._cloud ? null : (this._activeTag?.id ?? null);
+    const on = declutter(items, view, this._cloudBoxes(), pinned);
+    for (const l of all) {
+      l.marker._icon?.classList.toggle("atlas-marker--labelled", on.has(l.id));
+    }
+  }
+
+  /**
+   * Merge the place dots that overlap at this zoom into cluster dots
+   * (atlasLabels.ts::clusterDots). It runs on `zoomend`, not on `moveend`: a
+   * pan does not change the distance between two dots. At the maximum zoom no
+   * cluster forms. The open place and a window's own place are never inside a
+   * cluster. A cluster marker sits at its largest place and shows the place
+   * count; its size follows the sum of the post counts (`markerRadius`).
+   */
+  _applyClusters(): void {
+    if (!this._markerLayer || !this._clusterLayer || this._dead) return;
+    const map = this._map;
+    const L = this._L;
+    const zoom = map.getZoom();
+    const pinnedSlug = this._windowSlug;
+    const groups: number[][] = [];
+    if (zoom < map.getMaxZoom()) {
+      const items: DotItem[] = [];
+      for (const l of this._labels.values()) {
+        if (!l.dot) continue;
+        const tag = this._tagsById.get(l.id);
+        const p = map.project(l.latLng, zoom);
+        items.push({
+          id: l.id,
+          x: p.x,
+          y: p.y,
+          r: l.dot.width / 2,
+          weight: l.weight,
+          pinned: l.id === this._activeTag?.id || (!!pinnedSlug && tag?.slug === pinnedSlug),
+        });
+      }
+      groups.push(...clusterDots(items));
+    }
+
+    const next: Set<number> = new Set();
+    for (const g of groups) for (const id of g) next.add(id);
+    // The places that leave a cluster come back on the map; the new members go off it.
+    for (const id of this._clustered) {
+      if (!next.has(id)) this._labels.get(id)?.marker.addTo(this._markerLayer);
+    }
+    for (const id of next) {
+      if (!this._clustered.has(id)) this._markerLayer.removeLayer(this._labels.get(id)?.marker);
+    }
+    this._clustered = next;
+
+    this._clusterLayer.clearLayers();
+    this._clusters = groups.map((ids, i) => {
+      const lead = this._labels.get(ids[0]!)!;
+      const leadTag = this._tagsById.get(lead.id);
+      const leadName = leadTag?.name ?? "";
+      let sum = 0;
+      for (const id of ids) sum += this._labels.get(id)?.weight ?? 0;
+      const r = markerRadius(sum);
+      const text = `${truncate(leadName, LABEL_MAX)} +${ids.length - 1}`;
+      const w = this._measureLabel(text);
+      const hiddenLabel = leadTag && isConcealed(leadTag) ? " atlas-label--hidden" : "";
+      const icon = L.divIcon({
+        className: "atlas-marker atlas-cluster",
+        html: String(html`<span class="atlas-marker__dot atlas-cluster__dot" style="width:${r}px;height:${r}px;">${ids.length}</span><span class="atlas-marker__label${hiddenLabel}">${text}</span>`),
+        iconSize: [r, r],
+        iconAnchor: [r / 2, r / 2],
+      });
+      const marker = L.marker(lead.latLng, { icon }).addTo(this._clusterLayer);
+      const nameIcon = () => {
+        const el = marker._icon as HTMLElement | null;
+        if (!el) return;
+        el.setAttribute("aria-label", `${ids.length} places: ${leadTag ? concealedTitle(leadTag, leadName) : leadName} and ${ids.length - 1} more`);
+        el.dataset.clusterSize = String(ids.length);
+      };
+      nameIcon();
+      marker.on("add", nameIcon);
+      // A tap fits the cluster's places. It is no place tap: the selection stays.
+      marker.on("click", (e: LeafletRef) => {
+        L.DomEvent.stop(e);
+        const pts = ids.map((id) => this._labels.get(id)!.latLng);
+        map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: map.getMaxZoom() });
+      });
+      return {
+        ids,
+        marker,
+        label: {
+          id: -(i + 1),
+          latLng: lead.latLng,
+          marker,
+          label: pillBox(r, w),
+          dot: { dx: -r / 2, dy: -r / 2, width: r, height: r },
+          weight: sum,
+        },
+      };
+    });
+  }
+
+  /** Expand or collapse the pill of place `id` for a peek. A peek holds the map still. */
+  _setPeek(id: number, on: boolean): void {
+    const icon = this._labels.get(id)?.marker._icon as HTMLElement | null | undefined;
+    icon?.classList.toggle("atlas-marker--peek", on);
+    if (!on && icon) this._clearLift(icon);
+    const drag = this._map.dragging;
+    if (on && drag?.enabled()) {
+      drag.disable();
+      this._peekHeldDrag = true;
+    }
+  }
+
+  /**
+   * Show the peek pill of place `id` above the finger at client px `x`, `y`
+   * (atlasPeek.ts::liftPill). The dot stays at its place. The pill moves with
+   * the CSS variables `--atlas-lift-x` and `--atlas-lift-y` (atlas.css).
+   */
+  _liftPeek(id: number, x: number, y: number): void {
+    const icon = this._labels.get(id)?.marker._icon as HTMLElement | null | undefined;
+    const label = icon?.querySelector<HTMLElement>(".atlas-marker__label");
+    if (!icon || !label) return;
+    this._clearLift(icon);
+    const p = label.getBoundingClientRect();
+    const d = icon.getBoundingClientRect();
+    const b = this._map.getContainer().getBoundingClientRect();
+    const { dx, dy } = liftPill(
+      { left: p.left, top: p.top, width: p.width, height: p.height },
+      d.left + d.width / 2,
+      y,
+      { left: b.left, top: b.top, right: b.right, bottom: b.bottom },
+    );
+    icon.classList.add("atlas-marker--lift");
+    label.style.setProperty("--atlas-lift-r", `${d.width}px`);
+    label.style.setProperty("--atlas-lift-x", `${Math.round(dx)}px`);
+    label.style.setProperty("--atlas-lift-y", `${Math.round(dy)}px`);
+  }
+
+  /**
+   * The finger lifts: the peek pill moves back to its dot, still expanded.
+   * `atlas-marker--drop` keeps the dot in the pill during the move. Under
+   * `prefers-reduced-motion: reduce` the move is instant (decision 11).
+   */
+  _dropPeek(id: number): void {
+    const icon = this._labels.get(id)?.marker._icon as HTMLElement | null | undefined;
+    const label = icon?.querySelector<HTMLElement>(".atlas-marker__label");
+    if (!icon || !label || !icon.classList.contains("atlas-marker--lift")) return;
+    const animate = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    icon.classList.remove("atlas-marker--lift");
+    label.style.removeProperty("--atlas-lift-x");
+    label.style.removeProperty("--atlas-lift-y");
+    if (!animate) return;
+    icon.classList.add("atlas-marker--drop");
+    const done = () => icon.classList.remove("atlas-marker--drop");
+    label.addEventListener("transitionend", done, { once: true });
+    setTimeout(done, PEEK_DROP_MS + 100);
+  }
+
+  /** Put the peek pill of `icon` back at its dot at once. */
+  _clearLift(icon: HTMLElement): void {
+    icon.classList.remove("atlas-marker--lift", "atlas-marker--drop");
+    const label = icon.querySelector<HTMLElement>(".atlas-marker__label");
+    label?.style.removeProperty("--atlas-lift-x");
+    label?.style.removeProperty("--atlas-lift-y");
+    label?.style.removeProperty("--atlas-lift-r");
+  }
+
+  /** Enable the map drag that a peek disabled. */
+  _releasePeekDrag(): void {
+    if (!this._peekHeldDrag) return;
+    this._peekHeldDrag = false;
+    if (!this._dead) this._map.dragging?.enable();
+  }
+
+  /**
+   * Touch input for the peek. A long press on a place pill expands it and does
+   * not open its cloud. A window (the sheet widget) shows no peek:
+   * all its taps open the full map.
+   */
+  _listenPeek(): () => void {
+    const root = this._root;
+    const peek = this._peek;
+    const down = (e: PointerEvent) => {
+      const el = e.target instanceof HTMLElement ? e.target.closest<HTMLElement>(".atlas-marker[data-place-id]") : null;
+      if (!el || e.pointerType === "mouse" || !e.isPrimary || root.dataset.atlasOcean === "window") {
+        peek.cancel();
+        return;
+      }
+      peek.down(Number(el.dataset.placeId), e.pointerId, e.clientX, e.clientY);
+    };
+    const move = (e: PointerEvent) => peek.move(e.pointerId, e.clientX, e.clientY);
+    const up = (e: PointerEvent) => {
+      peek.up(e.pointerId);
+      // The release frees the map; the peek stays a moment (PEEK_HOLD).
+      this._releasePeekDrag();
+    };
+    // Before Leaflet's marker click: a peek press is no tap.
+    const click = (e: MouseEvent) => {
+      if (!peek.consumeClick()) return;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    // No system menu or callout on a long press on a marker.
+    const menu = (e: Event) => {
+      if (e.target instanceof HTMLElement && e.target.closest(".atlas-marker")) e.preventDefault();
+    };
+    const opts = { capture: true, passive: true };
+    root.addEventListener("pointerdown", down, opts);
+    root.addEventListener("pointermove", move, opts);
+    root.addEventListener("pointerup", up, opts);
+    root.addEventListener("pointercancel", up, opts);
+    root.addEventListener("click", click, true);
+    root.addEventListener("contextmenu", menu);
+    return () => {
+      root.removeEventListener("pointerdown", down, opts);
+      root.removeEventListener("pointermove", move, opts);
+      root.removeEventListener("pointerup", up, opts);
+      root.removeEventListener("pointercancel", up, opts);
+      root.removeEventListener("click", click, true);
+      root.removeEventListener("contextmenu", menu);
+    };
+  }
+
+  /** The open cloud's chip boxes in container px. */
+  _cloudBoxes(): Box[] {
+    const cloud = this._cloud;
+    if (!cloud) return [];
+    const anchor = this._map.latLngToContainerPoint(cloud.anchorLatLng);
+    const out: Box[] = [];
+    for (const [key, [w, h]] of cloud.chipSize) {
+      const pos = cloud.nodePos.get(key);
+      if (!pos) continue;
+      out.push({ left: anchor.x + pos.dx - w / 2, top: anchor.y + pos.dy - h / 2, width: w, height: h });
+    }
+    return out;
   }
 
   _updateHint(placeCount: number): void {
@@ -803,9 +1524,14 @@ export class AtlasPlaces {
     this._activeKey = key;
     this._activeTag = tag;
     this._activeAnchor = anchorLatLng;
+    this._activeLimit = opts.maxRings != null ? { maxRings: opts.maxRings, bounds: opts.bounds ?? null } : null;
 
+    // The open place leaves its cluster (its marker comes back) before it is marked active.
+    if (this._clustered.has(tag.id)) this._reclusterNow();
     setActive(true);
     this._activeSetActive = setActive;
+    // Until its cloud shows, the selected pill is expanded and goes first in the label pass.
+    this._applyLabels();
     if (opts.pan !== false) this._onSelect?.(tag);
 
     this.$("#atlas-hint")?.classList.add("is-hidden");
@@ -815,7 +1541,7 @@ export class AtlasPlaces {
     // Nudge the place into view if its cloud would spill off an edge. Skipped
     // when the selection is being restored rather than made (`pan: false`, from
     // a timeline redraw), where moving the map under the user is unwelcome.
-    if (opts.pan !== false && typeof this._map.panInside === "function") {
+    if (opts.pan !== false && !opts.fly && typeof this._map.panInside === "function") {
       this._map.panInside(anchorLatLng, { padding: [220, 220] });
     }
     return spawned;
@@ -943,8 +1669,11 @@ export class AtlasPlaces {
     const otherTags = tagSats.filter((n) => n.kind !== "geo");
     const ordered = [...places, ...otherTags, ...postSats];
 
+    const limit = this._activeLimit;
+    const placed = ringLayout(ordered.length || 1, { maxRings: limit?.maxRings });
+    // A window's cloud: the chips past the last ring are not drawn.
+    ordered.length = Math.min(ordered.length, placed.length);
     const nodePos: Map<string, Offset> = new Map([[centerKey, { dx: 0, dy: 0 }]]);
-    const placed = ringLayout(ordered.length || 1);
     ordered.forEach((n, i) => nodePos.set(n.key, placed[i]));
 
     const anchorPt = this._map.latLngToContainerPoint(anchorLatLng);
@@ -1042,6 +1771,47 @@ export class AtlasPlaces {
     });
     this._cloudMarkers.addLayer(centerMarker);
 
+    // Measure each chip once (offsetWidth does not include the open
+    // animation's transform), for the label pass.
+    const chipSize: Map<string, [number, number]> = new Map();
+    const measure = (key: string, marker: LeafletRef) => {
+      const el = marker._icon?.firstElementChild as HTMLElement | null | undefined;
+      if (el) chipSize.set(key, [el.offsetWidth, el.offsetHeight]);
+    };
+    sats.forEach((s) => measure(s.key, s.marker));
+    measure(centerKey, centerMarker);
+
+    // A window's cloud: a chip that the window edge cuts is not drawn, nor
+    // are its links.
+    const bounds = limit?.bounds;
+    if (bounds) {
+      const out = new Set<string>();
+      for (const s of sats) {
+        const pos = nodePos.get(s.key);
+        const size = chipSize.get(s.key);
+        if (!pos || !size) continue;
+        if (!boxInside(chipBox(pos.dx, pos.dy, size), bounds)) out.add(s.key);
+      }
+      if (out.size) {
+        for (let i = sats.length - 1; i >= 0; i--) {
+          if (!out.has(sats[i].key)) continue;
+          this._cloudMarkers.removeLayer(sats[i].marker);
+          sats.splice(i, 1);
+        }
+        for (let i = edges.length - 1; i >= 0; i--) {
+          if (!out.has(edges[i].a) && !out.has(edges[i].b)) continue;
+          this._cloudLines.removeLayer(edges[i].line);
+          edges.splice(i, 1);
+        }
+        for (const key of out) {
+          nodePos.delete(key);
+          chipSize.delete(key);
+          cloudNeighbors.delete(key);
+        }
+        for (const set of cloudNeighbors.values()) for (const key of out) set.delete(key);
+      }
+    }
+
     this._cloud = {
       anchorLatLng,
       nodePos,
@@ -1051,7 +1821,9 @@ export class AtlasPlaces {
       centerKey,
       centerMarker,
       focusKey: null,
+      chipSize,
     };
+    this._applyLabels();
 
     // Open the cloud as a full overview — every chip the place touches is lit.
     // Dimming only kicks in once the user focuses a specific chip.
@@ -1232,10 +2004,13 @@ export class AtlasPlaces {
   _clearCloud(): void {
     this._cloudMarkers?.clearLayers();
     this._cloudLines?.clearLayers();
+    const had = !!this._cloud;
     this._cloud = null;
+    if (had) this._applyLabels();
   }
 
   _clearSelection(): void {
+    const had = !!this._activeTag;
     this._clearCloud();
     this._cloudData = null;
     this._cloudReq++; // invalidate any in-flight cloud fetch for the cleared place
@@ -1244,6 +2019,9 @@ export class AtlasPlaces {
     this._activeKey = null;
     this._activeTag = null;
     this._activeAnchor = null;
+    this._activeLimit = null;
     this.$("#atlas-hint")?.classList.remove("is-hidden");
+    // The place that was open can join a cluster again.
+    if (had) this._reclusterNow();
   }
 }

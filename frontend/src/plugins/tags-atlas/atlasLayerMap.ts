@@ -15,8 +15,11 @@ import { AtlasPlaces } from './AtlasPlaces.ts';
 import { getAtlasLayerState, isAtlasListPath, replaceSearch, searchWithView, viewFromSearch } from './atlasLayerState.ts';
 
 import type { LeafletRef } from '../../utils/leaflet.ts';
-import type { Point } from './atlasOceanGeometry.ts';
+import type { Point, Rect } from './atlasOceanGeometry.ts';
 import type { AtlasView } from './atlasLayerState.ts';
+
+/** The map cannot pan past the world. */
+const WORLD_BOUNDS: [[number, number], [number, number]] = [[-90, -180], [90, 180]];
 
 /** A map point. */
 export interface LatLng {
@@ -70,9 +73,11 @@ export interface AtlasLayerMapController {
    * window centre), at `zoom` when given. A parked view stays parked for the next `show()` after a
    * `park()`; a `show()` straight from a window keeps the window's view.
    * The move into a window clears the place selection: the widget shows the
-   * post's place, not the cloud of the tag page before it.
+   * post's place, not the cloud of the tag page before it. With `place`, the
+   * place's cloud opens after that, with one ring; chips outside
+   * `place.bounds` (px from the place) are not drawn.
    */
-  frame(center: LatLng | null, offset: Point, zoom?: number): void;
+  frame(center: LatLng | null, offset: Point, zoom?: number, place?: { slug: string; bounds: Rect | null }): void;
   /** Where `latLng` is now, from the box centre, in px. `null` before the build. */
   offsetOf(latLng: LatLng): Point | null;
   /** Move the view by `dx`, `dy` px, with no animation. */
@@ -82,6 +87,11 @@ export interface AtlasLayerMapController {
    * and does not open the place's tag page. `null` sets the tag-page move back.
    */
   setWindowTap(fn: (() => void) | null): void;
+  /**
+   * The part of the box on screen, in box px (a window's visible rect), or
+   * `null` for the whole box. Only places inside it count for the labels.
+   */
+  setLabelBounds(rect: Rect | null): void;
   destroy(): void;
 }
 
@@ -119,7 +129,10 @@ export function mountAtlasLayerMap(
   let windowed = false;
   // A frame() before the build: applied when the map is built.
   let pendingFrame: { center: LatLng | null; offset: Point; zoom?: number } | null = null;
+  // A window's place cloud asked for before the build.
+  let pendingPlace: { slug: string; bounds: Rect | null } | null = null;
   let windowTap: (() => void) | null = null;
+  let labelBounds: Rect | null = null;
   const isAlive = () => !dead;
 
   const writeView = () => {
@@ -131,10 +144,21 @@ export function mountAtlasLayerMap(
 
   const onTheme = () => tiles?.setUrl(isDarkTheme() ? TILE_DARK : TILE_LIGHT);
 
-  /** Re-measure without a pan, then set the kept view (see `park`). */
+  /**
+   * Re-measure without a pan, then set the kept view (see `park`). The
+   * `maxBounds` check is off until the kept view is set. Each `moveend` starts
+   * an animated pan into the bounds, and the re-measure fires one with a centre
+   * that the new box cannot hold. The `setView` stops that pan, and the stop
+   * fires one more `moveend`. Its pan starts from a centre half-way through,
+   * and it continues after the `setView` (a box taller than the world, at a
+   * low zoom: p-atlas-ocean-o6wyh.26). With the check off, no pan starts. Then
+   * the bounds come back and pan the kept view inside them, if necessary.
+   */
   const restore = (kept: { center: unknown; zoom: number }) => {
+    map.setMaxBounds(null);
     map.invalidateSize({ pan: false });
     map.setView(kept.center, kept.zoom, { animate: false });
+    map.setMaxBounds(WORLD_BOUNDS);
   };
 
   /** Put `center` at `offset` px from the box centre, at `zoom` (default: the current zoom). */
@@ -177,7 +201,7 @@ export function mountAtlasLayerMap(
     // overlay) with a transform that drifts from the tile pane for this map.
     map = L.map(opts.container, {
       minZoom: 2,
-      maxBounds: [[-90, -180], [90, 180]],
+      maxBounds: WORLD_BOUNDS,
       maxBoundsViscosity: 1.0,
       zoomAnimation: false,
     });
@@ -209,6 +233,10 @@ export function mountAtlasLayerMap(
         openPlace(tag?.slug ?? null);
       },
     });
+    places.setLabelBounds(labelBounds);
+    // It opens when the places load.
+    if (windowed && pendingPlace) places.openWindowPlace(pendingPlace.slug, pendingPlace.bounds);
+    pendingPlace = null;
     // A viewport from the URL beats the opening fit-to-places.
     places._didFitBounds = !!view;
     // A warm build is off screen, in a box larger than the mapList box. At a
@@ -234,6 +262,8 @@ export function mountAtlasLayerMap(
       if (dead) return;
       shown = true;
       pendingFrame = null;
+      pendingPlace = null;
+      places?.openWindowPlace(null);
       if (!map) {
         windowed = false;
         void build();
@@ -264,12 +294,14 @@ export function mountAtlasLayerMap(
       shown = false;
       windowed = false;
       pendingFrame = null;
+      pendingPlace = null;
+      places?.openWindowPlace(null);
     },
     warm() {
       if (dead || map) return;
       void build();
     },
-    frame(center, offset, zoom) {
+    frame(center, offset, zoom, place) {
       if (dead) return;
       if (!windowed) places?.clearSelection();
       windowed = true;
@@ -278,11 +310,14 @@ export function mountAtlasLayerMap(
         // A second frame() before the build keeps the first centre (a slot
         // that moves while Leaflet loads keeps its point).
         pendingFrame = { center: center ?? pendingFrame?.center ?? null, offset, zoom: zoom ?? pendingFrame?.zoom };
+        if (place) pendingPlace = place;
         void build();
         return;
       }
       map.invalidateSize({ pan: false });
       if (center) centerAt(center, offset, zoom);
+      // After the view: the chips are laid out at the window's zoom.
+      if (place) places?.openWindowPlace(place.slug, place.bounds);
     },
     offsetOf(latLng) {
       if (!map) return null;
@@ -295,6 +330,10 @@ export function mountAtlasLayerMap(
     },
     setWindowTap(fn) {
       windowTap = fn;
+    },
+    setLabelBounds(rect) {
+      labelBounds = rect;
+      places?.setLabelBounds(rect);
     },
     setView(center, zoom) {
       map?.setView([center.lat, center.lng], zoom, { animate: false });

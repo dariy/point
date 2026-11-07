@@ -52,7 +52,26 @@ asks to save data (`navigator.connection.saveData`), there is no warm-up. A post
 grows the clip to the full map on the place's tag page. Back, or the "‹ <post title>"
 chip, shrinks it into the slot again. The zoom changes only after the motion. With
 `prefers-reduced-motion: reduce`, each change is instant. With `tags-atlas` off, the
-sheet has no map.
+sheet has no map. The slot is a square at the size of the camera data (EXIF) block,
+`min(50%, 18rem)` wide, on the right below that block. At 480 px and less it is full
+width, at most 16rem high, and after the sheet text. The window shows the place with
+its dot, its label and its cloud with one ring only (`maxRings: 1`).
+
+**Place labels.** A place marker is one pill: collapsed, the dot only; expanded, the dot
+and the name, `[● Berlin]`. A tap anywhere on the pill selects the place and opens its
+cloud. A pill expands when it has space, on hover or a long press, and while its place is
+selected and the cloud does not show yet. The places with more posts go first. A pill
+expands only if it does not cover a pill that is already expanded, the dot of another
+place, or a chip of the open cloud. The cloud's centre chip is the expanded form of the
+selected place. A tagged country or state gets its label at the place's own point. The
+pass (`atlasLabels.ts::declutter`) runs again after each zoom and move. In the sheet
+window, only the places in the visible part of the window count.
+
+**Touch landscape.** With touch input in landscape, `mapList` is a side layout: the map
+is a square on the left, the full viewport high, and the header, a scrolling grid of
+cards and the footer are in a column on the right. The handle is a vertical bar on the
+map's right edge, and a horizontal drag changes the state. `list` and `map` keep their
+layout. A mouse, a portrait turn or a fine pointer gives the stack layout again.
 
 Two endpoints feed it, both year-scopable:
 
@@ -176,6 +195,16 @@ fallback; `prefers-reduced-motion` is respected.
   the tiles and the places on each visit, and a post sheet map would have been a second
   map. One owner keeps the viewport, and the sheet widget is a clipped window on it, so
   the change between the widget and the full map is one motion with no resize.
+- **Labels by post count, with the dot as the fallback** — a label on every place made an
+  unreadable pile at a low zoom. A greedy pass, largest place first, keeps the important
+  names and lets a zoom in add the rest. The dot stays, so no place disappears.
+- **The sheet widget at the EXIF size** — a wide map at the top of the sheet pushed the
+  text down. A square in the EXIF column keeps the text in view. On a phone the widget
+  goes after the text, because at the top it covered the close and share buttons.
+- **A side split for touch landscape only** — on a phone or a tablet on its side, the
+  stack layout gives the map and the card row only a short height. A square map on the
+  left and a list column on the right use the width. A window with a mouse keeps the
+  stack layout.
 
 ## Out of scope
 

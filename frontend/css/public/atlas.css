@@ -53,6 +53,8 @@
 /* ── Geo-tag markers ───────────────────────────────────────────────────────── */
 
 .atlas-marker__dot {
+    position: relative;
+    z-index: 1;
     display: block;
     border-radius: 50%;
     background: rgba(31, 158, 142, 0.72);
@@ -84,6 +86,154 @@
 .leaflet-marker-icon.atlas-marker--dim {
     opacity: 0.2;
     transition: opacity 0.18s ease;
+}
+
+/* ── Cluster dots ──────────────────────────────────────────────────────────────
+   At a low zoom the dots that overlap merge into one cluster dot with the place
+   count (AtlasPlaces._applyClusters). It has the size rule of a place dot, for
+   the sum of the post counts. A tap fits its places. */
+.atlas-cluster__dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    background: rgba(31, 158, 142, 0.9);
+    border-color: #fff;
+    box-shadow:
+        0 0 0 2px rgba(31, 158, 142, 0.45),
+        0 1px 4px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+}
+
+/* ── Place pills and shape labels ─────────────────────────────────────────────
+   A place marker is one pill. Collapsed: the dot only. Expanded: the dot and
+   the title in one pill, `[● Berlin]`. `.atlas-marker__label` draws the whole
+   pill: it starts 3px left of the dot (PILL_INSET) and its left padding holds
+   the dot (100% = the dot size). AtlasPlaces.ts::pillBox measures the same box
+   (LABEL_H, LABEL_PAD_X, LABEL_GAP, PILL_INSET). A pill expands when the label
+   pass gives it room (`--labelled`, AtlasPlaces._applyLabels), on hover with a
+   fine pointer, and on a long press (`--peek`, AtlasPlaces._setPeek). The
+   label pass expands the selected place first while its cloud does not show;
+   an open cloud's centre chip is the selected place's expanded form. The whole expanded pill takes taps: a tap on
+   the title is a tap on the place. A shape label takes no taps: a tap goes to
+   the shape below. */
+.atlas-marker__label,
+.atlas-shape-label__text {
+    position: absolute;
+    top: 50%;
+    box-sizing: border-box;
+    height: 18px;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+    color: var(--text-primary, #1a1a1a);
+    background: color-mix(in srgb, var(--bg-primary, #fff) 82%, transparent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.atlas-marker__label {
+    left: -3px;
+    display: flex;
+    align-items: center;
+    height: max(18px, calc(100% + 6px));
+    padding-left: calc(100% + 10px);
+    border-radius: 999px;
+    /* --atlas-lift-x/-y: the long-press lift (below); 0 at rest. */
+    transform: translate(var(--atlas-lift-x, 0px), calc(-50% + var(--atlas-lift-y, 0px)));
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.leaflet-marker-icon.atlas-shape-label {
+    background: transparent;
+    border: 0;
+    pointer-events: none;
+}
+
+.atlas-shape-label__text {
+    left: 0;
+    transform: translate(-50%, -50%);
+}
+
+.atlas-marker--labelled .atlas-marker__label,
+.atlas-marker--labelled .atlas-shape-label__text,
+html.pointer-fine .atlas-marker:hover .atlas-marker__label,
+.atlas-marker--peek .atlas-marker__label {
+    visibility: visible;
+}
+
+/* A pill that expands on demand is opaque and goes above the other markers.
+   The z-index stays below #toasts (10020, toastStacking.test.ts). */
+html.pointer-fine .atlas-marker:hover .atlas-marker__label,
+.atlas-marker--peek .atlas-marker__label {
+    background: var(--bg-primary, #fff);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+html.pointer-fine .leaflet-marker-icon.atlas-marker:hover,
+.leaflet-marker-icon.atlas-marker--peek {
+    z-index: 9000 !important;
+}
+
+/* A long press on touch shows the pill above the finger (`--lift`,
+   AtlasPlaces._liftPeek, atlasPeek.ts::liftPill): the finger does not cover it.
+   The dot stays at its place; a copy of the dot (::before) goes with the pill.
+   The release moves the pill back to its dot (`--drop`, PEEK_DROP_MS). */
+.atlas-marker--lift .atlas-marker__label,
+.atlas-marker--drop .atlas-marker__label {
+    background: var(--bg-primary, #fff);
+}
+
+.atlas-marker--drop .atlas-marker__label {
+    transition: transform 0.18s ease;
+}
+
+.atlas-marker--lift .atlas-marker__label::before,
+.atlas-marker--drop .atlas-marker__label::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    width: var(--atlas-lift-r, 12px);
+    height: var(--atlas-lift-r, 12px);
+    border-radius: 50%;
+    background: rgba(31, 158, 142, 0.72);
+    border: 2px solid rgba(31, 158, 142, 1);
+    transform: translateY(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-marker--drop .atlas-marker__label {
+        transition: none;
+    }
+}
+
+.leaflet-marker-icon.atlas-marker {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* A window (the sheet widget) expands no pill on hover: all its taps open the
+   full map. */
+html.pointer-fine [data-atlas-ocean="window"] .atlas-marker:not(.atlas-marker--labelled):hover .atlas-marker__label {
+    visibility: hidden;
+}
+
+/* An owner-only place: its label is dimmed, with the dashed edge of its dot. */
+.atlas-label--hidden {
+    opacity: 0.6;
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--atlas-geo, #1f9e8e) 60%, transparent);
 }
 
 /* ── Cloud chips (satellite tags / posts) ──────────────────────────────────── */
@@ -398,6 +548,112 @@
     cursor: pointer;
 }
 
+/* The place search (AtlasPlaces.ts::_mountSearch): a button that opens a
+   field. The results open above the field, because the legend sits on the
+   bottom edge of the map. */
+.atlas-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.atlas-search__open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.atlas-search__open:hover,
+.atlas-search.is-open .atlas-search__open {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.05));
+}
+
+.atlas-search__input {
+    display: none;
+    width: 11rem;
+    min-width: 0;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--border-primary, rgba(0, 0, 0, 0.2));
+    border-radius: 5px;
+    background: var(--bg-secondary, var(--bg-primary));
+    color: var(--text-primary);
+    font: inherit;
+    /* 16px stops iOS Safari from a zoom on focus. */
+    font-size: 16px;
+}
+
+.atlas-search.is-open .atlas-search__input {
+    display: block;
+}
+
+.atlas-search__list {
+    position: absolute;
+    left: -10px;
+    bottom: calc(100% + 10px);
+    z-index: 1;
+    width: max-content;
+    min-width: 14rem;
+    max-width: min(20rem, 80vw);
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border-radius: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary, rgba(0, 0, 0, 0.12));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+
+.atlas-search__list[hidden] {
+    display: none;
+}
+
+.atlas-search__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 32px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.atlas-search__item:hover,
+.atlas-search__item.is-active {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.06));
+}
+
+.atlas-search__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.atlas-search__count {
+    flex: none;
+    color: var(--text-secondary, var(--text-primary));
+    font-variant-numeric: tabular-nums;
+}
+
+/* A hidden place: dimmed, as its label on the map. */
+.atlas-search__item--hidden .atlas-search__name {
+    opacity: 0.6;
+    font-style: italic;
+}
+
 /* A short layer map (a phone on its side) has no room for the legend column
    under the zoom control. The legend becomes one button; open, it is one row. */
 @container atlas-layer-map (max-height: 320px) {
@@ -412,8 +668,19 @@
     .atlas-legend__more {
         display: flex;
     }
-    .atlas-legend:not(.is-open) .atlas-toggle {
+    .atlas-legend:not(.is-open) :is(.atlas-toggle, .atlas-search) {
         display: none;
+    }
+    .atlas-search {
+        margin: 0;
+    }
+    .atlas-search__open {
+        width: 44px;
+        height: 44px;
+    }
+    .atlas-search__list {
+        left: 0;
+        bottom: calc(100% + 6px);
     }
     .atlas-legend .atlas-toggle {
         width: auto;
@@ -947,6 +1214,138 @@ body[data-atlas-settling] #grid-mount {
     }
 }
 
+/* ── Touch landscape: map left, list column right ───────────────────────────
+   atlasLayerLayout.ts::watchAtlasSide sets body[data-atlas-side] for touch
+   input in landscape. In `mapList` the map is a square on the left, from the
+   top to the bottom of the viewport. The column is at least 20rem wide. The
+   header, the list and the footer (css/public/footer.css) are in the column.
+   In `mapList` and `map` the handle is a vertical bar on the map's right edge.
+   A drag (atlasLayerGesture.ts) sets --atlas-layer-map-w inline and moves the
+   handle in x. The drag shows the layout of the state it snaps to
+   (body[data-atlas-drag-target]): the split for `list` and `mapList`, the map
+   under the header for `map`. `list` keeps the full-width list. */
+/* Registered as a length, so atlasLayerGesture.ts::sidePos reads it in px. */
+@property --atlas-layer-split-w {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+body[data-atlas-side] {
+    --atlas-layer-split-w: min(100dvh, 100vw - 20rem);
+    --atlas-layer-map-w: var(--atlas-layer-split-w);
+}
+
+/* In `map` the map is full width; the handle is on its right edge. */
+body[data-atlas-side][data-atlas-layer="map"] {
+    --atlas-layer-map-w: 100vw;
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .atlas-layer-map {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: var(--atlas-layer-map-w);
+}
+
+body[data-atlas-side]:is([data-atlas-layer="map"]:not([data-atlas-drag-target]), [data-atlas-drag-target="map"]) .atlas-layer-map {
+    bottom: var(--atlas-layer-footer-h, 0px);
+    left: 0;
+    right: auto;
+    width: var(--atlas-layer-map-w);
+}
+
+/* The handle: a vertical bar over the right edge of the map. */
+body[data-atlas-side]:is([data-atlas-layer="mapList"], [data-atlas-layer="map"], [data-atlas-dragging]) .atlas-layer-handle {
+    top: 0;
+    bottom: 0;
+    left: calc(var(--atlas-layer-map-w) - var(--atlas-layer-handle-h));
+    right: auto;
+    width: var(--atlas-layer-handle-h);
+    height: auto;
+    border-top: none;
+    border-left: var(--border-width) solid var(--border-primary);
+}
+
+body[data-atlas-side]:is([data-atlas-layer="map"]:not([data-atlas-drag-target]), [data-atlas-drag-target="map"]) .atlas-layer-handle {
+    top: var(--atlas-layer-top, var(--atlas-layer-header-h, 0px));
+    bottom: var(--atlas-layer-footer-h, 0px);
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"], [data-atlas-layer="map"], [data-atlas-dragging]) .atlas-layer-handle__grip {
+    width: 4px;
+    height: 40px;
+}
+
+/* The list column: a grid of square cards that scrolls. gridFit.ts::sidePerPage
+   fits the page to the column: whole rows, enough to fill its height. A finger
+   scrolls it (pan-y): in the side layout it is not a drag surface. */
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount {
+    top: var(--atlas-layer-header-h, 0px);
+    bottom: var(--atlas-layer-footer-h, 0px);
+    left: var(--atlas-layer-map-w);
+    right: 0;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    touch-action: pan-y;
+}
+
+/* A drag that snaps to `map`: the rest of the list is right of the map. */
+body[data-atlas-side]:is([data-atlas-layer="map"]:not([data-atlas-drag-target]), [data-atlas-drag-target="map"]) #grid-mount {
+    top: var(--atlas-layer-top, var(--atlas-layer-header-h, 0px));
+    bottom: var(--atlas-layer-footer-h, 0px);
+    left: var(--atlas-layer-map-w);
+    right: 0;
+    height: auto;
+    overflow: hidden;
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .posts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    gap: var(--atlas-layer-gap, 8px);
+    height: auto;
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .post-card-slot {
+    flex: none;
+    width: auto;
+    height: auto;
+    max-width: none;
+    aspect-ratio: 1;
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .post-card {
+    height: 100%;
+}
+
+/* The header goes right of the map; HeaderFold folds it for the column width. */
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #header-mount {
+    width: auto;
+    margin-left: var(--atlas-layer-map-w);
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .atlas-from-post {
+    top: var(--spacing-sm, 8px);
+    left: calc(var(--atlas-layer-map-w) / 2);
+    max-width: calc(var(--atlas-layer-map-w) - 2 * var(--spacing-md, 16px));
+}
+
+/* After release the map width slides to its snap position. */
+body[data-atlas-side][data-atlas-snapping] :is(.atlas-layer-map, .atlas-layer-handle, #grid-mount, #header-mount, #footer-mount) {
+    transition: width 0.2s ease-out, left 0.2s ease-out, margin-left 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body[data-atlas-side][data-atlas-snapping] :is(.atlas-layer-map, .atlas-layer-handle, #grid-mount, #header-mount, #footer-mount) {
+        transition: none;
+    }
+}
+
 /* The window (atlasOcean.ts): the map keeps its box and shows through the
    clip-path the ocean sets. It sits above the post viewer (the sheet and the
    header are z-index 50; layout.css has 110) and below the menus and modals.
@@ -964,6 +1363,51 @@ body .atlas-layer-map[data-atlas-ocean="window"] {
 /* A window is too small for the controls and the overlays: a tap opens the full map. */
 body .atlas-layer-map[data-atlas-ocean="window"] :is(.leaflet-control-container, .atlas-hint, .atlas-legend) {
     display: none;
+}
+
+/* The expand hint: a tap on the window opens the full map. It sits in the
+   window's top-right corner (atlasOcean.ts sets --atlas-window-top/-right in
+   box px) above the Leaflet panes, and it takes no taps: the tap goes to the
+   map, which opens the full map. Off outside a window and during a tween, so
+   it fades out as the window grows and back in on the slot. 0.28s is
+   atlasOcean.ts::TWEEN_MS. */
+.atlas-window-hint {
+    position: absolute;
+    top: calc(var(--atlas-window-top, 0px) + 8px);
+    right: calc(var(--atlas-window-right, 0px) + 8px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--bg-primary, #fff) 82%, transparent);
+    color: var(--text-primary, #222);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.28s ease, visibility 0s linear 0.28s;
+}
+
+.atlas-window-hint svg {
+    width: 14px;
+    height: 14px;
+}
+
+body .atlas-layer-map[data-atlas-ocean="window"][data-atlas-window-hint="on"] .atlas-window-hint {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.28s ease, visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-window-hint,
+    body .atlas-layer-map[data-atlas-ocean="window"][data-atlas-window-hint="on"] .atlas-window-hint {
+        transition: none;
+    }
 }
 
 /* The way back to the post the full map came from (atlasFromPost.ts). Above the

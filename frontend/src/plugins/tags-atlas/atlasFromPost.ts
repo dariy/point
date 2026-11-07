@@ -63,6 +63,25 @@ export function sheetReturnState(state: unknown, atlasReturn: string | null): Re
   return s;
 }
 
+/**
+ * Prev/next on a post keeps the sheet state. The post's entry has
+ * `sheetKept: true` while its sheet is open, and the next post's entry gets it
+ * when the sheet was open on the move (ImmersiveSheetViewer.ts). It is a key
+ * of its own: `sheet: 'open'` is the way back from the full map, and that one
+ * holds the map over the page and shrinks it into the slot.
+ */
+export function sheetKeptOf(state: unknown): boolean {
+  return record(state)?.sheetKept === true;
+}
+
+/** The entry with the sheet state `open` (an entry with a shut sheet has no key). */
+export function sheetKeptState(state: unknown, open: boolean): Record<string, unknown> {
+  const s: Record<string, unknown> = { ...(record(state) ?? {}) };
+  if (open) s.sheetKept = true;
+  else delete s.sheetKept;
+  return s;
+}
+
 /** True when a move to `path` with `state` is a Back to a post's open sheet. */
 export function isSheetReturn(path: string, state: unknown): boolean {
   const pathname = path.split(/[?#]/, 1)[0];

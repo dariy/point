@@ -184,13 +184,58 @@ body.ui-hidden .immersive-sheet-hint {
 /* ── Map slot (the atlas ocean shows its map through it) ───────────────────── */
 /* An empty box. atlasOcean.ts clips its map to this rect (the map sits above
    the viewer), so the box has no content of its own; the background shows only
-   while the tiles load. flow-root keeps it beside the floated EXIF block, not
-   under it, so the map never covers the camera data. */
+   while the tiles load. A square in the EXIF column: it floats right, under the
+   EXIF block (clear: right), and the text of the sheet flows on the left. The
+   window's cloud has one ring (AtlasPlaces.ts::openWindowPlace); at 18rem the
+   ring fits in the square. At 480px and less it is full width, at most 16rem
+   high (an explicit width, so max-height does not narrow it through the
+   aspect ratio), and after the text. */
 .immersive-sheet-map {
-    display: flow-root;
-    height: clamp(10rem, 28vh, 16rem);
-    margin-bottom: var(--spacing-lg);
+    float: right;
+    clear: right;
+    box-sizing: border-box;
+    width: min(50%, 18rem);
+    aspect-ratio: 1;
+    margin: 0 0 var(--spacing-md) var(--spacing-lg);
     background: var(--bg-tertiary);
+}
+
+/* The slot is the control that opens the full map. The map (atlas.css, z-index
+   115) is above the slot and clipped to it, so the ring goes outside the clip. */
+.immersive-sheet-map:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+}
+
+/* With a map, the EXIF block takes the same width: one column. */
+.immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-exif {
+    box-sizing: border-box;
+    width: min(50%, 18rem);
+}
+
+/* On a phone the map goes after the text (order), not at the top of the sheet:
+   at the top, the map (above the viewer) covers the close and share buttons. */
+@media (max-width: 480px) {
+    .immersive-sheet-body:has(.immersive-sheet-map) {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .immersive-sheet-map {
+        order: 1;
+        float: none;
+        width: 100%;
+        max-height: 16rem;
+        margin: var(--spacing-lg) 0;
+    }
+
+    .immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-comments {
+        order: 2;
+    }
+
+    .immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-exif {
+        width: auto;
+    }
 }
 
 /* A tap on the map opens the full map (ImmersiveSheetViewer.ts::_onMapTap). The
@@ -356,4 +401,102 @@ body.ui-hidden .immersive-sheet-hint {
 .immersive-sheet-footer-actions {
     flex: 0 0 auto;
     margin-left: auto;
+}
+
+/* ── Touch landscape: photo left, sheet column right ──────────────────────── */
+/* ImmersiveSheetViewer.ts::_applySide sets .immersive-sheet-side for touch
+   input in landscape (atlasLayerLayout.ts::onAtlasSide, the same test as the
+   map layer's side split). The sheet is a right column that is always open and
+   scrolls; it has no slide, so JS sets no transform. The photo stage, its nav
+   panels, its dots and the chrome cluster use the area left of the column. */
+.immersive-sheet-mode.immersive-sheet-side {
+    --immersive-sheet-side-w: clamp(18rem, 38vw, 26rem);
+    /* The ladder's right inset starts at the column edge. --viewer-btn-top is
+       computed on body (the plain inset in sheet mode), so the top stays. */
+    --viewer-btn-inset: calc(var(--immersive-sheet-side-w) + var(--viewer-btn-top));
+}
+
+.immersive-sheet-side .immersive-visuals {
+    right: var(--immersive-sheet-side-w);
+    overflow: hidden;
+}
+
+.immersive-sheet-side .immersive-nav-panel {
+    width: calc((100% - var(--immersive-sheet-side-w)) * 0.6666);
+}
+
+.immersive-sheet-side .immersive-nav-prev {
+    left: calc((100% - var(--immersive-sheet-side-w)) * -0.3333);
+}
+
+.immersive-sheet-side .immersive-nav-next {
+    right: calc(var(--immersive-sheet-side-w) - (100% - var(--immersive-sheet-side-w)) * 0.3333);
+}
+
+.immersive-sheet-side .carousel-indicators {
+    left: calc((100% - var(--immersive-sheet-side-w)) / 2);
+}
+
+.immersive-sheet-side .immersive-sheet-hint,
+.immersive-sheet-side .immersive-sheet-grip {
+    display: none;
+}
+
+.immersive-sheet-side .immersive-sheet {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+    width: var(--immersive-sheet-side-w);
+    max-height: none;
+    border-radius: 0;
+    box-shadow: -8px 0 32px var(--color-black-alpha-30);
+    padding-bottom: 0;
+    will-change: auto;
+}
+
+[data-theme="dark"] .immersive-sheet-side .immersive-sheet {
+    border-width: 0 0 0 var(--border-width);
+}
+
+.immersive-sheet-side .immersive-sheet-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: none;
+    padding: var(--spacing-lg) max(var(--spacing-lg), env(safe-area-inset-right, 0)) calc(var(--spacing-lg) + env(safe-area-inset-bottom, 0)) var(--spacing-lg);
+}
+
+/* One column: the text first, then the map, the camera data and the comments.
+   The map is a square at most 18rem wide (the widget size), at the top of the
+   column's content after the text, so the window has a stable place. */
+.immersive-sheet-side .immersive-sheet-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.immersive-sheet-side .immersive-sheet-main {
+    order: 0;
+}
+
+.immersive-sheet-side .immersive-sheet-map {
+    order: 1;
+    float: none;
+    width: 100%;
+    max-width: 18rem;
+    max-height: none;
+    margin: var(--spacing-lg) auto 0;
+}
+
+.immersive-sheet-side .immersive-sheet-exif,
+.immersive-sheet-side .immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-exif {
+    order: 2;
+    float: none;
+    width: auto;
+    max-width: none;
+    margin: var(--spacing-lg) 0 0;
+}
+
+.immersive-sheet-side .immersive-sheet-comments,
+.immersive-sheet-side .immersive-sheet-body:has(.immersive-sheet-map) .immersive-sheet-comments {
+    order: 3;
 }

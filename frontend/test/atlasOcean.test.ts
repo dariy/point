@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { SETTLE_FRAMES, createAtlasOcean, defaultIdle, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
+import { EXPAND_CLICK_GUARD_MS, SETTLE_FRAMES, createAtlasOcean, defaultIdle, inertChildren, defaultSaveData, presentationForState } from '../src/plugins/tags-atlas/atlasOcean.ts';
 import { isAtlasListPath, setAtlasLayerState } from '../src/plugins/tags-atlas/atlasLayerState.ts';
 
 /**
@@ -21,9 +21,16 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   } as unknown as HTMLElement;
   // The container's listeners, by type (the ocean listens in the capture phase).
   const listeners = new Map<string, Set<(e: any) => void>>();
+  const containerAttrs = new Map<string, string>();
   const container = {
     dataset: {} as Record<string, string>,
-    style: { transition: '', clipPath: '' },
+    getAttribute: (n: string) => containerAttrs.get(n) ?? null,
+    setAttribute: (n: string, v: string) => { containerAttrs.set(n, v); },
+    removeAttribute: (n: string) => { containerAttrs.delete(n); },
+    style: {
+      transition: '', clipPath: '', props: {} as Record<string, string>,
+      setProperty(n: string, v: string) { this.props[n] = v; },
+    },
     offsetHeight: 0,
     remove: () => log.push('container.remove'),
     addEventListener: (type: string, fn: (e: any) => void) => {
@@ -47,14 +54,23 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
   const frames = new Set<(now: number) => void>();
   let clock = 0;
   let windowTap: (() => void) | null = null;
+  // The label bounds the ocean gave the map last (undefined: never).
+  let labelBounds: { left: number; top: number; width: number; height: number } | null | undefined;
   // The "‹ <post title>" chip: what the ocean asked for last.
   let chip = false;
+  // The inert stops that are open (deps.inert): 1 in a window, 0 out of it.
+  let inert = 0;
   const log: string[] = [];
   let maps = 0;
   let urlState = initial;
   let path = '/';
   // The idle callbacks the ocean asked for; `idle()` runs them.
   const idle = new Set<() => void>();
+  // The box: a 400×800 viewport. `setBox` changes it and tells the box observers.
+  let box = { left: 0, top: 0, width: 400, height: 800 };
+  const boxObservers = new Set<() => void>();
+  // The route watchers (deps.onRoute); `routeTo` tells them.
+  const routeWatchers = new Set<(pathname: string) => void>();
   const ocean = createAtlasOcean({
     body,
     container: () => container as unknown as HTMLElement,
@@ -72,10 +88,11 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
         setView: (c, z) => log.push(`setView ${c.lat},${c.lng} z${z}`),
         useView: (v) => log.push(`useView ${v.lat},${v.lng} z${v.zoom}`),
         warm: () => log.push('warm'),
-        frame: (c, o, z) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}${z == null ? '' : ` z${z}`}`),
+        frame: (c, o, z, place) => log.push(`frame ${c ? `${c.lat},${c.lng}` : '-'} ${Math.round(o.x)},${Math.round(o.y)}${z == null ? '' : ` z${z}`}${place ? ` place ${place.slug} ${place.bounds ? `${place.bounds.left},${place.bounds.top},${place.bounds.width}x${place.bounds.height}` : '-'}` : ''}`),
         offsetOf: () => ({ x: 0, y: 0 }),
         panBy: (dx, dy) => log.push(`panBy ${dx},${dy}`),
         setWindowTap: (fn) => { windowTap = fn; },
+        setLabelBounds: (rect) => { labelBounds = rect; },
         destroy: () => log.push('map.destroy'),
       };
     },
@@ -87,13 +104,15 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
       return () => { idle.delete(fn); };
     },
     saveData: () => !!opts.saveData,
-    // The box: a 400×800 viewport.
-    box: () => ({ left: 0, top: 0, width: 400, height: 800 }) as DOMRect,
+    box: () => ({ ...box }) as DOMRect,
+    observeBox: (_c, fn) => { boxObservers.add(fn); return () => boxObservers.delete(fn); },
     reducedMotion: () => !!opts.reducedMotion,
     frame: (fn) => { frames.add(fn); return () => { frames.delete(fn); }; },
     now: () => clock,
     sheetReturn: () => !!opts.sheetReturn,
     fromPostChip: (show) => { chip = show; },
+    onRoute: (fn) => { routeWatchers.add(fn); return () => { routeWatchers.delete(fn); }; },
+    inert: () => { inert++; return () => { inert--; }; },
   });
   return {
     ocean,
@@ -111,6 +130,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     dispatch,
     /** A place pick in the map (AtlasPlaces → onSelect), as the controller sees it. */
     get windowTap() { return windowTap; },
+    get labelBounds() { return labelBounds; },
     /** Run the pending frames at time `ms`. */
     tick(ms: number) {
       clock = ms;
@@ -120,10 +140,20 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     },
     get pendingFrames() { return frames.size; },
     get chip() { return chip; },
+    get inert() { return inert; },
+    /** The container's box changes size (a rotation). */
+    setBox(b: { left: number; top: number; width: number; height: number }) {
+      box = b;
+      for (const fn of boxObservers) fn();
+    },
+    get boxObservers() { return boxObservers.size; },
     /** the state the next page reads from its URL */
     setUrlState(s: 'list' | 'mapList' | 'map') { urlState = s; },
     /** the path and query that the ocean reads (deps.path) */
     setPath(p: string) { path = p; },
+    /** The router changes the route to `pathname`. */
+    routeTo(pathname: string) { for (const fn of [...routeWatchers]) fn(pathname); },
+    get routeWatchers() { return routeWatchers.size; },
   };
 }
 
@@ -353,6 +383,8 @@ describe('atlasOcean', () => {
       p.ocean.present({ kind: 'window', rect: slot, center: paris });
       assert.equal(p.ocean.presentation(), 'window');
       assert.equal(p.container.dataset.atlasOcean, 'window');
+      assert.equal(p.container.getAttribute('aria-hidden'), 'true', 'the slot under the window is the control');
+      assert.equal(p.inert, 1, 'the aria-hidden map is out of the Tab order');
       assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
       // The point goes 200 px below the box centre: the slot centre.
       assert.deepEqual(p.log, ['frame 48.85,2.35 0,200']);
@@ -367,10 +399,70 @@ describe('atlasOcean', () => {
       assert.deepEqual(p.log.slice(-2), ['frame - 0,0', 'panBy 0,200']);
     });
 
+    test('fractional slot moves pan whole px and keep the rest (Leaflet rounds panBy)', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      // A sheet animation: ten moves of 0.4 px up. Each one alone rounds to 0.
+      for (let i = 1; i <= 10; i++) p.ocean.present({ kind: 'window', rect: { ...slot, top: slot.top - 0.4 * i } });
+      const pans = p.log.filter((l) => l.startsWith('panBy')).map((l) => l.slice(6).split(',').map(Number));
+      for (const [dx, dy] of pans) assert.ok(Number.isInteger(dx) && Number.isInteger(dy), 'whole px: ' + pans);
+      // The map moved 4 px in total, as the slot centre did.
+      assert.equal(pans.reduce((sum, [, dy]) => sum + dy, 0), 4);
+      // A new centre starts again from no rest.
+      p.ocean.present({ kind: 'window', rect: { ...slot, top: 200.3 }, center: paris });
+      p.ocean.present({ kind: 'window', rect: { ...slot, top: 200 } });
+      assert.equal(p.log[p.log.length - 1], 'frame - 0,-100', 'a 0.3 px move with no rest: no pan');
+    });
+
+    test('a box change in window mode recomputes the clip and the offset', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      // A rotation: the box is 800×400 now. The slot is where it was (below the box) until the page syncs.
+      p.setBox({ left: 0, top: 0, width: 800, height: 400 });
+      assert.equal(p.container.style.clipPath, 'inset(400px 420px 0px 20px)');
+      // The offset is from the new box centre; the point stays on screen where it was.
+      assert.deepEqual(p.log.slice(-1), ['frame - -200,400']);
+      // The page syncs: the slot is wider and higher now. The map follows the slot centre.
+      p.ocean.present({ kind: 'window', rect: { left: 20, top: 150, width: 760, height: 180 } });
+      assert.equal(p.container.style.clipPath, 'inset(150px 20px 70px 20px)');
+      assert.deepEqual(p.log.slice(-2), ['frame - 0,40', 'panBy -200,360']);
+    });
+
+    test('a box change outside a window, or with the same size, does nothing', () => {
+      const p = fakePage('map');
+      p.ocean.attach();
+      const n = p.log.length;
+      p.setBox({ left: 0, top: 0, width: 800, height: 400 });
+      assert.equal(p.log.length, n, 'Leaflet re-measures a shown map on its own');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      const m = p.log.length;
+      p.setBox({ left: 0, top: 0, width: 800, height: 400 });
+      assert.equal(p.log.length, m);
+    });
+
+    test('destroy stops the box observer', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      assert.equal(p.boxObservers, 1);
+      p.ocean.destroy();
+      assert.equal(p.boxObservers, 0);
+    });
+
     test('a window with a zoom frames the point at that zoom', () => {
       const p = fakePage('list');
       p.ocean.present({ kind: 'window', rect: slot, center: paris, zoom: 10 });
       assert.deepEqual(p.log, ['frame 48.85,2.35 0,200 z10']);
+    });
+
+    test('a window with a place opens its cloud, with the whole slot as the chip bounds', () => {
+      const p = fakePage('list');
+      // The clip cuts the slot; the cloud bounds are the whole slot, in px from its centre.
+      const clip = { left: 0, top: 600, width: 400, height: 200 };
+      p.ocean.present({ kind: 'window', rect: slot, clip, center: paris, zoom: 10, place: { slug: 'paris' } });
+      assert.deepEqual(p.log, ['frame 48.85,2.35 0,200 z10 place paris -180,-100,360x200']);
+      // A move with no centre (a scroll) does not open the cloud again.
+      p.ocean.present({ kind: 'window', rect: { ...slot, top: 450 }, clip, place: { slug: 'paris' } });
+      assert.ok(!p.log.slice(1).some((l) => l.includes('place')));
     });
 
     test('a clip shows only the slot inside it; the view follows the whole slot', () => {
@@ -386,6 +478,17 @@ describe('atlasOcean', () => {
       assert.deepEqual(p.log.slice(-2), ['frame - 0,150', 'panBy 0,50']);
     });
 
+    test('the labels count only the visible part of the window, in box px', () => {
+      const p = fakePage('list');
+      // The box starts at y 56 (below a header); the clip cuts the slot top.
+      p.setBox({ left: 0, top: 56, width: 400, height: 744 });
+      const clip = { left: 0, top: 600, width: 400, height: 200 };
+      p.ocean.present({ kind: 'window', rect: slot, clip, center: paris });
+      assert.deepEqual(p.labelBounds, { left: 20, top: 544, width: 360, height: 100 });
+      p.ocean.present('hidden');
+      assert.equal(p.labelBounds, null, 'out of the window: the whole box counts');
+    });
+
     test('a move out of the window removes the clip and the tap', () => {
       const p = fakePage('list');
       let taps = 0;
@@ -393,6 +496,8 @@ describe('atlasOcean', () => {
       p.ocean.present('hidden');
       assert.equal(p.container.style.clipPath, '');
       assert.equal(p.container.dataset.atlasOcean, 'hidden');
+      assert.equal(p.container.getAttribute('aria-hidden'), null);
+      assert.equal(p.inert, 0, 'the markers are in the Tab order again');
       assert.equal(p.windowTap, null);
       assert.equal(p.log[p.log.length - 1], 'park');
       // A click on a hidden ocean goes on to the map as before.
@@ -497,6 +602,61 @@ describe('atlasOcean', () => {
       assert.equal(p.container.style.clipPath, '');
     });
 
+    describe('the expand hint', () => {
+      test('a window with onTap shows the hint at the rect\'s top-right corner', () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => {} });
+        assert.equal(p.container.dataset.atlasWindowHint, 'on');
+        // Box 400x800; slot 20..380 x 500..700: 500 px from the top, 20 px from the right.
+        assert.equal(p.container.style.props['--atlas-window-top'], '500px');
+        assert.equal(p.container.style.props['--atlas-window-right'], '20px');
+      });
+
+      test('a window with no onTap has no hint; a hidden map has none', () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => {} });
+        p.ocean.present('hidden');
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+      });
+
+      test('the hint goes off for the expand tween and stays off on the full box', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => {} });
+        const done = p.ocean.expand({ center: paris, zoom: 6, focusPostSlug: 'a-post' }, 100);
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+        p.tick(50);
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+        p.tick(100);
+        await done;
+        assert.equal(p.container.dataset.atlasWindowHint, 'off', 'the full-box window opens nothing');
+        p.ocean.destroy();
+      });
+
+      test('the hint comes back after the collapse tween, not during it', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        assert.equal(p.container.dataset.atlasWindowHint, 'off', 'the held map is not a slot');
+        const done = p.ocean.collapse(() => ({ kind: 'window', rect: slot, center: paris, onTap: () => {} }), 100);
+        p.tick(0);
+        p.tick(50);
+        assert.equal(p.container.dataset.atlasWindowHint, 'off');
+        p.tick(100);
+        await done;
+        assert.equal(p.container.dataset.atlasWindowHint, 'on');
+      });
+
+      test('reduced motion: the hint is on the slot at once after the collapse', async () => {
+        const p = fakePage('map', { sheetReturn: true, reducedMotion: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        await p.ocean.collapse(() => ({ kind: 'window', rect: slot, center: paris, onTap: () => {} }));
+        assert.equal(p.container.dataset.atlasWindowHint, 'on');
+      });
+    });
+
     describe('expand (the sheet widget opens the full map)', () => {
       const target = { center: paris, zoom: 6, focusPostSlug: 'a-post' };
 
@@ -558,6 +718,130 @@ describe('atlasOcean', () => {
         assert.deepEqual(p.log, ['layout', 'show']);
       });
 
+      test('a window from the post during the tween keeps the expand', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, zoom: 10 });
+        const done = p.ocean.expand(target, 100);
+        p.tick(50);
+        // A re-render or a resize of the post viewer sends its window again.
+        p.ocean.present({ kind: 'window', rect: slot, center: paris, zoom: 10 });
+        await done;
+        p.log.length = 0;
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.equal(p.ocean.presentation(), 'full');
+        assert.deepEqual(p.log, ['layout', 'show', 'setView 48.85,2.35 z6', 'route a-post']);
+      });
+
+      test('a state change before the attach keeps the expand', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        const done = p.ocean.expand(target, 100);
+        p.tick(100);
+        await done;
+        // A kept layout sees `map` before the tag page attaches.
+        p.ocean.present('full');
+        p.log.length = 0;
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.deepEqual(p.log.slice(-2), ['setView 48.85,2.35 z6', 'route a-post']);
+      });
+
+      test('the full map ignores clicks for EXPAND_CLICK_GUARD_MS after the attach', async () => {
+        const p = fakePage('list');
+        p.ocean.present({ kind: 'window', rect: slot, center: paris });
+        const done = p.ocean.expand(target, 100);
+        p.tick(100);
+        await done;
+        p.setUrlState('map');
+        p.ocean.attach();
+        assert.equal(p.ocean.presentation(), 'full');
+        // A late click of the tap: stopped before Leaflet clears the place.
+        const late = p.dispatch('click');
+        assert.ok(late.stopped && late.prevented, 'a click in the guard is stopped');
+        p.tick(100 + EXPAND_CLICK_GUARD_MS);
+        const later = p.dispatch('click');
+        assert.ok(!later.stopped && !later.prevented, 'a click after the guard goes to the map');
+      });
+
+      describe('release (the tag page does not come)', () => {
+        const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        /** A window, then an expand to /tags/france that holds for `holdMs`. */
+        const held = async (holdMs: number) => {
+          const p = fakePage('list', { reducedMotion: true });
+          let released = 0;
+          p.ocean.present({ kind: 'window', rect: slot, center: paris });
+          await p.ocean.expand({ ...target, path: '/tags/france', onRelease: () => released++ }, 100, holdMs);
+          return { p, released: () => released };
+        };
+
+        test('no attach in the hold time: the map is hidden and onRelease runs', async () => {
+          const { p, released } = await held(20);
+          p.routeTo('/tags/france');
+          assert.equal(p.ocean.presentation(), 'window');
+          await wait(40);
+          assert.equal(p.ocean.presentation(), 'hidden');
+          assert.equal(released(), 1);
+          assert.equal(p.routeWatchers, 0, 'the route watch stops');
+          // A late attach of the tag page is a plain attach: no expand to finish.
+          p.log.length = 0;
+          p.setUrlState('map');
+          p.ocean.attach();
+          assert.equal(p.ocean.presentation(), 'full');
+          assert.ok(!p.log.includes('route a-post'));
+        });
+
+        test('a route to another page releases the hold at once', async () => {
+          const { p, released } = await held(10_000);
+          p.routeTo('/tags/france');
+          assert.equal(p.ocean.presentation(), 'window', 'the target route keeps the hold');
+          p.routeTo('/search');
+          assert.equal(p.ocean.presentation(), 'hidden');
+          assert.equal(released(), 1);
+          p.ocean.releaseExpand();
+          assert.equal(released(), 1, 'a second release does nothing');
+        });
+
+        test('the error path releases the hold at once', async () => {
+          const { p, released } = await held(10_000);
+          p.routeTo('/tags/france');
+          p.ocean.releaseExpand();
+          assert.equal(p.ocean.presentation(), 'hidden');
+          assert.equal(released(), 1);
+        });
+
+        test('a slow but good load keeps the hold until the attach', async () => {
+          const { p, released } = await held(60);
+          p.routeTo('/tags/france');
+          await wait(20);
+          assert.equal(p.ocean.presentation(), 'window');
+          p.log.length = 0;
+          p.setUrlState('map');
+          p.ocean.attach();
+          assert.deepEqual(p.log, ['layout', 'show', 'setView 48.85,2.35 z6', 'route a-post']);
+          assert.equal(p.routeWatchers, 0);
+          // The hold timer is gone with the attach: the full map stays.
+          await wait(80);
+          assert.equal(p.ocean.presentation(), 'full');
+          p.routeTo('/search');
+          assert.equal(released(), 0);
+        });
+
+        test('a release with no expand does nothing', () => {
+          const p = fakePage('map');
+          p.ocean.attach();
+          p.ocean.releaseExpand();
+          assert.equal(p.ocean.presentation(), 'full');
+        });
+      });
+
+      test('a plain attach sets no click guard', () => {
+        const p = fakePage('map');
+        p.ocean.attach();
+        const click = p.dispatch('click');
+        assert.ok(!click.stopped && !click.prevented);
+      });
+
       test('a later attach after a finished expand is a plain attach', async () => {
         const p = fakePage('list');
         p.ocean.present({ kind: 'window', rect: slot, center: paris });
@@ -598,6 +882,20 @@ describe('atlasOcean', () => {
         assert.equal(p.container.style.clipPath, 'inset(500px 20px 100px 20px)');
         assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,200 z10', 'the slot zoom after the tween');
         assert.equal(p.maps, 1, 'no second map');
+      });
+
+      test('collapse opens the place cloud only after the tween, at the slot zoom', async () => {
+        const p = fakePage('map', { sheetReturn: true });
+        p.ocean.attach();
+        p.ocean.detach('/posts/a-post');
+        p.log.length = 0;
+        const done = p.ocean.collapse(() => ({ ...back, place: { slug: 'paris' } }), 100);
+        p.tick(0);
+        p.tick(50);
+        assert.ok(!p.log.some((l) => l.includes('place')), 'no cloud during the tween');
+        p.tick(100);
+        await done;
+        assert.equal(p.log[p.log.length - 1], 'frame 48.85,2.35 0,200 z10 place paris -180,-100,360x200');
       });
 
       test('collapse waits for the slot\'s first layout: no tween from a zero rect', async () => {
@@ -724,6 +1022,49 @@ describe('atlasOcean', () => {
 
 describe('atlasOcean default deps', () => {
   const g = globalThis as Record<string, unknown>;
+
+  test('inertChildren takes the container and each child, also a later one, out of the focus order until the stop', () => {
+    const prevMo = g.MutationObserver;
+    let notify: ((records: Array<{ addedNodes: unknown[] }>) => void) | null = null;
+    let disconnected = false;
+    g.MutationObserver = class {
+      constructor(fn: typeof notify) { notify = fn; }
+      observe(_el: unknown, opts: { childList: boolean }) {
+        assert.deepEqual(opts, { childList: true, attributes: true, attributeFilter: ['tabindex'] });
+      }
+      disconnect() { disconnected = true; }
+    };
+    try {
+      const pane = { nodeType: 1, inert: false };
+      const text = { nodeType: 3 } as { nodeType: number; inert?: boolean };
+      const attrs = new Map<string, string>();
+      const el = {
+        children: [pane],
+        getAttribute: (n: string) => attrs.get(n) ?? null,
+        setAttribute: (n: string, v: string) => { attrs.set(n, v); },
+        removeAttribute: (n: string) => { attrs.delete(n); },
+      } as unknown as HTMLElement & { children: unknown[] };
+      const stop = inertChildren(el);
+      assert.equal(pane.inert, true);
+      assert.equal(attrs.get('tabindex'), '-1', 'Leaflet keyboard focus on the container is off');
+      const legend = { nodeType: 1, inert: false };
+      el.children.push(legend);
+      notify!([{ addedNodes: [legend, text] }]);
+      assert.equal(legend.inert, true, 'a child added in the window');
+      assert.equal(text.inert, undefined, 'a text node is no element');
+      // Leaflet builds the map later and sets its keyboard tabindex.
+      attrs.set('tabindex', '0');
+      notify!([]);
+      assert.equal(attrs.get('tabindex'), '-1', 'a later tabindex is off too');
+      stop();
+      assert.ok(disconnected);
+      assert.equal(pane.inert, false);
+      assert.equal(legend.inert, false);
+      assert.equal(attrs.get('tabindex'), '0', 'the Leaflet tabindex is back');
+    } finally {
+      g.MutationObserver = prevMo;
+    }
+  });
 
   test('defaultIdle uses requestIdleCallback and its cancel', () => {
     const calls: string[] = [];

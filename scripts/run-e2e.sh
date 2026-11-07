@@ -22,9 +22,14 @@ if (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null; then
     exit 1
 fi
 
-# Install Chromium if needed
+# Install Chromium if needed. E2E_DEVICE=ipad also needs WebKit
+# (frontend/e2e/devices.ts::launchFor).
 echo "==> Ensuring Playwright Chromium is installed..."
 npx playwright install chromium
+if [ "${E2E_DEVICE:-}" = "ipad" ]; then
+    echo "==> E2E_DEVICE=ipad: ensuring Playwright WebKit is installed..."
+    npx playwright install webkit
+fi
 
 # Always rebuild. The old guard tested frontend/css/public and frontend/js for
 # existence, but the first is a *source* directory that is always present, so
