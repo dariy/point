@@ -1,0 +1,17 @@
+# Reviewed govulncheck exceptions, read by scripts/govulncheck-gate.sh.
+# Format: <OSV id> <until YYYY-MM-DD> <reason>. After the date the entry
+# stops applying and the scan fails again, so somebody looks at it again.
+#
+# GO-2026-6875 and GO-2026-6872 (echo): the OSV records give a fix only for
+# echo/v5 and list all of echo/v4 >= 4.0.0, with no symbols, so govulncheck
+# flags any use of v4. Point is not exposed on v4.16.3:
+#   6875 — middleware/proxy.go always sets X-Real-IP to c.RealIP() before the
+#          request goes upstream (comments.go proxies to remark42), so a
+#          client-supplied X-Real-IP does not get through.
+#   6872 — the rate limiters use the default extractor, c.RealIP(), and
+#          cmd/api/middleware_stack.go::installMiddleware sets e.IPExtractor
+#          to ExtractIPFromXFFHeader with trusted hops only, so a spoofed
+#          X-Forwarded-For entry is skipped.
+# Remove both when echo/v4 gets a fixed range or point moves to echo/v5.
+GO-2026-6875 2027-02-07 echo/v4 proxy overwrites X-Real-IP; see note above
+GO-2026-6872 2027-02-07 echo/v4 rate limiter keyed on trusted-hop IPExtractor; see note above

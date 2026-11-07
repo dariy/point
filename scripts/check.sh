@@ -104,9 +104,10 @@ step_go_coverage() {
     "$SCRIPT_DIR/coverage-gate.sh" "$ROOT_DIR/api/coverage.out"
 }
 
+# Reviewed exceptions live in api/govulncheck-ignore.txt (see the gate script).
 step_govulncheck() {
     cd "$ROOT_DIR/api"
-    govulncheck ./...
+    "$SCRIPT_DIR/govulncheck-gate.sh" govulncheck-ignore.txt
 }
 
 # The lockfile-pinned Oxlint (.oxlintrc.json, plugin scripts/oxlint-point.ts).
