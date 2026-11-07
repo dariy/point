@@ -21,7 +21,7 @@ import { tagKind } from "../../utils/tagLinks.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
 import { isRevelioOn } from "../../utils/revelio.ts";
 import { clusterDots, declutter } from "./atlasLabels.ts";
-import { createLongPress } from "./atlasPeek.ts";
+import { createLongPress, liftPill, PEEK_DROP_MS } from "./atlasPeek.ts";
 import { matchPlaces } from "./atlasSearch.ts";
 import {
   COUNTRIES_GEOJSON,
@@ -385,7 +385,11 @@ export class AtlasPlaces {
     this._relabel = () => this._applyLabels();
     this._recluster = () => this._applyClusters();
     this._peek = createLongPress({
-      onPeek: (id) => this._setPeek(id, true),
+      onPeek: (id, x, y) => {
+        this._setPeek(id, true);
+        this._liftPeek(id, x, y);
+      },
+      onDrop: (id) => this._dropPeek(id),
       onHide: (id) => this._setPeek(id, false),
     });
   }
@@ -1335,12 +1339,68 @@ export class AtlasPlaces {
 
   /** Expand or collapse the pill of place `id` for a peek. A peek holds the map still. */
   _setPeek(id: number, on: boolean): void {
-    this._labels.get(id)?.marker._icon?.classList.toggle("atlas-marker--peek", on);
+    const icon = this._labels.get(id)?.marker._icon as HTMLElement | null | undefined;
+    icon?.classList.toggle("atlas-marker--peek", on);
+    if (!on && icon) this._clearLift(icon);
     const drag = this._map.dragging;
     if (on && drag?.enabled()) {
       drag.disable();
       this._peekHeldDrag = true;
     }
+  }
+
+  /**
+   * Show the peek pill of place `id` above the finger at client px `x`, `y`
+   * (atlasPeek.ts::liftPill). The dot stays at its place. The pill moves with
+   * the CSS variables `--atlas-lift-x` and `--atlas-lift-y` (atlas.css).
+   */
+  _liftPeek(id: number, x: number, y: number): void {
+    const icon = this._labels.get(id)?.marker._icon as HTMLElement | null | undefined;
+    const label = icon?.querySelector<HTMLElement>(".atlas-marker__label");
+    if (!icon || !label) return;
+    this._clearLift(icon);
+    const p = label.getBoundingClientRect();
+    const d = icon.getBoundingClientRect();
+    const b = this._map.getContainer().getBoundingClientRect();
+    const { dx, dy } = liftPill(
+      { left: p.left, top: p.top, width: p.width, height: p.height },
+      d.left + d.width / 2,
+      y,
+      { left: b.left, top: b.top, right: b.right, bottom: b.bottom },
+    );
+    icon.classList.add("atlas-marker--lift");
+    label.style.setProperty("--atlas-lift-r", `${d.width}px`);
+    label.style.setProperty("--atlas-lift-x", `${Math.round(dx)}px`);
+    label.style.setProperty("--atlas-lift-y", `${Math.round(dy)}px`);
+  }
+
+  /**
+   * The finger lifts: the peek pill moves back to its dot, still expanded.
+   * `atlas-marker--drop` keeps the dot in the pill during the move. Under
+   * `prefers-reduced-motion: reduce` the move is instant (decision 11).
+   */
+  _dropPeek(id: number): void {
+    const icon = this._labels.get(id)?.marker._icon as HTMLElement | null | undefined;
+    const label = icon?.querySelector<HTMLElement>(".atlas-marker__label");
+    if (!icon || !label || !icon.classList.contains("atlas-marker--lift")) return;
+    const animate = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    icon.classList.remove("atlas-marker--lift");
+    label.style.removeProperty("--atlas-lift-x");
+    label.style.removeProperty("--atlas-lift-y");
+    if (!animate) return;
+    icon.classList.add("atlas-marker--drop");
+    const done = () => icon.classList.remove("atlas-marker--drop");
+    label.addEventListener("transitionend", done, { once: true });
+    setTimeout(done, PEEK_DROP_MS + 100);
+  }
+
+  /** Put the peek pill of `icon` back at its dot at once. */
+  _clearLift(icon: HTMLElement): void {
+    icon.classList.remove("atlas-marker--lift", "atlas-marker--drop");
+    const label = icon.querySelector<HTMLElement>(".atlas-marker__label");
+    label?.style.removeProperty("--atlas-lift-x");
+    label?.style.removeProperty("--atlas-lift-y");
+    label?.style.removeProperty("--atlas-lift-r");
   }
 
   /** Enable the map drag that a peek disabled. */

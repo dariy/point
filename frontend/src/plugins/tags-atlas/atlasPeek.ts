@@ -6,6 +6,10 @@
  * A press that stays within `slop` px for `delay` ms expands the pill. The
  * release collapses it after `hold` ms. A peek press is no tap: the click after
  * it must not open the cloud (`consumeClick`).
+ *
+ * While the finger is down, the expanded pill shows above the finger, so that
+ * the finger does not cover it (`liftPill`). The release moves it back to its
+ * dot (`onDrop`), then the hold collapses it.
  */
 
 /** The press time that shows the peek, ms. */
@@ -14,10 +18,44 @@ export const PEEK_DELAY = 450;
 export const PEEK_SLOP = 6;
 /** The time the peek stays after the release, ms. */
 export const PEEK_HOLD = 1500;
+/** The gap between the touch point and the lifted pill, px: clear of a fingertip. */
+export const PEEK_LIFT = 44;
+/** The move of the pill back to its dot on the release, ms (atlas.css `--drop`). */
+export const PEEK_DROP_MS = 180;
+
+export interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export interface Bounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * The move (`dx`, `dy`, client px) that lifts a pill above the finger.
+ * The pill is centred on its dot (`dotX`). Its bottom is `gap` px above the
+ * touch point `y`. If the map box has no room above, its top is `gap` px below
+ * the touch point. The pill stays inside `box`.
+ */
+export function liftPill(pill: Rect, dotX: number, y: number, box: Bounds, gap: number = PEEK_LIFT): { dx: number; dy: number } {
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
+  const left = clamp(dotX - pill.width / 2, box.left, box.right - pill.width);
+  let top = y - gap - pill.height;
+  if (top < box.top) top = Math.min(y + gap, box.bottom - pill.height);
+  return { dx: left - pill.left, dy: top - pill.top };
+}
 
 export interface LongPressOptions {
-  /** Show the peek of place `id`. */
-  onPeek(id: number): void;
+  /** Show the peek of place `id`; the finger is down at client px `x`, `y`. */
+  onPeek(id: number, x: number, y: number): void;
+  /** The finger that shows the peek of place `id` lifts: the pill goes back to its dot. */
+  onDrop?(id: number): void;
   /** Hide the peek of place `id`. */
   onHide(id: number): void;
   delay?: number;
@@ -80,7 +118,7 @@ export function createLongPress(opts: LongPressOptions): LongPress {
         if (!press) return;
         shown = press.id;
         swallow = true;
-        opts.onPeek(shown);
+        opts.onPeek(shown, press.x, press.y);
       }, delay);
     },
     move(pointerId, x, y) {
@@ -91,6 +129,7 @@ export function createLongPress(opts: LongPressOptions): LongPress {
       if (press && press.pointerId !== pointerId) return;
       stopPress();
       if (shown === null || hideTimer !== null) return;
+      opts.onDrop?.(shown);
       hideTimer = setTimer(() => {
         hideTimer = null;
         hide();

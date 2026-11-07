@@ -120,10 +120,15 @@ A pill expands in these cases:
   window. In a window, only the places in the visible part of the window count. An open
   cloud is taken space: a pill below a chip of the cloud stays collapsed.
 - **Hover or a long press.** With a mouse, a pill expands on hover and collapses on leave.
-  On touch, a press of 450 ms with less than 6 px of movement expands the pill. The release
-  collapses it after 1.5 s. A long press does not open the cloud and does not pan the map.
-  A short tap works as before. The sheet window expands no pill on hover or a long press.
-  The timer is `atlasPeek.ts::createLongPress`.
+  On touch, a press of 450 ms with less than 6 px of movement expands the pill. While the
+  finger is down, the pill shows 44 px above the touch point, centred on the dot, so that the
+  finger does not cover it. The dot stays at its place, and the pill shows a copy of the dot.
+  If the map has no room above, the pill shows 44 px below the touch point. The pill stays
+  inside the map. The release moves the pill back to its dot in 180 ms (instant under
+  `prefers-reduced-motion: reduce`), and it collapses after 1.5 s. A long press does not
+  open the cloud and does not pan the map. A short tap works as before. The sheet window
+  expands no pill on hover or a long press. The timer is `atlasPeek.ts::createLongPress`;
+  the position is `atlasPeek.ts::liftPill` (`AtlasPlaces._liftPeek`, `_dropPeek`).
 - **The place is selected.** While its cloud does not show (the cloud loads, or there is
   no cloud), the selected pill goes first in the pass and is always expanded. The other
   pills go around it. While the cloud shows, the cloud's centre chip is the expanded form

@@ -147,7 +147,8 @@
     height: max(18px, calc(100% + 6px));
     padding-left: calc(100% + 10px);
     border-radius: 999px;
-    transform: translateY(-50%);
+    /* --atlas-lift-x/-y: the long-press lift (below); 0 at rest. */
+    transform: translate(var(--atlas-lift-x, 0px), calc(-50% + var(--atlas-lift-y, 0px)));
     cursor: pointer;
     pointer-events: auto;
 }
@@ -181,6 +182,39 @@ html.pointer-fine .atlas-marker:hover .atlas-marker__label,
 html.pointer-fine .leaflet-marker-icon.atlas-marker:hover,
 .leaflet-marker-icon.atlas-marker--peek {
     z-index: 9000 !important;
+}
+
+/* A long press on touch shows the pill above the finger (`--lift`,
+   AtlasPlaces._liftPeek, atlasPeek.ts::liftPill): the finger does not cover it.
+   The dot stays at its place; a copy of the dot (::before) goes with the pill.
+   The release moves the pill back to its dot (`--drop`, PEEK_DROP_MS). */
+.atlas-marker--lift .atlas-marker__label,
+.atlas-marker--drop .atlas-marker__label {
+    background: var(--bg-primary, #fff);
+}
+
+.atlas-marker--drop .atlas-marker__label {
+    transition: transform 0.18s ease;
+}
+
+.atlas-marker--lift .atlas-marker__label::before,
+.atlas-marker--drop .atlas-marker__label::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    width: var(--atlas-lift-r, 12px);
+    height: var(--atlas-lift-r, 12px);
+    border-radius: 50%;
+    background: rgba(31, 158, 142, 0.72);
+    border: 2px solid rgba(31, 158, 142, 1);
+    transform: translateY(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .atlas-marker--drop .atlas-marker__label {
+        transition: none;
+    }
 }
 
 .leaflet-marker-icon.atlas-marker {

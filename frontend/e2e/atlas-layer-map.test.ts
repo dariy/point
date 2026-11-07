@@ -1028,11 +1028,37 @@ describe('Atlas layer map', () => {
         const init = { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 };
         m.querySelector('.atlas-marker__dot')!.dispatchEvent(new PointerEvent(t, init));
       }, type);
+      // The pill box, the dot box and the touch point (the dot centre).
+      const boxes = () => delta.evaluate((m) => {
+        const box = (el: Element) => {
+          const r = el.getBoundingClientRect();
+          return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+        };
+        const dot = box(m.querySelector('.atlas-marker__dot')!);
+        return { pill: box(m.querySelector('.atlas-marker__label')!), dot, x: (dot.left + dot.right) / 2, y: (dot.top + dot.bottom) / 2 };
+      });
+      const before = await boxes();
       await press('pointerdown');
       await page.waitForTimeout(700);
       assert.equal(await expanded(), true, 'the long press expands the pill');
+      // While the finger is down, the pill is above it (child .29).
+      const held = await boxes();
+      assert.ok(held.pill.bottom <= held.y - 40, 'the pill is above the touch point: ' + JSON.stringify(held));
+      const holdsTouch = held.pill.left <= held.x && held.x <= held.pill.right && held.pill.top <= held.y && held.y <= held.pill.bottom;
+      assert.ok(!holdsTouch, 'the pill does not contain the touch point');
+      assert.ok(Math.abs((held.pill.left + held.pill.right) / 2 - held.x) < 2, 'the pill is centred on the dot');
+      // The lift is 44 px or more; WebKit can shift the map by a pixel or two.
+      assert.ok(Math.abs(held.dot.left - before.dot.left) <= 3 && Math.abs(held.dot.top - before.dot.top) <= 3,
+        'the dot stays at its place: ' + JSON.stringify([before.dot, held.dot]));
+      assert.equal(await delta.evaluate((m) => getComputedStyle(m.querySelector('.atlas-marker__label')!, '::before').content !== 'none'), true, 'the lifted pill shows a dot');
       await press('pointerup');
       assert.equal(await expanded(), true, 'the pill stays a moment after the release');
+      // The release moves the pill back to its dot (PEEK_DROP_MS = 180).
+      await page.waitForTimeout(400);
+      const dropped = await boxes();
+      assert.ok(dropped.pill.left < dropped.dot.left && dropped.pill.right > dropped.dot.right
+        && dropped.pill.top <= dropped.dot.top + 1 && dropped.pill.bottom >= dropped.dot.bottom - 1, 'the pill is at its dot: ' + JSON.stringify(dropped));
+      assert.equal(await expanded(), true, 'the pill is still expanded at its dot');
       await page.waitForTimeout(1800);
       assert.equal(await expanded(), false, 'the pill collapses after PEEK_HOLD');
       assert.equal(await page.locator('.atlas-layer-map .atlas-node--center').count(), 0, 'no cloud');
