@@ -209,6 +209,7 @@ describe('Atlas layer', () => {
         await legend.waitFor();
         await zoom.waitFor();
         assert.equal(await page.locator('.atlas-layer-map .atlas-toggle').first().isVisible(), false, 'toggles fold away');
+        assert.equal(await legend.locator('.atlas-search__open').isVisible(), false, 'the place search folds away');
         const more = legend.locator('.atlas-legend__more');
         const apart = async () => {
           const l = (await legend.boundingBox())!;
@@ -219,6 +220,7 @@ describe('Atlas layer', () => {
         await more.click();
         assert.equal(await more.getAttribute('aria-expanded'), 'true');
         assert.equal(await page.locator('.atlas-layer-map .atlas-toggle').first().isVisible(), true, 'toggles open');
+        assert.equal(await legend.locator('.atlas-search__open').isVisible(), true, 'the place search is in the open legend');
         assert.ok(await apart(), 'open legend clear of the zoom control');
         // A fine pointer keeps the stack layout in landscape.
         assert.equal(await page.evaluate(() => document.body.hasAttribute('data-atlas-side')), false, 'no side layout with a mouse');

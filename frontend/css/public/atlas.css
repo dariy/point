@@ -527,6 +527,112 @@ html.pointer-fine [data-atlas-ocean="window"] .atlas-marker--labelled:hover .atl
     cursor: pointer;
 }
 
+/* The place search (AtlasPlaces.ts::_mountSearch): a button that opens a
+   field. The results open above the field, because the legend sits on the
+   bottom edge of the map. */
+.atlas-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.atlas-search__open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.atlas-search__open:hover,
+.atlas-search.is-open .atlas-search__open {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.05));
+}
+
+.atlas-search__input {
+    display: none;
+    width: 11rem;
+    min-width: 0;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--border-primary, rgba(0, 0, 0, 0.2));
+    border-radius: 5px;
+    background: var(--bg-secondary, var(--bg-primary));
+    color: var(--text-primary);
+    font: inherit;
+    /* 16px stops iOS Safari from a zoom on focus. */
+    font-size: 16px;
+}
+
+.atlas-search.is-open .atlas-search__input {
+    display: block;
+}
+
+.atlas-search__list {
+    position: absolute;
+    left: -10px;
+    bottom: calc(100% + 10px);
+    z-index: 1;
+    width: max-content;
+    min-width: 14rem;
+    max-width: min(20rem, 80vw);
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border-radius: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary, rgba(0, 0, 0, 0.12));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+
+.atlas-search__list[hidden] {
+    display: none;
+}
+
+.atlas-search__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 32px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.atlas-search__item:hover,
+.atlas-search__item.is-active {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.06));
+}
+
+.atlas-search__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.atlas-search__count {
+    flex: none;
+    color: var(--text-secondary, var(--text-primary));
+    font-variant-numeric: tabular-nums;
+}
+
+/* A hidden place: dimmed, as its label on the map. */
+.atlas-search__item--hidden .atlas-search__name {
+    opacity: 0.6;
+    font-style: italic;
+}
+
 /* A short layer map (a phone on its side) has no room for the legend column
    under the zoom control. The legend becomes one button; open, it is one row. */
 @container atlas-layer-map (max-height: 320px) {
@@ -541,8 +647,19 @@ html.pointer-fine [data-atlas-ocean="window"] .atlas-marker--labelled:hover .atl
     .atlas-legend__more {
         display: flex;
     }
-    .atlas-legend:not(.is-open) .atlas-toggle {
+    .atlas-legend:not(.is-open) :is(.atlas-toggle, .atlas-search) {
         display: none;
+    }
+    .atlas-search {
+        margin: 0;
+    }
+    .atlas-search__open {
+        width: 44px;
+        height: 44px;
+    }
+    .atlas-search__list {
+        left: 0;
+        bottom: calc(100% + 6px);
     }
     .atlas-legend .atlas-toggle {
         width: auto;

@@ -723,6 +723,77 @@ describe('Atlas layer map', () => {
   });
 
   // Epic decision 13: a place shows its name when the label has space, else the dot only.
+  // A field in the legend finds a place by name; a pick flies to it and opens its cloud.
+  describe('place search', () => {
+    const openSearch = async () => {
+      await openMap('map');
+      await page.evaluate(() => { (window as any).__noReload = true; });
+      await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
+      await page.locator('.atlas-layer-map .atlas-search__open').click();
+      const input = page.locator('.atlas-layer-map .atlas-search__input');
+      await input.waitFor();
+      return input;
+    };
+    const items = () => page.locator('.atlas-layer-map .atlas-search__item .atlas-search__name').allInnerTexts();
+
+    it('type, Enter: the map flies to the place and opens its cloud', async () => {
+      const input = await openSearch();
+      assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('atlas-search__input')), true, 'the field has the focus');
+      await input.pressSequentially('MAPT');
+      assert.deepEqual(await items(), ['Mapton']);
+      await input.press('Enter');
+      await page.waitForFunction(() => location.pathname === '/tags/mapton');
+      await page.locator('.atlas-layer-map .atlas-node--center').waitFor();
+      assert.match(await page.locator('.atlas-layer-map .atlas-node--center').innerText(), /Mapton/);
+      assert.equal(await page.evaluate(() => (window as any).__noReload === true), true, 'no full page load');
+      assert.equal(await page.locator('.atlas-layer-map .atlas-search__list').isVisible(), false, 'the list closes');
+      // The fly ends with the place in the middle of the map, at the pick zoom or more.
+      await page.waitForFunction(() => {
+        const at = (new URLSearchParams(location.search).get('at') ?? '').split(',').map(Number);
+        return at.length === 3 && Math.abs(at[0]! - 40.7) < 0.5 && Math.abs(at[1]! + 74) < 0.5 && at[2]! >= 10;
+      }, null, { timeout: 5000 }).catch(async (e) => {
+        throw new Error('at= after the fly: ' + (await page.evaluate(() => location.search)) + ' ' + e);
+      });
+    });
+
+    it('a tap on a shape result fits the shape and opens its cloud', async () => {
+      const input = await openSearch();
+      await input.pressSequentially('anc'); // a substring of France
+      assert.deepEqual(await items(), ['France']);
+      await page.locator('.atlas-layer-map .atlas-search__item').first().click();
+      await page.waitForFunction(() => location.pathname === '/tags/france');
+      await page.locator('.atlas-layer-map .atlas-node--center').waitFor();
+      assert.match(await page.locator('.atlas-layer-map .atlas-node--center').innerText(), /France/);
+      await page.waitForFunction(() => {
+        const at = (new URLSearchParams(location.search).get('at') ?? '').split(',').map(Number);
+        return at.length === 3 && at[0]! > 40 && at[0]! < 52 && at[1]! > -6 && at[1]! < 10 && at[2]! >= 4;
+      }, null, { timeout: 5000 });
+    });
+
+    it('arrow keys move the choice; Escape and an empty field close the list', async () => {
+      const input = await openSearch();
+      await input.pressSequentially('a'); // France and Mapton
+      assert.equal((await items()).length, 2);
+      const active = () => page.locator('.atlas-layer-map .atlas-search__item.is-active .atlas-search__name').innerText();
+      const first = await active();
+      await input.press('ArrowDown');
+      assert.notEqual(await active(), first);
+      await input.press('ArrowDown');
+      assert.equal(await active(), first, 'the choice wraps');
+      await input.fill('');
+      assert.equal(await page.locator('.atlas-layer-map .atlas-search__list').isVisible(), false, 'an empty field closes the list');
+      await input.pressSequentially('zzz');
+      assert.equal(await page.locator('.atlas-layer-map .atlas-search__list').isVisible(), false, 'no match, no list');
+      await input.fill('map');
+      assert.equal(await page.locator('.atlas-layer-map .atlas-search__list').isVisible(), true);
+      const path = await page.evaluate(() => location.pathname);
+      await input.press('Escape');
+      assert.equal(await page.locator('.atlas-layer-map .atlas-search__list').isVisible(), false, 'Escape closes the list');
+      assert.equal(await input.isVisible(), false, 'Escape closes the field');
+      assert.equal(await page.evaluate(() => location.pathname), path, 'Escape picks nothing');
+    });
+  });
+
   describe('labels', () => {
     // Four places in a column, 0.5° apart: one point at zoom 2, about 45 px apart at zoom 7.
     const column: Array<[string, number, number]> = [['Lbl Alpha', 10, 3], ['Lbl Beta', 10.5, 1], ['Lbl Gamma', 11, 1], ['Lbl Delta', 11.5, 1]];

@@ -80,6 +80,26 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
 When the layer map is 320 px high or less (a short window, or a small phone on its side), the
 legend is one button to the right of the zoom control. The button opens the filters in one row.
 
+### Place search
+
+The legend starts with a search button. It opens a field ("Find a place"). The field finds
+the places that the map draws, by name, case and accent insensitive (`zur` finds Zürich). A
+name that starts with the text comes first, then a name that contains it. In each group, the
+place with more posts comes first. The list shows 8 places or fewer, above the field.
+
+- **Arrow keys** move the choice. **Enter** or a **tap** picks the place.
+- **A pick** flies the map to the place: a marker at zoom 10 (or the current zoom, if it is
+  larger), a country or state shape to fit its bounds. The place opens its cloud, and its tag
+  page `/tags/<slug>` opens, as for a tap on the place.
+- **Escape** closes the field. An empty field, or a text with no match, shows no list.
+- A hidden place is in the list only while the "Hidden" filter shows it.
+- The sheet window shows no legend, so it has no search. On a short map, the search is in
+  the folded legend.
+
+The matcher is `atlasSearch.ts::matchPlaces`; `AtlasPlaces.ts::_mountSearch` and
+`pickPlace` draw the field and do the pick. Under `prefers-reduced-motion: reduce`, the pick
+moves the map with no animation.
+
 ### Labels
 
 A place shows its name next to its dot (`● Berlin`) when the label has space. Else the

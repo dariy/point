@@ -16,12 +16,13 @@
 import { getTagsGraph, getTagCloud } from "../../api/pages.ts";
 import { getUser, onRoute } from "../../store.ts";
 import { ViewContext } from "../../utils/viewContext.ts";
-import { html, navigate, raw, safeUrl } from "../../utils/helpers.ts";
+import { html, navigate, raw, safeUrl, setHTML } from "../../utils/helpers.ts";
 import { tagKind } from "../../utils/tagLinks.ts";
 import { LOCK_SVG } from "../../utils/icons.ts";
 import { isRevelioOn } from "../../utils/revelio.ts";
 import { clusterDots, declutter } from "./atlasLabels.ts";
 import { createLongPress, peekText } from "./atlasPeek.ts";
+import { matchPlaces } from "./atlasSearch.ts";
 import {
   COUNTRIES_GEOJSON,
   CA_PROVINCES_GEOJSON,
@@ -58,6 +59,8 @@ interface PlaceActivator {
   latLng: LeafletRef;
   setActive: (on: boolean) => void;
   key: string;
+  /** a shape's bounds (LatLngBounds): a search pick fits them */
+  bounds?: LeafletRef;
 }
 
 /** One satellite chip, before it is placed on the map. */
@@ -128,6 +131,8 @@ interface SelectOptions {
    */
   maxRings?: number;
   bounds?: Box | null;
+  /** a search pick: the map flies to the place, so no `panInside` */
+  fly?: boolean;
 }
 
 /** The fields that hold a cached boundary file. */
@@ -142,6 +147,11 @@ const LABEL_PAD_X = 10;
 const LABEL_GAP = 3;
 /** The longest name a label shows. */
 const LABEL_MAX = 24;
+/** The magnifier on the place search button. */
+const SEARCH_SVG =
+  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>';
+/** The zoom a search pick flies to (a marker), and the most a shape fit zooms in. */
+const PICK_ZOOM = 10;
 
 let measureCtx: CanvasRenderingContext2D | null | undefined;
 
@@ -160,6 +170,31 @@ function labelWidth(text: string, font: string): number {
   if (!measureCtx) return Math.ceil(text.length * 6.6) + LABEL_PAD_X;
   measureCtx.font = font;
   return Math.ceil(measureCtx.measureText(text).width) + LABEL_PAD_X;
+}
+
+/**
+ * The bounds of the part of a shape that holds `at` (the tag's own point). A
+ * country with far parts (France and French Guiana) then fits its main part
+ * only. Without such a part, the bounds of the whole shape.
+ */
+function partBounds(L: LeafletRef, layer: LeafletRef, at: LeafletRef): LeafletRef {
+  if (typeof layer.getBounds !== "function") return null;
+  const whole = layer.getBounds();
+  if (typeof layer.getLatLngs !== "function") return whole;
+  // Polygon: [outer ring, holes…]; MultiPolygon: [[outer ring, holes…], …].
+  const parts: LeafletRef[] = [];
+  const walk = (arr: LeafletRef[]) => {
+    if (!arr.length) return;
+    if (L.LineUtil?.isFlat ? L.LineUtil.isFlat(arr) : arr[0]?.lat != null) parts.push(arr);
+    else if (Array.isArray(arr[0]) && arr[0].length && (L.LineUtil?.isFlat ? L.LineUtil.isFlat(arr[0]) : arr[0][0]?.lat != null)) parts.push(arr[0]);
+    else arr.forEach(walk);
+  };
+  walk(layer.getLatLngs());
+  for (const ring of parts) {
+    const b = L.latLngBounds(ring);
+    if (b.contains(at)) return b;
+  }
+  return whole;
 }
 
 /** Marker radius in px for a geo-tag, scaled by post count. */
@@ -543,7 +578,7 @@ export class AtlasPlaces {
       const open = legend.classList.toggle("is-open");
       more.setAttribute("aria-expanded", String(open));
     });
-    legend.append(more);
+    legend.append(more, this._mountSearch());
     for (const [type, dot, label] of kinds) {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -565,6 +600,174 @@ export class AtlasPlaces {
     this._hint = hint;
     this._legend = legend;
     this._wireToggles();
+  }
+
+  /**
+   * The place search: a button that opens a field. The list shows the drawn
+   * places that match (atlasSearch.ts::matchPlaces), so a place that the
+   * "Hidden" filter removes is not found. Arrow keys move, Enter or a tap
+   * picks (`pickPlace`), Escape closes.
+   */
+  _mountSearch(): HTMLElement {
+    const box = document.createElement("div");
+    box.className = "atlas-search";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "atlas-search__open";
+    open.setAttribute("aria-label", "Search places");
+    open.setAttribute("aria-expanded", "false");
+    setHTML(open, raw(SEARCH_SVG));
+    const input = document.createElement("input");
+    input.type = "search";
+    input.className = "atlas-search__input";
+    input.placeholder = "Find a place";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-label", "Find a place");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-expanded", "false");
+    const list = document.createElement("ul");
+    list.className = "atlas-search__list";
+    list.id = "atlas-search-list";
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", "Places");
+    list.hidden = true;
+    input.setAttribute("aria-controls", list.id);
+    box.append(open, input, list);
+
+    let results: AtlasTag[] = [];
+    let active = -1;
+    const mark = () => {
+      list.querySelectorAll<HTMLElement>(".atlas-search__item").forEach((li, i) => {
+        li.classList.toggle("is-active", i === active);
+        li.setAttribute("aria-selected", String(i === active));
+      });
+      if (active >= 0) input.setAttribute("aria-activedescendant", "atlas-search-opt-" + active);
+      else input.removeAttribute("aria-activedescendant");
+    };
+    const closeList = () => {
+      results = [];
+      active = -1;
+      list.hidden = true;
+      list.replaceChildren();
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+    };
+    const update = () => {
+      const drawn = [...this._placeActivators.keys()]
+        .map((id) => this._tagsById.get(id))
+        .filter((t): t is AtlasTag => !!t);
+      results = matchPlaces(input.value, drawn);
+      active = results.length ? 0 : -1;
+      if (!results.length) {
+        closeList();
+        return;
+      }
+      list.replaceChildren(
+        ...results.map((tag, i) => {
+          const li = document.createElement("li");
+          li.className = "atlas-search__item" + (isConcealed(tag) ? " atlas-search__item--hidden" : "");
+          li.id = "atlas-search-opt-" + i;
+          li.setAttribute("role", "option");
+          li.dataset.placeId = String(tag.id);
+          const name = document.createElement("span");
+          name.className = "atlas-search__name";
+          name.textContent = tag.name;
+          const count = document.createElement("span");
+          count.className = "atlas-search__count";
+          count.textContent = String(tag.post_count || 0);
+          li.append(name, count);
+          // pointerdown would blur the field first; the pick runs on click.
+          li.addEventListener("mousedown", (e) => e.preventDefault());
+          li.addEventListener("click", (e) => {
+            // The pick removes this item; Leaflet then cannot see that the
+            // click came from the legend and would clear the selection.
+            e.stopPropagation();
+            pick(i);
+          });
+          return li;
+        }),
+      );
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      mark();
+    };
+    const setOpen = (on: boolean) => {
+      box.classList.toggle("is-open", on);
+      open.setAttribute("aria-expanded", String(on));
+      if (on) input.focus();
+      else {
+        input.value = "";
+        closeList();
+      }
+    };
+    const pick = (i: number) => {
+      const tag = results[i];
+      if (!tag) return;
+      setOpen(false);
+      this.pickPlace(tag.id);
+    };
+
+    open.addEventListener("click", () => setOpen(!box.classList.contains("is-open")));
+    input.addEventListener("input", update);
+    input.addEventListener("keydown", (e) => {
+      // Keys in the field are for the field: not for the map or the page.
+      e.stopPropagation();
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (!results.length) return;
+        e.preventDefault();
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        active = (active + step + results.length) % results.length;
+        mark();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (active >= 0) pick(active);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        open.focus();
+      }
+    });
+    // A wheel or a drag on the list scrolls the list, not the map.
+    this._L.DomEvent.disableScrollPropagation(box);
+    return box;
+  }
+
+  /**
+   * A search pick: the map flies to the place (a shape: it fits its bounds),
+   * and the place opens its cloud as for a tap (the URL changes the same way).
+   */
+  pickPlace(tagId: number): boolean {
+    const a = this._placeActivators.get(tagId);
+    const tag = this._tagsById.get(tagId);
+    if (!a || !tag) return false;
+    const map = this._map;
+    const animate = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // A list page that attaches during the fly re-measures the map, which
+    // fires `moveend`; the `maxBounds` check then pans and stops the fly. The
+    // check is off for the fly and comes back at its end (`zoomend`), on a
+    // drag, or after a timeout.
+    const maxBounds = map.options?.maxBounds;
+    if (animate && maxBounds && typeof map.setMaxBounds === "function") {
+      map.setMaxBounds(null);
+      let timer = 0;
+      const back = () => {
+        map.off("zoomend dragstart", back);
+        clearTimeout(timer);
+        if (!this._dead) map.setMaxBounds(maxBounds);
+      };
+      map.on("zoomend dragstart", back);
+      timer = window.setTimeout(back, 2000);
+    }
+    if (a.bounds && typeof map.flyToBounds === "function") {
+      map.flyToBounds(a.bounds, { padding: [40, 40], maxZoom: PICK_ZOOM, animate, duration: 0.8 });
+    } else if (typeof map.flyTo === "function") {
+      const zoom = Math.min(map.getMaxZoom(), Math.max(map.getZoom(), PICK_ZOOM));
+      map.flyTo(a.latLng, zoom, { animate, duration: 0.8 });
+    }
+    if (this._activeKey !== a.key) this._select(tag, a.latLng, a.setActive, a.key, { fly: true });
+    return true;
   }
 
   /** Query params carrying the active timeline scope, if any. */
@@ -828,10 +1031,14 @@ export class AtlasPlaces {
           // Centroid anchor for programmatic reselection (a click uses e.latlng;
           // returning from a post has no click point, so fall back to the tag's
           // own coordinates).
+          // A tag can match more than one feature: the bounds take all of them.
+          const prev = this._placeActivators.get(tag.id)?.bounds;
+          const shapeBounds = partBounds(L, layer, L.latLng(tag.latitude, tag.longitude));
           this._placeActivators.set(tag.id, {
             latLng: L.latLng(tag.latitude, tag.longitude),
             setActive,
             key: "c" + tag.id,
+            bounds: prev && shapeBounds ? prev.extend(shapeBounds) : (shapeBounds ?? prev),
           });
 
           layer.on("click", (e: LeafletRef) => {
@@ -1252,7 +1459,7 @@ export class AtlasPlaces {
     // Nudge the place into view if its cloud would spill off an edge. Skipped
     // when the selection is being restored rather than made (`pan: false`, from
     // a timeline redraw), where moving the map under the user is unwelcome.
-    if (opts.pan !== false && typeof this._map.panInside === "function") {
+    if (opts.pan !== false && !opts.fly && typeof this._map.panInside === "function") {
       this._map.panInside(anchorLatLng, { padding: [220, 220] });
     }
     return spawned;
