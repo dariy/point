@@ -200,9 +200,12 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
   // The drag in progress (see beginDrag).
   let drag: { from: AtlasLayerState; at: number; side: boolean; pos: SnapPositions; min: number; max: number } | null = null;
 
+  // The height the fixed layer is laid out in, read at the start of a drag (see beginDrag).
+  let layerH = 0;
+  const stackH = () => layerH || viewportH();
   const bounds = () => {
     const top = px('--atlas-layer-top');
-    const bottom = viewportH() - px('--atlas-layer-footer-h') - handle.offsetHeight;
+    const bottom = stackH() - px('--atlas-layer-footer-h') - handle.offsetHeight;
     return { top, bottom: Math.max(top, bottom) };
   };
   const positions = (): SnapPositions => {
@@ -210,13 +213,13 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     // atlas.css registers --atlas-layer-row-h as a length, so it computes to px.
     const rowH = parseFloat(getComputedStyle(body).getPropertyValue('--atlas-layer-row-h')) || 120;
     // The same height as --atlas-layer-list-h in atlas.css: the footer, the handle and one card row.
-    const mapList = viewportH() - (px('--atlas-layer-footer-h') + handle.offsetHeight + rowH);
+    const mapList = stackH() - (px('--atlas-layer-footer-h') + handle.offsetHeight + rowH);
     return { list: top, mapList: Math.min(Math.max(mapList, top), bottom), map: bottom };
   };
   const handleW = () => cssPx('--atlas-layer-handle-h', 30);
   // atlas.css registers --atlas-layer-split-w (the map width in side `mapList`) as a length.
   const sidePos = (): SnapPositions => sidePositions(viewportW(), cssPx('--atlas-layer-split-w', 0), handleW());
-  const setHandleY = (y: number) => body.style.setProperty('--atlas-layer-list-h', `${viewportH() - y}px`);
+  const setHandleY = (y: number) => body.style.setProperty('--atlas-layer-list-h', `${stackH() - y}px`);
   const setHandleX = (x: number) => body.style.setProperty('--atlas-layer-map-w', `${x + handleW()}px`);
   // The cards take the layout of the state the handle would snap to now.
   const setDragTarget = (state: AtlasLayerState) => {
@@ -230,6 +233,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     const target = snapTo;
     snapTo = null;
     drag = null;
+    layerH = 0;
     if (!body.hasAttribute('data-atlas-dragging')) return;
     // The drag left the layout where the new state puts it. Change the state with
     // transitions off, so the map does not fold or slide a second time.
@@ -257,6 +261,21 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
   const setHandle = (v: number) => (drag?.side ? setHandleX(v) : setHandleY(v));
   const beginDrag = (handleY: number, from: AtlasLayerState, side: boolean) => {
     samples = [];
+    // During a drag the footer is the fixed bar (css/public/footer.css), not the
+    // taller footer of `list`. Switch to the drag layout first and measure the bar,
+    // so the bounds and the snap positions are the ones each state shows.
+    setDragTarget(from);
+    body.setAttribute('data-atlas-dragging', '');
+    // The bar is fixed at the bottom of the layout viewport, so its bottom edge is
+    // the height CSS places the layer in. It can be more than the visual viewport:
+    // a page wider than a phone screen makes the layout viewport larger.
+    const fm = document.getElementById('footer-mount');
+    layerH = 0;
+    if (!side && fm) {
+      const r = fm.getBoundingClientRect();
+      body.style.setProperty('--atlas-layer-footer-h', `${Math.round(r.height)}px`);
+      layerH = r.bottom;
+    }
     if (side) {
       const pos = sidePos();
       drag = { from, at: pos[from], side, pos, min: pos.list, max: pos.map };
@@ -265,8 +284,6 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
       drag = { from, at: handleY, side, pos: positions(), min: top, max: bottom };
     }
     setHandle(drag.at);
-    setDragTarget(from);
-    body.setAttribute('data-atlas-dragging', '');
   };
   const clampDrag = (delta: number) => (drag ? Math.min(drag.max, Math.max(drag.min, drag.at + delta)) : 0);
   const moveDrag = (delta: number, coord: number, t: number) => {

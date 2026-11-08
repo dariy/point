@@ -116,6 +116,10 @@ describe('Atlas layer gestures', () => {
     await page.locator('.atlas-layer-handle').waitFor();
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(800); // the first fit may re-render the grid; a drag must not start before it
+    // A page wider than the phone makes the layout viewport larger, and the fixed
+    // layer moves down. The header folds until it fits the screen.
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && innerWidth === 390),
+      'the page is no wider than the screen');
     const to = (v: string) => page.waitForFunction((x) => document.body.dataset.atlasLayer === x, v);
     // Handle centre in each state: the snap positions.
     const at: Record<string, number> = {};
@@ -152,14 +156,17 @@ describe('Atlas layer gestures', () => {
       return mid;
     }
 
-    // list -> a point between mapList and map, nearer mapList
-    let mid = await dragTo(at.mapList! + 20);
+    // list -> a point between mapList and map, nearer mapList. The positions come
+    // from the drag layout: from `list` the footer is taller than the bar it
+    // becomes during the drag, and positions read from it put this point nearer map.
+    const near = at.mapList! + (at.map! - at.mapList!) * 0.35;
+    let mid = await dragTo(near);
     assert.ok(mid.dragging);
     assert.equal(mid.target, 'mapList', 'the drag shows the layout of the state it snaps to');
     assert.ok(mid.strip, 'the cards take the map+list layout during the drag');
     assert.ok(mid.map && mid.map.height > 100, 'map visible during the drag');
     assert.ok(mid.grid && mid.grid.height > 20, 'list visible during the drag');
-    assert.ok(Math.abs(mid.handle!.y + mid.handle!.height / 2 - (at.mapList! + 20)) < 8, 'handle follows the finger');
+    assert.ok(Math.abs(mid.handle!.y + mid.handle!.height / 2 - near) < 8, 'handle follows the finger');
     await to('mapList');
     await page.waitForFunction(() => !document.body.hasAttribute('data-atlas-dragging'));
 
