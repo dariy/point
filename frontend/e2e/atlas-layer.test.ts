@@ -209,6 +209,7 @@ describe('Atlas layer', () => {
         await legend.waitFor();
         await zoom.waitFor();
         assert.equal(await page.locator('.atlas-layer-map .atlas-toggle').first().isVisible(), false, 'toggles fold away');
+        assert.equal(await legend.locator('.atlas-search__open').isVisible(), false, 'the place search folds away');
         const more = legend.locator('.atlas-legend__more');
         const apart = async () => {
           const l = (await legend.boundingBox())!;
@@ -219,7 +220,139 @@ describe('Atlas layer', () => {
         await more.click();
         assert.equal(await more.getAttribute('aria-expanded'), 'true');
         assert.equal(await page.locator('.atlas-layer-map .atlas-toggle').first().isVisible(), true, 'toggles open');
+        assert.equal(await legend.locator('.atlas-search__open').isVisible(), true, 'the place search is in the open legend');
         assert.ok(await apart(), 'open legend clear of the zoom control');
+        // A fine pointer keeps the stack layout in landscape.
+        assert.equal(await page.evaluate(() => document.body.hasAttribute('data-atlas-side')), false, 'no side layout with a mouse');
+      });
+
+      // Touch landscape (epic decision 16): in mapList the map is a square on
+      // the left; the header, the list column and the footer are on the right.
+      describe('touch landscape', () => {
+        let touch: Page;
+        let ctx: import('playwright').BrowserContext;
+        before(async () => {
+          ctx = await browser!.newContext({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
+          touch = await ctx.newPage();
+          await touch.addInitScript(() => { localStorage.removeItem('atlasLayerState'); localStorage.removeItem('pointerFine'); });
+        });
+        after(async () => { await ctx?.close(); });
+
+        const openTouch = async (width: number, height: number, view: string) => {
+          await touch.setViewportSize({ width, height });
+          await touch.goto(`${BASE}/tags/atlas-strip?view=${view}`);
+          await touch.locator('.atlas-layer-handle').waitFor();
+          if (view === 'list') return;
+          await touch.waitForFunction(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).transform === 'none');
+        };
+        const box = async (sel: string) => (await touch.locator(sel).first().boundingBox())!;
+        const firstTitle = () => touch.evaluate(() => document.querySelector('#grid-mount .post-card-title')?.textContent?.trim() ?? '');
+
+        /** The side layout in mapList at `width` x `height`. */
+        const assertSide = async (width: number, height: number) => {
+          await touch.waitForFunction(() => document.body.hasAttribute('data-atlas-side'));
+          const mapW = Math.min(height, width - 320);
+          const m = await box('body > .atlas-layer-map');
+          const label = `${width}x${height}: map ${JSON.stringify(m)}`;
+          assert.ok(Math.abs(m.x) <= 1 && Math.abs(m.y) <= 1, 'the map is at the top left: ' + label);
+          assert.ok(Math.abs(m.height - height) <= 1, 'the map is as tall as the viewport: ' + label);
+          assert.ok(Math.abs(m.width - mapW) <= 1, `the map is ${mapW} px wide: ` + label);
+          assert.ok(width - m.width >= 320 - 1, 'the column is at least 20rem: ' + label);
+          const right = m.x + m.width;
+          const h = await box('#header-mount');
+          const g = await box('#grid-mount');
+          const f = await box('#footer-mount .site-footer');
+          for (const [name, b] of [['header', h], ['list', g], ['footer', f]] as const) {
+            assert.ok(b.x >= right - 1, `the ${name} is right of the map: ${JSON.stringify(b)} (${label})`);
+            assert.ok(b.x + b.width <= width + 1, `the ${name} is in the viewport: ${JSON.stringify(b)} (${label})`);
+          }
+          assert.ok(Math.abs(h.y) <= 1, 'the header is at the top of the column');
+          assert.ok(Math.abs(f.y + f.height - height) <= 1, `the footer is at the bottom: ${f.y + f.height}`);
+          assert.ok(g.y >= h.y + h.height - 1 && g.y + g.height <= f.y + 1, 'the list is between the header and the footer');
+          // The column fills: the last card reaches the column end (it scrolls).
+          const fill = await touch.evaluate(() => {
+            const gm = document.querySelector<HTMLElement>('#grid-mount')!;
+            const slots = [...gm.querySelectorAll('.post-card-slot')].map((s) => s.getBoundingClientRect()).filter((r) => r.width > 0);
+            const r = gm.getBoundingClientRect();
+            return { overflowY: getComputedStyle(gm).overflowY, bottom: r.bottom, last: Math.max(...slots.map((s) => s.bottom)), n: slots.length };
+          });
+          assert.equal(fill.overflowY, 'auto', 'the column scrolls');
+          assert.ok(fill.last >= fill.bottom - 8 - 1, `no empty column end: ${JSON.stringify(fill)}`);
+        };
+
+        for (const [width, height] of [[844, 390], [1180, 820]] as const) {
+          it(`at ${width}x${height} mapList is the map on the left and the list column on the right`, async () => {
+            await openTouch(width, height, 'list');
+            await touch.locator('#grid-mount .post-card').first().waitFor();
+            const listFirst = await firstTitle();
+            await touch.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
+            await touch.waitForFunction(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).transform === 'none');
+            // The refit after the state change: the column page size.
+            await touch.waitForTimeout(800);
+            await assertSide(width, height);
+            assert.equal(await firstTitle(), listFirst, 'the same first post as in list');
+            // Paging works: page 2 shows other posts.
+            const next = touch.locator('#footer-mount .footer-pagination .page-next');
+            assert.ok(await next.isVisible(), 'the paginator is in the footer');
+            // A tap, not a click: a mouse event sets pointer-fine and ends the side layout.
+            await next.tap();
+            await touch.waitForFunction(() => new URL(location.href).searchParams.get('page') === '2');
+            await touch.waitForFunction((f) => document.querySelector('#grid-mount .post-card-title')?.textContent?.trim() !== f, listFirst);
+          });
+        }
+
+        it('at 844x390 the legend is clear of the zoom control in the square map', async () => {
+          await openTouch(844, 390, 'split');
+          const legend = touch.locator('.atlas-layer-map .atlas-legend');
+          const zoom = touch.locator('.atlas-layer-map .leaflet-control-zoom');
+          await legend.waitFor();
+          await zoom.waitFor();
+          const l = (await legend.boundingBox())!;
+          const z = (await zoom.boundingBox())!;
+          const m = await box('body > .atlas-layer-map');
+          assert.ok(l.x >= z.x + z.width || l.y >= z.y + z.height, 'legend clear of the zoom control');
+          assert.ok(l.x + l.width <= m.x + m.width + 1 && l.y + l.height <= m.y + m.height + 1, 'legend inside the map');
+        });
+
+        it('list and map keep the stack layout in landscape', async () => {
+          await openTouch(844, 390, 'map');
+          await touch.waitForFunction(() => document.body.hasAttribute('data-atlas-side'));
+          const m = await box('body > .atlas-layer-map');
+          const h = await box('#header-mount');
+          assert.ok(Math.abs(m.x) <= 1 && Math.abs(m.width - 844) <= 1, `the full map is as wide as the viewport: ${JSON.stringify(m)}`);
+          assert.ok(Math.abs(m.y - (h.y + h.height)) <= 1, 'the full map starts under the header');
+          assert.ok(Math.abs(h.x) <= 1 && Math.abs(h.width - 844) <= 1, 'the header is full width in map');
+          await touch.evaluate(() => document.body.setAttribute('data-atlas-layer', 'list'));
+          await touch.locator('#grid-mount .post-card').first().waitFor();
+          const g = await box('#grid-mount');
+          const h2 = await box('#header-mount');
+          assert.ok(Math.abs(h2.x) <= 1 && Math.abs(h2.width - 844) <= 1, 'the header is full width in list');
+          assert.ok(g.x < 100, `the list is the full-width page: ${JSON.stringify(g)}`);
+        });
+
+        it('a rotation in mapList changes the layout both ways without a reload', async () => {
+          await openTouch(844, 390, 'split');
+          await assertSide(844, 390);
+          const nav = await touch.evaluate(() => performance.getEntriesByType('navigation').length + ':' + performance.timeOrigin);
+          await touch.setViewportSize({ width: 390, height: 844 });
+          await touch.waitForFunction(() => !document.body.hasAttribute('data-atlas-side'));
+          await touch.waitForTimeout(500);
+          const m = await box('body > .atlas-layer-map');
+          const h = await box('#header-mount');
+          assert.ok(Math.abs(m.width - 390) <= 1, `portrait map is full width: ${JSON.stringify(m)}`);
+          assert.ok(Math.abs(m.y - (h.y + h.height)) <= 1, 'portrait map starts under the header');
+          await touch.setViewportSize({ width: 844, height: 390 });
+          await touch.waitForTimeout(800);
+          await assertSide(844, 390);
+          assert.equal(await touch.evaluate(() => performance.getEntriesByType('navigation').length + ':' + performance.timeOrigin), nav, 'no reload');
+        });
+
+        it('portrait touch keeps the stack layout', async () => {
+          await openTouch(390, 844, 'split');
+          assert.equal(await touch.evaluate(() => document.body.hasAttribute('data-atlas-side')), false);
+          const m = await box('body > .atlas-layer-map');
+          assert.ok(Math.abs(m.width - 390) <= 1, `the map is full width: ${JSON.stringify(m)}`);
+        });
       });
     });
 

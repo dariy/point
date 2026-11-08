@@ -477,7 +477,8 @@ function columnsForWidth(width: number, colW: number, gap: number) {
 export function computePerPage(minPerPage: number, gridEl: HTMLElement | null = null): number {
   const floor = Math.max(1, minPerPage || 1);
   if (gridEl?.isConnected && document.body.dataset.atlasLayer === 'mapList') {
-    const strip = stripPerPage(gridEl);
+    // Touch landscape (body[data-atlas-side]): the list is a column right of the map.
+    const strip = document.body.hasAttribute('data-atlas-side') ? sidePerPage(gridEl) : stripPerPage(gridEl);
     if (strip) {
       _cache = strip;
       return strip;
@@ -603,6 +604,37 @@ function stripPerPage(gridEl: HTMLElement): number {
 }
 
 /**
+ * per_page for a column of square cells `width` x `height` px: whole rows, as
+ * many as it takes to fill the height. The last row can be cut by the column
+ * end; the column scrolls. Returns 0 when the column has no size.
+ */
+export function columnPerPage(width: number, height: number, cols: number, gap: number): number {
+  if (width <= 0 || height <= 0) return 0;
+  const n = Math.max(1, Math.round(cols) || 1);
+  const cell = (width - (n - 1) * gap) / n;
+  if (cell <= 0) return 0;
+  const rows = Math.max(1, Math.ceil((height + gap) / (cell + gap) - 0.01));
+  return Math.min(MAX_PER_PAGE, n * rows);
+}
+
+/**
+ * per_page for the list column of the touch landscape layout (atlas.css,
+ * body[data-atlas-side]): a scrolling grid of square cards in `#grid-mount`.
+ * The size of the column only, never the count. Returns 0 when it has no size.
+ */
+function sidePerPage(gridEl: HTMLElement): number {
+  const column = gridEl.closest<HTMLElement>('#grid-mount') ?? gridEl;
+  const ccs = window.getComputedStyle(column);
+  const height = column.clientHeight - (parseFloat(ccs.paddingTop) || 0) - (parseFloat(ccs.paddingBottom) || 0);
+  const cs = window.getComputedStyle(gridEl);
+  const cols = cs.gridTemplateColumns.split(/\s+/).filter(Boolean).length || 1;
+  const gap = parseFloat(cs.rowGap) || parseFloat(cs.columnGap) || 0;
+  // The zoom row pin is for the full-width grid; the column has its own rows.
+  applyRowsVar(0);
+  return columnPerPage(gridEl.clientWidth, height, cols, gap);
+}
+
+/**
  * Call `onChange` after the atlas layer changes state and its layout settles.
  * Each state has its own list area, so each state fits its own per_page.
  *
@@ -610,16 +642,18 @@ function stripPerPage(gridEl: HTMLElement): number {
  */
 export function watchAtlasLayer(onChange: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let last = document.body.dataset.atlasLayer;
+  // The state and the touch landscape layout (data-atlas-side) both move the list area.
+  const key = () => `${document.body.dataset.atlasLayer}|${document.body.hasAttribute('data-atlas-side')}`;
+  let last = key();
   const mo = new MutationObserver(() => {
-    const now = document.body.dataset.atlasLayer;
+    const now = key();
     if (now === last) return;
     last = now;
     clearTimeout(timer);
     // After the 0.28s slide: the strip is at its final size by then.
     timer = setTimeout(onChange, 320);
   });
-  mo.observe(document.body, { attributes: true, attributeFilter: ['data-atlas-layer'] });
+  mo.observe(document.body, { attributes: true, attributeFilter: ['data-atlas-layer', 'data-atlas-side'] });
   return () => {
     clearTimeout(timer);
     mo.disconnect();

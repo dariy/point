@@ -122,3 +122,25 @@ describe('viewport fit measures the box the CSS sizes', () => {
     assert.equal(computePerPage(1), 12);          // 4 cols × 3 rows, not 16
   });
 });
+
+describe('columnPerPage (the touch landscape list column)', () => {
+  test('fills the column height with whole rows of square cells', async () => {
+    const { columnPerPage } = await import('../src/utils/gridFit.ts');
+    // 2 columns of 100px cells, 8px gap: 286px is 2.7 rows -> 3 rows.
+    assert.equal(columnPerPage(208, 286, 2, 8), 6);
+    // Exactly 2 rows (100 + 8 + 100) fill it: no third row.
+    assert.equal(columnPerPage(208, 208, 2, 8), 4);
+  });
+
+  test('a short column gets one row; no size gets 0', async () => {
+    const { columnPerPage } = await import('../src/utils/gridFit.ts');
+    assert.equal(columnPerPage(300, 40, 3, 0), 3);
+    assert.equal(columnPerPage(0, 300, 2, 8), 0);
+    assert.equal(columnPerPage(300, 0, 2, 8), 0);
+  });
+
+  test('stays at most MAX_PER_PAGE', async () => {
+    const { columnPerPage } = await import('../src/utils/gridFit.ts');
+    assert.equal(columnPerPage(100, 100000, 1, 0), 60);
+  });
+});

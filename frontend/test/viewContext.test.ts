@@ -82,3 +82,60 @@ describe('ViewContext.toUrl', () => {
     }
   });
 });
+
+// ViewContext.update carries the map layer's URL state through a page or fit
+// change of the same list. The viewport (`at`) rides along only while the
+// target is still a list page; a filter change starts clean.
+describe('ViewContext.update', () => {
+  let ViewContext: typeof ViewContextClass;
+  let navigated: { path: string; replace: boolean; state?: unknown }[];
+
+  before(async () => {
+    ({ ViewContext } = await import('../src/utils/viewContext.ts'));
+  });
+
+  const at = (pathname: string, search: string) => {
+    navigated = [];
+    global.history = mock<History>({ state: null });
+    global.window = mock<typeof window>({
+      location: mock<Location>({ pathname, search }),
+      dispatchEvent: (e: Event) => {
+        navigated.push((e as CustomEvent<{ path: string; replace: boolean }>).detail);
+        return true;
+      },
+    });
+  };
+
+  test('a fit change on a tag page keeps the viewport', () => {
+    at('/tags/kyiv', '?view=map&at=50.4501,30.5234,11');
+    ViewContext.update({ per_page: 12, page: 1 }, { replace: true });
+    assert.deepStrictEqual(navigated, [
+      { path: '/tags/kyiv?per_page=12&view=map&at=50.4501%2C30.5234%2C11', replace: true, state: null },
+    ]);
+  });
+
+  test('a replace keeps the history state of the entry', () => {
+    at('/tags/kyiv', '?view=map');
+    global.history = mock<History>({ state: { fromPost: 'a-post', sheet: 'open' } });
+    ViewContext.update({ per_page: 12, page: 1 }, { replace: true });
+    assert.deepStrictEqual(navigated[0]?.state, { fromPost: 'a-post', sheet: 'open' });
+  });
+
+  test('a page change on the home list keeps the viewport', () => {
+    at('/', '?view=map&at=1.0000,2.0000,5');
+    ViewContext.update({ page: 2 });
+    assert.strictEqual(navigated[0]?.path, '/?page=2&view=map&at=1.0000%2C2.0000%2C5');
+  });
+
+  test('opening a post inside a tag drops the viewport', () => {
+    at('/tags/kyiv', '?view=map&at=1.0000,2.0000,5');
+    ViewContext.update({ postSlug: 'some-post' });
+    assert.strictEqual(navigated[0]?.path, '/tags/kyiv?slug=some-post&view=map');
+  });
+
+  test('a filter change drops the map state', () => {
+    at('/tags/kyiv', '?view=map&at=1.0000,2.0000,5');
+    ViewContext.update({ tag: 'lviv' });
+    assert.strictEqual(navigated[0]?.path, '/tags/lviv');
+  });
+});

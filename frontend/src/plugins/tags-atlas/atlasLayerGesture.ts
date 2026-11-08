@@ -6,6 +6,11 @@
  * list at scroll top opens the map. The map is a separate element that has no
  * listener here, so a gesture that starts in the map goes to the map alone. The
  * classifier functions are pure.
+ *
+ * In the touch landscape split (`body[data-atlas-side]`) the handle is a vertical
+ * bar on the map's right edge, and a horizontal drag moves it: to the right the
+ * map grows (`next`), to the left it gets smaller (`prev`). The list column
+ * scrolls, so it is not a drag surface. The pull down in `list` stays vertical.
  */
 
 import { cycle, getAtlasLayerState, next, prev, setAtlasLayerState } from './atlasLayerState.ts';
@@ -28,19 +33,39 @@ export function lockAxis(dx: number, dy: number): Axis {
 }
 
 /**
- * What a finished gesture means. Down is `next`, up is `prev`. A gesture that
- * stayed under the lock distance is a tap. A horizontal gesture is `none`.
+ * What a finished gesture means. `dragAxis` is the axis that changes the state:
+ * `y` (down is `next`, up is `prev`) or, in the side layout, `x` (right is
+ * `next`, left is `prev`). A gesture that stayed under the lock distance is a
+ * tap. A gesture on the other axis is `none`.
  */
-export function classifyRelease(dx: number, dy: number, elapsedMs: number): Release {
+export function classifyRelease(dx: number, dy: number, elapsedMs: number, dragAxis: 'x' | 'y' = 'y'): Release {
   const axis = lockAxis(dx, dy);
   if (axis === null) return 'tap';
-  if (axis === 'x') return 'none';
-  const velocity = Math.abs(dy) / Math.max(elapsedMs, 1);
-  if (Math.abs(dy) < SWIPE_DISTANCE_PX && velocity < FLING_VELOCITY) return 'none';
-  return dy > 0 ? 'next' : 'prev';
+  if (axis !== dragAxis) return 'none';
+  const d = axis === 'x' ? dx : dy;
+  const velocity = Math.abs(d) / Math.max(elapsedMs, 1);
+  if (Math.abs(d) < SWIPE_DISTANCE_PX && velocity < FLING_VELOCITY) return 'none';
+  return d > 0 ? 'next' : 'prev';
 }
 
-/** Handle top edge (px from the viewport top) for each state while the layer is dragged. */
+/**
+ * The axis that moves the handle in a drag, from the locked axis. The stack
+ * layout drags in y. The side layout drags in x; from `list` the handle is still
+ * the bar at the top of the list, so there a move in either axis opens the map.
+ * `null`: the gesture does not move the handle.
+ */
+export function dragAxis(side: boolean, from: AtlasLayerState, locked: Axis): Axis {
+  if (locked === null) return null;
+  if (!side) return locked === 'y' ? 'y' : null;
+  if (from === 'list') return locked;
+  return locked === 'x' ? 'x' : null;
+}
+
+/**
+ * Handle position for each state while the layer is dragged: in the stack
+ * layout the handle top edge (px from the viewport top), in the side layout the
+ * handle left edge (px from the viewport left).
+ */
 export interface SnapPositions {
   list: number;
   mapList: number;
@@ -62,7 +87,17 @@ export function snapState(y: number, from: AtlasLayerState, velocity: number, po
   return best;
 }
 
-/** Speed (px/ms, down positive) over the samples of the last `SPEED_WINDOW_MS`. */
+/**
+ * Handle left edge for each state in the side layout. The handle is on the
+ * map's right edge, so the map width is the position plus `handleW`. `list`
+ * leaves only the handle, `mapList` is the split width, `map` is the full width.
+ */
+export function sidePositions(viewportW: number, splitW: number, handleW: number): SnapPositions {
+  const map = Math.max(0, viewportW - handleW);
+  return { list: 0, mapList: Math.min(Math.max(splitW - handleW, 0), map), map };
+}
+
+/** Speed (px/ms, down or right positive) over the samples of the last `SPEED_WINDOW_MS`. `y` is the coordinate on the drag axis. */
 export const SPEED_WINDOW_MS = 100;
 export function recentVelocity(samples: readonly { y: number; t: number }[]): number {
   const last = samples[samples.length - 1];
@@ -85,12 +120,14 @@ export const FOOTER_CONTROLS = 'button, a, input, .pagination';
 /**
  * True when a gesture that starts on `target` belongs to the layer controls:
  * the handle always, the card row only in `mapList`, the footer background in
- * `mapList` and `map`. Never the map.
+ * `mapList` and `map`. Never the map. In the side layout (`side`) the list
+ * column scrolls, so the grid is never a control.
  */
 export function startsOnControl(
   target: EventTarget | null,
   els: { handle: Element; grid: Element | null; map: Element | null; footer?: Element | null },
   state: AtlasLayerState,
+  side = false,
 ): boolean {
   if (!(target instanceof globalThis.Node)) return false;
   if (els.map?.contains(target)) return false;
@@ -98,7 +135,7 @@ export function startsOnControl(
   if (state !== 'list' && els.footer?.contains(target)) {
     return !(target as Partial<Element>).closest?.(FOOTER_CONTROLS);
   }
-  return state === 'mapList' && !!els.grid?.contains(target);
+  return !side && state === 'mapList' && !!els.grid?.contains(target);
 }
 
 /**
@@ -112,11 +149,14 @@ export function pullOpens(scrollY: number, dx: number, dy: number): boolean {
 /** Quiet time (ms) after the last wheel event before the next wheel gesture counts. */
 export const WHEEL_DEBOUNCE_MS = 250;
 
-/** State a key press on the handle leads to, or `null` when the key is not ours. */
-export function stateAfterKey(state: AtlasLayerState, key: string): AtlasLayerState | null {
+/**
+ * State a key press on the handle leads to, or `null` when the key is not ours.
+ * In the side layout ArrowRight and ArrowLeft also step, as the drag does.
+ */
+export function stateAfterKey(state: AtlasLayerState, key: string, side = false): AtlasLayerState | null {
   if (key === 'Enter' || key === ' ') return cycle(state);
-  if (key === 'ArrowDown') return next(state);
-  if (key === 'ArrowUp') return prev(state);
+  if (key === 'ArrowDown' || (side && key === 'ArrowRight')) return next(state);
+  if (key === 'ArrowUp' || (side && key === 'ArrowLeft')) return prev(state);
   if (key === 'Escape') return 'list';
   return null;
 }
@@ -132,24 +172,33 @@ export function stateLabel(state: AtlasLayerState): string {
 const SNAP_MS = 200;
 
 const px = (name: string): number => parseFloat(document.body.style.getPropertyValue(name)) || 0;
+/** A body custom property as the stylesheet computes it (registered lengths compute to px). */
+const cssPx = (name: string, fallback: number): number =>
+  parseFloat(getComputedStyle(document.body).getPropertyValue(name)) || fallback;
 /** The visible height. On a phone the visual viewport excludes the browser bars and the keyboard. */
 const viewportH = (): number => window.visualViewport?.height ?? window.innerHeight;
+const viewportW = (): number => window.visualViewport?.width ?? window.innerWidth;
+const sideLayout = (): boolean => document.body.hasAttribute('data-atlas-side');
 
 /**
  * Wire swipe and tap on the handle, the card row and the footer, and the pull
  * down on the post list. Returns a teardown.
- * A vertical drag moves the handle freely: `body[data-atlas-dragging]` shows the
- * map above it and the card row below it, and `--atlas-layer-list-h` (the height
- * under the map) follows the finger. On release the handle slides to the position
+ * A drag moves the handle freely: `body[data-atlas-dragging]` shows the map and
+ * the list together. In the stack layout `--atlas-layer-list-h` (the height under
+ * the map) follows the finger in y; in the side layout `--atlas-layer-map-w` (the
+ * map width) follows it in x. On release the handle slides to the position
  * `snapState` chose, and only then does the state change.
  */
 export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTMLElement | null): () => void {
   const body = document.body;
-  let start: { id: number; x: number; y: number; t: number; onHandle: boolean; handleY: number; from: AtlasLayerState } | null = null;
+  let start: { id: number; x: number; y: number; t: number; onHandle: boolean; handleY: number; from: AtlasLayerState; side: boolean } | null = null;
   let axis: Axis = null;
+  let drive: Axis = null;
   let samples: { y: number; t: number }[] = [];
   let snapTimer: ReturnType<typeof setTimeout> | null = null;
   let snapTo: AtlasLayerState | null = null;
+  // The drag in progress (see beginDrag).
+  let drag: { from: AtlasLayerState; at: number; side: boolean; pos: SnapPositions; min: number; max: number } | null = null;
 
   const bounds = () => {
     const top = px('--atlas-layer-top');
@@ -164,7 +213,11 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     const mapList = viewportH() - (px('--atlas-layer-footer-h') + handle.offsetHeight + rowH);
     return { list: top, mapList: Math.min(Math.max(mapList, top), bottom), map: bottom };
   };
+  const handleW = () => cssPx('--atlas-layer-handle-h', 30);
+  // atlas.css registers --atlas-layer-split-w (the map width in side `mapList`) as a length.
+  const sidePos = (): SnapPositions => sidePositions(viewportW(), cssPx('--atlas-layer-split-w', 0), handleW());
   const setHandleY = (y: number) => body.style.setProperty('--atlas-layer-list-h', `${viewportH() - y}px`);
+  const setHandleX = (x: number) => body.style.setProperty('--atlas-layer-map-w', `${x + handleW()}px`);
   // The cards take the layout of the state the handle would snap to now.
   const setDragTarget = (state: AtlasLayerState) => {
     if (body.dataset.atlasDragTarget !== state) body.dataset.atlasDragTarget = state;
@@ -176,6 +229,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     snapTimer = null;
     const target = snapTo;
     snapTo = null;
+    drag = null;
     if (!body.hasAttribute('data-atlas-dragging')) return;
     // The drag left the layout where the new state puts it. Change the state with
     // transitions off, so the map does not fold or slide a second time.
@@ -185,6 +239,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     body.removeAttribute('data-atlas-snapping');
     body.removeAttribute('data-atlas-drag-target');
     body.style.removeProperty('--atlas-layer-list-h');
+    body.style.removeProperty('--atlas-layer-map-w');
     cancelAnimationFrame(settleFrame);
     settleFrame = requestAnimationFrame(() => {
       settleFrame = requestAnimationFrame(() => body.removeAttribute('data-atlas-settling'));
@@ -195,48 +250,61 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     handle, grid: gridMount(), map: document.querySelector('body > .atlas-layer-map'), footer: document.getElementById('footer-mount'),
   });
 
-  // The free drag. The pointer path and the touch path share it: `handleY` is the
-  // handle top when the drag started, `dy` the finger movement since then.
-  const beginDrag = (handleY: number, from: AtlasLayerState) => {
+  // The free drag. The pointer path and the touch path share it. `at` is the
+  // handle position when the drag started (top in y, left in x), `delta` the
+  // finger movement since then on the drag axis. The positions and the bounds
+  // are read once, before the drag sets its own custom property.
+  const setHandle = (v: number) => (drag?.side ? setHandleX(v) : setHandleY(v));
+  const beginDrag = (handleY: number, from: AtlasLayerState, side: boolean) => {
     samples = [];
-    setHandleY(handleY);
+    if (side) {
+      const pos = sidePos();
+      drag = { from, at: pos[from], side, pos, min: pos.list, max: pos.map };
+    } else {
+      const { top, bottom } = bounds();
+      drag = { from, at: handleY, side, pos: positions(), min: top, max: bottom };
+    }
+    setHandle(drag.at);
     setDragTarget(from);
     body.setAttribute('data-atlas-dragging', '');
   };
-  const moveDrag = (handleY: number, from: AtlasLayerState, dy: number, clientY: number, t: number) => {
-    const { top, bottom } = bounds();
-    const y = Math.min(bottom, Math.max(top, handleY + dy));
-    setHandleY(y);
-    setDragTarget(snapState(y, from, 0, positions()));
-    samples.push({ y: clientY, t });
+  const clampDrag = (delta: number) => (drag ? Math.min(drag.max, Math.max(drag.min, drag.at + delta)) : 0);
+  const moveDrag = (delta: number, coord: number, t: number) => {
+    if (!drag) return;
+    const v = clampDrag(delta);
+    setHandle(v);
+    setDragTarget(snapState(v, drag.from, 0, drag.pos));
+    samples.push({ y: coord, t });
     if (samples.length > 8) samples.shift();
   };
-  const releaseDrag = (handleY: number, from: AtlasLayerState, dy: number, cancelled: boolean) => {
-    const pos = positions();
-    const { top, bottom } = bounds();
-    const releaseY = Math.min(bottom, Math.max(top, handleY + dy));
-    const target = cancelled ? from : snapState(releaseY, from, recentVelocity(samples), pos);
+  const releaseDrag = (delta: number, cancelled: boolean) => {
+    if (!drag) return;
+    const { pos, from } = drag;
+    const target = cancelled ? from : snapState(clampDrag(delta), from, recentVelocity(samples), pos);
     snapTo = target;
     setDragTarget(target);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       finishDrag();
     } else {
       body.setAttribute('data-atlas-snapping', '');
-      setHandleY(pos[target]);
+      setHandle(pos[target]);
       snapTimer = setTimeout(finishDrag, SNAP_MS + 20);
     }
   };
 
   const onDown = (e: PointerEvent) => {
     if (start || snapTimer !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    if (!startsOnControl(e.target, els(), getAtlasLayerState())) return;
+    const side = sideLayout();
+    if (!startsOnControl(e.target, els(), getAtlasLayerState(), side)) return;
     start = {
       id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp,
       onHandle: handle.contains(e.target as Node),
       handleY: handle.getBoundingClientRect().top,
       from: getAtlasLayerState(),
+      side,
     };
     axis = null;
+    drive = null;
     // A mouse leaves the 30px handle on the first move, before the axis locks.
     // Capture at once so the drag keeps its events.
     if (start.onHandle) {
@@ -246,31 +314,35 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
 
   const onMove = (e: PointerEvent) => {
     if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
     if (axis === null) {
-      axis = lockAxis(e.clientX - start.x, dy);
-      if (axis === 'y') {
+      axis = lockAxis(dx, dy);
+      drive = dragAxis(start.side, start.from, axis);
+      if (drive !== null) {
         try { (e.target as Element).setPointerCapture(e.pointerId); } catch { /* target gone */ }
-        beginDrag(start.handleY, start.from);
+        beginDrag(start.handleY, start.from, start.side);
       }
     }
-    if (axis !== 'y') return;
-    moveDrag(start.handleY, start.from, dy, e.clientY, e.timeStamp);
+    if (drive === null) return;
+    moveDrag(drive === 'x' ? dx : dy, drive === 'x' ? e.clientX : e.clientY, e.timeStamp);
   };
 
   const end = (e: PointerEvent, cancelled: boolean) => {
     if (!start || e.pointerId !== start.id) return;
-    const { x, y, t, onHandle, handleY, from } = start;
+    const { x, y, t, onHandle, from, side } = start;
     start = null;
     const wasAxis = axis;
+    const wasDrive = drive;
     axis = null;
-    if (wasAxis === 'y') {
-      releaseDrag(handleY, from, e.clientY - y, cancelled);
+    drive = null;
+    if (wasDrive !== null) {
+      releaseDrag(wasDrive === 'x' ? e.clientX - x : e.clientY - y, cancelled);
       return;
     }
     // No drag: a tap on the handle cycles the state.
-    if (cancelled || wasAxis === 'x') return;
-    const release = classifyRelease(e.clientX - x, e.clientY - y, e.timeStamp - t);
+    if (cancelled || wasAxis !== null) return;
+    const release = classifyRelease(e.clientX - x, e.clientY - y, e.timeStamp - t, side && from !== 'list' ? 'x' : 'y');
     const finish = release === 'tap' && !onHandle ? 'none' : release;
     const state = getAtlasLayerState();
     const target = stateAfter(state, finish);
@@ -282,7 +354,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
   // Pull down in `list`. Touch events, not pointer events: only a cancelable
   // touchmove can stop the page scroll. The post list container is the whole
   // main column, so a pull can start anywhere on it.
-  let pull: { id: number; x: number; y: number; handleY: number; axis: Axis } | null = null;
+  let pull: { id: number; x: number; y: number; handleY: number; axis: Axis; side: boolean } | null = null;
   const listArea = () => {
     const gm = gridMount();
     return gm?.closest('.site-main') ?? gm;
@@ -294,7 +366,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
     const target = e.target;
     if (!(target instanceof globalThis.Node) || handle.contains(target) || !listArea()?.contains(target)) return;
     const t = e.touches[0]!;
-    pull = { id: t.identifier, x: t.clientX, y: t.clientY, handleY: handle.getBoundingClientRect().top, axis: null };
+    pull = { id: t.identifier, x: t.clientX, y: t.clientY, handleY: handle.getBoundingClientRect().top, axis: null, side: sideLayout() };
   };
   const onTouchMove = (e: TouchEvent) => {
     if (!pull) return;
@@ -314,18 +386,19 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
         pull = null;
         return;
       }
-      beginDrag(pull.handleY, 'list');
+      beginDrag(pull.handleY, 'list', pull.side);
     }
     e.preventDefault();
-    moveDrag(pull.handleY, 'list', dy, t.clientY, e.timeStamp);
+    // The pull is vertical in both layouts. In the side layout it widens the map.
+    moveDrag(dy, t.clientY, e.timeStamp);
   };
   const endPull = (e: TouchEvent, cancelled: boolean) => {
     if (!pull) return;
     const t = pullTouch(e);
     if (!t) return;
-    const { y, handleY, axis: pullAxis } = pull;
+    const { y, axis: pullAxis } = pull;
     pull = null;
-    if (pullAxis === 'y') releaseDrag(handleY, 'list', t.clientY - y, cancelled);
+    if (pullAxis === 'y') releaseDrag(t.clientY - y, cancelled);
   };
   const onTouchEnd = (e: TouchEvent) => endPull(e, false);
   const onTouchCancel = (e: TouchEvent) => endPull(e, true);
@@ -345,7 +418,7 @@ export function mountAtlasLayerGesture(handle: HTMLElement, gridMount: () => HTM
 
   const onKey = (e: KeyboardEvent) => {
     if (e.target !== handle) return;
-    const target = stateAfterKey(getAtlasLayerState(), e.key);
+    const target = stateAfterKey(getAtlasLayerState(), e.key, sideLayout());
     if (target === null) return;
     e.preventDefault();
     setAtlasLayerState(target);

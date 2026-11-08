@@ -43,7 +43,7 @@ jobs:
           # Pinned for reproducible CI; the action downloads the release binary
           # rather than compiling it. Keep in sync with local tooling —
           # scripts/doctor.sh reads this line.
-          version: v2.12.2
+          version: v2.15.0
           install-only: true
           # The action's schema check of .golangci.yml is not part of the gate
           # (and the config does not pass it).
@@ -99,7 +99,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ steps.playwright.outputs.version }}
+          # `webkit` in the key: an entry from before the WebKit step has no WebKit.
+          key: playwright-webkit-${{ steps.playwright.outputs.version }}
 
       - name: Install npm dependencies
         run: npm ci --no-audit --no-fund
@@ -121,6 +122,15 @@ jobs:
       - name: E2E tests
         run: ./scripts/check.sh --only e2e
 
+      # The same atlas file again on WebKit with an iPad touch context
+      # (frontend/e2e/devices.ts::launchFor). --with-deps adds the system
+      # libraries that WebKit needs and the runner image does not have.
+      - name: Playwright WebKit
+        run: npx playwright install --with-deps webkit chromium
+
+      - name: E2E tests (WebKit iPad)
+        run: E2E_DEVICE=ipad ./scripts/run-e2e.sh frontend/e2e/atlas-layer-map.test.ts
+
       - name: JS tests
         run: ./scripts/check.sh --only js-test
 
@@ -136,28 +146,9 @@ jobs:
           flags: frontend
           name: codecov-frontend
 
+  # Same scan and Go version as the release gate; see govulncheck.yml.
   govulncheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          # Tracks api/go.mod like every other job, with check-latest so the
-          # newest patch release is resolved rather than the runner's cached
-          # one: govulncheck resolves Go stdlib symbols from the toolchain in
-          # use, so an older patch level here would re-flag stdlib vulns
-          # already fixed upstream.
-          go-version-file: api/go.mod
-          check-latest: true
-          cache-dependency-path: api/go.sum
-
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-
-      - name: Run govulncheck
-        run: ./scripts/check.sh --only govulncheck
+    uses: ./.github/workflows/govulncheck.yml
 
   test:
     runs-on: ubuntu-latest

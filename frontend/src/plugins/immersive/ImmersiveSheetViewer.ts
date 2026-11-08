@@ -8,12 +8,29 @@
  *   - Closed state: just the photo, with a small "swipe up" hint and a floating
  *     back / share bar.
  *   - Open state: the photo (and the sheet beneath it) slide up far enough to
- *     reveal the full sheet — breadcrumb, title, excerpt, tags, EXIF (inline,
- *     no extra click), action buttons and footer.
+ *     reveal the full sheet — breadcrumb, title, excerpt, tags, the map of the
+ *     post's place, EXIF (inline, no extra click), action buttons and footer.
+ *
+ * The map is not a second map. The sheet has an empty slot (only for a post
+ * with its own geo-tag, and only with `tags-atlas` on), and the atlas ocean
+ * shows its one map through it (`presentAtlasOcean` with a window). The window
+ * follows the slot while the sheet drags, slides and scrolls; the ocean is
+ * `hidden` again when the sheet closes or the viewer goes.
  *
  * The gesture is a snap: it only ever rests fully open or fully closed, never
  * mid-way. Swipe up opens, swipe down collapses (or, when already closed,
  * dismisses the viewer).
+ *
+ * Prev/next keeps the sheet state. An open sheet stays open on the next post,
+ * with no slide, at the top of its scroll, and the window frames the next
+ * post's geo-tag. The state is in each post's history entry (`sheetKept`,
+ * atlasFromPost.ts), so Back and Forward show each entry as the reader left it.
+ *
+ * Touch input in landscape (the same test as the map layer's side split,
+ * atlasLayerLayout.ts::onAtlasSide) uses the side layout: the photo is on the
+ * left, and the sheet is a right column that is always open and scrolls. There
+ * is no sheet drag. A swipe left or right on the photo still steps, and a swipe
+ * down still dismisses. A rotation changes the layout with no reload.
  *
  * Selected via the `immersive_overlay_mode` site setting (classic | sheet);
  * the classic MediaViewer is left untouched.
@@ -22,17 +39,28 @@
 import type { MediaViewerProps } from '../../components/shared/MediaViewer.ts';
 import { MediaViewer } from '../../components/shared/MediaViewer.ts';
 import type { PostStub } from '../../api/posts.ts';
-import { html, setHTML, linkify, raw, sharePost } from '../../utils/helpers.ts';
+import { html, setHTML, linkify, raw, sharePost, navigate } from '../../utils/helpers.ts';
 import { getNavTags, getSettings, getTheme, getUser, setTheme } from '../../store.ts';
 import { pluginHost } from '../../core/pluginHost.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
-import { renderTagLink, buildTagIndex, parseTagUrl } from '../../utils/tagLinks.ts';
+import { renderTagLink, buildTagIndex, parseTagUrl, postGeoTag } from '../../utils/tagLinks.ts';
+import { atlasPresentation, collapseAtlasOcean, expandAtlasOcean, presentAtlasOcean } from '../tags-atlas/atlasOcean.ts';
+import type { AtlasWindow } from '../tags-atlas/atlasOcean.ts';
+import { fromPostState, sheetKeptOf, sheetKeptState, sheetReturnOf, sheetReturnState } from '../tags-atlas/atlasFromPost.ts';
+import { markAtlasOpen, takeAtlasReturn } from '../../utils/atlasReturn.ts';
+import { searchWithState, searchWithView } from '../tags-atlas/atlasLayerState.ts';
+import { onAtlasSide } from '../tags-atlas/atlasLayerLayout.ts';
 import { setupTagFlyout } from '../../utils/tagFlyout.ts';
 import { exifVisible, buildExifMap, metadataForSrc, curatedExifRows } from '../../utils/exif.ts';
 import { SHARE_SVG, EDIT_SVG, RSS_SVG, SUN_SVG, MOON_SVG, CHEVRON_SVG } from '../../utils/icons.ts';
 import { immersiveNavTargets } from '../../utils/immersiveNav.ts';
 import { renderCopyright } from '../../utils/copyright.ts';
-const SHEET_ANIM = 'transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1)';
+const SHEET_ANIM_MS = 340;
+const SHEET_ANIM = `transform ${SHEET_ANIM_MS / 1000}s cubic-bezier(0.22, 0.61, 0.36, 1)`;
+/** The map zoom in the sheet's slot: a town and its streets. */
+const SHEET_MAP_ZOOM = 10;
+/** The full map's zoom after a tap on the slot: the place and the places near it. */
+const FULL_MAP_ZOOM = 6;
 export class ImmersiveSheetViewer extends MediaViewer {
   _sheetOpen: boolean;
   _sheetHeight: number;
@@ -43,8 +71,28 @@ export class ImmersiveSheetViewer extends MediaViewer {
   _sheetFlyoutCleanup: (() => void) | null = null;
   _sheetCommentsComps: { unmount?: () => void }[] | null = null;
   _onResize: (() => void) | null = null;
+  /** Stop the frames that measure the sheet again after a resize. */
+  _resizeSettleStop: (() => void) | null = null;
   _sheetObserver: ResizeObserver | null = null;
   _swipeAxis: 'v' | 'h' | null = null;
+  /** The current touch started in the map slot: the swipe leaves the sheet alone. */
+  _swipeInMap = false;
+  /** The ocean shows through this viewer's slot. */
+  _mapShown = false;
+  /** Stop the frame loop that keeps the window on the slot during a sheet slide. */
+  _mapFollowStop: (() => void) | null = null;
+  /** A tap opened the full map: the ocean is not this viewer's now. */
+  _mapLeaving = false;
+  /** The way back from the full map: the ocean shrinks into the slot (collapse). */
+  _mapReturning = false;
+  /** The history entry was read for a return (once per viewer). */
+  _returnChecked = false;
+  /** Touch landscape: the sheet is a right column, always open. */
+  _side = false;
+  /** The portrait open state before the side layout forced it open. */
+  _openBeforeSide: boolean | null = null;
+  /** Stop the side watcher (onAtlasSide). */
+  _sideStop: (() => void) | null = null;
   constructor(container: HTMLElement, props: MediaViewerProps = {}) {
     super(container, props);
     this._sheetOpen = false; // current snap state
@@ -84,12 +132,19 @@ export class ImmersiveSheetViewer extends MediaViewer {
     // matching are marked `inherited` and belong to the breadcrumb, not here.
     const tags = (post.tags || []).filter(t => !t.inherited);
     const tagsHtml = tags.length ? html`<div class="immersive-sheet-tags">${tags.map(t => renderTagLink(t))}</div>` : '';
+    // An empty slot: the atlas ocean shows the map through it (_syncMapWindow).
+    // It floats right in the EXIF column, under the EXIF block; the text flows on the left.
+    // It is the control that opens the full map (Enter, Space: _wireSheetMap);
+    // the ocean above it is aria-hidden in window mode.
+    const geo = this._mapGeoTag();
+    const mapHtml = geo ? html`<div class="immersive-sheet-map" role="button" tabindex="0" aria-label="${`Open on the map: ${geo.name}`}"></div>` : '';
     return html`
       <div class="immersive-sheet" aria-hidden="true">
         <button class="immersive-sheet-grip" type="button" aria-label="Collapse details"></button>
         <div class="immersive-sheet-scroll">
           <div class="immersive-sheet-body">
             <aside class="immersive-sheet-exif hidden" aria-label="Camera data"></aside>
+            ${mapHtml}
             <div class="immersive-sheet-main">
               ${breadcrumb}
               ${viewsLine}
@@ -189,9 +244,36 @@ export class ImmersiveSheetViewer extends MediaViewer {
       });
     }
     this._wireSheetControls();
-    this._onResize = () => {
+    this._wireSheetMap();
+    // The history entry is read once per viewer (a re-render keeps the state).
+    let ret: ReturnType<typeof sheetReturnOf> = null;
+    if (!this._returnChecked) {
+      this._returnChecked = true;
+      ret = sheetReturnOf(history.state);
+      // Prev/next with the sheet open, or Back to an entry with the sheet open:
+      // open at once, with no slide. The offset and the window come below.
+      if (!ret && sheetKeptOf(history.state)) this._showSheetNow();
+    }
+    // The map sync waits for the return check below: a return holds the map.
+    let sideReady = false;
+    this._sideStop = onAtlasSide(side => this._applySide(side, sideReady));
+    sideReady = true;
+    const resync = () => {
       this._measureSheet();
       if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
+    };
+    // On iOS the resize (a rotation) can come before the layout settles. Sync
+    // now, and again after two frames, when the slot has its new place.
+    this._onResize = () => {
+      resync();
+      this._resizeSettleStop?.();
+      let id = requestAnimationFrame(() => {
+        id = requestAnimationFrame(() => {
+          this._resizeSettleStop = null;
+          resync();
+        });
+      });
+      this._resizeSettleStop = () => cancelAnimationFrame(id);
     };
     window.addEventListener('resize', this._onResize);
     const sheetEl = this.$('.immersive-sheet');
@@ -203,6 +285,136 @@ export class ImmersiveSheetViewer extends MediaViewer {
       this._sheetObserver.observe(sheetEl);
     }
     this._measureSheet();
+    if (ret) {
+      this._returnToSheet(ret.atlasReturn);
+      return;
+    }
+    // A re-render, or a kept open sheet, with the sheet open puts the window on the new slot.
+    if (this._sheetOpen) this._setSheetOffset(this._sheetHeight, false);
+  }
+
+  /**
+   * The post's history entry asks for the open sheet: a Back from the full map
+   * (atlasFromPost.ts). The sheet is open at once, with no slide; the ocean
+   * holds the full map over the page and shrinks it into the slot after the
+   * slot's first layout (atlasOcean.ts::collapse). The list URL marker of a
+   * post that the map layer opened comes back, so a close still lands there.
+   */
+  _returnToSheet(atlasReturn: string | null) {
+    if (atlasReturn) markAtlasOpen({ returnUrl: atlasReturn });
+    this._showSheetNow();
+    const geo = this._mapGeoTag();
+    if (!this.$('.immersive-sheet-map') || !geo) {
+      // No slot (no geo-tag now, or the atlas is off): a held map must go.
+      if (atlasPresentation() === 'window') presentAtlasOcean('hidden');
+      this._setSheetOffset(this._sheetHeight, false);
+      return;
+    }
+    this._mapReturning = true;
+    this._setSheetOffset(this._sheetHeight, false);
+    const center = { lat: geo.latitude, lng: geo.longitude };
+    const slot = (): AtlasWindow | null => {
+      if (!this._mapReturning) return null;
+      // The sheet can grow after the first render (images, comments): keep it open.
+      this._measureSheet();
+      if (!this._side && this._currentOffset !== this._sheetHeight) this._setSheetOffset(this._sheetHeight, false);
+      const el = this.$('.immersive-sheet-map');
+      if (!el) return null;
+      return {
+        kind: 'window',
+        rect: el.getBoundingClientRect(),
+        clip: this.$('.immersive-sheet-scroll')?.getBoundingClientRect(),
+        center,
+        zoom: SHEET_MAP_ZOOM,
+        place: { slug: geo.slug },
+        onTap: () => this._onMapTap()
+      };
+    };
+    void collapseAtlasOcean(slot).then(() => {
+      if (!this._mapReturning) return;
+      this._mapReturning = false;
+      this._mapShown = atlasPresentation() === 'window';
+      // The slot can move during the tween; the window follows it now.
+      this._syncMapWindow();
+    });
+  }
+  /** The open state with no slide: the caller sets the offset. */
+  _showSheetNow() {
+    this._sheetOpen = true;
+    this._sheetDrag = false;
+    this._showUI();
+    this._wrapper?.classList.add('sheet-open');
+    this.$('.immersive-sheet')?.setAttribute('aria-hidden', 'false');
+  }
+
+  /**
+   * The sheet state that prev/next keeps: the portrait state, also in the side
+   * layout (there the column is always open).
+   */
+  _sheetKept() {
+    return this._side ? this._openBeforeSide ?? false : this._sheetOpen;
+  }
+
+  /** Write the sheet state into this post's history entry, for a Back to it. */
+  _recordSheet() {
+    history.replaceState(sheetKeptState(history.state, this._sheetKept()), '');
+  }
+
+  /** The next post's entry opens the sheet when it is open now. */
+  _postNavState() {
+    return this._sheetKept() ? sheetKeptState(null, true) : undefined;
+  }
+
+  /**
+   * Turn the side layout on or off. On: the sheet opens, with no slide and no
+   * transform (CSS places the column). Off: the sheet goes back to its
+   * portrait state from before the side layout. `sync` puts the map window on
+   * the slot (false only during the first wiring).
+   */
+  _applySide(side: boolean, sync = true) {
+    if (side === this._side && this._wrapper?.classList.contains('immersive-sheet-side') === side) return;
+    this._side = side;
+    this._wrapper?.classList.toggle('immersive-sheet-side', side);
+    this._sheetDrag = false;
+    const sheet = this.$('.immersive-sheet');
+    if (side) {
+      if (this._openBeforeSide == null) this._openBeforeSide = this._sheetOpen;
+      this._sheetOpen = true;
+      this._wrapper?.classList.add('sheet-open');
+      sheet?.setAttribute('aria-hidden', 'false');
+    } else {
+      const open = this._openBeforeSide ?? this._sheetOpen;
+      this._openBeforeSide = null;
+      this._sheetOpen = open;
+      this._wrapper?.classList.toggle('sheet-open', open);
+      sheet?.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+    this._measureSheet();
+    if (!sync) {
+      this._clearSheetTransforms();
+      return;
+    }
+    this._setSheetOffset(this._sheetOpen && !side ? this._sheetHeight : 0, false);
+  }
+
+  /** The side layout: no inline slide on the photo or the sheet. */
+  _clearSheetTransforms() {
+    for (const el of [this.$('.immersive-visuals'), this.$('.immersive-sheet')]) {
+      if (!el) continue;
+      el.style.transition = 'none';
+      el.style.transform = '';
+    }
+  }
+
+  /** In the side layout the photo stage is left of the column. */
+  _stageWidth() {
+    if (!this._side) return super._stageWidth();
+    return this.$('.immersive-visuals')?.clientWidth || super._stageWidth();
+  }
+
+  /** In the side layout the column scrolls: a touch there starts no swipe. */
+  _gestureIgnoreSelector() {
+    return '.immersive-sheet-side .immersive-sheet';
   }
   _wireSheetControls() {
     this.on(this.$('.immersive-sheet-hint'), 'click', e => {
@@ -218,7 +430,7 @@ export class ImmersiveSheetViewer extends MediaViewer {
     // letting MediaViewer's background-tap close the whole viewer).
     const visuals = this.$('.immersive-visuals');
     this.on(visuals, 'click', e => {
-      if (this._sheetOpen) {
+      if (this._sheetOpen && !this._side) {
         e.stopPropagation();
         this._closeSheet();
       }
@@ -236,11 +448,152 @@ export class ImmersiveSheetViewer extends MediaViewer {
         url: window.location.href
       });
     });
+    // The footer's prev/next links carry the sheet state, as the keys and the
+    // photo panels do (MediaViewer.ts::_navigatePost).
+    this.on(this.$('.immersive-sheet-footer'), 'click', e => {
+      const me = e as MouseEvent;
+      if (me.button !== 0 || me.metaKey || me.ctrlKey || me.shiftKey || me.altKey) return;
+      const link = (e.target as Element).closest<HTMLAnchorElement>('a.immersive-sheet-postnav');
+      const href = link?.getAttribute('href');
+      if (!href) return;
+      e.preventDefault();
+      const state = this._postNavState();
+      navigate(href, state === undefined ? {} : { state });
+    });
     this.on(this.$('.immersive-sheet-theme'), 'click', e => {
       e.stopPropagation();
       const current = getTheme() || 'auto';
       setTheme(current === 'dark' ? 'light' : 'dark');
     });
+  }
+
+  // ── The map slot (the atlas ocean's window) ──────────────────────────────────
+
+  /** The post's own geo-tag, when the atlas is on. No tag: no slot, no Leaflet. */
+  _mapGeoTag() {
+    if (!pluginHost.isEnabled('tags-atlas')) return null;
+    return postGeoTag(this.props.post);
+  }
+  _wireSheetMap() {
+    if (!this.$('.immersive-sheet-map')) return;
+    this.on(this.$('.immersive-sheet-scroll'), 'scroll', () => this._syncMapWindow(), { passive: true });
+    // The ocean is above the slot, so a touch there reaches the map, not the
+    // sheet. A touch that does land on the slot (the ocean is not over it yet)
+    // still must not drag the sheet.
+    this.on(this._wrapper, 'touchstart', e => {
+      this._swipeInMap = !!(e.target as Element).closest?.('.immersive-sheet-map');
+    }, { capture: true, passive: true });
+    // The keyboard way to the full map: a pointer tap goes through the ocean (onTap).
+    this.on(this.$('.immersive-sheet-map'), 'keydown', e => {
+      const key = (e as KeyboardEvent).key;
+      if (key !== 'Enter' && key !== ' ') return;
+      e.preventDefault();
+      this._onMapTap();
+    });
+  }
+
+  /**
+   * A tap in the window opens the geo-tag's page in `map` state, at the place.
+   * The ocean grows the window to the whole screen while the viewer fades
+   * (`immersive-map-leaving`); then the move. The tag page's attach sets the
+   * zoom, selects the place and focuses this post's chip
+   * (atlasOcean.ts::expand). The history entry carries `fromPost` (the way
+   * back to this post) and `sheet: 'open'`. A tag page that does not come
+   * releases the hold (atlasOcean.ts::releaseExpand).
+   */
+  _onMapTap() {
+    const geo = this._mapGeoTag();
+    const postSlug = this.props.post?.slug;
+    if (!geo || !postSlug || this._mapLeaving) return;
+    this._mapLeaving = true;
+    this._mapReturning = false;
+    this._stopMapFollow();
+    // The tag page owns the ocean from here: this viewer's cleanup must not hide it.
+    this._mapShown = false;
+    this.container.classList.add('immersive-map-leaving');
+    const center = { lat: geo.latitude, lng: geo.longitude };
+    const search = searchWithView(searchWithState('', 'map'), { ...center, zoom: FULL_MAP_ZOOM });
+    const tagPath = `/tags/${encodeURIComponent(geo.slug)}`;
+    const path = `${tagPath}${search}`;
+    const title = this.props.post?.title || '';
+    // The tag page did not come (an error, no attach in time, another route):
+    // the ocean hides the held map. A viewer that is still here drops its fade
+    // and puts the widget back on the slot.
+    const onRelease = () => {
+      if (!this._mapLeaving) return;
+      this._mapLeaving = false;
+      this.container.classList.remove('immersive-map-leaving');
+      this._syncMapWindow();
+    };
+    const target = { center, zoom: FULL_MAP_ZOOM, focusPostSlug: postSlug, path: tagPath, onRelease };
+    void expandAtlasOcean(target).then(() => {
+      // A release or an unmount during the tween: the user is not going there.
+      if (!this._mapLeaving) return;
+      // Back to this entry opens the sheet and shrinks the map into the slot.
+      // The post page drops the list URL marker when it unmounts; the entry keeps it.
+      history.replaceState(sheetReturnState(history.state, takeAtlasReturn()), '');
+      navigate(path, { state: fromPostState(postSlug, title) });
+    });
+  }
+
+  /**
+   * Put the ocean's window on the slot, or hide the ocean when the slot is off
+   * screen (the sheet is shut). The first window of a post centres the geo-tag;
+   * the next ones move the map with the slot, so a pan in the window stays.
+   */
+  _syncMapWindow() {
+    if (this._mapLeaving || this._mapReturning) return;
+    const slot = this.$('.immersive-sheet-map');
+    const geo = slot ? this._mapGeoTag() : null;
+    // A shut sheet has no slot on screen; a closing slide keeps the window to the end.
+    // The side column is always open.
+    if (!slot || !geo || !this._side && this._currentOffset <= 0 && !this._mapFollowStop) {
+      this._hideMapWindow();
+      return;
+    }
+    const rect = slot.getBoundingClientRect();
+    const scroller = this.$('.immersive-sheet-scroll')?.getBoundingClientRect();
+    presentAtlasOcean({
+      kind: 'window',
+      rect,
+      clip: scroller,
+      center: this._mapShown ? undefined : { lat: geo.latitude, lng: geo.longitude },
+      zoom: this._mapShown ? undefined : SHEET_MAP_ZOOM,
+      place: this._mapShown ? undefined : { slug: geo.slug },
+      onTap: () => this._onMapTap()
+    });
+    this._mapShown = true;
+  }
+
+  /** Hide the ocean if this viewer's window is what it shows. */
+  _hideMapWindow() {
+    this._stopMapFollow();
+    if (!this._mapShown) return;
+    this._mapShown = false;
+    // A list page that attached in the meantime owns the ocean now.
+    if (atlasPresentation() === 'window') presentAtlasOcean('hidden');
+  }
+
+  /** Keep the window on the slot for one sheet slide (a CSS transition). */
+  _followMapWindow() {
+    this._stopMapFollow();
+    if (!this.$('.immersive-sheet-map')) return;
+    const end = performance.now() + SHEET_ANIM_MS + 50;
+    let id = 0;
+    const step = (now: number) => {
+      this._syncMapWindow();
+      if (now < end) id = requestAnimationFrame(step);
+      else {
+        this._mapFollowStop = null;
+        this._syncMapWindow();
+      }
+    };
+    id = requestAnimationFrame(step);
+    this._mapFollowStop = () => cancelAnimationFrame(id);
+  }
+  _stopMapFollow() {
+    this._mapFollowStop?.();
+    this._mapFollowStop = null;
   }
 
   // ── Keyboard → sheet ────────────────────────────────────────────────────────
@@ -257,6 +610,12 @@ export class ImmersiveSheetViewer extends MediaViewer {
     const tag = (e.target as Element).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (this._zoomState.scale > 1) return super._onKeyDown(e);
+    // The side column is always open: Up and Down only scroll it.
+    if (this._side && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      this._scrollSheet(e.key === 'ArrowUp' ? -1 : 1);
+      return;
+    }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (!this._sheetOpen) return this._openSheet();
@@ -302,12 +661,20 @@ export class ImmersiveSheetViewer extends MediaViewer {
   // ── Vertical gesture → sheet ───────────────────────────────────────────────
 
   _onSwipeMove(dx: number, dy: number) {
+    // A drag in the map slot pans the map; the sheet does not move.
+    if (this._swipeInMap) return;
     if (this._zoomState.scale > 1) return super._onSwipeMove(dx, dy);
 
     // Latch the axis on the first move so a diagonal drag can't flip handlers
     // mid-gesture; reset in _onSwipeCommit / _onSwipeCancel.
     if (this._swipeAxis == null) {
       this._swipeAxis = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h';
+    }
+    if (this._side) {
+      // The side column does not drag. A swipe down on the photo dismisses.
+      this._sheetDrag = false;
+      if (this._swipeAxis === 'h') return super._onSwipeMove(dx, 0);
+      return super._onSwipeMove(0, Math.max(0, dy));
     }
     if (this._swipeAxis === 'v') {
       // Vertical: drive the sheet, except a downward drag while closed, which
@@ -332,7 +699,16 @@ export class ImmersiveSheetViewer extends MediaViewer {
   }
   _onSwipeCommit(dir: 'left' | 'right' | 'up' | 'down') {
     this._swipeAxis = null;
+    if (this._swipeInMap) {
+      this._swipeInMap = false;
+      return;
+    }
     if (this._zoomState.scale > 1) return super._onSwipeCommit(dir);
+    if (this._side) {
+      if (dir === 'down') return this.props.onClose?.();
+      if (dir === 'up') return super._onSwipeCancel();
+      return super._onSwipeCommit(dir);
+    }
     if (dir === 'up') return this._openSheet();
     if (dir === 'down') {
       if (this._sheetOpen || this._sheetDrag) return this._closeSheet();
@@ -343,6 +719,10 @@ export class ImmersiveSheetViewer extends MediaViewer {
   }
   _onSwipeCancel() {
     this._swipeAxis = null;
+    if (this._swipeInMap) {
+      this._swipeInMap = false;
+      return;
+    }
     if (this._sheetDrag) {
       this._sheetDrag = false;
       // Snap to the nearer end state — never rest mid-way.
@@ -352,6 +732,14 @@ export class ImmersiveSheetViewer extends MediaViewer {
     super._onSwipeCancel();
   }
   _setSheetOffset(px: number, animate: boolean) {
+    if (this._side) {
+      // The side column has no slide: CSS places it, and the window follows the slot.
+      this._currentOffset = 0;
+      this._clearSheetTransforms();
+      this._stopMapFollow();
+      this._syncMapWindow();
+      return;
+    }
     this._currentOffset = px;
     const t = animate ? SHEET_ANIM : 'none';
     const visuals = this.$('.immersive-visuals');
@@ -368,8 +756,14 @@ export class ImmersiveSheetViewer extends MediaViewer {
       sheet.style.transition = t;
       sheet.style.transform = `translateY(${-px}px)`;
     }
+    if (animate) this._followMapWindow();
+    else {
+      this._stopMapFollow();
+      this._syncMapWindow();
+    }
   }
   _openSheet() {
+    if (this._side) return;
     if (!this._sheetHeight) this._measureSheet();
     this._sheetOpen = true;
     this._sheetDrag = false;
@@ -377,13 +771,16 @@ export class ImmersiveSheetViewer extends MediaViewer {
     this._wrapper?.classList.add('sheet-open');
     this.$('.immersive-sheet')?.setAttribute('aria-hidden', 'false');
     this._setSheetOffset(this._sheetHeight, true);
+    this._recordSheet();
   }
   _closeSheet() {
+    if (this._side) return;
     this._sheetOpen = false;
     this._sheetDrag = false;
     this._wrapper?.classList.remove('sheet-open');
     this.$('.immersive-sheet')?.setAttribute('aria-hidden', 'true');
     this._setSheetOffset(0, true);
+    this._recordSheet();
   }
 
   // ── Keep the inline EXIF block pointed at the active slide ──────────────────
@@ -415,12 +812,31 @@ export class ImmersiveSheetViewer extends MediaViewer {
     mount.classList.remove('hidden');
     bodyEl?.classList.add('has-exif');
   }
+  beforeUnmount() {
+    // A return that did not end: the held map is this viewer's to hide. (A
+    // re-render also runs _cleanup; the return goes on through it.)
+    if (this._mapReturning) {
+      this._mapReturning = false;
+      this._mapShown = true;
+    }
+    super.beforeUnmount();
+    this._mapLeaving = false;
+    this.container.classList.remove('immersive-map-leaving');
+  }
   _cleanup() {
     super._cleanup();
+    this._hideMapWindow();
+    // A re-render during a leave keeps `_mapLeaving` (beforeUnmount ends it):
+    // the re-wired viewer must not put a window on the expand (atlasOcean.ts).
+    this._swipeInMap = false;
+    this._sideStop?.();
+    this._sideStop = null;
     if (this._onResize) {
       window.removeEventListener('resize', this._onResize);
       this._onResize = null;
     }
+    this._resizeSettleStop?.();
+    this._resizeSettleStop = null;
     if (this._sheetObserver) {
       this._sheetObserver.disconnect();
       this._sheetObserver = null;

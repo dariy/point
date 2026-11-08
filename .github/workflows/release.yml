@@ -50,24 +50,7 @@ jobs:
           fail_ci_if_error: false
 
   vulnerability-scan:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: api/go.mod
-          cache-dependency-path: api/go.sum
-
-      - name: Run govulncheck
-        working-directory: api
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          govulncheck ./...
+    uses: ./.github/workflows/govulncheck.yml
 
   build-and-push:
     needs: [test, vulnerability-scan]
@@ -103,7 +86,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -171,7 +154,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@v4.38.2
+        uses: github/codeql-action/upload-sarif@v4.39.1
         if: always()
         with:
           sarif_file: trivy-results-${{ matrix.flavor }}.sarif

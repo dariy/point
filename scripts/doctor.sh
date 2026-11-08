@@ -4,8 +4,9 @@
 # The alternative to this script is discovering the answer through a failing
 # build — `check.sh` has always required `golangci-lint` and `govulncheck`
 # without anything saying so. Every version below is read from the file that
-# already decides it (api/go.mod for Go, .nvmrc for Node, .github/workflows/test.yml
-# for the two tool pins), so this report cannot drift from what CI enforces.
+# already decides it (api/go.mod for Go, .nvmrc for Node, test.yml and
+# govulncheck.yml in .github/workflows for the two tool pins), so this report
+# cannot drift from what CI enforces.
 #
 # Usage: ./scripts/doctor.sh [--json]
 #   --json   the same report as one JSON object on stdout, nothing else
@@ -20,6 +21,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORKFLOW="$ROOT_DIR/.github/workflows/test.yml"
+VULN_WORKFLOW="$ROOT_DIR/.github/workflows/govulncheck.yml"
 
 JSON=0
 for arg in "$@"; do
@@ -83,7 +85,7 @@ NODE_WANT="$(tr -d ' \tv\r' <"$ROOT_DIR/.nvmrc" 2>/dev/null | head -1)"
 LINT_WANT="$(awk '/golangci-lint-action@/ { f = 1 }
     f && /version:/ { sub(/.*version:[ \t]*v?/, ""); sub(/[^0-9.].*/, ""); print; exit }' \
     "$WORKFLOW" 2>/dev/null)"
-VULN_WANT="$(sed -n 's|.*govulncheck@v\([0-9][0-9.]*\).*|\1|p' "$WORKFLOW" 2>/dev/null | head -1)"
+VULN_WANT="$(sed -n 's|.*govulncheck@v\([0-9][0-9.]*\).*|\1|p' "$VULN_WORKFLOW" 2>/dev/null | head -1)"
 
 # ── Go ───────────────────────────────────────────────────────────────────────
 if ! command -v go >/dev/null 2>&1; then
