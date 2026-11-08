@@ -159,7 +159,23 @@ describe('Atlas layer map', () => {
     await page.goto(BASE + '/tags/atlas-map-set');
     await page.locator('#grid-mount .post-card').first().waitFor();
     await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
-    const marker = page.locator('.atlas-layer-map .atlas-marker').first();
+    // The warm map drew its markers while it was hidden. The show then fits the
+    // places and resizes the box. A click during that move can hit the map (which
+    // clears the selection) or a marker that the zoomend recluster takes off.
+    // Under load the move is slow, so wait until the box and the map pane stay
+    // still for a few frames, then click the Mapton marker by its name.
+    await page.waitForFunction(() => {
+      const box = document.querySelector<HTMLElement>('.atlas-layer-map');
+      const pane = box?.querySelector<HTMLElement>('.leaflet-map-pane');
+      if (!box || !pane || box.classList.contains('leaflet-zoom-anim')) return false;
+      const w = window as unknown as { __atlasSettle?: { key: string; n: number } };
+      const r = box.getBoundingClientRect();
+      const key = [r.x, r.y, r.width, r.height, pane.style.transform].join('|');
+      const prev = w.__atlasSettle;
+      w.__atlasSettle = { key, n: prev && prev.key === key ? prev.n + 1 : 0 };
+      return w.__atlasSettle.n >= 5;
+    }, undefined, { polling: 100 });
+    const marker = page.locator('.atlas-layer-map .atlas-marker:not(.atlas-cluster)[aria-label*="Mapton"]');
     await marker.waitFor();
     if (onIpad) await marker.tap();
     else await marker.click();
