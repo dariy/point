@@ -565,7 +565,11 @@ export class PublicHeader extends Component<PublicHeaderProps> {
     const first = inner.firstElementChild;
     if (!tools || !first || tools === first) return true;
     const cs = getComputedStyle(inner);
-    const right = inner.getBoundingClientRect().right - (parseFloat(cs.paddingRight) || 0);
+    // On a phone a row wider than the screen makes the layout viewport wider,
+    // and the row then grows with it, so it would always fit. The root's
+    // clientWidth stays the screen width: the row must end inside it too.
+    const pad = parseFloat(cs.paddingRight) || 0;
+    const right = Math.min(inner.getBoundingClientRect().right, document.documentElement.clientWidth) - pad;
     const toolsRect = tools.getBoundingClientRect();
     const firstRect = first.getBoundingClientRect();
     if (toolsRect.top - firstRect.top > firstRect.height / 2) return false;
