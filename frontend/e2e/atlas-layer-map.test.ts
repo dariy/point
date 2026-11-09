@@ -716,6 +716,45 @@ describe('Atlas layer map', () => {
       });
     }
 
+    // p-yeaj4: the page swipe (core/gridPager.ts) moves #grid-mount left in x.
+    // In the side split no card may show left of the handle: the map covers it.
+    it('cuts the list column at the map edge when it moves left', { skip: !onIpad && 'the side layout needs touch input' }, async () => {
+      await page.setViewportSize(LANDSCAPE);
+      await page.goto(BASE + '/tags/atlas-map-set');
+      await page.locator('#grid-mount .post-card').first().waitFor();
+      await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
+      await page.waitForFunction(() => document.body.hasAttribute('data-atlas-side'));
+      await page.waitForTimeout(700);
+      // Two frames: at rest, and in a free drag of the handle to a narrower map.
+      for (const dragW of [null, 500]) {
+        const hits = await page.evaluate(async (w) => {
+          const b = document.body;
+          if (w !== null) {
+            b.setAttribute('data-atlas-dragging', '');
+            b.dataset.atlasDragTarget = 'mapList';
+            b.style.setProperty('--atlas-layer-map-w', `${w}px`);
+          }
+          const gm = document.querySelector<HTMLElement>('#grid-mount')!;
+          gm.style.transform = 'translateX(-300px)';
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const h = document.querySelector('.atlas-layer-handle')!.getBoundingClientRect();
+          const out: string[] = [];
+          for (let x = h.left - 4; x > h.left - 300; x -= 12) {
+            for (let y = 60; y < innerHeight - 60; y += 40) {
+              const el = document.elementFromPoint(x, y);
+              if (el?.closest('#grid-mount')) out.push(`${Math.round(x)},${y}`);
+            }
+          }
+          gm.style.transform = '';
+          b.removeAttribute('data-atlas-dragging');
+          delete b.dataset.atlasDragTarget;
+          b.style.removeProperty('--atlas-layer-map-w');
+          return out;
+        }, dragW);
+        assert.deepEqual(hits, [], `no card left of the handle (drag ${dragW}): ${hits.slice(0, 5).join(' ')}`);
+      }
+    });
+
     it('keeps the place at the centre of the sheet widget', async () => {
       const on = await api('/api/plugins/immersive-sheet', { enabled: true }, 'PATCH');
       assert.ok(on.ok, 'immersive-sheet on: ' + on.status);
