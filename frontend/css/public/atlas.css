@@ -1236,6 +1236,18 @@ body[data-atlas-side] {
     --atlas-layer-map-w: var(--atlas-layer-split-w);
 }
 
+/* The map is above the list column, and the handle (z-index 105) is above the
+   map. The page swipe (core/gridPager.ts) moves #grid-mount and its neighbour
+   page in x. A card that moves left of the handle goes under the map, so the
+   column is cut at the map edge. */
+body[data-atlas-side] .atlas-layer-map {
+    z-index: 104;
+}
+
+body[data-atlas-side] #grid-mount {
+    z-index: 103;
+}
+
 /* In `map` the map is full width; the handle is on its right edge. */
 body[data-atlas-side][data-atlas-layer="map"] {
     --atlas-layer-map-w: 100vw;
