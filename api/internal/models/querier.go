@@ -65,6 +65,8 @@ type Querier interface {
 	GetUserSessions(ctx context.Context, userID int64) ([]Session, error)
 	IncrementPostViewCount(ctx context.Context, id int64) error
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey, error)
+	// The trash keeps a media file for 30 days (services.TrashRetentionDays).
+	ListExpiredTrashedMediaIDs(ctx context.Context) ([]int64, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
@@ -74,6 +76,9 @@ type Querier interface {
 	MergeTagChildren(ctx context.Context, arg MergeTagChildrenParams) error
 	MergeTagParents(ctx context.Context, arg MergeTagParentsParams) error
 	PublishPost(ctx context.Context, id int64) (Post, error)
+	// The trash keeps a post for 30 days (services.TrashRetentionDays). deleted_at
+	// is set with CURRENT_TIMESTAMP, so datetime() compares like with like.
+	PurgeExpiredTrashedPosts(ctx context.Context) (int64, error)
 	RemoveTagFromPost(ctx context.Context, arg RemoveTagFromPostParams) error
 	RemoveTagRelationship(ctx context.Context, arg RemoveTagRelationshipParams) error
 	RestorePost(ctx context.Context, arg RestorePostParams) error

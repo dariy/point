@@ -73,6 +73,12 @@ by upload date (`/YYYY/MM/…`).
   `POST /api/media/bulk-restore`. An upload of bytes that are in the trash restores
   that row. The library, the picker, the folders and the orphan list do not show a
   trashed file.
+- **Trash purge and Undo**: the trash keeps posts and media for 30 days
+  (`services.TrashRetentionDays`). The daily "trash purge" task (2 AM,
+  `scheduler.go::purgeTrash`) then deletes them, with the files of the media, and
+  records its outcome in the health view. The trash views show "Removed on <date>"
+  for each item. After a delete or a bulk delete in the posts list or the media
+  library, the toast shows "Undo" for 8 seconds; Undo calls the restore endpoint.
 - **Drag-and-drop creation**: dropping an image anywhere in the admin uploads it and
   opens a new post pre-populated with that media; the Web Share Target (PWA) feeds the
   same flow from a phone's share sheet.

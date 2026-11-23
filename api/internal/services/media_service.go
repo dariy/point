@@ -771,6 +771,35 @@ func (s *MediaService) PermanentlyDeleteMedia(ctx context.Context, id int64) err
 	return s.repo.DeleteMedia(ctx, id)
 }
 
+// TrashRetentionDays is how long the trash keeps a post or a media file before
+// the scheduled purge removes it. The purge queries in sql/queries.sql
+// (PurgeExpiredTrashedPosts, ListExpiredTrashedMediaIDs) carry the same number,
+// and so does the admin (frontend/src/utils/formatters.ts TRASH_RETENTION_DAYS).
+const TrashRetentionDays = 30
+
+// PurgeExpiredTrash permanently deletes the media files that have been in the
+// trash for more than TrashRetentionDays, with their files on disk. It returns
+// how many it deleted. One failure does not stop the others; the first error
+// comes back after the loop.
+func (s *MediaService) PurgeExpiredTrash(ctx context.Context) (int, error) {
+	ids, err := s.repo.ListExpiredTrashedMediaIDs(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var purged int
+	var firstErr error
+	for _, id := range ids {
+		if err := s.PermanentlyDeleteMedia(ctx, id); err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("purge media %d: %w", id, err)
+			}
+			continue
+		}
+		purged++
+	}
+	return purged, firstErr
+}
+
 // removeFiles removes the original, the HEIF archive, the poster and every
 // derived variant of a media record from disk.
 func (s *MediaService) removeFiles(m models.Medium) {

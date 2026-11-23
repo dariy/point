@@ -236,7 +236,9 @@ th.status-col {
     opacity: 0.6;
 }
 
-.trash-status-label {
+.trash-status-label,
+.post-row-tags .trash-removal-date,
+.post-card-meta .trash-removal-date {
     font-size: var(--font-size-xs);
     color: var(--text-tertiary, var(--text-secondary));
     font-style: italic;

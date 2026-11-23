@@ -1463,6 +1463,36 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey
 	return items, nil
 }
 
+const listExpiredTrashedMediaIDs = `-- name: ListExpiredTrashedMediaIDs :many
+SELECT id FROM media
+WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', '-30 days')
+ORDER BY id
+`
+
+// The trash keeps a media file for 30 days (services.TrashRetentionDays).
+func (q *Queries) ListExpiredTrashedMediaIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listExpiredTrashedMediaIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMedia = `-- name: ListMedia :many
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at FROM media
 WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
@@ -1808,6 +1838,21 @@ func (q *Queries) PublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.InstagramID,
 	)
 	return i, err
+}
+
+const purgeExpiredTrashedPosts = `-- name: PurgeExpiredTrashedPosts :execrows
+DELETE FROM posts
+WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', '-30 days')
+`
+
+// The trash keeps a post for 30 days (services.TrashRetentionDays). deleted_at
+// is set with CURRENT_TIMESTAMP, so datetime() compares like with like.
+func (q *Queries) PurgeExpiredTrashedPosts(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, purgeExpiredTrashedPosts)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const removeTagFromPost = `-- name: RemoveTagFromPost :exec

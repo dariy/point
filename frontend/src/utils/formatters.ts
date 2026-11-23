@@ -22,6 +22,24 @@ export function formatDateShort(iso: string | null | undefined): string {
 }
 
 /**
+ * How long the trash keeps a post or a media file before the server's daily
+ * purge removes it. The server has the same number (services.TrashRetentionDays).
+ */
+export const TRASH_RETENTION_DAYS = 30;
+
+/**
+ * The date when the trash purge removes an item that was deleted at `deletedAt`,
+ * as a short date. Returns '' if falsy or invalid.
+ */
+export function trashRemovalDate(deletedAt: string | null | undefined): string {
+  if (!deletedAt) return '';
+  const d = new Date(deletedAt);
+  if (isNaN(d.getTime())) return '';
+  d.setUTCDate(d.getUTCDate() + TRASH_RETENTION_DAYS);
+  return formatDateShort(d.toISOString());
+}
+
+/**
  * Format a UTC ISO date string as a datetime-local string for <time> elements.
  * Returns '' if falsy or invalid.
  */

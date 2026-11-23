@@ -381,6 +381,33 @@ describe('MediaBrowser', () => {
       assert.match(getToast().message, /moved to the trash/i);
     });
 
+    test('the delete toast offers Undo, and Undo restores the file', async () => {
+      await mountBrowser();
+
+      await mb()._deleteMedia(1);
+      const toast = getToast();
+      assert.equal(toast.action?.label, 'Undo');
+
+      toast.action.onClick();
+      await settle();
+
+      assert.equal(sent('POST', '/api/media/1/restore').length, 1);
+      assert.match(getToast().message, /File restored/);
+    });
+
+    test('Undo after a bulk delete restores the moved files in one request', async () => {
+      routes['DELETE /api/media/3'] = () => fail(500, 'nope');
+      await mountBrowser();
+
+      await mb()._bulkDelete([1, 2, 3]);
+      getToast().action.onClick();
+      await settle();
+
+      const restore = sent('POST', '/api/media/bulk-restore');
+      assert.equal(restore.length, 1);
+      assert.deepEqual(restore[0]?.body, { ids: [1, 2] });
+    });
+
     test('cancelling deletes nothing', async () => {
       await mountBrowser();
 
@@ -455,6 +482,7 @@ describe('MediaBrowser', () => {
       assert.equal(q('.delete-media-btn'), null);
       assert.equal(q('.exif-toggle-btn'), null);
       assert.match(el('.media-item-meta').textContent, /Deleted/);
+      assert.match(el('.trash-removal-date').textContent, /Removed on .*2024/);
     });
 
     test('an empty trash says so', async () => {

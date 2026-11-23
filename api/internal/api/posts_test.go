@@ -1660,3 +1660,53 @@ func TestBuildPostResponse_TagGeoFields(t *testing.T) {
 		}
 	}
 }
+
+// The trash list sends deleted_at as a time string, so the admin can show the
+// delete date and the date when the purge removes the post.
+func TestListPosts_TrashSendsDeletedAtAsTime(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	post, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "Gone", Slug: "gone", Content: "x", Status: "draft", AuthorID: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost failed: %v", err)
+	}
+	if err := postSvc.SoftDeletePost(ctx, post.ID, 1); err != nil {
+		t.Fatalf("SoftDeletePost failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?status=trash", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	if err := h.ListPosts(c); err != nil {
+		t.Fatalf("ListPosts: %v", err)
+	}
+	var body struct {
+		Posts []map[string]interface{} `json:"posts"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Posts) != 1 {
+		t.Fatalf("trash has %d posts, want 1", len(body.Posts))
+	}
+	s, ok := body.Posts[0]["deleted_at"].(string)
+	if !ok {
+		t.Fatalf("deleted_at = %#v, want a time string", body.Posts[0]["deleted_at"])
+	}
+	if _, err := time.Parse(time.RFC3339, s); err != nil {
+		t.Errorf("deleted_at %q is not RFC 3339: %v", s, err)
+	}
+}

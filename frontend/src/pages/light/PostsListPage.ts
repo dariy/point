@@ -16,7 +16,7 @@ import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../
 import type { Slot } from "../../utils/helpers.ts";
 import type { PageProps } from "../../router.ts";
 import type { Post, PostPage, PostTag } from "../../api/posts.ts";
-import { formatDateShort } from "../../utils/formatters.ts";
+import { formatDateShort, trashRemovalDate } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 import { captureInteraction } from "../../utils/preserveInteraction.ts";
 import { EDIT_SVG, X_SVG, LINK_SVG, CHECK_SVG, TRASH_SVG, EXTERNAL_LINK_SVG, PLAY_SVG, MUSIC_SVG, RESTORE_SVG, SELECT_SVG, PLUS_SVG } from "../../utils/icons.ts";
@@ -59,11 +59,20 @@ type ListPost = Omit<Post, "tags"> & {
   deleted_at?: string | { value: string } | null;
 };
 
-/** When a trash row was deleted, formatted; "" when unknown. */
-const trashDate = (p: ListPost) => {
+/** The raw deleted_at of a trash row; "" when unknown. */
+const deletedAtRaw = (p: ListPost) => {
   const d = p.deleted_at;
-  if (typeof d === "object" && d?.value) return formatDateShort(d.value);
-  return typeof d === "string" && d ? formatDateShort(d) : "";
+  if (typeof d === "object" && d?.value) return d.value;
+  return typeof d === "string" ? d : "";
+};
+
+/** When a trash row was deleted, formatted; "" when unknown. */
+const trashDate = (p: ListPost) => formatDateShort(deletedAtRaw(p));
+
+/** When the trash purge removes a trash row, as "Removed on …"; "" when unknown. */
+const trashRemoval = (p: ListPost) => {
+  const d = trashRemovalDate(deletedAtRaw(p));
+  return d ? `Removed on ${d}` : "";
 };
 
 /** The list filters that _load and _syncUrl override. */
@@ -152,6 +161,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
             <div class="post-card-meta">
               <span class="trash-status-label">Was: ${STATUS_LABELS[p.status] || p.status}</span>
               ${deletedAt ? html`· ${deletedAt}` : ""}
+              ${trashRemoval(p) ? html`· <span class="trash-removal-date">${trashRemoval(p)}</span>` : ""}
             </div>
             <div class="post-card-actions">
               <button class="btn btn-sm restore-btn"
@@ -280,6 +290,7 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
                 <tr data-post-id="${String(p.id)}" class="post-row-tags">
                   <td colspan="4" class="tags-col muted-tags">
                     <span class="trash-status-label">Was: ${STATUS_LABELS[p.status] || p.status}</span>
+                    ${trashRemoval(p) ? html`· <span class="trash-removal-date">${trashRemoval(p)}</span>` : ""}
                   </td>
                 </tr>`;
       }
@@ -683,17 +694,18 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     const n = this.state.selectedIds.size;
     this._showConfirm("Move to Trash", `Move ${n} posts to Trash? You can restore them later.`, "Move to Trash", "danger", async () => {
       const ids = Array.from(this.state.selectedIds as Set<number>);
-      let successCount = 0;
+      const moved: number[] = [];
       let failCount = 0;
       for (const id of ids) {
         try {
           await deletePost(id);
-          successCount++;
+          moved.push(id);
         } catch (err) {
           console.error(`Failed to move post ${id} to trash:`, err);
           failCount++;
         }
       }
+      const successCount = moved.length;
       let message = "";
       if (failCount === 0) {
         message = `${successCount} posts moved to Trash.`;
@@ -702,7 +714,8 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       }
       setToast({
         message,
-        type: failCount > 0 ? "error" : "success"
+        type: failCount > 0 ? "error" : "success",
+        ...(moved.length ? { action: { label: "Undo", onClick: () => { void this._undoDelete(moved); } } } : {})
       });
       this.setState({
         selectMode: false,
@@ -940,7 +953,8 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
       await deletePost(id);
       setToast({
         message: "Post moved to Trash.",
-        type: "success"
+        type: "success",
+        action: { label: "Undo", onClick: () => { void this._undoDelete([id]); } }
       });
       this._load();
     } catch (err) {
@@ -949,6 +963,26 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
         type: "error"
       });
     }
+  }
+  /** The "Undo" of a delete toast: take the posts out of the trash again. */
+  async _undoDelete(ids: number[]) {
+    let failCount = 0;
+    for (const id of ids) {
+      try {
+        await restorePost(id);
+      } catch (err) {
+        console.error(`Failed to restore post ${id}:`, err);
+        failCount++;
+      }
+    }
+    setToast(failCount === 0 ? {
+      message: ids.length === 1 ? "Post restored." : `${ids.length} posts restored.`,
+      type: "success"
+    } : {
+      message: `${ids.length - failCount} of ${ids.length} posts restored. ${failCount} failed.`,
+      type: "error"
+    });
+    this._load();
   }
   async _restorePost(id: number, title: string) {
     try {

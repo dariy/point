@@ -16,14 +16,14 @@ import { Pagination } from "../shared/Pagination.ts";
 import { MediaLightbox } from "../public/MediaLightbox.ts";
 import { ConfirmDialog } from "../shared/ConfirmDialog.ts";
 import { PromptDialog } from "../shared/PromptDialog.ts";
-import { listMedia, listTrashedMedia, restoreMedia, permanentlyDeleteMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
+import { listMedia, listTrashedMedia, restoreMedia, bulkRestoreMedia, permanentlyDeleteMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
 import { captureVideoPoster } from "../../utils/videoPoster.ts";
 import { MediaPager } from "../../core/mediaPager.ts";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.ts";
 import { listPosts } from "../../api/posts.ts";
 import { setToast } from "../../store.ts";
 import { html, setHTML, navigate, raw } from "../../utils/helpers.ts";
-import { formatFileSize, formatDateShort } from "../../utils/formatters.ts";
+import { formatFileSize, formatDateShort, trashRemovalDate } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
 import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG, RESTORE_SVG, X_SVG } from "../../utils/icons.ts";
 import type { Media } from "../../api/media.ts";
@@ -439,6 +439,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
           <div class="media-item-meta">
             ${formatFileSize(m.file_size)} · ${isTrash && m.deleted_at ? `Deleted ${formatDateShort(m.deleted_at)}` : formatDateShort(m.uploaded_at)}
           </div>
+          ${isTrash && trashRemovalDate(m.deleted_at) ? html`<div class="media-item-meta trash-removal-date">Removed on ${trashRemovalDate(m.deleted_at)}</div>` : ""}
           ${m.hevc_note ? html`<div class="media-item-note" title="Most browsers cannot play HEVC. This install has no ffmpeg to convert it to H.264.">HEVC: may not play in browsers</div>` : ""}
         </div>
         ${actions}
@@ -1074,19 +1075,20 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     });
   }
   async _bulkDelete(ids: number[]) {
-    let deleted = 0;
+    const moved: number[] = [];
     let failed = 0;
     for (const id of ids) {
       try {
         await deleteMedia(id);
-        deleted++;
+        moved.push(id);
       } catch {
         failed++;
       }
     }
     setToast({
-      message: `Moved ${deleted} to the trash${failed ? `, ${failed} failed` : ""}.`,
-      type: failed ? "warning" : "success"
+      message: `Moved ${moved.length} to the trash${failed ? `, ${failed} failed` : ""}.`,
+      type: failed ? "warning" : "success",
+      ...(moved.length ? { action: { label: "Undo", onClick: () => { void this._undoDelete(moved); } } } : {})
     });
     this.setState({
       selectMode: false,
@@ -1427,7 +1429,8 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       await deleteMedia(id);
       setToast({
         message: "File moved to the trash.",
-        type: "success"
+        type: "success",
+        action: { label: "Undo", onClick: () => { void this._undoDelete([id]); } }
       });
       this._load();
       this._loadFolders();
@@ -1438,7 +1441,25 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       });
     }
   }
-  /** Trash view: take a file out of the trash. The server sets its visibility again. */
+  /** The "Undo" of a delete toast: take the files out of the trash again. */
+  async _undoDelete(ids: number[]) {
+    try {
+      if (ids.length === 1) await restoreMedia(ids[0]);
+      else await bulkRestoreMedia(ids);
+      setToast({
+        message: ids.length === 1 ? "File restored." : `Restored ${ids.length} files.`,
+        type: "success"
+      });
+      this._load({ page: this.state.pagination.page || 1 });
+      this._loadFolders();
+    } catch (err) {
+      setToast({
+        message: (err as Error).message || "Restore failed.",
+        type: "error"
+      });
+    }
+  }
+    /** Trash view: take a file out of the trash. The server sets its visibility again. */
   async _restoreMedia(id: number, name: string) {
     try {
       await restoreMedia(id);
