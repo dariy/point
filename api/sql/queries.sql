@@ -366,12 +366,14 @@ WHERE checksum = ? LIMIT 1;
 -- name: ListMedia :many
 SELECT * FROM media
 WHERE (CASE WHEN sqlc.arg('type_filter') THEN file_type = sqlc.arg('file_type') ELSE 1=1 END)
+AND deleted_at IS NULL
 ORDER BY uploaded_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountMedia :one
 SELECT COUNT(*) FROM media
-WHERE (CASE WHEN sqlc.arg('type_filter') THEN file_type = sqlc.arg('file_type') ELSE 1=1 END);
+WHERE (CASE WHEN sqlc.arg('type_filter') THEN file_type = sqlc.arg('file_type') ELSE 1=1 END)
+AND deleted_at IS NULL;
 
 -- name: CreateMedia :one
 INSERT INTO media (
@@ -411,8 +413,18 @@ SELECT SUM(file_size) FROM media;
 
 -- name: GetMediaByPostID :many
 SELECT * FROM media
-WHERE post_id = ?
+WHERE post_id = ? AND deleted_at IS NULL
 ORDER BY uploaded_at ASC;
+
+-- name: ListTrashedMedia :many
+SELECT * FROM media
+WHERE deleted_at IS NOT NULL
+ORDER BY deleted_at DESC, id DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountTrashedMedia :one
+SELECT COUNT(*) FROM media
+WHERE deleted_at IS NOT NULL;
 
 -- SECRETS
 

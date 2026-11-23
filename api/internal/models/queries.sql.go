@@ -149,6 +149,7 @@ func (q *Queries) ClearTagRelationships(ctx context.Context, arg ClearTagRelatio
 const countMedia = `-- name: CountMedia :one
 SELECT COUNT(*) FROM media
 WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
+AND deleted_at IS NULL
 `
 
 type CountMediaParams struct {
@@ -193,6 +194,18 @@ type CountPostsByTagParams struct {
 
 func (q *Queries) CountPostsByTag(ctx context.Context, arg CountPostsByTagParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPostsByTag, arg.TagID, arg.IncludeDrafts, arg.PublishedOnlyFilter)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTrashedMedia = `-- name: CountTrashedMedia :one
+SELECT COUNT(*) FROM media
+WHERE deleted_at IS NOT NULL
+`
+
+func (q *Queries) CountTrashedMedia(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTrashedMedia)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -261,7 +274,7 @@ INSERT INTO media (
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at
 `
 
 type CreateMediaParams struct {
@@ -319,6 +332,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		&i.Metadata,
 		&i.OriginalMetadata,
 		&i.IsPublic,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -703,7 +717,7 @@ func (q *Queries) GetFirstUser(ctx context.Context) (User, error) {
 
 const getMedia = `-- name: GetMedia :one
 
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at FROM media
 WHERE id = ? LIMIT 1
 `
 
@@ -729,12 +743,13 @@ func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
 		&i.Metadata,
 		&i.OriginalMetadata,
 		&i.IsPublic,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getMediaByChecksum = `-- name: GetMediaByChecksum :one
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at FROM media
 WHERE checksum = ? LIMIT 1
 `
 
@@ -759,13 +774,14 @@ func (q *Queries) GetMediaByChecksum(ctx context.Context, checksum string) (Medi
 		&i.Metadata,
 		&i.OriginalMetadata,
 		&i.IsPublic,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getMediaByPostID = `-- name: GetMediaByPostID :many
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
-WHERE post_id = ?
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at FROM media
+WHERE post_id = ? AND deleted_at IS NULL
 ORDER BY uploaded_at ASC
 `
 
@@ -796,6 +812,7 @@ func (q *Queries) GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([
 			&i.Metadata,
 			&i.OriginalMetadata,
 			&i.IsPublic,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1447,8 +1464,9 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey
 }
 
 const listMedia = `-- name: ListMedia :many
-SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public FROM media
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at FROM media
 WHERE (CASE WHEN ?1 THEN file_type = ?2 ELSE 1=1 END)
+AND deleted_at IS NULL
 ORDER BY uploaded_at DESC
 LIMIT ?4 OFFSET ?3
 `
@@ -1492,6 +1510,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 			&i.Metadata,
 			&i.OriginalMetadata,
 			&i.IsPublic,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1569,6 +1588,60 @@ func (q *Queries) ListTags(ctx context.Context, includeEmptyFilter interface{}) 
 			&i.Longitude,
 			&i.PostCount,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTrashedMedia = `-- name: ListTrashedMedia :many
+SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at FROM media
+WHERE deleted_at IS NOT NULL
+ORDER BY deleted_at DESC, id DESC
+LIMIT ? OFFSET ?
+`
+
+type ListTrashedMediaParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) ListTrashedMedia(ctx context.Context, arg ListTrashedMediaParams) ([]Medium, error) {
+	rows, err := q.db.QueryContext(ctx, listTrashedMedia, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Medium
+	for rows.Next() {
+		var i Medium
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.OriginalPath,
+			&i.ThumbnailPath,
+			&i.FileType,
+			&i.MimeType,
+			&i.FileSize,
+			&i.Width,
+			&i.Height,
+			&i.PostID,
+			&i.UploadedAt,
+			&i.Checksum,
+			&i.AltText,
+			&i.Caption,
+			&i.Metadata,
+			&i.OriginalMetadata,
+			&i.IsPublic,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1864,7 +1937,7 @@ SET alt_text = COALESCE(?, alt_text),
     post_id = COALESCE(?, post_id),
     metadata = COALESCE(?, metadata)
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at
 `
 
 type UpdateMediaParams struct {
@@ -1902,6 +1975,7 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		&i.Metadata,
 		&i.OriginalMetadata,
 		&i.IsPublic,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -1910,7 +1984,7 @@ const updateMediaFilename = `-- name: UpdateMediaFilename :one
 UPDATE media
 SET filename = ?, original_path = ?, thumbnail_path = ?
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at
 `
 
 type UpdateMediaFilenameParams struct {
@@ -1946,6 +2020,7 @@ func (q *Queries) UpdateMediaFilename(ctx context.Context, arg UpdateMediaFilena
 		&i.Metadata,
 		&i.OriginalMetadata,
 		&i.IsPublic,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -1954,7 +2029,7 @@ const updateMediaMetadata = `-- name: UpdateMediaMetadata :one
 UPDATE media
 SET metadata = ?
 WHERE id = ?
-RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public
+RETURNING id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at
 `
 
 type UpdateMediaMetadataParams struct {
@@ -1983,6 +2058,7 @@ func (q *Queries) UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetada
 		&i.Metadata,
 		&i.OriginalMetadata,
 		&i.IsPublic,
+		&i.DeletedAt,
 	)
 	return i, err
 }

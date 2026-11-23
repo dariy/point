@@ -65,6 +65,14 @@ by upload date (`/YYYY/MM/…`).
 - **Library UI**: folder-tree browser (breadcrumb + folder chips on narrow screens),
   type filters, rename with safe-character validation (post references stay intact),
   orphaned-media detection and cleanup (individual or bulk), storage stats by type.
+- **Media trash**: delete, bulk delete and orphan cleanup move media to the trash
+  (`media.deleted_at`). The files stay on disk. The "Trash" entry of the type filter
+  lists the trash, with "Restore" and "Delete now" on each file. "Delete now"
+  (`DELETE /api/media/:id/permanent`) removes the files and the row, and it refuses a
+  file that is not in the trash. Restore is `POST /api/media/:id/restore` or
+  `POST /api/media/bulk-restore`. An upload of bytes that are in the trash restores
+  that row. The library, the picker, the folders and the orphan list do not show a
+  trashed file.
 - **Drag-and-drop creation**: dropping an image anywhere in the admin uploads it and
   opens a new post pre-populated with that media; the Web Share Target (PWA) feeds the
   same flow from a phone's share sheet.
@@ -98,6 +106,10 @@ Gotchas from production:
   [hidden-visibility.md](hidden-visibility.md)): a hidden feature-tag once made public
   feature pages lose their media.
 - Batch recalcs have a known N+1.
+- A trashed file is never public. The trash sets `is_public = 0` in the same UPDATE,
+  the recalcs skip trashed rows, and the media route returns 404 to a guest when
+  `deleted_at` is set, whatever `is_public` says. A restore calculates visibility again
+  from the posts.
 
 ## Not yet implemented
 

@@ -31,6 +31,8 @@ export interface Media {
   /** As captured at upload. */
   original_metadata: Record<string, any> | null;
   is_public: boolean;
+  /** When the file went to the trash; null on a live file. */
+  deleted_at?: string | null;
   /** Admin responses only: set on an HEVC video that this install cannot convert. */
   hevc_note?: boolean;
 }
@@ -169,9 +171,36 @@ export function renameMedia(id: number, newFilename: string): Promise<Media> {
   return api.post(`/api/media/${id}/rename`, { new_filename: newFilename });
 }
 
-/** Delete a media item. */
+/** Move a media item to the trash. The file stays on disk until "Delete now". */
 export function deleteMedia(id: number): Promise<null> {
   return api.delete(`/api/media/${id}`);
+}
+
+/** Move media items to the trash in one request. */
+export function bulkDeleteMedia(ids: number[]): Promise<{ deleted: number, message: string }> {
+  return api.post('/api/media/bulk-delete', { ids });
+}
+
+/** List the media trash, newest first. Same envelope as listMedia. */
+export function listTrashedMedia(params: { page?: number; per_page?: number } = {}): Promise<{
+  media: Media[], total: number, page: number, per_page: number, pages: number,
+}> {
+  return api.get('/api/media/trash', params);
+}
+
+/** Take a media item out of the trash. The server calculates its visibility again. */
+export function restoreMedia(id: number): Promise<null> {
+  return api.post(`/api/media/${id}/restore`);
+}
+
+/** Take media items out of the trash in one request. */
+export function bulkRestoreMedia(ids: number[]): Promise<{ restored: number, message: string }> {
+  return api.post('/api/media/bulk-restore', { ids });
+}
+
+/** Remove a trashed media item and its files now. The server refuses a live file (409). */
+export function permanentlyDeleteMedia(id: number): Promise<null> {
+  return api.delete(`/api/media/${id}/permanent`);
 }
 
 /** Get storage statistics — services.StorageStats. */
@@ -195,7 +224,7 @@ export function getOrphanedMedia(): Promise<{
   return api.get('/api/media/orphaned');
 }
 
-/** Delete all orphaned media files. */
+/** Move all orphaned media files to the trash. */
 export function deleteOrphanedMedia(): Promise<{
   message: string;
   deleted_count: number;

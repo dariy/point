@@ -404,10 +404,72 @@ func (h *MediaHandler) BulkDeleteMedia(c echo.Context) error {
 		return MapError(err)
 	}
 
+	// "deleted" keeps its name for old clients. The files are in the trash.
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"deleted": count,
-		"message": fmt.Sprintf("Deleted %d media files", count),
+		"message": fmt.Sprintf("Moved %d media files to the trash", count),
 	})
+}
+
+// BulkRestoreMedia takes the given media files out of the trash.
+// POST /api/media/bulk-restore {"ids": [...]}
+func (h *MediaHandler) BulkRestoreMedia(c echo.Context) error {
+	var req BulkDeleteRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	if len(req.IDs) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "no ids provided")
+	}
+	count, err := h.mediaService.RestoreMedia(c.Request().Context(), req.IDs)
+	if err != nil {
+		return MapError(err)
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"restored": count,
+		"message":  fmt.Sprintf("Restored %d media files", count),
+	})
+}
+
+// RestoreMedia takes one media file out of the trash.
+// POST /api/media/:id/restore
+func (h *MediaHandler) RestoreMedia(c echo.Context) error {
+	id, err := parseIDParam(c)
+	if err != nil {
+		return err
+	}
+	if _, err := h.mediaService.RestoreMedia(c.Request().Context(), []int64{id}); err != nil {
+		return MapError(err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// PermanentlyDeleteMedia removes a trashed media file and its row.
+// DELETE /api/media/:id/permanent. A file that is not in the trash is a 409.
+func (h *MediaHandler) PermanentlyDeleteMedia(c echo.Context) error {
+	id, err := parseIDParam(c)
+	if err != nil {
+		return err
+	}
+	if err := h.mediaService.PermanentlyDeleteMedia(c.Request().Context(), id); err != nil {
+		return MapError(err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// ListTrashedMedia lists the media trash, newest first.
+// GET /api/media/trash
+func (h *MediaHandler) ListTrashedMedia(c echo.Context) error {
+	page, perPage := ParsePaginationParams(c, 20)
+	media, total, err := h.mediaService.ListTrashedMedia(c.Request().Context(), page, perPage)
+	if err != nil {
+		return MapError(err)
+	}
+	pages := int(math.Ceil(float64(total) / float64(perPage)))
+	if pages == 0 {
+		pages = 1
+	}
+	return c.JSON(http.StatusOK, h.mediaListEnvelope(c, media, total, page, perPage, pages))
 }
 
 func (h *MediaHandler) DeleteMedia(c echo.Context) error {
@@ -530,7 +592,7 @@ func (h *MediaHandler) DeleteOrphanedMedia(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message":       fmt.Sprintf("Deleted %d orphaned files", count),
+		"message":       fmt.Sprintf("Moved %d orphaned files to the trash", count),
 		"deleted_count": count,
 		"freed_bytes":   freed,
 		"failed_count":  0,

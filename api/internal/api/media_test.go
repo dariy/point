@@ -430,6 +430,112 @@ func TestMediaHandler_DeleteMedia(t *testing.T) {
 	}
 }
 
+// The trash endpoints: delete moves to the trash, the trash lists it, restore
+// brings it back, bulk restore takes ids, and "Delete now" refuses a live file
+// and removes a trashed one.
+func TestMediaHandler_TrashEndpoints(t *testing.T) {
+	handler, cleanup := setupMediaHandler(t)
+	defer cleanup()
+	e := echo.New()
+	ctx := context.Background()
+	media, err := handler.mediaService.UploadFile(ctx, services.UploadFileParams{
+		Content: []byte("trash"), Filename: "trash.txt", MimeType: "text/plain",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idStr := strconv.FormatInt(media.ID, 10)
+	withID := func(method string) (echo.Context, *httptest.ResponseRecorder) {
+		req := httptest.NewRequest(method, "/media/"+idStr, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(idStr)
+		return c, rec
+	}
+	trashTotal := func() float64 {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/media/trash", nil)
+		rec := httptest.NewRecorder()
+		if err := handler.ListTrashedMedia(e.NewContext(req, rec)); err != nil {
+			t.Fatalf("ListTrashedMedia: %v", err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		if items, _ := body["media"].([]interface{}); len(items) > 0 {
+			if first, _ := items[0].(map[string]interface{}); first["deleted_at"] == nil {
+				t.Error("a trash row has no deleted_at")
+			}
+		}
+		total, _ := body["total"].(float64)
+		return total
+	}
+
+	// "Delete now" on a live file: 409.
+	c, _ := withID(http.MethodDelete)
+	if err := handler.PermanentlyDeleteMedia(c); err == nil {
+		t.Error("expected an error for Delete now on a live file")
+	} else {
+		var he *echo.HTTPError
+		if !errors.As(MapError(err), &he) || he.Code != http.StatusConflict {
+			t.Errorf("Delete now on a live file = %v, want 409", MapError(err))
+		}
+	}
+
+	c, rec := withID(http.MethodDelete)
+	if err := handler.DeleteMedia(c); err != nil || rec.Code != http.StatusNoContent {
+		t.Fatalf("DeleteMedia = %v, %d", err, rec.Code)
+	}
+	if got := trashTotal(); got != 1 {
+		t.Errorf("trash total after delete = %v, want 1", got)
+	}
+
+	c, rec = withID(http.MethodPost)
+	if err := handler.RestoreMedia(c); err != nil || rec.Code != http.StatusNoContent {
+		t.Fatalf("RestoreMedia = %v, %d", err, rec.Code)
+	}
+	if got := trashTotal(); got != 0 {
+		t.Errorf("trash total after restore = %v, want 0", got)
+	}
+
+	// Bulk delete, then bulk restore.
+	body, _ := json.Marshal(BulkDeleteRequest{IDs: []int64{media.ID}})
+	req := httptest.NewRequest(http.MethodPost, "/media/bulk-delete", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec = httptest.NewRecorder()
+	if err := handler.BulkDeleteMedia(e.NewContext(req, rec)); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/media/bulk-restore", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec = httptest.NewRecorder()
+	if err := handler.BulkRestoreMedia(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("BulkRestoreMedia: %v", err)
+	}
+	if !strings.Contains(rec.Body.String(), `"restored":1`) {
+		t.Errorf("bulk restore body = %s", rec.Body.String())
+	}
+	empty, _ := json.Marshal(BulkDeleteRequest{})
+	req = httptest.NewRequest(http.MethodPost, "/media/bulk-restore", bytes.NewReader(empty))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	if handler.BulkRestoreMedia(e.NewContext(req, httptest.NewRecorder())) == nil {
+		t.Error("expected an error for bulk restore with no ids")
+	}
+
+	// Trash again, then Delete now.
+	c, _ = withID(http.MethodDelete)
+	if err := handler.DeleteMedia(c); err != nil {
+		t.Fatal(err)
+	}
+	c, rec = withID(http.MethodDelete)
+	if err := handler.PermanentlyDeleteMedia(c); err != nil || rec.Code != http.StatusNoContent {
+		t.Fatalf("PermanentlyDeleteMedia = %v, %d", err, rec.Code)
+	}
+	if _, err := handler.mediaService.GetMediaByID(ctx, media.ID); !errors.Is(err, services.ErrMediaNotFound) {
+		t.Errorf("row after Delete now: %v", err)
+	}
+}
+
 func setupMediaHandler(t *testing.T) (*MediaHandler, func()) {
 	t.Helper()
 	repo := setupTestDB(t)

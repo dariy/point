@@ -25,7 +25,7 @@ SELECT
   (SELECT COUNT(*) FROM posts WHERE LOWER(status) = 'published' AND deleted_at IS NULL) AS published_count,
   (SELECT COUNT(*) FROM posts WHERE LOWER(status) = 'draft' AND deleted_at IS NULL) AS draft_count,
   (SELECT COUNT(*) FROM tags) AS tag_count,
-  (SELECT COUNT(*) FROM media) AS media_count,
+  (SELECT COUNT(*) FROM media WHERE deleted_at IS NULL) AS media_count,
   (SELECT COALESCE(SUM(file_size), 0) FROM media) AS storage_bytes,
   (SELECT COUNT(*) FROM users) AS user_count,
   (SELECT COUNT(*) FROM sessions WHERE expires_at > ?) AS session_count

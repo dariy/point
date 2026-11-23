@@ -122,8 +122,14 @@ func TestUpload_HEICBecomesJPEG(t *testing.T) {
 		t.Errorf("re-upload = %d, %v; want row %d", again.ID, err, m.ID)
 	}
 
-	// Delete removes the archival HEIC too.
+	// The trash keeps the archival HEIC; "Delete now" removes it too.
 	if err := svc.DeleteMedia(ctx, m.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(svc.mediaBase(), heicRel)); err != nil {
+		t.Errorf("archival HEIC after trash: %v", err)
+	}
+	if err := svc.PermanentlyDeleteMedia(ctx, m.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(svc.mediaBase(), heicRel)); !errors.Is(err, os.ErrNotExist) {

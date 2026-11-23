@@ -470,6 +470,18 @@ var schema = []struct{ name, sql string }{
 		"drop_photo_library_path_secret",
 		`DELETE FROM blog_secrets WHERE key = 'photo_library_path'`,
 	},
+	{
+		// The media trash (NF-15). A delete sets deleted_at and keeps the
+		// files; "Delete now" in the trash view removes them.
+		"add_media_deleted_at",
+		`ALTER TABLE media ADD COLUMN deleted_at DATETIME`,
+	},
+	{
+		// Partial: it holds only the trash, so the library queries
+		// (deleted_at IS NULL) cannot choose it. See idx_posts_trashed.
+		"add_media_trashed_index",
+		`CREATE INDEX IF NOT EXISTS idx_media_trashed ON media(deleted_at DESC) WHERE deleted_at IS NOT NULL`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

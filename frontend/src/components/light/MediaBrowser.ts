@@ -16,7 +16,7 @@ import { Pagination } from "../shared/Pagination.ts";
 import { MediaLightbox } from "../public/MediaLightbox.ts";
 import { ConfirmDialog } from "../shared/ConfirmDialog.ts";
 import { PromptDialog } from "../shared/PromptDialog.ts";
-import { listMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
+import { listMedia, listTrashedMedia, restoreMedia, permanentlyDeleteMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
 import { captureVideoPoster } from "../../utils/videoPoster.ts";
 import { MediaPager } from "../../core/mediaPager.ts";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.ts";
@@ -25,7 +25,7 @@ import { setToast } from "../../store.ts";
 import { html, setHTML, navigate, raw } from "../../utils/helpers.ts";
 import { formatFileSize, formatDateShort } from "../../utils/formatters.ts";
 import { thumbAttrs } from "../../utils/mediaUrl.ts";
-import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG } from "../../utils/icons.ts";
+import { EDIT_SVG, LOCK_SVG, TRASH_SVG, INFO_SVG, LINK_SVG, PLUS_SVG, RESTORE_SVG, X_SVG } from "../../utils/icons.ts";
 import type { Media } from "../../api/media.ts";
 import type { Post } from "../../api/posts.ts";
 import type { Slot } from "../../utils/helpers.ts";
@@ -81,6 +81,24 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     this._selectedItemsById = {};
   }
 
+  /**
+   * The trash view: the "Trash" entry of the type filter. Standalone only — the
+   * picker never offers a trashed file. The same model as the posts list.
+   */
+  _isTrash() {
+    return !this.props.pickerMode && this.state.typeFilter === "trash";
+  }
+
+  /** One page of the current listing: the trash, or the library with its filters. */
+  _fetchPage(page: number, perPage: number) {
+    if (this._isTrash()) return listTrashedMedia({ page, per_page: perPage });
+    const params: Parameters<typeof listMedia>[0] = { page, per_page: perPage };
+    if (this.state.typeFilter) params.file_type = this.state.typeFilter;
+    if (this.state.filenameFilter) params.filename = this.state.filenameFilter;
+    if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
+    return listMedia(params);
+  }
+
   /** Wire the grid gesture layer to this browser's data and DOM. */
   _makePager() {
     return new MediaPager({
@@ -123,14 +141,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
    * bound: nothing in a ghost is ever clicked.
    */
   async _pageMarkup(page: number) {
-    const params: Parameters<typeof listMedia>[0] = {
-      page,
-      per_page: this._lastPerPage || 24
-    };
-    if (this.state.typeFilter) params.file_type = this.state.typeFilter;
-    if (this.state.filenameFilter) params.filename = this.state.filenameFilter;
-    if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
-    const data = await listMedia(params);
+    const data = await this._fetchPage(page, this._lastPerPage || 24);
     const items = data.media || [];
     if (!items.length) return html`<p class="empty-state">No media files.</p>`;
     const none = new Set<number>();
@@ -165,7 +176,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       const grid = loading
           ? html`<div class="loading-spinner" aria-label="Loading media…"></div>`: error
               ? html`<p class="error-state" role="alert">${error}</p>`: !media.length
-                  ? html`<p class="empty-state">No media files. Drag &amp; drop to upload.</p>`: html`<div class="media-grid">${media.map((m: Media) => this._renderItem(m, selectedIds))}</div>`;
+                  ? html`<p class="empty-state">${this._isTrash() ? "Trash is empty." : raw("No media files. Drag &amp; drop to upload.")}</p>`: html`<div class="media-grid">${media.map((m: Media) => this._renderItem(m, selectedIds))}</div>`;
       const dropOverlay = pickerMode
           ? html`<div class="media-browser-drop-overlay${draggingOver? " visible": ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
@@ -213,7 +224,9 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
 
   /** Media type filter — first control on the folder (media/year/month) line. */
   _renderTypeFilter(typeFilter: string) {
-    const typeOptions = ["", "image", "video", "audio", "file"].map(t => {
+    const types = ["", "image", "video", "audio", "file"];
+    if (!this.props.pickerMode) types.push("trash");
+    const typeOptions = types.map(t => {
       const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
       return html`<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
     });
@@ -342,7 +355,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
           <button id="mb-sel-create-post" class="btn btn-sm btn-primary" title="Create new post with selected images" ${count === 0 ? "disabled" : ""}>
             ${raw(PLUS_SVG)} Create post
           </button>
-          <button id="mb-sel-delete" class="btn btn-sm btn-danger" title="Delete selected files" ${count === 0 ? "disabled" : ""}>
+          <button id="mb-sel-delete" class="btn btn-sm btn-danger" title="Move selected files to Trash" ${count === 0 ? "disabled" : ""}>
             ${raw(TRASH_SVG)} Delete (${count})
           </button>
         </div>
@@ -383,9 +396,18 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         <input type="checkbox" class="media-item-check" data-id="${String(m.id)}"
                ${isSelected ? "checked" : ""} aria-label="Select ${m.filename}">
       </label>` : "";
-    const exifPanel = pickerMode ? "" : this._renderExifPanel(m);
-    const refPanel = !pickerMode && isImage ? this._renderReferringPostsInline(m) : "";
-    const actions = pickerMode ? "" : html`
+    const isTrash = this._isTrash();
+    const exifPanel = pickerMode || isTrash ? "" : this._renderExifPanel(m);
+    const refPanel = !pickerMode && !isTrash && isImage ? this._renderReferringPostsInline(m) : "";
+    const actions = pickerMode ? "" : isTrash ? html`
+      <div class="media-item-actions">
+        <button class="btn btn-sm restore-media-btn"
+                data-id="${String(m.id)}"
+                data-name="${m.filename}" title="Restore" aria-label="Restore file">${raw(RESTORE_SVG)} Restore</button>
+        <button class="btn btn-sm btn-danger purge-media-btn"
+                data-id="${String(m.id)}"
+                data-name="${m.filename}" title="Delete now" aria-label="Delete file now">${raw(X_SVG)} Delete now</button>
+      </div>` : html`
       <div class="media-item-actions">
         <a href="${m.path || ""}" class="btn btn-sm" target="_blank"
            rel="noopener" title="View original" aria-label="View original file">↗</a>
@@ -397,7 +419,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
                 data-name="${m.filename}" title="Rename" aria-label="Rename file">${raw(EDIT_SVG)}</button>
         <button class="btn btn-sm btn-danger delete-media-btn"
                 data-id="${String(m.id)}"
-                data-name="${m.filename}" title="Delete" aria-label="Delete file">${raw(TRASH_SVG)}</button>
+                data-name="${m.filename}" title="Move to Trash" aria-label="Move file to Trash">${raw(TRASH_SVG)}</button>
         <button class="btn btn-sm exif-toggle-btn" data-id="${String(m.id)}" type="button" title="Edit EXIF" aria-label="Edit EXIF metadata">${raw(INFO_SVG)}</button>
 
       </div>`;
@@ -415,7 +437,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
                       data-path="${copyPath}" title="Copy path to clipboard">⎘</button>`}
           </div>
           <div class="media-item-meta">
-            ${formatFileSize(m.file_size)} · ${formatDateShort(m.uploaded_at)}
+            ${formatFileSize(m.file_size)} · ${isTrash && m.deleted_at ? `Deleted ${formatDateShort(m.deleted_at)}` : formatDateShort(m.uploaded_at)}
           </div>
           ${m.hevc_note ? html`<div class="media-item-note" title="Most browsers cannot play HEVC. This install has no ffmpeg to convert it to H.264.">HEVC: may not play in browsers</div>` : ""}
         </div>
@@ -774,8 +796,11 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     this._wireDragDrop(fileInput, pickerMode);
     this._bindPreviewFallback();
     this.$$(".mb-type-filter").forEach(select => select.addEventListener("change", e => {
+      const typeFilter = (e.target as HTMLSelectElement).value;
       this.setState({
-        typeFilter: (e.target as HTMLSelectElement).value
+        typeFilter,
+        // The trash has no folders and no selection.
+        ...(typeFilter === "trash" ? { selectedFolder: null, selectMode: false, selectedIds: new Set() } : {})
       });
       this._load({
         page: 1
@@ -843,8 +868,8 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         this._deleteSelected();
       });
 
-      // Long-press to enter select mode (standalone only)
-      this.$$(".media-item").forEach(item => {
+      // Long-press to enter select mode (standalone only, not in the trash)
+      if (!this._isTrash()) this.$$(".media-item").forEach(item => {
         let timer: ReturnType<typeof setTimeout> | null = null;
         let originX = 0;
         let originY = 0;
@@ -877,6 +902,20 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         item.addEventListener("pointerup", cancel);
         item.addEventListener("pointerleave", cancel);
         item.addEventListener("pointercancel", cancel);
+      });
+
+      // Trash view: restore, delete now
+      this.$$(".restore-media-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
+          e.stopPropagation();
+          this._restoreMedia(parseInt(btn.dataset.id!, 10), btn.dataset.name!);
+        });
+      });
+      this.$$(".purge-media-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
+          e.stopPropagation();
+          this._showPurgeConfirm(parseInt(btn.dataset.id!, 10), btn.dataset.name!);
+        });
       });
 
       // Standalone: delete, copy, lightbox
@@ -1017,9 +1056,9 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       ConfirmDialog
     }) => {
       const dialog = new ConfirmDialog(mountEl, {
-        title: "Delete files",
-        message: `Delete ${ids.length} file${ids.length !== 1 ? "s" : ""}? This cannot be undone.`,
-        confirmText: "Delete all",
+        title: "Move to Trash",
+        message: `Move ${ids.length} file${ids.length !== 1 ? "s" : ""} to the trash? You can restore them from the trash later.`,
+        confirmText: "Move to Trash",
         variant: "danger",
         onConfirm: async () => {
           dialog.unmount();
@@ -1046,7 +1085,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       }
     }
     setToast({
-      message: `Deleted ${deleted}${failed ? `, ${failed} failed` : ""}.`,
+      message: `Moved ${deleted} to the trash${failed ? `, ${failed} failed` : ""}.`,
       type: failed ? "warning" : "success"
     });
     this.setState({
@@ -1201,6 +1240,11 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     this._load();
   }
   async _loadFolders() {
+    // The trash is one flat list, newest first: no folders.
+    if (this._isTrash()) {
+      this.setState({ folders: [] });
+      return;
+    }
     try {
       const params: Parameters<typeof getMediaFolders>[0] = {};
       if (this.state.typeFilter) params.file_type = this.state.typeFilter;
@@ -1248,15 +1292,8 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     });
     const perPage = this._measuredPerPage ?? 24;
     this._lastPerPage = perPage;
-    const params: Parameters<typeof listMedia>[0] = {
-      page: overrides.page ?? 1,
-      per_page: perPage
-    };
-    if (this.state.typeFilter) params.file_type = this.state.typeFilter;
-    if (this.state.filenameFilter) params.filename = this.state.filenameFilter;
-    if (this.state.selectedFolder) params.folder = this.state.selectedFolder;
     try {
-      const data = await listMedia(params);
+      const data = await this._fetchPage(overrides.page ?? 1, perPage);
       const media = data.media || [];
       this.setState({
         loading: false,
@@ -1267,7 +1304,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
           total: data.total
         }
       });
-      if (!this.props.pickerMode) {
+      if (!this.props.pickerMode && !this._isTrash()) {
         media.forEach(m => {
           if ((m.file_type || "").toLowerCase() === "image" && m.path) {
             this._loadReferringPosts(m.id, m.path);
@@ -1338,9 +1375,9 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     const mountEl = document.createElement("div");
     document.body.appendChild(mountEl);
     const dialog = new ConfirmDialog(mountEl, {
-      title: "Delete file",
-      message: `Delete "${name}"?`,
-      confirmText: "Delete",
+      title: "Move to Trash",
+      message: `Move "${name}" to the trash? You can restore it from the trash later.`,
+      confirmText: "Move to Trash",
       variant: "danger",
       onConfirm: () => {
         dialog.unmount();
@@ -1389,11 +1426,63 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     try {
       await deleteMedia(id);
       setToast({
-        message: "File deleted.",
+        message: "File moved to the trash.",
         type: "success"
       });
       this._load();
       this._loadFolders();
+    } catch (err) {
+      setToast({
+        message: (err as Error).message || "Delete failed.",
+        type: "error"
+      });
+    }
+  }
+  /** Trash view: take a file out of the trash. The server sets its visibility again. */
+  async _restoreMedia(id: number, name: string) {
+    try {
+      await restoreMedia(id);
+      setToast({
+        message: `Restored "${name}".`,
+        type: "success"
+      });
+      this._load({ page: this.state.pagination.page || 1 });
+    } catch (err) {
+      setToast({
+        message: (err as Error).message || "Restore failed.",
+        type: "error"
+      });
+    }
+  }
+  _showPurgeConfirm(id: number, name: string) {
+    const mountEl = document.createElement("div");
+    document.body.appendChild(mountEl);
+    const dialog = new ConfirmDialog(mountEl, {
+      title: "Delete now",
+      message: `Delete "${name}" now? This removes the file from disk and cannot be undone.`,
+      confirmText: "Delete now",
+      variant: "danger",
+      onConfirm: () => {
+        dialog.unmount();
+        mountEl.remove();
+        this._purgeMedia(id);
+      },
+      onCancel: () => {
+        dialog.unmount();
+        mountEl.remove();
+      }
+    });
+    dialog.mount();
+  }
+  /** Trash view: "Delete now" — remove the file and its row. */
+  async _purgeMedia(id: number) {
+    try {
+      await permanentlyDeleteMedia(id);
+      setToast({
+        message: "File deleted permanently.",
+        type: "success"
+      });
+      this._load({ page: this.state.pagination.page || 1 });
     } catch (err) {
       setToast({
         message: (err as Error).message || "Delete failed.",

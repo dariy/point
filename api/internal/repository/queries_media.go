@@ -13,7 +13,7 @@ func (r *sqliteRepository) ListOrphanedMedia(ctx context.Context, limit, offset 
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
        file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
 FROM media
-WHERE post_id IS NULL
+WHERE post_id IS NULL AND deleted_at IS NULL
 ORDER BY uploaded_at DESC
 LIMIT ? OFFSET ?`
 
@@ -58,7 +58,7 @@ func (r *sqliteRepository) ReplaceMediaOriginal(ctx context.Context, id int64, f
 
 // CountOrphanedMedia counts media with no associated post.
 func (r *sqliteRepository) CountOrphanedMedia(ctx context.Context) (int64, error) {
-	const q = `SELECT COUNT(*) FROM media WHERE post_id IS NULL`
+	const q = `SELECT COUNT(*) FROM media WHERE post_id IS NULL AND deleted_at IS NULL`
 	var count int64
 	err := r.db.QueryRowContext(ctx, q).Scan(&count)
 	return count, err
@@ -74,7 +74,7 @@ func (r *sqliteRepository) GetMediaByIDs(ctx context.Context, ids []int64) ([]mo
 	// Build placeholders
 	const baseQ = `
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
-       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public, deleted_at
 FROM media WHERE id IN (`
 
 	args := make([]interface{}, len(ids))
@@ -102,13 +102,59 @@ FROM media WHERE id IN (`
 		if err := rows.Scan(
 			&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
 			&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
-			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic,
+			&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic, &m.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, m)
 	}
 	return items, rows.Err()
+}
+
+// idList returns the "?,?,?" placeholder list and the bound arguments for ids.
+func idList(ids []int64) (string, []interface{}) {
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", len(ids)), ","), args
+}
+
+// TrashMediaByIDs moves live media to the trash: it sets deleted_at and makes
+// the rows private in the same statement, so no request can see a trashed row
+// as public. Rows already in the trash are not changed. It returns the number
+// of rows it moved.
+func (r *sqliteRepository) TrashMediaByIDs(ctx context.Context, ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	placeholders, args := idList(ids)
+	//nolint:gosec // G202: placeholders only, values are bound
+	q := `UPDATE media SET deleted_at = CURRENT_TIMESTAMP, is_public = 0
+WHERE deleted_at IS NULL AND id IN (` + placeholders + `)`
+	res, err := r.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// RestoreMediaByIDs takes media out of the trash. It does not set is_public:
+// the caller calculates visibility again from the posts. It returns the
+// number of rows it restored.
+func (r *sqliteRepository) RestoreMediaByIDs(ctx context.Context, ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	placeholders, args := idList(ids)
+	//nolint:gosec // G202: placeholders only, values are bound
+	q := `UPDATE media SET deleted_at = NULL
+WHERE deleted_at IS NOT NULL AND id IN (` + placeholders + `)`
+	res, err := r.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (r *sqliteRepository) DeleteMediaByIDs(ctx context.Context, ids []int64) error {
@@ -159,6 +205,7 @@ SELECT DISTINCT
     substr(original_path, 16, 2) as month
 FROM media
 WHERE original_path LIKE 'originals/____/__/%'
+  AND deleted_at IS NULL
   AND (? = '' OR LOWER(file_type) = LOWER(?))
 ORDER BY year DESC, month DESC`
 
@@ -191,7 +238,8 @@ func (r *sqliteRepository) ListMediaFiltered(ctx context.Context, fileType, fold
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
        file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public, metadata
 FROM media
-WHERE (? = '' OR LOWER(file_type) = LOWER(?))
+WHERE deleted_at IS NULL
+  AND (? = '' OR LOWER(file_type) = LOWER(?))
   AND (? = '' OR original_path LIKE ? || '%')
   AND (? = '' OR (
       filename LIKE '%' || ? || '%'
@@ -244,7 +292,8 @@ func (r *sqliteRepository) CountMediaFiltered(ctx context.Context, fileType, fol
 	}
 	const q = `
 SELECT COUNT(*) FROM media
-WHERE (? = '' OR LOWER(file_type) = LOWER(?))
+WHERE deleted_at IS NULL
+  AND (? = '' OR LOWER(file_type) = LOWER(?))
   AND (? = '' OR original_path LIKE ? || '%')
   AND (? = '' OR (
       filename LIKE '%' || ? || '%'
@@ -271,16 +320,18 @@ WHERE (? = '' OR LOWER(file_type) = LOWER(?))
 
 // GetMediaByPath returns the media record whose original_path matches exactly.
 // The path should be in the stored format, e.g. "originals/2026/03/ts_file.jpg".
+// It also returns a trashed record, with DeletedAt set: the media route must
+// still serve its bytes to the admin's trash view, and refuse them to a guest.
 func (r *sqliteRepository) GetMediaByPath(ctx context.Context, originalPath string) (models.Medium, error) {
 	const q = `
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
-       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
+       file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public, deleted_at
 FROM media WHERE original_path = ? LIMIT 1`
 	var m models.Medium
 	err := r.db.QueryRowContext(ctx, q, originalPath).Scan(
 		&m.ID, &m.Filename, &m.OriginalPath, &m.ThumbnailPath,
 		&m.FileType, &m.MimeType, &m.FileSize, &m.Width, &m.Height,
-		&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic,
+		&m.PostID, &m.UploadedAt, &m.Checksum, &m.AltText, &m.Caption, &m.IsPublic, &m.DeletedAt,
 	)
 	return m, err
 }
@@ -307,12 +358,15 @@ func (r *sqliteRepository) SetMediaPublic(ctx context.Context, mediaID int64, is
 	return err
 }
 
-// GetAllMediaPaths returns all media records needed for a full visibility recalculation.
+// GetAllMediaPaths returns all live media records, for a full visibility
+// recalculation and the offline snapshot. A trashed record is not in the list:
+// the trash made it private, and nothing may make it public again until it is
+// restored.
 func (r *sqliteRepository) GetAllMediaPaths(ctx context.Context) ([]models.Medium, error) {
 	const q = `
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
        file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, is_public
-FROM media ORDER BY id`
+FROM media WHERE deleted_at IS NULL ORDER BY id`
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
@@ -335,8 +389,10 @@ FROM media ORDER BY id`
 	return items, rows.Err()
 }
 
-// GetMediaByPaths returns media records whose original_path is in the given
-// list (DB format: "originals/YYYY/MM/file"). Order is not guaranteed.
+// GetMediaByPaths returns live media records whose original_path is in the
+// given list (DB format: "originals/YYYY/MM/file"). Order is not guaranteed.
+// A trashed record is left out, so the editor, the Instagram publish and the
+// visibility sync do not see it.
 // Returns an empty slice (not an error) when paths is empty.
 func (r *sqliteRepository) GetMediaByPaths(ctx context.Context, paths []string) ([]models.Medium, error) {
 	if len(paths) == 0 {
@@ -362,7 +418,7 @@ func (r *sqliteRepository) GetMediaByPaths(ctx context.Context, paths []string) 
 	//nolint:gosec // G202: placeholders only, values are bound
 	q := `SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
 		file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption,
-		is_public, metadata FROM media WHERE original_path IN (` + placeholders + `)`
+		is_public, metadata FROM media WHERE deleted_at IS NULL AND original_path IN (` + placeholders + `)`
 	args := make([]interface{}, len(paths))
 	for i, p := range paths {
 		args[i] = p

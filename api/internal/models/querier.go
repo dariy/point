@@ -18,6 +18,7 @@ type Querier interface {
 	ClearTagRelationships(ctx context.Context, arg ClearTagRelationshipsParams) error
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
 	CountPostsByTag(ctx context.Context, arg CountPostsByTagParams) (int64, error)
+	CountTrashedMedia(ctx context.Context) (int64, error)
 	CountTrashedPosts(ctx context.Context) (int64, error)
 	// API KEYS
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
@@ -67,6 +68,7 @@ type Querier interface {
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
+	ListTrashedMedia(ctx context.Context, arg ListTrashedMediaParams) ([]Medium, error)
 	ListTrashedPosts(ctx context.Context, arg ListTrashedPostsParams) ([]Post, error)
 	MergePostTags(ctx context.Context, arg MergePostTagsParams) error
 	MergeTagChildren(ctx context.Context, arg MergeTagChildrenParams) error

@@ -159,12 +159,18 @@ CREATE TABLE IF NOT EXISTS media (
     caption VARCHAR(1000),
     metadata TEXT,
     original_metadata TEXT,
-    is_public INTEGER NOT NULL DEFAULT 0
+    is_public INTEGER NOT NULL DEFAULT 0,
+    -- Set when the media is moved to the trash. A trashed row keeps its files
+    -- on disk and is never public. NULL means the media is live.
+    deleted_at DATETIME
 );
 CREATE INDEX IF NOT EXISTS idx_media_post_id ON media(post_id);
 CREATE INDEX IF NOT EXISTS idx_media_uploaded_at ON media(uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_media_checksum ON media(checksum);
 CREATE INDEX IF NOT EXISTS idx_media_original_path ON media(original_path);
+-- Partial on IS NOT NULL for the same reason as idx_posts_trashed: it holds
+-- only the trash, so the library queries cannot pick it.
+CREATE INDEX IF NOT EXISTS idx_media_trashed ON media(deleted_at DESC) WHERE deleted_at IS NOT NULL;
 
 -- Sessions
 CREATE TABLE IF NOT EXISTS sessions (
