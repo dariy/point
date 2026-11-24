@@ -680,6 +680,19 @@ func (s *PostService) PermanentlyDeletePost(ctx context.Context, id, authorID in
 	return nil
 }
 
+// PurgeExpiredTrash permanently deletes the posts that have been in the trash
+// for more than TrashRetentionDays. It returns how many it deleted.
+func (s *PostService) PurgeExpiredTrash(ctx context.Context) (int64, error) {
+	n, err := s.repo.PurgeExpiredTrashedPosts(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if n > 0 {
+		s.onPostsChanged(ctx)
+	}
+	return n, nil
+}
+
 func (s *PostService) ListTrashedPosts(ctx context.Context, page, perPage int32) ([]models.Post, int64, error) {
 	offset := (page - 1) * perPage
 	posts, err := s.repo.ListTrashedPosts(ctx, models.ListTrashedPostsParams{

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
@@ -105,10 +106,14 @@ func (s *SchedulerService) Start(ctx context.Context) {
 		go s.runDaily(ctx, "job prune", 5, s.pruneJobs)
 	}
 
+	// Daily task: remove posts and media that have been in the trash for
+	// more than TrashRetentionDays (at 2 AM, before the backup).
+	go s.runDaily(ctx, "trash purge", 2, s.purgeTrash)
+
 	// Daily task: Backups (checked at 3 AM). The cadence (backup_interval_days)
 	// and retention (backup_keep) are admin settings; the check runs daily but
 	// only creates a backup when one is due, then prunes old ones. BACKUP_MANAGED
-// overrides the toggle and puts a floor under retention.
+	// overrides the toggle and puts a floor under retention.
 	go s.runDaily(ctx, "daily backup", 3, func(ctx context.Context) error {
 		enabled, _ := s.settingsService.GetSetting(ctx, "enable_backup", "true")
 		if !s.systemService.BackupEnabled(enabled) {
@@ -135,6 +140,30 @@ func (s *SchedulerService) pruneJobs(ctx context.Context) error {
 		slog.Info("scheduler: pruned done jobs", "count", n)
 	}
 	return nil
+}
+
+// purgeTrash removes the expired posts and media of the trash and logs how
+// many. A failure on the posts does not stop the media purge.
+func (s *SchedulerService) purgeTrash(ctx context.Context) error {
+	var errs []error
+	if s.postService != nil {
+		n, err := s.postService.PurgeExpiredTrash(ctx)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("trash purge: posts: %w", err))
+		} else if n > 0 {
+			slog.Info("scheduler: purged trashed posts", "count", n)
+		}
+	}
+	if s.mediaService != nil {
+		n, err := s.mediaService.PurgeExpiredTrash(ctx)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("trash purge: media: %w", err))
+		}
+		if n > 0 {
+			slog.Info("scheduler: purged trashed media", "count", n)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // purgeOrientedVariants runs MediaService.PurgeOrientedVariants and logs the

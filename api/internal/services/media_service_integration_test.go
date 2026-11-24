@@ -176,10 +176,16 @@ func TestMediaService_Upload(t *testing.T) {
 		t.Error("renamed file does not exist")
 	}
 
-	// Test Delete
+	// Test Delete: the trash keeps the file, "Delete now" removes it.
 	err = service.DeleteMedia(ctx, media.ID)
 	if err != nil {
 		t.Fatalf("DeleteMedia failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "media", renamed.OriginalPath)); err != nil {
+		t.Errorf("file gone after a move to the trash: %v", err)
+	}
+	if err := service.PermanentlyDeleteMedia(ctx, media.ID); err != nil {
+		t.Fatalf("PermanentlyDeleteMedia failed: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(tmpDir, "media", renamed.OriginalPath)); !os.IsNotExist(err) {
 		t.Error("file still exists after delete")
@@ -1689,6 +1695,21 @@ func TestLifecycleSweepsAllVariants(t *testing.T) {
 			}
 		}
 	}
+	assertKept := func(t *testing.T, paths []string) {
+		t.Helper()
+		for _, p := range paths {
+			if _, err := os.Stat(p); err != nil {
+				t.Errorf("variant %s gone after a move to the trash: %v", p, err)
+			}
+		}
+	}
+	// purge is the trash view's "Delete now": the step that removes files.
+	purge := func(t *testing.T, service *MediaService, id int64) {
+		t.Helper()
+		if err := service.PermanentlyDeleteMedia(ctx, id); err != nil {
+			t.Fatalf("PermanentlyDeleteMedia: %v", err)
+		}
+	}
 	upload := func(t *testing.T, service *MediaService, name string) models.Medium {
 		t.Helper()
 		m, err := service.UploadFile(ctx, UploadFileParams{
@@ -1714,6 +1735,8 @@ func TestLifecycleSweepsAllVariants(t *testing.T) {
 		if err := service.DeleteMedia(ctx, m.ID); err != nil {
 			t.Fatalf("DeleteMedia: %v", err)
 		}
+		assertKept(t, paths)
+		purge(t, service, m.ID)
 		assertGone(t, paths)
 	})
 
@@ -1724,6 +1747,8 @@ func TestLifecycleSweepsAllVariants(t *testing.T) {
 		if _, err := service.BulkDeleteMedia(ctx, []int64{m.ID}); err != nil {
 			t.Fatalf("BulkDeleteMedia: %v", err)
 		}
+		assertKept(t, paths)
+		purge(t, service, m.ID)
 		assertGone(t, paths)
 	})
 
@@ -1734,6 +1759,8 @@ func TestLifecycleSweepsAllVariants(t *testing.T) {
 		if _, _, err := service.CleanupOrphaned(ctx); err != nil {
 			t.Fatalf("CleanupOrphaned: %v", err)
 		}
+		assertKept(t, paths)
+		purge(t, service, m.ID)
 		assertGone(t, paths)
 	})
 

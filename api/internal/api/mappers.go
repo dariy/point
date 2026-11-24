@@ -318,6 +318,7 @@ func mediaToResponse(m models.Medium, gen string) map[string]interface{} {
 		"metadata":          metadata,
 		"original_metadata": originalMetadata,
 		"is_public":         m.IsPublic,
+		"deleted_at":        nullTime(m.DeletedAt),
 	}
 }
 

@@ -180,6 +180,8 @@ func registerMediaRoutes(e *echo.Echo, h *api.MediaHandler, svcs *AppServices) {
 	mediaGroup.GET("/orphaned", h.ListOrphanedMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.DELETE("/orphaned", h.DeleteOrphanedMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/bulk-delete", h.BulkDeleteMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/bulk-restore", h.BulkRestoreMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.GET("/trash", h.ListTrashedMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/thumbnails/rebuild", h.RebuildThumbnails, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.GET("/:id", h.GetMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PUT("/:id", h.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -191,6 +193,8 @@ func registerMediaRoutes(e *echo.Echo, h *api.MediaHandler, svcs *AppServices) {
 	mediaGroup.PUT("/:id/exif", h.UpdateEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/:id/revert-exif", h.RevertEXIF, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.DELETE("/:id", h.DeleteMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/:id/restore", h.RestoreMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.DELETE("/:id/permanent", h.PermanentlyDeleteMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 }
 
 func registerSettingsRoutes(e *echo.Echo, h *api.SettingsHandler, svcs *AppServices, setupComplete func(context.Context) bool) {

@@ -81,7 +81,8 @@ lives in the **Details** rail/sheet.
   unpublished post has no year to be scoped by.
 - **Preview links**: time-limited shareable token URLs (`/preview/:token`,
   `point_generate_preview_link`) for reviewing unpublished posts without auth.
-- **Soft delete / trash** with restore; view counts per post; featured flag; SEO meta
+- **Soft delete / trash** with restore, "Undo" in the delete toast, and a daily purge
+  after 30 days (see media.md, Trash purge and Undo); view counts per post; featured flag; SEO meta
   description per post.
 
 ## Creation shortcuts

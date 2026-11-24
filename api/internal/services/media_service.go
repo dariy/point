@@ -175,6 +175,14 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	// Check duplicate
 	existing, err := s.repo.GetMediaByChecksum(ctx, checksum)
 	if err == nil {
+		// The same bytes in the trash: an upload of them is a restore, or the
+		// file would stay out of the library while its checksum blocks a copy.
+		if existing.DeletedAt.Valid {
+			if _, err := s.RestoreMedia(ctx, []int64{existing.ID}); err != nil {
+				return models.Medium{}, err
+			}
+			return s.getMedia(ctx, existing.ID)
+		}
 		return existing, nil
 	}
 
@@ -667,50 +675,160 @@ func (s *MediaService) RevertEXIF(ctx context.Context, id int64) (models.Medium,
 	})
 }
 
+// DeleteMedia moves one media file to the trash. The files stay on disk and
+// the row becomes private at once; RestoreMedia undoes it, and
+// PermanentlyDeleteMedia removes the files. Trashing a trashed file is a no-op.
 func (s *MediaService) DeleteMedia(ctx context.Context, id int64) error {
 	media, err := s.getMedia(ctx, id)
 	if err != nil {
 		return err
 	}
-
-	// Delete files
-	originalFull := filepath.Join(s.cfg.StoragePath, "media", media.OriginalPath)
-	_ = os.Remove(originalFull)
-	s.removeHEIFArchive(media)
-
-	if media.ThumbnailPath.Valid {
-		thumbnailFull := filepath.Join(s.cfg.StoragePath, "media", media.ThumbnailPath.String)
-		_ = os.Remove(thumbnailFull)
-	}
-	s.removeAllVariants(media.OriginalPath)
-
-	return s.repo.DeleteMedia(ctx, id)
+	_, err = s.trash(ctx, []models.Medium{media})
+	return err
 }
 
+// BulkDeleteMedia moves the given media files to the trash and returns how many
+// it moved. IDs that do not exist or are already in the trash are skipped.
 func (s *MediaService) BulkDeleteMedia(ctx context.Context, ids []int64) (int, error) {
-	// Fetch records first so we can remove the files
 	records, err := s.repo.GetMediaByIDs(ctx, ids)
 	if err != nil {
 		return 0, err
 	}
+	return s.trash(ctx, records)
+}
 
-	// Remove files from disk
+// trash moves the live records in the list to the trash. The UPDATE makes them
+// private in the same statement; each record that was public then gets an
+// audit row in media_visibility_log, as every other visibility change does.
+func (s *MediaService) trash(ctx context.Context, records []models.Medium) (int, error) {
+	var ids []int64
+	var wasPublic []int64
 	for _, m := range records {
-		originalFull := filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath)
-		_ = os.Remove(originalFull)
-		s.removeHEIFArchive(m)
-		if m.ThumbnailPath.Valid {
-			thumbnailFull := filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String)
-			_ = os.Remove(thumbnailFull)
+		if m.DeletedAt.Valid {
+			continue
 		}
-		s.removeAllVariants(m.OriginalPath)
+		ids = append(ids, m.ID)
+		if m.IsPublic != 0 {
+			wasPublic = append(wasPublic, m.ID)
+		}
 	}
-
-	if err := s.repo.DeleteMediaByIDs(ctx, ids); err != nil {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	n, err := s.repo.TrashMediaByIDs(ctx, ids)
+	if err != nil {
 		return 0, err
 	}
+	for _, id := range wasPublic {
+		if err := s.repo.SetMediaPublic(ctx, id, false, nil); err != nil {
+			slog.Warn("failed to log media visibility on trash", "media_id", id, "error", err)
+		}
+	}
+	return int(n), nil
+}
 
-	return len(records), nil
+// RestoreMedia takes the given media files out of the trash and returns how
+// many it restored. Visibility is calculated again from the posts, so a file
+// that a visible published post shows is public again.
+func (s *MediaService) RestoreMedia(ctx context.Context, ids []int64) (int, error) {
+	records, err := s.repo.GetMediaByIDs(ctx, ids)
+	if err != nil {
+		return 0, err
+	}
+	var trashed []int64
+	var paths []string
+	for _, m := range records {
+		if m.DeletedAt.Valid {
+			trashed = append(trashed, m.ID)
+			paths = append(paths, m.OriginalPath)
+		}
+	}
+	if len(trashed) == 0 {
+		return 0, nil
+	}
+	n, err := s.repo.RestoreMediaByIDs(ctx, trashed)
+	if err != nil {
+		return 0, err
+	}
+	if err := s.UpdateMediaVisibilityForPaths(ctx, paths); err != nil {
+		return int(n), fmt.Errorf("restore media: recalculate visibility: %w", err)
+	}
+	return int(n), nil
+}
+
+// PermanentlyDeleteMedia removes trashed media files from disk and deletes
+// their rows. It is the "Delete now" of the trash view, and it refuses a file
+// that is not in the trash: a live file goes to the trash first.
+func (s *MediaService) PermanentlyDeleteMedia(ctx context.Context, id int64) error {
+	media, err := s.getMedia(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !media.DeletedAt.Valid {
+		return wrapKind(ErrConflict, errors.New("media is not in the trash"))
+	}
+	s.removeFiles(media)
+	return s.repo.DeleteMedia(ctx, id)
+}
+
+// TrashRetentionDays is how long the trash keeps a post or a media file before
+// the scheduled purge removes it. The purge queries in sql/queries.sql
+// (PurgeExpiredTrashedPosts, ListExpiredTrashedMediaIDs) carry the same number,
+// and so does the admin (frontend/src/utils/formatters.ts TRASH_RETENTION_DAYS).
+const TrashRetentionDays = 30
+
+// PurgeExpiredTrash permanently deletes the media files that have been in the
+// trash for more than TrashRetentionDays, with their files on disk. It returns
+// how many it deleted. One failure does not stop the others; the first error
+// comes back after the loop.
+func (s *MediaService) PurgeExpiredTrash(ctx context.Context) (int, error) {
+	ids, err := s.repo.ListExpiredTrashedMediaIDs(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var purged int
+	var firstErr error
+	for _, id := range ids {
+		if err := s.PermanentlyDeleteMedia(ctx, id); err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("purge media %d: %w", id, err)
+			}
+			continue
+		}
+		purged++
+	}
+	return purged, firstErr
+}
+
+// removeFiles removes the original, the HEIF archive, the poster and every
+// derived variant of a media record from disk.
+func (s *MediaService) removeFiles(m models.Medium) {
+	_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath))
+	s.removeHEIFArchive(m)
+	if m.ThumbnailPath.Valid {
+		_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String))
+	}
+	s.removeAllVariants(m.OriginalPath)
+}
+
+// ListTrashedMedia returns one page of the media trash, newest first.
+func (s *MediaService) ListTrashedMedia(ctx context.Context, page, perPage int32) ([]models.Medium, int64, error) {
+	offset := (page - 1) * perPage
+	media, err := s.repo.ListTrashedMedia(ctx, models.ListTrashedMediaParams{
+		Limit:  int64(perPage),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.repo.CountTrashedMedia(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if media == nil {
+		media = []models.Medium{}
+	}
+	return media, total, nil
 }
 
 func (s *MediaService) ListOrphanedMedia(ctx context.Context, page, perPage int32) ([]models.Medium, int64, error) {
@@ -722,32 +840,23 @@ func (s *MediaService) ListOrphanedMedia(ctx context.Context, page, perPage int3
 	return media, count, nil
 }
 
-// CleanupOrphaned deletes all media with no linked post. Returns count and freed bytes.
+// CleanupOrphaned moves all live media with no linked post to the trash.
+// Returns the count and the bytes the files hold. The bytes stay on disk until
+// the trash is emptied.
 func (s *MediaService) CleanupOrphaned(ctx context.Context) (int, int64, error) {
 	all, err := s.repo.ListOrphanedMedia(ctx, 10000, 0)
 	if err != nil {
 		return 0, 0, err
 	}
-
 	var freed int64
-	var ids []int64
 	for _, m := range all {
-		ids = append(ids, m.ID)
 		freed += m.FileSize
-		_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.OriginalPath))
-		s.removeHEIFArchive(m)
-		if m.ThumbnailPath.Valid {
-			_ = os.Remove(filepath.Join(s.cfg.StoragePath, "media", m.ThumbnailPath.String))
-		}
-		s.removeAllVariants(m.OriginalPath)
 	}
-
-	if len(ids) > 0 {
-		if err := s.repo.DeleteMediaByIDs(ctx, ids); err != nil {
-			return 0, 0, err
-		}
+	n, err := s.trash(ctx, all)
+	if err != nil {
+		return 0, 0, err
 	}
-	return len(ids), freed, nil
+	return n, freed, nil
 }
 
 // StorageStats holds aggregate storage info.

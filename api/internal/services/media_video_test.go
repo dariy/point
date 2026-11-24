@@ -208,6 +208,9 @@ func TestVideoTranscodeJob_Stub(t *testing.T) {
 	if err := svc.DeleteMedia(ctx, media.ID); err != nil {
 		t.Fatal(err)
 	}
+	if err := svc.PermanentlyDeleteMedia(ctx, media.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := os.Stat(filepath.Join(svc.mediaBase(), VideoTranscodeRelPath(renamed.OriginalPath))); !os.IsNotExist(err) {
 		t.Error("delete left the transcode")
 	}

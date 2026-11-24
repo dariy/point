@@ -378,7 +378,34 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.equal(sent('DELETE', '/api/media/1').length, 1);
-      assert.match(getToast().message, /deleted/i);
+      assert.match(getToast().message, /moved to the trash/i);
+    });
+
+    test('the delete toast offers Undo, and Undo restores the file', async () => {
+      await mountBrowser();
+
+      await mb()._deleteMedia(1);
+      const toast = getToast();
+      assert.equal(toast.action?.label, 'Undo');
+
+      toast.action.onClick();
+      await settle();
+
+      assert.equal(sent('POST', '/api/media/1/restore').length, 1);
+      assert.match(getToast().message, /File restored/);
+    });
+
+    test('Undo after a bulk delete restores the moved files in one request', async () => {
+      routes['DELETE /api/media/3'] = () => fail(500, 'nope');
+      await mountBrowser();
+
+      await mb()._bulkDelete([1, 2, 3]);
+      getToast().action.onClick();
+      await settle();
+
+      const restore = sent('POST', '/api/media/bulk-restore');
+      assert.equal(restore.length, 1);
+      assert.deepEqual(restore[0]?.body, { ids: [1, 2] });
     });
 
     test('cancelling deletes nothing', async () => {
@@ -407,11 +434,11 @@ describe('MediaBrowser', () => {
 
       mb()._deleteSelected();
       await settle();
-      assert.match(openDialog().textContent, /Delete 2 files/);
+      assert.match(openDialog().textContent, /Move 2 files to the trash/);
       acceptDialog();
       await settle();
 
-      assert.match(getToast().message, /Deleted 1, 1 failed/);
+      assert.match(getToast().message, /Moved 1 to the trash, 1 failed/);
       assert.equal(mb().state.selectMode, false);
       assert.deepEqual(mb().getSelectedItems(), []);
     });
@@ -423,6 +450,74 @@ describe('MediaBrowser', () => {
       await settle();
 
       assert.equal(dialog(), null);
+    });
+  });
+
+  describe('the trash', () => {
+    const TRASHED = { ...IMAGE, id: 7, is_public: false, deleted_at: '2024-09-01T10:00:00Z' };
+
+    async function openTrash() {
+      routes['GET /api/media/trash'] = () => ({ media: [TRASHED], page: 1, pages: 1, total: 1 });
+      await mountBrowser();
+      const select = el<HTMLSelectElement>('.mb-type-filter');
+      select.value = 'trash';
+      fire(select, 'change');
+      await settle();
+    }
+
+    test('the standalone filter offers Trash; the picker does not', async () => {
+      await mountBrowser({ pickerMode: true });
+      assert.ok(!qa<HTMLOptionElement>('.mb-type-filter option').some(o => o.value === 'trash'));
+      browser?.unmount();
+      await mountBrowser();
+      assert.ok(qa<HTMLOptionElement>('.mb-type-filter option').some(o => o.value === 'trash'));
+    });
+
+    test('Trash lists the trash, with Restore and Delete now and no library actions', async () => {
+      await openTrash();
+
+      assert.equal(sent('GET', '/api/media/trash').length >= 1, true);
+      assert.ok(q('.restore-media-btn[data-id="7"]'), 'a Restore button');
+      assert.ok(q('.purge-media-btn[data-id="7"]'), 'a Delete now button');
+      assert.equal(q('.delete-media-btn'), null);
+      assert.equal(q('.exif-toggle-btn'), null);
+      assert.match(el('.media-item-meta').textContent, /Deleted/);
+      assert.match(el('.trash-removal-date').textContent, /Removed on .*2024/);
+    });
+
+    test('an empty trash says so', async () => {
+      routes['GET /api/media/trash'] = () => ({ media: [], page: 1, pages: 1, total: 0 });
+      await mountBrowser();
+      const select = el<HTMLSelectElement>('.mb-type-filter');
+      select.value = 'trash';
+      fire(select, 'change');
+      await settle();
+      assert.match(el('.empty-state').textContent, /Trash is empty/);
+    });
+
+    test('Restore calls the restore endpoint and reloads the trash', async () => {
+      await openTrash();
+      const before = sent('GET', '/api/media/trash').length;
+
+      click(el('.restore-media-btn[data-id="7"]'));
+      await settle();
+
+      assert.equal(sent('POST', '/api/media/7/restore').length, 1);
+      assert.match(getToast().message, /Restored/);
+      assert.ok(sent('GET', '/api/media/trash').length > before);
+    });
+
+    test('Delete now asks first, then calls the permanent endpoint', async () => {
+      await openTrash();
+
+      click(el('.purge-media-btn[data-id="7"]'));
+      assert.match(openDialog().textContent, /cannot be undone/);
+      assert.equal(sent('DELETE', '/api/media/7/permanent').length, 0);
+      acceptDialog();
+      await settle();
+
+      assert.equal(sent('DELETE', '/api/media/7/permanent').length, 1);
+      assert.match(getToast().message, /permanently/);
     });
   });
 

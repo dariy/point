@@ -164,7 +164,8 @@ func stripGPS(ctx context.Context, settings *services.SettingsService) bool {
 //
 // Access rules:
 //   - Authenticated users (session cookie present) may access any file.
-//   - Unauthenticated users may only access files where media.is_public = 1.
+//   - Unauthenticated users may only access files where media.is_public = 1
+//     and media.deleted_at IS NULL. A file in the trash is a 404 to a guest.
 //   - Files not found in the media table return 404.
 //
 // Variant selection:
@@ -245,8 +246,11 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 			}
 		}
 
-		// Enforce visibility: unauthenticated clients cannot access private media.
-		if media.IsPublic == 0 && !isAuthenticated {
+		// Enforce visibility: unauthenticated clients cannot access private
+		// media. A trashed file is private whatever is_public says: the trash
+		// sets is_public = 0 in the same UPDATE, and this check holds the rule
+		// even if a later write gets that wrong.
+		if (media.IsPublic == 0 || media.DeletedAt.Valid) && !isAuthenticated {
 			// The one 404 that stays uncacheable. Unlike the others, this
 			// response is authentication-dependent: the same URL serves the
 			// bytes to a logged-in owner. A shared cache does not vary on
@@ -286,7 +290,7 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 
 		gen := c.Request().URL.Query().Get("v")
 		c.Response().Header().Set("Cache-Control", mediaCacheControl(
-			media.IsPublic != 0,
+			media.IsPublic != 0 && !media.DeletedAt.Valid,
 			filename,
 			servedVariant != "",
 			gen != "" && gen == mediaSvc.ThumbnailGeneration(ctx),

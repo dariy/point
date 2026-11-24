@@ -9,6 +9,12 @@
  * setToast({ message: 'Info', type: 'info' });
  *
  * Types: 'success' | 'error' | 'info' | 'warning'
+ *
+ * An action adds a button before the close button, and a toast with an action
+ * stays longer (ACTION_DURATION_MS) so that there is time to click it:
+ *
+ * setToast({ message: 'Moved to Trash.', type: 'success',
+ *            action: { label: 'Undo', onClick: () => restore() } });
  */
 
 import { Component } from '../Component.ts';
@@ -16,11 +22,15 @@ import { onToast } from '../../store.ts';
 import { html } from '../../utils/helpers.ts';
 
 const DURATION_MS = 4000;
+/** How long a toast with an action (for example "Undo") stays. */
+export const ACTION_DURATION_MS = 8000;
 const MAX_TOASTS = 5;
 
 interface ToastPayload {
   message: string;
   type?: 'success' | 'error' | 'info' | 'warning';
+  /** A button in the toast. A click runs onClick and closes the toast. */
+  action?: { label: string; onClick: () => void };
 }
 
 interface ToastEntry {
@@ -49,7 +59,7 @@ export class ToastContainer extends Component {
     });
   }
 
-  _add({ message, type = 'info' }: ToastPayload) {
+  _add({ message, type = 'info', action }: ToastPayload) {
     const id = this._nextId++;
 
     // Limit visible toasts.
@@ -75,11 +85,23 @@ export class ToastContainer extends Component {
     btn.textContent = '×';
     btn.addEventListener('click', () => this._remove(id));
 
-    el.append(msg, btn);
+    el.append(msg);
+    if (action) {
+      const act = document.createElement('button');
+      act.type = 'button';
+      act.className = 'toast-action';
+      act.textContent = action.label;
+      act.addEventListener('click', () => {
+        this._remove(id);
+        action.onClick();
+      });
+      el.append(act);
+    }
+    el.append(btn);
     this.container.appendChild(el);
 
     const entry: ToastEntry = { id, el, timer: null };
-    entry.timer = setTimeout(() => this._remove(id), DURATION_MS);
+    entry.timer = setTimeout(() => this._remove(id), action ? ACTION_DURATION_MS : DURATION_MS);
     this._toasts.push(entry);
 
     // Trigger CSS enter animation next frame.

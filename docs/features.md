@@ -36,7 +36,7 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 | EXIF editing & revert | Admins can edit extracted EXIF fields and revert to the original on-disk values at any time. |
 | Photo library import | Point a read-only path (e.g. a Lightroom export folder) at the engine; it imports new files without moving or copying originals. |
 | Folder browser | The media library is browsable by folder and filterable by file type (image, video, audio). |
-| Orphaned media cleanup | Detects media files not referenced by any post and removes them individually or in bulk. |
+| Orphaned media cleanup | Detects media files not referenced by any post and moves them to the media trash, individually or in bulk. |
 | Thumbnail rebuild | Regenerates thumbnails for all media or only those missing a thumbnail — useful after changing dimensions. |
 | Media rename | Renames a media file with validation (safe characters only) while keeping all post references intact. |
 | Storage statistics | Dashboard card showing total disk usage broken down by media type. |
@@ -158,7 +158,7 @@ decisions, future-development notes) see [`features/`](./features/) — index in
 | Post list | Searchable, filterable (by status and featured flag) list of all posts with inline status indicators. |
 | Drag-and-drop upload | Drop a file anywhere on any admin page to instantly upload it and open a new post pre-populated with that media. |
 | Tag manager | Full tag tree with inline create, edit, and delete; drag to reorder; multi-parent assignment. |
-| Media library | Browse, filter, rename, and bulk-delete media; view storage stats and clean up orphaned files. |
+| Media library | Browse, filter, rename, and bulk-delete media to a trash with restore; view storage stats and clean up orphaned files. |
 | Settings page | Configure blog metadata, Gemini AI key, photo library import path, active theme, and thumbnail dimensions. |
 | Security page | View all active sessions with device/IP info; revoke individual sessions or log out all other devices; change password; trigger a password reset link. |
 | System page | Create, download (move out, re-verifies the account password), upload (move in — stages an archive into the backups list), and restore tar.gz backups; stream live application logs; view disk usage; trigger photo library import; rebuild thumbnails. |

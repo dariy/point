@@ -66,6 +66,30 @@
     color: var(--text-primary);
 }
 
+/* The action of a toast, for example "Undo" after a delete. It takes the
+   colour of the toast type, so it reads as part of the message. */
+.toast-action {
+    background: transparent;
+    border: var(--border-width) solid currentColor;
+    border-radius: var(--border-radius);
+    color: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.toast-message + .toast-action {
+    margin-left: var(--spacing-md);
+}
+
+.toast-action:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
 /* Types */
 .toast-success {
     background-color: var(--color-success-light);

@@ -229,6 +229,15 @@ describe('PostsListPage', () => {
       assert.equal(qa('.tag-chip-input, #tag-filter-mount .tags-input').length, 0);
     });
 
+    test('a trash row shows the date when the purge removes it', async () => {
+      routes['GET /api/posts'] = () => ({
+        posts: [{ ...POSTS()[0], deleted_at: '2024-09-01T10:00:00Z' }], page: 1, pages: 1, total: 1, per_page: 20,
+      });
+      await mountPage({ query: { status: 'trash' } });
+
+      assert.match(el('.trash-removal-date').textContent, /Removed on .*2024/);
+    });
+
     test('the URL keeps only the filters that are set', async () => {
       await mountPage();
 
@@ -344,6 +353,21 @@ describe('PostsListPage', () => {
 
       assert.equal(sent('DELETE', '/api/posts/1').length, 1);
       assert.match(getToast().message, /Trash/);
+    });
+
+    test('the delete toast offers Undo, and Undo restores the post', async () => {
+      await mountPage();
+
+      await pg()._deletePost(1);
+      const toast = getToast();
+      assert.equal(toast.action?.label, 'Undo');
+      assert.equal(sent('POST', '/api/posts/1/restore').length, 0);
+
+      toast.action.onClick();
+      await settle();
+
+      assert.equal(sent('POST', '/api/posts/1/restore').length, 1);
+      assert.match(getToast().message, /Post restored/);
     });
 
     test('a failed delete reports the reason', async () => {
@@ -560,6 +584,22 @@ describe('PostsListPage', () => {
       await settle();
 
       assert.match(getToast().message, /1 of 2 posts moved to Trash\. 1 failed/);
+    });
+
+    test('Undo after a bulk delete restores only the posts that moved', async () => {
+      routes['DELETE /api/posts/2'] = () => fail(500, 'nope');
+      await mountPage();
+      click(el('#select-mode-btn'));
+      pg().state.selectedIds = new Set([1, 2]);
+
+      pg()._handleBulkDelete();
+      acceptConfirm();
+      await settle();
+      getToast().action.onClick();
+      await settle();
+
+      assert.equal(sent('POST', '/api/posts/1/restore').length, 1);
+      assert.equal(sent('POST', '/api/posts/2/restore').length, 0);
     });
   });
 

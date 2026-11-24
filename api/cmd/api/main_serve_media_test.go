@@ -187,6 +187,55 @@ func TestServeSimplifiedMedia_PrivateMedia_Authenticated(t *testing.T) {
 	}
 }
 
+// ── Trash ──────────────────────────────────────────────────────────────────
+
+// A public file that goes to the trash is a 404 to a guest at once, and the
+// admin still gets its bytes (the trash view shows them), never cacheable.
+func TestServeSimplifiedMedia_TrashedMedia(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "gone.jpg")
+	makeMediaFile(t, storage, "2024", "01", "gone.jpg")
+	ctx := context.Background()
+	m, err := repo.GetMediaByPath(ctx, "originals/2024/01/gone.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testMediaSvc(t, repo, storage).DeleteMedia(ctx, m.ID); err != nil {
+		t.Fatalf("DeleteMedia: %v", err)
+	}
+
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "gone.jpg", false)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("guest: expected 404 for trashed media, got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("guest: Cache-Control = %q, want no-store", cc)
+	}
+
+	rec = serveMediaRequest(t, storage, "", repo, "2024", "01", "gone.jpg", true)
+	if rec.Code != http.StatusOK {
+		t.Errorf("admin: expected 200 for trashed media, got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-store" {
+		t.Errorf("admin: Cache-Control = %q, want private, no-store", cc)
+	}
+}
+
+// The route checks deleted_at itself: a trashed row that some later write
+// marked public is still a 404 to a guest.
+func TestServeSimplifiedMedia_TrashedMedia_PublicFlagIgnored(t *testing.T) {
+	repo, storage := newMediaRepo(t)
+	createPublicMedia(t, repo, "2024", "01", "flag.jpg")
+	makeMediaFile(t, storage, "2024", "01", "flag.jpg")
+	if _, err := repo.DB().Exec(`UPDATE media SET deleted_at = CURRENT_TIMESTAMP, is_public = 1 WHERE original_path = 'originals/2024/01/flag.jpg'`); err != nil {
+		t.Fatal(err)
+	}
+	rec := serveMediaRequest(t, storage, "", repo, "2024", "01", "flag.jpg", false)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for trashed media with is_public=1, got %d", rec.Code)
+	}
+}
+
 // ── Serve public original ──────────────────────────────────────────────────
 
 func TestServeSimplifiedMedia_PublicMedia_FileExists(t *testing.T) {

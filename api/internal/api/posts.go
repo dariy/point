@@ -228,7 +228,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 		postResponses := make([]map[string]interface{}, len(posts))
 		for i, p := range posts {
 			resp := postToResponse(p, nil, nil)
-			resp["deleted_at"] = p.DeletedAt
+			resp["deleted_at"] = nullTime(p.DeletedAt)
 			postResponses[i] = resp
 		}
 		pages := int(math.Ceil(float64(total) / float64(perPage)))

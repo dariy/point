@@ -121,6 +121,12 @@ type mockRepository struct {
 	MockReplaceMediaOriginal                 func(ctx context.Context, id int64, filename, originalPath, mimeType string, fileSize int64) error
 	MockGetMediaByIDs                        func(ctx context.Context, ids []int64) ([]models.Medium, error)
 	MockDeleteMediaByIDs                     func(ctx context.Context, ids []int64) error
+	MockTrashMediaByIDs                      func(ctx context.Context, ids []int64) (int64, error)
+	MockRestoreMediaByIDs                    func(ctx context.Context, ids []int64) (int64, error)
+	MockListTrashedMedia                     func(ctx context.Context, arg models.ListTrashedMediaParams) ([]models.Medium, error)
+	MockCountTrashedMedia                    func(ctx context.Context) (int64, error)
+	MockListExpiredTrashedMediaIDs           func(ctx context.Context) ([]int64, error)
+	MockPurgeExpiredTrashedPosts             func(ctx context.Context) (int64, error)
 	MockListOrphanedMediaByPage              func(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
 	MockListMediaFolders                     func(ctx context.Context, fileType string) ([]repository.MediaFolder, error)
 	MockListMediaFiltered                    func(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error)
@@ -912,6 +918,48 @@ func (m *mockRepository) DeleteMediaByIDs(ctx context.Context, ids []int64) erro
 		return m.MockDeleteMediaByIDs(ctx, ids)
 	}
 	return fmt.Errorf("DeleteMediaByIDs not implemented")
+}
+
+func (m *mockRepository) TrashMediaByIDs(ctx context.Context, ids []int64) (int64, error) {
+	if m.MockTrashMediaByIDs != nil {
+		return m.MockTrashMediaByIDs(ctx, ids)
+	}
+	return 0, fmt.Errorf("TrashMediaByIDs not implemented")
+}
+
+func (m *mockRepository) RestoreMediaByIDs(ctx context.Context, ids []int64) (int64, error) {
+	if m.MockRestoreMediaByIDs != nil {
+		return m.MockRestoreMediaByIDs(ctx, ids)
+	}
+	return 0, fmt.Errorf("RestoreMediaByIDs not implemented")
+}
+
+func (m *mockRepository) ListTrashedMedia(ctx context.Context, arg models.ListTrashedMediaParams) ([]models.Medium, error) {
+	if m.MockListTrashedMedia != nil {
+		return m.MockListTrashedMedia(ctx, arg)
+	}
+	return nil, fmt.Errorf("ListTrashedMedia not implemented")
+}
+
+func (m *mockRepository) CountTrashedMedia(ctx context.Context) (int64, error) {
+	if m.MockCountTrashedMedia != nil {
+		return m.MockCountTrashedMedia(ctx)
+	}
+	return 0, fmt.Errorf("CountTrashedMedia not implemented")
+}
+
+func (m *mockRepository) ListExpiredTrashedMediaIDs(ctx context.Context) ([]int64, error) {
+	if m.MockListExpiredTrashedMediaIDs != nil {
+		return m.MockListExpiredTrashedMediaIDs(ctx)
+	}
+	return nil, fmt.Errorf("ListExpiredTrashedMediaIDs not implemented")
+}
+
+func (m *mockRepository) PurgeExpiredTrashedPosts(ctx context.Context) (int64, error) {
+	if m.MockPurgeExpiredTrashedPosts != nil {
+		return m.MockPurgeExpiredTrashedPosts(ctx)
+	}
+	return 0, fmt.Errorf("PurgeExpiredTrashedPosts not implemented")
 }
 
 func (m *mockRepository) ListOrphanedMediaByPage(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error) {

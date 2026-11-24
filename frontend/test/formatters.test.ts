@@ -1,8 +1,20 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { stripHtml, formatTitleDate, defaultPostTitle } from '../src/utils/formatters.ts';
+import { stripHtml, formatTitleDate, defaultPostTitle, trashRemovalDate, formatDateShort, TRASH_RETENTION_DAYS } from '../src/utils/formatters.ts';
 
 describe('formatters', () => {
+  describe('trashRemovalDate', () => {
+    test('is the delete date plus the retention days', () => {
+      assert.strictEqual(TRASH_RETENTION_DAYS, 30);
+      assert.strictEqual(trashRemovalDate('2024-09-01T10:00:00Z'), formatDateShort('2024-10-01T10:00:00Z'));
+    });
+
+    test('is empty for no date or a bad date', () => {
+      assert.strictEqual(trashRemovalDate(null), '');
+      assert.strictEqual(trashRemovalDate('not a date'), '');
+    });
+  });
+
   describe('formatTitleDate', () => {
     // Sunday, 8 March 2026, 09:07:05 local — single-digit parts exercise padding.
     const ref = new Date(2026, 2, 8, 9, 7, 5);
