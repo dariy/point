@@ -270,6 +270,16 @@ func (h *SystemHandler) backupHealth(ctx context.Context) map[string]any {
 	if last := h.systemService.LastBackupTime(); !last.IsZero() {
 		out["last_backup"] = last
 	}
+	// The last restore check comes from a file in the backups directory, so
+	// it also survives a restart. GET /system/backups/restore-check has the
+	// full result.
+	if rc := h.systemService.LastRestoreCheck(); rc != nil {
+		out["restore_check"] = map[string]any{
+			"passed":     rc.Passed,
+			"checked_at": rc.CheckedAt,
+			"backup":     rc.Backup,
+		}
+	}
 	return out
 }
 
@@ -613,6 +623,41 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 	})
 
 	return c.JSON(http.StatusAccepted, map[string]string{"status": "started"})
+}
+
+// GetRestoreCheck returns the stored result of the last restore check (null
+// when no check has run) and whether a check is running now.
+func (h *SystemHandler) GetRestoreCheck(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]any{
+		"running": h.systemService.RestoreCheckRunning(),
+		"last":    h.systemService.LastRestoreCheck(),
+	})
+}
+
+// StartRestoreCheck starts a restore check of one backup in the background:
+// the backup in the JSON field "filename", or the newest backup when the field
+// is empty. A check of a large archive can take minutes, so the request does
+// not wait; GetRestoreCheck shows the result when it is done.
+func (h *SystemHandler) StartRestoreCheck(c echo.Context) error {
+	var req struct {
+		Filename string `json:"filename"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	name, err := h.systemService.ResolveBackupName(req.Filename)
+	if err != nil {
+		return MapError(err)
+	}
+	if h.systemService.RestoreCheckRunning() {
+		return MapError(services.ErrRestoreCheckInProgress)
+	}
+	utils.SafeGo("system: restore check", func() {
+		if _, err := h.systemService.VerifyBackup(context.Background(), name); err != nil {
+			slog.Error("restore check did not run", "backup", name, "err", err)
+		}
+	})
+	return c.JSON(http.StatusAccepted, map[string]string{"status": "started", "backup": name})
 }
 
 func (h *SystemHandler) ListBackups(c echo.Context) error {

@@ -150,6 +150,51 @@ a backup behaves exactly as it did before.
   remote itself — the hook is a one-way copy, deliberately, so its only
   credential need be write-only.
 
+## Restore check
+
+A checksum shows that the archive bytes did not change. It does not show that the
+archive restores. The restore check restores a backup and compares the result.
+
+Each archive has a **manifest**: the last entry, `.point-backup-manifest.json`. It
+has a `version` field, the SHA-256 of each file as it went into the archive, and the
+row count of each table of the database snapshot. A real restore does not write the
+manifest into the data directory.
+
+`VerifyBackup` does these steps:
+
+1. It unpacks the archive into a temporary directory `<data>/backups/.restore-check-*`.
+   It does not touch the live database or the media tree. The backup skips the
+   `backups/` directory, so the temporary directory never goes into an archive.
+2. It opens the restored database read-only and runs `PRAGMA quick_check`.
+3. It hashes each restored file and counts the rows of each table. Then it compares
+   them with the manifest. A missing, changed or extra file is a mismatch. A missing
+   table or a different row count is a mismatch.
+4. It removes the temporary directory and writes the result to
+   `<data>/backups/restore_check.json`.
+
+The check fails when the archive does not unpack, the database does not open, the
+manifest has an unknown version, or there is one or more mismatches. The result
+lists the first 20 mismatches and counts all of them. A backup made before the
+manifest existed gets `"manifest": false`: the check unpacks it and opens the
+database, but it has no hashes to compare.
+
+The check runs:
+
+- **Weekly, after a scheduled backup.** When the last check is 7 days old (or there
+  is no check), the scheduler checks the backup that it just made.
+- **From the API.** `POST /api/system/backups/restore-check` with
+  `{"filename": "<archive>"}` (or `{}` for the newest backup) starts a check in the
+  background and returns `202`. `GET /api/system/backups/restore-check` returns
+  `{"running": …, "last": <result or null>}`.
+- **From the command line.** `point verify-backup [<archive>]` prints the result as
+  JSON. The exit code is 0 for a pass and 1 for a fail. It opens only the restored
+  copy, so it can run while the server runs.
+
+`/api/system/health` shows the last result in `backup.restore_check` (`passed`,
+`checked_at`, `backup`), and the `backup restore check` task shows the last outcome
+of this process. The check needs free disk space for one unpacked copy of the
+archive.
+
 ## Pre-migration snapshots
 
 Separate from this plugin, and deliberately not gated by it: schema migrations

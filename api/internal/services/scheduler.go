@@ -122,10 +122,20 @@ func (s *SchedulerService) Start(ctx context.Context) {
 		if !s.systemService.BackupDue(s.settingInt(ctx, "backup_interval_days", 1)) {
 			return nil
 		}
-		if _, _, err := s.systemService.CreateBackup(ctx); err != nil {
+		name, _, err := s.systemService.CreateBackup(ctx)
+		if err != nil {
 			return err
 		}
-		_, err := s.systemService.RotateBackups(s.systemService.BackupKeep(s.settingInt(ctx, "backup_keep", 7)))
+		_, err = s.systemService.RotateBackups(s.systemService.BackupKeep(s.settingInt(ctx, "backup_keep", 7)))
+		// Once a week, restore the new backup into a temporary directory and
+		// compare it with its manifest. VerifyBackup records the outcome in
+		// the health registry itself, so a failed check does not mark the
+		// backup task as failed.
+		if s.systemService.RestoreCheckDue(RestoreCheckIntervalDays) {
+			if _, cerr := s.systemService.VerifyBackup(ctx, name); cerr != nil {
+				slog.Warn("restore check did not run", "backup", name, "err", cerr)
+			}
+		}
 		return err
 	})
 }

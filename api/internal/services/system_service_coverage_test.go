@@ -68,7 +68,7 @@ func TestCleanupPartialBackups_MissingDir(t *testing.T) {
 func TestAddFileToTar_MissingSource(t *testing.T) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	ok, err := addFileToTar(tw, filepath.Join(t.TempDir(), "does-not-exist"), "x")
+	_, ok, err := addFileToTar(tw, filepath.Join(t.TempDir(), "does-not-exist"), "x")
 	if err != nil || ok {
 		t.Fatalf("addFileToTar(missing) = %v, %v; want false, nil", ok, err)
 	}
