@@ -93,3 +93,57 @@ test("BackupsSection actions", async (t) => {
   root.remove();
   dom.cleanup();
 });
+
+test("BackupsSection export block", async () => {
+  const dom = setupDOM();
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+  const section = new BackupsSection(root);
+  const base = { backups: [], loading: false, uploading: false, uploadPct: 0 };
+
+  // No export yet: the start button only.
+  section.state = { ...base, exportStatus: { running: false, last: null } };
+  let out = String(section.render());
+  assert.ok(out.includes('id="start-export-btn"'));
+  assert.ok(out.includes("Export site"));
+  assert.ok(!out.includes("download-export-btn"));
+
+  // A running export disables the button.
+  section.state = { ...base, exportStatus: { running: true, last: null } };
+  out = String(section.render());
+  assert.match(out, /id="start-export-btn"[^>]*disabled/);
+  assert.ok(out.includes("Exporting…"));
+
+  // A finished export shows its counts, the missing files and a download.
+  section.state = { ...base, exportStatus: { running: false, last: {
+    filename: "point-export_20261126_120000.tar.gz", size: 2048, created_at: "2026-11-26T12:00:00Z",
+    counts: { posts: 3, pages: 1, media: 5, tags: 2 }, missing: ["originals/a.jpg"], missing_count: 1, duration_ms: 10,
+  } } };
+  out = String(section.render());
+  assert.ok(out.includes("point-export_20261126_120000.tar.gz"));
+  assert.ok(out.includes("3 posts · 1 pages · 5 media · 2 tags"));
+  assert.ok(out.includes("1 originals missing on disk"));
+  root.innerHTML = out;
+  section._load = async () => {};
+  let downloaded = "";
+  let started = 0;
+  section._handleExportDownload = (f: string) => { downloaded = f; };
+  section._handleStartExport = async () => { started++; };
+  section.afterRender();
+  must(root.querySelector<HTMLElement>(".download-export-btn")).click();
+  assert.strictEqual(downloaded, "point-export_20261126_120000.tar.gz");
+  must(root.querySelector<HTMLElement>("#start-export-btn")).click();
+  assert.strictEqual(started, 1);
+
+  // A failed export shows the error and no download.
+  section.state = { ...base, exportStatus: { running: false, last: {
+    created_at: "2026-11-26T12:00:00Z", counts: { posts: 0, pages: 0, media: 0, tags: 0 },
+    missing_count: 0, error: "db snapshot: disk full", duration_ms: 1,
+  } } };
+  out = String(section.render());
+  assert.ok(out.includes("The last export failed: db snapshot: disk full"));
+  assert.ok(!out.includes("download-export-btn"));
+
+  root.remove();
+  dom.cleanup();
+});

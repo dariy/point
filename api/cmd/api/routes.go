@@ -262,6 +262,11 @@ func registerSystemRoutes(e *echo.Echo, h *api.SystemHandler, svcs *AppServices)
 	// Move out: re-enter password to authorize, then a one-time-token GET streams the archive.
 	systemGroup.POST("/backups/:filename/authorize-download", h.AuthorizeBackupDownload, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "backups"))
 	systemGroup.GET("/backups/:filename/download", h.DownloadBackup, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	// Portable export (NF-13): posts as Markdown, originals and media sidecars in one archive.
+	systemGroup.GET("/export", h.GetExport, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.POST("/export", h.StartExport, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.POST("/export/:filename/authorize-download", h.AuthorizeExportDownload, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "backups"))
+	systemGroup.GET("/export/:filename/download", h.DownloadExport, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.RequirePlugin(svcs.Settings, "backups"))
 	// Move in: upload a local archive (password in X-Confirm-Password header) to overwrite everything.
 	systemGroup.POST("/backups/upload", h.UploadBackupArchive, api.AuthMiddleware(svcs.Auth, svcs.ApiKey), api.SessionOnlyMiddleware, api.RequirePlugin(svcs.Settings, "backups"))
 	systemGroup.GET("/offline/stats", h.GetOfflineStats, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))

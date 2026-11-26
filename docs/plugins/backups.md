@@ -49,6 +49,10 @@ recomputed on upload. This is an **integrity** check (detects corruption/truncat
 not an authenticity one — a bare checksum proves nothing about a hostile archive;
 password re-entry and tar-traversal hardening cover that.
 
+A backup restores this engine only. To get the content out in open formats (posts as
+Markdown, the originals, a JSON file per photo), use the **portable export**:
+`docs/features/export.md`.
+
 ## Schedule and managed mode (`BACKUP_MANAGED`)
 
 A daily task at 03:00 creates a backup when one is due (`backup_interval_days`),

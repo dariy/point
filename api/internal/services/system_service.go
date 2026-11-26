@@ -53,6 +53,10 @@ type SystemService struct {
 	checkMu      sync.Mutex
 	checkRunning bool
 
+	// exportMu guards exportRunning: one portable export runs at a time.
+	exportMu      sync.Mutex
+	exportRunning bool
+
 	// backupHook, when set, is a `sh -c` command run against each finished
 	// archive to copy it off-host; backupHookTimeout bounds one run. health
 	// receives the hook's outcome under healthTaskBackupHook. All optional —
@@ -299,6 +303,7 @@ func (s *SystemService) removePartials(backupDir string) {
 // at startup: a freshly started process has no backup running.
 func (s *SystemService) CleanupPartialBackups() {
 	s.removePartials(filepath.Join(s.dataPath, "backups"))
+	s.removePartials(s.exportDir())
 }
 
 // RotateBackups keeps only the `keep` most recent .tar.gz backups, deleting the

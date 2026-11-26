@@ -181,6 +181,63 @@ export function backupDownloadUrl(filename: string, token: string): string {
   return `/api/system/backups/${encodeURIComponent(filename)}/download?token=${encodeURIComponent(token)}`;
 }
 
+/** Row counts in a portable export (see docs/features/export.md). */
+export interface ExportCounts {
+  posts: number;
+  pages: number;
+  media: number;
+  tags: number;
+}
+
+/** The result of the last portable export. */
+export interface ExportResult {
+  /** Empty when the export failed. */
+  filename?: string;
+  /** Bytes. */
+  size?: number;
+  sha256?: string;
+  created_at: string;
+  counts: ExportCounts;
+  /** The first originals that were not on disk. */
+  missing?: string[];
+  missing_count: number;
+  error?: string;
+  duration_ms: number;
+}
+
+export interface ExportStatus {
+  running: boolean;
+  last: ExportResult | null;
+}
+
+export function getExport(): Promise<ExportStatus> {
+  return api.get('/api/system/export');
+}
+
+/** Start a portable export in the background; poll getExport for the result. */
+export function startExport(): Promise<{ status: string }> {
+  return api.post('/api/system/export');
+}
+
+/**
+ * Re-verify the password and get a one-time token to download the export.
+ *
+ * @param sha256pw - sha256-hex of the account password
+ */
+export function authorizeExportDownload(
+  filename: string,
+  sha256pw: string,
+): Promise<{ token: string }> {
+  return api.post(`/api/system/export/${encodeURIComponent(filename)}/authorize-download`, {
+    current_name: sha256pw,
+  });
+}
+
+/** The URL a browser navigates to in order to stream the export archive. */
+export function exportDownloadUrl(filename: string, token: string): string {
+  return `/api/system/export/${encodeURIComponent(filename)}/download?token=${encodeURIComponent(token)}`;
+}
+
 export interface BackupUpload {
   status: string;
   filename: string;
