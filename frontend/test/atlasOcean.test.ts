@@ -40,7 +40,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     removeEventListener: (type: string, fn: (e: any) => void) => { listeners.get(type)?.delete(fn); },
   };
   /** Send a DOM event to the container's listeners. Returns what the listeners did to it. */
-  const dispatch = (type: string, init: Record<string, number> = {}) => {
+  const dispatch = (type: string, init: Record<string, number | string> = {}) => {
     const ev = {
       type, pointerId: 1, clientX: 0, clientY: 0, ...init,
       stopped: false, prevented: false,
@@ -529,6 +529,22 @@ describe('atlasOcean', () => {
       const ev = p.dispatch('click');
       assert.equal(taps, 0);
       assert.equal(ev.stopped, true, 'the click after a drag selects nothing');
+    });
+
+    test('a pen tap that skids 7 px is a tap; a mouse press that moves 7 px is a drag', () => {
+      const p = fakePage('list');
+      let taps = 0;
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => taps++ });
+      p.dispatch('pointerdown', { clientX: 100, clientY: 600, pointerType: 'pen' });
+      p.dispatch('pointermove', { clientX: 107, clientY: 600, pointerType: 'pen' });
+      p.dispatch('pointerup', { pointerType: 'pen' });
+      p.dispatch('click');
+      assert.equal(taps, 1);
+      p.dispatch('pointerdown', { clientX: 100, clientY: 600, pointerType: 'mouse' });
+      p.dispatch('pointermove', { clientX: 107, clientY: 600, pointerType: 'mouse' });
+      p.dispatch('pointerup', { pointerType: 'mouse' });
+      p.dispatch('click');
+      assert.equal(taps, 1);
     });
 
     test('a pinch in the window is not a tap', () => {

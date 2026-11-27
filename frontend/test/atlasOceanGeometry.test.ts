@@ -4,6 +4,7 @@ import assert from 'node:assert';
 import {
   clipInsets, createTapGate, easeInOut, insetCss, insetsEmpty, intersectRect, TAP_SLOP_PX, tweenPoint, tweenRect, windowOffset,
 } from '../src/plugins/tags-atlas/atlasOceanGeometry.ts';
+import { PRESS_SLOP_PX } from '../src/utils/pointerMode.ts';
 
 // The map box: the whole 400×800 viewport.
 const box = { left: 0, top: 0, width: 400, height: 800 };
@@ -110,6 +111,39 @@ describe('atlasOceanGeometry', () => {
     g.up(1);
     assert.equal(g.isTap(), false);
     g.down(2, 50, 50);
+    g.up(2);
+    assert.equal(g.isTap(), true);
+  });
+
+  test('tap gate: a pen or a touch gets PRESS_SLOP_PX', () => {
+    assert.equal(PRESS_SLOP_PX, 10);
+    for (const type of ['pen', 'touch']) {
+      const g = createTapGate();
+      g.down(1, 100, 100, type);
+      g.move(1, 107, 100);
+      g.up(1);
+      assert.equal(g.isTap(), true, `a 7 px ${type} move is a tap`);
+      g.down(2, 100, 100, type);
+      g.move(2, 112, 100);
+      g.up(2);
+      assert.equal(g.isTap(), false, `a 12 px ${type} move is a drag`);
+    }
+  });
+
+  test('tap gate: a mouse keeps TAP_SLOP_PX', () => {
+    const g = createTapGate();
+    g.down(1, 100, 100, 'mouse');
+    g.move(1, 107, 100);
+    g.up(1);
+    assert.equal(g.isTap(), false, 'a 7 px mouse move is a drag');
+  });
+
+  test('tap gate: the first pointer of a gesture sets the slop', () => {
+    const g = createTapGate();
+    g.down(1, 100, 100, 'mouse');
+    g.up(1);
+    g.down(2, 100, 100, 'pen');
+    g.move(2, 107, 100);
     g.up(2);
     assert.equal(g.isTap(), true);
   });

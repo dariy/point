@@ -77,6 +77,14 @@ row in `mapList`, the footer background in `mapList` and `map`, and the post lis
 - **Tap on a cluster dot**: the map fits the places of the cluster. No place is selected,
   and the route does not change. See [Clusters](#clusters).
 
+A tap can move a little. A pen or touch press that moves less than 10 px
+(`utils/pointerMode.ts::PRESS_SLOP_PX`) is a tap, so a pencil tip that skids on the glass still
+opens the place. A mouse press starts a drag at 3 px, the Leaflet default. The window tap and the
+place peek use the same 10 px for a pen or a touch; the window tap uses 6 px for a mouse.
+`utils/leaflet.ts::setPressTolerance` sets the drag start of each map for each press. Leaflet
+measures `|dx| + |dy|`, and the window tap and the peek measure `Math.hypot`. Thus a diagonal skid
+of 7 px on each axis still starts a map drag.
+
 When the layer map is 320 px high or less (a short window, or a small phone on its side), the
 legend is one button to the right of the zoom control. The button opens the filters in one row.
 

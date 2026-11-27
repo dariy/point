@@ -12,6 +12,8 @@
  *   createTapGate  a tap or a drag, from the pointer moves
  */
 
+import { PRESS_SLOP_PX } from '../../utils/pointerMode.ts';
+
 /** A rect in viewport pixels, as from `getBoundingClientRect`. */
 export interface Rect {
   left: number;
@@ -32,7 +34,10 @@ export interface Point {
   y: number;
 }
 
-/** Pointer moves of this size or more (in CSS pixels) make a drag, not a tap. */
+/**
+ * Mouse moves of this size or more (in CSS pixels) make a drag, not a tap. A pen
+ * or a touch uses `PRESS_SLOP_PX`: a fingertip or a stylus tip skids more.
+ */
 export const TAP_SLOP_PX = 6;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -109,7 +114,8 @@ export function easeInOut(t: number): number {
 }
 
 export interface TapGate {
-  down(id: number, x: number, y: number): void;
+  /** `pointerType` is the PointerEvent type. A `pen` or a `touch` gets `PRESS_SLOP_PX`. */
+  down(id: number, x: number, y: number, pointerType?: string): void;
   move(id: number, x: number, y: number): void;
   up(id: number): void;
   /** True when the gesture so far is a tap: one pointer, no move past the slop. */
@@ -120,20 +126,24 @@ export interface TapGate {
  * Tells a tap from a drag or a pinch. A gesture starts at the first `down` with
  * no other pointer down. It is a drag when a pointer moves `slop` px or more
  * from its start, and a pinch when a second pointer goes down. Either one stays
- * in force until the next gesture starts.
+ * in force until the next gesture starts. The first pointer of the gesture sets
+ * the slop: `slop` for a mouse, `PRESS_SLOP_PX` for a pen or a touch.
  */
 export function createTapGate(slop = TAP_SLOP_PX): TapGate {
   const starts = new Map<number, Point>();
   let moved = false;
+  let limit = slop;
   return {
-    down(id, x, y) {
-      if (starts.size === 0) moved = false;
-      else moved = true; // a second finger: a pinch
+    down(id, x, y, pointerType) {
+      if (starts.size === 0) {
+        moved = false;
+        limit = pointerType === 'pen' || pointerType === 'touch' ? PRESS_SLOP_PX : slop;
+      } else moved = true; // a second finger: a pinch
       starts.set(id, { x, y });
     },
     move(id, x, y) {
       const s = starts.get(id);
-      if (s && Math.hypot(x - s.x, y - s.y) >= slop) moved = true;
+      if (s && Math.hypot(x - s.x, y - s.y) >= limit) moved = true;
     },
     up(id) {
       starts.delete(id);
