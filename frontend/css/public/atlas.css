@@ -1290,9 +1290,10 @@ body[data-atlas-side]:is([data-atlas-layer="mapList"], [data-atlas-layer="map"],
     height: 40px;
 }
 
-/* The list column: a grid of square cards that scrolls. gridFit.ts::sidePerPage
-   fits the page to the column: whole rows, enough to fill its height. A finger
-   scrolls it (pan-y): in the side layout it is not a drag surface. */
+/* The list column: a grid of square cards. gridFit.ts::sidePerPage fits the
+   page to the column: only the whole rows that fit in its height, so no card is
+   cut at the footer. The column scrolls only when it is shorter than one card.
+   A finger scrolls it (pan-y): in the side layout it is not a drag surface. */
 body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount {
     top: var(--atlas-layer-header-h, 0px);
     bottom: var(--atlas-layer-footer-h, 0px);
