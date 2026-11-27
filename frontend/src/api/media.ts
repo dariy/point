@@ -99,6 +99,24 @@ export function getMedia(id: number): Promise<Media> {
 }
 
 /**
+ * What the server does when the library already has a file with the same
+ * SHA-256. 'existing' (also the default when none is sent) returns the
+ * existing media and restores it from the trash; 'ask' answers 409 with the
+ * existing media and changes nothing; 'new' stores a second copy.
+ */
+export type OnDuplicate = 'ask' | 'new' | 'existing';
+
+/**
+ * The existing media of an `on_duplicate: 'ask'` 409, or null for any other
+ * error.
+ */
+export function duplicateOf(err: unknown): Media | null {
+  const e = err as { status?: number, body?: { code?: string, existing?: Media } } | null;
+  if (e?.status !== 409 || e.body?.code !== 'duplicate' || !e.body.existing) return null;
+  return e.body.existing;
+}
+
+/**
  * Upload a single file.
  *
  * A video is accompanied by a poster frame captured here in the browser — the
@@ -108,12 +126,14 @@ export function getMedia(id: number): Promise<Media> {
 export async function uploadMedia(
   file: File,
   meta: { alt_text?: string, caption?: string, post_id?: number } = {},
+  onDuplicate?: OnDuplicate,
 ): Promise<Media> {
   const form = new FormData();
   form.append('file', file);
   if (meta.alt_text) form.append('alt_text', meta.alt_text);
   if (meta.caption)  form.append('caption', meta.caption);
   if (meta.post_id)  form.append('post_id', String(meta.post_id));
+  if (onDuplicate)   form.append('on_duplicate', onDuplicate);
 
   if (isVideoFile(file)) {
     const poster = await captureVideoPoster(file);
@@ -136,19 +156,25 @@ export function setVideoPoster(id: number, poster: Blob): Promise<Media> {
   return api.upload(`/api/media/${id}/poster`, form);
 }
 
-/** Upload multiple files. */
+/**
+ * Upload multiple files. With `onDuplicate: 'ask'` the exact matches come
+ * back in `duplicates`, not in `uploaded` or `failed`.
+ */
 export function uploadMultiple(
   files: File[],
   postId?: number,
+  onDuplicate?: OnDuplicate,
 ): Promise<{
   uploaded: Media[];
   failed: Array<{ filename: string, error: string }>;
+  duplicates: Array<{ filename: string, existing: Media }>;
   total_uploaded: number;
   total_failed: number;
 }> {
   const form = new FormData();
   files.forEach((f) => form.append('files', f));
   if (postId) form.append('post_id', String(postId));
+  if (onDuplicate) form.append('on_duplicate', onDuplicate);
   return api.upload('/api/media/upload/multiple', form);
 }
 

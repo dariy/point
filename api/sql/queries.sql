@@ -394,8 +394,12 @@ SELECT * FROM media
 WHERE id = ? LIMIT 1;
 
 -- name: GetMediaByChecksum :one
+-- checksum is not unique: "Upload again" keeps a second copy. A live row
+-- wins over a trashed one, then the oldest.
 SELECT * FROM media
-WHERE checksum = ? LIMIT 1;
+WHERE checksum = ?
+ORDER BY (deleted_at IS NOT NULL), id
+LIMIT 1;
 
 -- name: ListMedia :many
 SELECT * FROM media

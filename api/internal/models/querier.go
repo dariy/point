@@ -40,6 +40,8 @@ type Querier interface {
 	GetFirstUser(ctx context.Context) (User, error)
 	// MEDIA
 	GetMedia(ctx context.Context, id int64) (Medium, error)
+	// checksum is not unique: "Upload again" keeps a second copy. A live row
+	// wins over a trashed one, then the oldest.
 	GetMediaByChecksum(ctx context.Context, checksum string) (Medium, error)
 	GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([]Medium, error)
 	// POSTS

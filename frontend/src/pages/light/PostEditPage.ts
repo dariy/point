@@ -15,6 +15,7 @@ import { MarkdownEditor } from "../../components/light/MarkdownEditor.ts";
 import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender, type PostInput } from "../../api/posts.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
 import { uploadMedia } from "../../api/media.ts";
+import { uploadAskingOnDuplicate } from "../../utils/duplicateUpload.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.ts";
 import {
@@ -1367,9 +1368,12 @@ export default class PostEditPage extends Component<PageProps> {
   }
   async _uploadAndInsert(file: File) {
     try {
-      const result = await uploadMedia(file, {
+      // An exact duplicate asks first; "Use the existing file" inserts the
+      // existing media, and a closed question inserts nothing.
+      const result = await uploadAskingOnDuplicate(file, {
         post_id: this.state.postId || undefined
       });
+      if (!result) return;
       if (this.state.editorMode === "visual") this._insertMediaPaths([{
         path: result.path
       } as Media]);else if (this._markdownEditorRef) this._markdownEditorRef.insertAtEnd(result.path);

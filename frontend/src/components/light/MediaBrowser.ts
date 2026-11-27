@@ -16,10 +16,11 @@ import { Pagination } from "../shared/Pagination.ts";
 import { MediaLightbox } from "../public/MediaLightbox.ts";
 import { ConfirmDialog } from "../shared/ConfirmDialog.ts";
 import { PromptDialog } from "../shared/PromptDialog.ts";
-import { listMedia, listTrashedMedia, restoreMedia, bulkRestoreMedia, permanentlyDeleteMedia, uploadMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
+import { listMedia, listTrashedMedia, restoreMedia, bulkRestoreMedia, permanentlyDeleteMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
 import { captureVideoPoster } from "../../utils/videoPoster.ts";
 import { MediaPager } from "../../core/mediaPager.ts";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.ts";
+import { uploadBatchAskingOnDuplicate } from "../../utils/duplicateUpload.ts";
 import { listPosts } from "../../api/posts.ts";
 import { setToast } from "../../store.ts";
 import { html, setHTML, navigate, raw } from "../../utils/helpers.ts";
@@ -1341,21 +1342,19 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     this.setState({
       uploading: true
     });
-    const uploadedItems = [];
-    let failed = 0;
-    for (const file of files) {
-      try {
-        const result = await uploadMedia(file);
-        uploadedItems.push(result);
-      } catch {
-        failed++;
-      }
-    }
+    // Exact duplicates are collected and asked about once, after the batch.
+    const { media: uploadedItems, failed, duplicates, choice } = await uploadBatchAskingOnDuplicate(files);
     this.setState({
       uploading: false
     });
+    const reused = choice === "existing" ? duplicates : 0;
+    const skipped = choice === null ? duplicates : 0;
+    const parts = [`Uploaded ${uploadedItems.length - reused}`];
+    if (reused) parts.push(`${reused} already in the library`);
+    if (skipped) parts.push(`${skipped} skipped`);
+    if (failed) parts.push(`${failed} failed`);
     setToast({
-      message: `Uploaded ${uploadedItems.length}${failed ? `, ${failed} failed` : ""}.`,
+      message: `${parts.join(", ")}.`,
       type: failed ? "warning" : "success"
     });
     await this._load();

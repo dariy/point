@@ -387,3 +387,93 @@ func TestRun_BuildsAndBackfillsTheSearchIndex(t *testing.T) {
 		t.Errorf("search for the replaced body = (%d rows, %v), want (0, nil)", len(rows), err)
 	}
 }
+
+// "Upload again" at a duplicate prompt keeps a second row with the same
+// checksum, so an old database loses the UNIQUE constraint. The rebuild must
+// keep every row, the visibility log that cascades from media, the indexes,
+// and the AUTOINCREMENT high-water mark.
+func TestRun_DropsTheUniqueChecksumConstraint(t *testing.T) {
+	repo, err := repository.NewRepository(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+	db := repo.DB()
+
+	// The old shape: checksum UNIQUE, as every install before NF-16 has it.
+	for _, q := range []string{
+		`PRAGMA foreign_keys = OFF`,
+		`DROP TABLE media`,
+		`CREATE TABLE media (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			filename VARCHAR(500) NOT NULL,
+			original_path VARCHAR(1000) NOT NULL,
+			thumbnail_path VARCHAR(1000),
+			file_type TEXT NOT NULL,
+			mime_type VARCHAR(100) NOT NULL,
+			file_size INTEGER NOT NULL,
+			width INTEGER,
+			height INTEGER,
+			post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+			uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			checksum VARCHAR(64) NOT NULL UNIQUE,
+			alt_text VARCHAR(500),
+			caption VARCHAR(1000),
+			metadata TEXT,
+			original_metadata TEXT,
+			is_public INTEGER NOT NULL DEFAULT 0,
+			deleted_at DATETIME
+		)`,
+		`PRAGMA foreign_keys = ON`,
+		`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum, is_public, deleted_at)
+			VALUES (1, 'a.jpg', 'originals/a.jpg', 'image', 'image/jpeg', 10, 'c1', 1, NULL),
+			       (7, 'b.jpg', 'originals/b.jpg', 'image', 'image/jpeg', 20, 'c2', 0, '2026-01-01 00:00:00')`,
+		// A row deleted for good leaves the sequence above the highest id.
+		`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, checksum) VALUES (9, 'x', 'x', 'file', 'text/plain', 1, 'c9')`,
+		`DELETE FROM media WHERE id = 9`,
+		`INSERT INTO media_visibility_log (media_id, is_public) VALUES (1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("seed %q: %v", q, err)
+		}
+	}
+
+	if err := Run(ctx, repo); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx, `INSERT INTO media (filename, original_path, file_type, mime_type, file_size, checksum)
+		VALUES ('a2.jpg', 'originals/a2.jpg', 'image', 'image/jpeg', 10, 'c1')`); err != nil {
+		t.Fatalf("a second row with the same checksum: %v", err)
+	}
+	var n, logs, maxID int64
+	var deleted string
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), MAX(id) FROM media`).Scan(&n, &maxID); err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 || maxID != 10 {
+		t.Errorf("media has %d rows, max id %d; want 3 rows and the new row at id 10", n, maxID)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT deleted_at FROM media WHERE id = 7`).Scan(&deleted); err != nil || deleted == "" {
+		t.Errorf("the trashed row lost deleted_at: %q, %v", deleted, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_visibility_log WHERE media_id = 1`).Scan(&logs); err != nil || logs != 1 {
+		t.Errorf("visibility log rows = %d (%v), want 1; the rebuild cascaded", logs, err)
+	}
+	got := indexNames(t, repo, "media")
+	for _, want := range []string{"idx_media_checksum", "idx_media_original_path", "idx_media_post_id", "idx_media_trashed", "idx_media_uploaded_at"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("index %s is missing after the rebuild; have %v", want, got)
+		}
+	}
+	for _, name := range got {
+		if strings.HasPrefix(name, "sqlite_autoindex_media") {
+			t.Errorf("a UNIQUE autoindex survived: %s", name)
+		}
+	}
+	var fkOn int
+	if err := db.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&fkOn); err != nil || fkOn != 1 {
+		t.Errorf("foreign_keys = %d (%v) after Run, want 1", fkOn, err)
+	}
+}

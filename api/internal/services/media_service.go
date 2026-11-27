@@ -160,6 +160,47 @@ func (s *MediaService) GetStorageUsage(ctx context.Context) (int64, error) {
 	return int64(usage.Float64), nil
 }
 
+// DuplicatePolicy says what UploadFile does when the library already holds
+// media with the same SHA-256 (media.checksum).
+type DuplicatePolicy int
+
+const (
+	// DuplicateReuse returns the existing media and creates no row. A trashed
+	// match is restored first. This is the default for callers with no user
+	// to ask: the Instagram import, the audio post, the bulk endpoint.
+	DuplicateReuse DuplicatePolicy = iota
+	// DuplicateAsk returns a *DuplicateMediaError and changes nothing, so the
+	// client can offer "Use the existing file" or "Upload again".
+	DuplicateAsk
+	// DuplicateKeep stores the upload as a new row next to the existing one:
+	// the "Upload again" answer.
+	DuplicateKeep
+)
+
+// ParseDuplicatePolicy reads the on_duplicate form value of the upload
+// endpoints: "ask", "new", or "existing" (also the empty value).
+func ParseDuplicatePolicy(v string) (DuplicatePolicy, bool) {
+	switch v {
+	case "", "existing":
+		return DuplicateReuse, true
+	case "ask":
+		return DuplicateAsk, true
+	case "new":
+		return DuplicateKeep, true
+	}
+	return DuplicateReuse, false
+}
+
+// DuplicateMediaError is the DuplicateAsk result: the upload has the same
+// bytes as Existing, which can be in the trash.
+type DuplicateMediaError struct {
+	Existing models.Medium
+}
+
+func (e *DuplicateMediaError) Error() string {
+	return fmt.Sprintf("media %d has the same content", e.Existing.ID)
+}
+
 type UploadFileParams struct {
 	Content  []byte
 	Filename string
@@ -167,23 +208,29 @@ type UploadFileParams struct {
 	AltText  string
 	Caption  string
 	PostID   *int64
+	// OnDuplicate applies when media with the same checksum exists.
+	OnDuplicate DuplicatePolicy
 }
 
 func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (models.Medium, error) {
 	checksum := CalculateChecksum(p.Content)
 
-	// Check duplicate
-	existing, err := s.repo.GetMediaByChecksum(ctx, checksum)
-	if err == nil {
-		// The same bytes in the trash: an upload of them is a restore, or the
-		// file would stay out of the library while its checksum blocks a copy.
-		if existing.DeletedAt.Valid {
-			if _, err := s.RestoreMedia(ctx, []int64{existing.ID}); err != nil {
-				return models.Medium{}, err
+	if p.OnDuplicate != DuplicateKeep {
+		existing, err := s.repo.GetMediaByChecksum(ctx, checksum)
+		if err == nil {
+			if p.OnDuplicate == DuplicateAsk {
+				return models.Medium{}, &DuplicateMediaError{Existing: existing}
 			}
-			return s.getMedia(ctx, existing.ID)
+			// The same bytes in the trash: an upload of them is a restore, or
+			// the file would stay out of the library.
+			if existing.DeletedAt.Valid {
+				if _, err := s.RestoreMedia(ctx, []int64{existing.ID}); err != nil {
+					return models.Medium{}, err
+				}
+				return s.getMedia(ctx, existing.ID)
+			}
+			return existing, nil
 		}
-		return existing, nil
 	}
 
 	now := time.Now().UTC().Round(0)
@@ -202,6 +249,16 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	originalRelPath := filepath.Join("originals", datePath, uniqueFilename)
 	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
 	originalFullPath := filepath.Clean(filepath.Join(mediaBase, originalRelPath))
+	// A second copy of the same file in the same second ("Upload again")
+	// must not overwrite the first: add a counter until the name is free.
+	for n := 2; ; n++ {
+		if _, err := os.Stat(originalFullPath); err != nil {
+			break
+		}
+		uniqueFilename = fmt.Sprintf("%d_%d_%s", now.Unix(), n, safeFilename)
+		originalRelPath = filepath.Join("originals", datePath, uniqueFilename)
+		originalFullPath = filepath.Clean(filepath.Join(mediaBase, originalRelPath))
+	}
 	if !strings.HasPrefix(originalFullPath, mediaBase+string(filepath.Separator)) {
 		return models.Medium{}, fmt.Errorf("invalid media path")
 	}

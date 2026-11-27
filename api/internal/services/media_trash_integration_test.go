@@ -279,3 +279,33 @@ func TestMediaTrash_UploadOfTrashedBytesRestores(t *testing.T) {
 		t.Error("the restored row is not public; a published post shows it")
 	}
 }
+
+// DuplicateAsk reports a trashed match like a live one and changes nothing:
+// the client decides between a restore and a second copy.
+func TestMediaTrash_AskOnTrashedBytesReportsTheTrashedRow(t *testing.T) {
+	f := newTrashFixture(t)
+	ctx := context.Background()
+	if err := f.svc.DeleteMedia(ctx, f.imageID); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.svc.UploadFile(ctx, UploadFileParams{
+		Content:     jpegBytes(t, 800, 600),
+		Filename:    "again.jpg",
+		MimeType:    "image/jpeg",
+		OnDuplicate: DuplicateAsk,
+	})
+	var dup *DuplicateMediaError
+	if !errors.As(err, &dup) {
+		t.Fatalf("UploadFile = %v, want a DuplicateMediaError", err)
+	}
+	if dup.Existing.ID != f.imageID || !dup.Existing.DeletedAt.Valid {
+		t.Errorf("existing = row %d (trashed %v), want the trashed row %d", dup.Existing.ID, dup.Existing.DeletedAt.Valid, f.imageID)
+	}
+	m, err := f.svc.GetMediaByID(ctx, f.imageID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.DeletedAt.Valid {
+		t.Error("an ask restored the trashed row; only Use the existing file may do that")
+	}
+}

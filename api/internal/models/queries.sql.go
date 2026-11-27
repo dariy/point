@@ -788,9 +788,13 @@ func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
 
 const getMediaByChecksum = `-- name: GetMediaByChecksum :one
 SELECT id, filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata, original_metadata, is_public, deleted_at FROM media
-WHERE checksum = ? LIMIT 1
+WHERE checksum = ?
+ORDER BY (deleted_at IS NOT NULL), id
+LIMIT 1
 `
 
+// checksum is not unique: "Upload again" keeps a second copy. A live row
+// wins over a trashed one, then the oldest.
 func (q *Queries) GetMediaByChecksum(ctx context.Context, checksum string) (Medium, error) {
 	row := q.db.QueryRowContext(ctx, getMediaByChecksum, checksum)
 	var i Medium

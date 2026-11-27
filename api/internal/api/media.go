@@ -84,15 +84,28 @@ func (h *MediaHandler) UploadFile(c *echo.Context) error {
 			postID = &id
 		}
 	}
+	onDuplicate, ok := services.ParseDuplicatePolicy(c.FormValue("on_duplicate"))
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "on_duplicate must be ask, new or existing")
+	}
 
 	media, err := h.mediaService.UploadFile(c.Request().Context(), services.UploadFileParams{
-		Content:  content,
-		Filename: file.Filename,
-		MimeType: mimeType,
-		AltText:  altText,
-		Caption:  caption,
-		PostID:   postID,
+		Content:     content,
+		Filename:    file.Filename,
+		MimeType:    mimeType,
+		AltText:     altText,
+		Caption:     caption,
+		PostID:      postID,
+		OnDuplicate: onDuplicate,
 	})
+	var dup *services.DuplicateMediaError
+	if errors.As(err, &dup) {
+		return c.JSON(http.StatusConflict, map[string]interface{}{
+			"message":  "the library already has this file",
+			"code":     "duplicate",
+			"existing": h.mediaResponse(c, dup.Existing),
+		})
+	}
 	if err != nil {
 		return MapError(err)
 	}
@@ -504,9 +517,17 @@ func (h *MediaHandler) UploadMultiple(c *echo.Context) error {
 		}
 	}
 
+	onDuplicate, ok := services.ParseDuplicatePolicy(c.FormValue("on_duplicate"))
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "on_duplicate must be ask, new or existing")
+	}
+
 	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	var uploaded []interface{}
 	var failed []interface{}
+	// With on_duplicate=ask, the matches go here and not into failed, so the
+	// client can ask once for all of them.
+	duplicates := []interface{}{}
 
 	for _, fh := range files {
 		src, err := fh.Open()
@@ -528,11 +549,20 @@ func (h *MediaHandler) UploadMultiple(c *echo.Context) error {
 		}
 
 		media, err := h.mediaService.UploadFile(c.Request().Context(), services.UploadFileParams{
-			Content:  content,
-			Filename: fh.Filename,
-			MimeType: mimeType,
-			PostID:   postID,
+			Content:     content,
+			Filename:    fh.Filename,
+			MimeType:    mimeType,
+			PostID:      postID,
+			OnDuplicate: onDuplicate,
 		})
+		var dup *services.DuplicateMediaError
+		if errors.As(err, &dup) {
+			duplicates = append(duplicates, map[string]interface{}{
+				"filename": fh.Filename,
+				"existing": mediaToResponse(dup.Existing, gen),
+			})
+			continue
+		}
 		if err != nil {
 			failed = append(failed, map[string]string{"filename": fh.Filename, "error": err.Error()})
 			continue
@@ -543,6 +573,7 @@ func (h *MediaHandler) UploadMultiple(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"uploaded":       uploaded,
 		"failed":         failed,
+		"duplicates":     duplicates,
 		"total_uploaded": len(uploaded),
 		"total_failed":   len(failed),
 	})

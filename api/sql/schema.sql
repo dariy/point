@@ -171,7 +171,9 @@ CREATE TABLE IF NOT EXISTS media (
     height INTEGER,
     post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL,
     uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    checksum VARCHAR(64) NOT NULL UNIQUE,
+    -- SHA-256 of the uploaded original. Not unique: "Upload again" at a
+    -- duplicate prompt keeps a second row with the same bytes (NF-16).
+    checksum VARCHAR(64) NOT NULL,
     alt_text VARCHAR(500),
     caption VARCHAR(1000),
     metadata TEXT,

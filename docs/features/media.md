@@ -7,9 +7,22 @@ by upload date (`/YYYY/MM/…`).
 ## What is implemented
 
 - **Upload**: multi-format (JPEG/PNG/WebP/…, video, audio) with MIME sniffing
-  (`media_mime.go`), size limit (`MAX_UPLOAD_SIZE_MB`), and **SHA256 dedup** — the same
-  bytes uploaded twice resolve to one stored file (this is what makes Instagram import
-  re-runs cheap).
+  (`media_mime.go`), size limit (`MAX_UPLOAD_SIZE_MB`), and **SHA256 dedup**.
+  `media.checksum` holds the SHA-256 of the uploaded original. It has a non-unique index
+  (migration `media_checksum_not_unique` removed the old UNIQUE constraint). The
+  `on_duplicate` form value of `/api/media/upload` and `/api/media/upload/multiple` sets
+  what an exact match does (`MediaService.UploadFile`, `DuplicatePolicy`):
+  - `existing` (the default): return the existing media and make no row; a trashed match
+    is restored. Instagram import and the audio post use it, so their re-runs are cheap.
+  - `ask`: change nothing. The single upload answers 409 with `code: "duplicate"` and the
+    `existing` media; the multiple upload lists the matches in `duplicates`.
+  - `new`: store a second row with the same checksum and its own original file.
+
+  The admin UI sends `ask` (`frontend/src/utils/duplicateUpload.ts`). The media library,
+  the editor picker, and a file dropped or shared into the editor ask "Use the existing file"
+  or "Upload again". A batch asks one question for all of its matches. "Use the existing
+  file" restores a trashed match, and in the editor it inserts the existing media. Folder
+  import from the photo library skips exact matches and reports them in one summary line.
 - **Thumbnails**: a fixed ladder of six rungs — 128/256/512/1024/1600/2048 px on the
   **longest side**, aspect-preserving (`fitImage`, Catmull-Rom from `golang.org/x/image/draw`), JPEG only (the binary is CGO-free,
   so no WebP/AVIF encoder). Upload and import write the rungs up to 1024
