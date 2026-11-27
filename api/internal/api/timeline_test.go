@@ -11,7 +11,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func setupTimelineHandler(t *testing.T) (*TimelineHandler, *services.TimelineService, *services.SettingsService, *services.TagService, repository.Repository) {

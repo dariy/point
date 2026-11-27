@@ -7,7 +7,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type TimelineHandler struct {
@@ -23,7 +23,7 @@ func NewTimelineHandler(timelineService *services.TimelineService, settingsServi
 }
 
 // timelineGate enforces plugin enabled state.
-func (h *TimelineHandler) timelineGate(c echo.Context) error {
+func (h *TimelineHandler) timelineGate(c *echo.Context) error {
 	settings, _ := h.settingsService.GetAllSettings(c.Request().Context())
 	if !plugins.IsEnabled("timeline", settings) {
 		return echo.NewHTTPError(http.StatusNotFound, "timeline not found")
@@ -32,7 +32,7 @@ func (h *TimelineHandler) timelineGate(c echo.Context) error {
 }
 
 // GetTimeline handles GET /api/timeline?context=<slug?>
-func (h *TimelineHandler) GetTimeline(c echo.Context) error {
+func (h *TimelineHandler) GetTimeline(c *echo.Context) error {
 	if err := h.timelineGate(c); err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func (h *TimelineHandler) GetTimeline(c echo.Context) error {
 }
 
 // GetTimelineLocations handles GET /api/timeline/locations?tag=<slug>&context=<slug?>&limit=10
-func (h *TimelineHandler) GetTimelineLocations(c echo.Context) error {
+func (h *TimelineHandler) GetTimelineLocations(c *echo.Context) error {
 	if err := h.timelineGate(c); err != nil {
 		return err
 	}

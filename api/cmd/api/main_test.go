@@ -24,7 +24,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // mkdirs creates subdirectories inside base and returns their paths.

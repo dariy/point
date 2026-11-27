@@ -23,7 +23,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // handlers bundles the REST handlers the MCP tools dispatch to.
@@ -55,7 +55,7 @@ type invoker struct {
 	baseURL string
 }
 
-// call runs handler h with a synthetic echo.Context carrying the invoker's
+// call runs handler h with a synthetic *echo.Context carrying the invoker's
 // context, principal, path params and optional JSON body, returning the response
 // body or an error built from the handler's status.
 func (in *invoker) call(h echo.HandlerFunc, method, target string, body []byte, params map[string]string) (json.RawMessage, error) {
@@ -92,14 +92,11 @@ func (in *invoker) serve(h echo.HandlerFunc, req *http.Request, params map[strin
 	rec := httptest.NewRecorder()
 	c := in.e.NewContext(req, rec)
 	if len(params) > 0 {
-		names := make([]string, 0, len(params))
-		vals := make([]string, 0, len(params))
+		pv := make(echo.PathValues, 0, len(params))
 		for k, v := range params {
-			names = append(names, k)
-			vals = append(vals, v)
+			pv = append(pv, echo.PathValue{Name: k, Value: v})
 		}
-		c.SetParamNames(names...)
-		c.SetParamValues(vals...)
+		c.SetPathValues(pv)
 	}
 	if in.principal != nil {
 		c.Set("user", in.principal)
@@ -108,6 +105,9 @@ func (in *invoker) serve(h echo.HandlerFunc, req *http.Request, params map[strin
 		var he *echo.HTTPError
 		if errors.As(err, &he) {
 			return nil, fmt.Errorf("point API error %d: %v", he.Code, he.Message)
+		}
+		if code := echo.StatusCode(err); code != 0 {
+			return nil, fmt.Errorf("point API error %d: %s", code, err.Error())
 		}
 		return nil, err
 	}

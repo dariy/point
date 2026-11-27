@@ -17,7 +17,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func setupPagesHandler(t *testing.T) (*PagesHandler, *testHandlers) {
@@ -85,9 +85,7 @@ func TestPagesHandler_PostPage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/posts/post-1", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("post-1")
-
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "post-1"}})
 	if err := postH.GetPostBySlug(c); err != nil {
 		t.Fatalf("GetPostBySlug failed: %v", err)
 	}
@@ -116,9 +114,7 @@ func TestPagesHandler_TagPage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/tags/tag-1", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("tag-1")
-
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "tag-1"}})
 	if err := ph.GetTagPage(c); err != nil {
 		t.Fatalf("GetTagPage failed: %v", err)
 	}
@@ -161,8 +157,7 @@ func TestPagesHandler_TagPageBreadcrumbPath(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, url, nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("slug")
-		c.SetParamValues("kyiv")
+		c.SetPathValues(echo.PathValues{{Name: "slug", Value: "kyiv"}})
 		if err := ph.GetTagPage(c); err != nil {
 			t.Fatalf("GetTagPage failed: %v", err)
 		}
@@ -240,8 +235,7 @@ func TestPagesHandler_TagPageHidden(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/tags/hidden-tag", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("hidden-tag")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "hidden-tag"}})
 	err := ph.GetTagPage(c)
 	if err == nil {
 		t.Error("expected error for hidden tag accessed publicly")
@@ -259,8 +253,7 @@ func TestPagesHandler_TagPageWithAuth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/tags/auth-tag", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("auth-tag")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "auth-tag"}})
 	c.Set("user", "test-user")
 
 	if err := ph.GetTagPage(c); err != nil {
@@ -393,9 +386,7 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/pages/graph/tag/"+strconv.FormatInt(place.ID, 10), nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(place.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(place.ID, 10)}})
 	if err := ph.GetTagCloud(c); err != nil {
 		t.Fatalf("GetTagCloud failed: %v", err)
 	}
@@ -432,8 +423,7 @@ func TestPagesHandler_GetTagCloud(t *testing.T) {
 	_ = h.settingsSvc.SetSetting(ctx, "atlas_post_limit", "12", "integer")
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req, rec2)
-	c2.SetParamNames("id")
-	c2.SetParamValues(strconv.FormatInt(place.ID, 10))
+	c2.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(place.ID, 10)}})
 	if err := ph.GetTagCloud(c2); err != nil {
 		t.Fatalf("GetTagCloud (custom limit) failed: %v", err)
 	}
@@ -653,8 +643,7 @@ func TestPagesHandler_TagsModuleDisabled404(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/api/pages/graph/tag/1", nil)
 	c := e.NewContext(req, httptest.NewRecorder())
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	is404(t, ph.GetTagCloud(c))
 
 	req = httptest.NewRequest(http.MethodGet, "/api/pages/map", nil)
@@ -682,9 +671,7 @@ func TestPagesHandler_TagPage_ViewCountVisibility(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/tags/"+tag1.Slug, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues(tag1.Slug)
-
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: tag1.Slug}})
 	if err := ph.GetTagPage(c); err != nil {
 		t.Fatalf("GetTagPage (above) failed: %v", err)
 	}
@@ -703,9 +690,7 @@ func TestPagesHandler_TagPage_ViewCountVisibility(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodGet, "/tags/"+tag2.Slug, nil)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	c2.SetParamNames("slug")
-	c2.SetParamValues(tag2.Slug)
-
+	c2.SetPathValues(echo.PathValues{{Name: "slug", Value: tag2.Slug}})
 	err := ph.GetTagPage(c2)
 	if err == nil {
 		t.Error("expected 404 for tag under threshold (public)")
@@ -714,8 +699,7 @@ func TestPagesHandler_TagPage_ViewCountVisibility(t *testing.T) {
 	// Case 3: Admin sees it anyway
 	rec3 := httptest.NewRecorder()
 	c3 := e.NewContext(req2, rec3)
-	c3.SetParamNames("slug")
-	c3.SetParamValues(tag2.Slug)
+	c3.SetPathValues(echo.PathValues{{Name: "slug", Value: tag2.Slug}})
 	c3.Set("user", "admin")
 
 	if err := ph.GetTagPage(c3); err != nil {
@@ -1031,8 +1015,7 @@ func TestPagesHandler_TagPageScheduledPages(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/tags/"+slug+"?page="+page, nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("slug")
-		c.SetParamValues(slug)
+		c.SetPathValues(echo.PathValues{{Name: "slug", Value: slug}})
 		if asOwner {
 			c.Set("user", "test-user")
 		}
@@ -1241,8 +1224,7 @@ func TestPagesHandler_GetTagCloud_HiddenMarking(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/pages/graph/tag/"+id, nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("id")
-		c.SetParamValues(id)
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: id}})
 		if admin {
 			c.Set("user", "test-user")
 		}
@@ -1333,8 +1315,7 @@ func TestPagesHandler_PathScopedTagPageCaches(t *testing.T) {
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		if len(params) == 2 {
-			c.SetParamNames(params[0])
-			c.SetParamValues(params[1])
+			c.SetPathValues(echo.PathValues{{Name: params[0], Value: params[1]}})
 		}
 		if err := ph.GetTagPage(c); err != nil {
 			t.Fatalf("GetTagPage failed: %v", err)

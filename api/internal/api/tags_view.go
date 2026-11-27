@@ -16,7 +16,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // tagView pairs a tag graph snapshot with the visibility rules of whoever is
@@ -32,7 +32,7 @@ type tagView struct {
 // tagView loads the graph snapshot and pairs it with the caller's visibility
 // rules. Callers get the mapped HTTP error, so a failed snapshot is one
 // `return err` rather than a MapError call at every use site.
-func (h *TagHandler) tagView(c echo.Context) (tagView, error) {
+func (h *TagHandler) tagView(c *echo.Context) (tagView, error) {
 	g, err := h.tagService.GetTagSnapshot(c.Request().Context())
 	if err != nil {
 		return tagView{}, MapError(err)
@@ -181,13 +181,13 @@ func (v tagView) annotateHiddenVia(resp map[string]interface{}, id int64) {
 }
 
 // renderTag writes a single-tag payload, fetching its location on the way.
-func (h *TagHandler) renderTag(c echo.Context, v tagView, tag models.Tag, status int) error {
+func (h *TagHandler) renderTag(c *echo.Context, v tagView, tag models.Tag, status int) error {
 	return c.JSON(status, v.fullResponse(tag, h.tagLocation(c, tag.ID)))
 }
 
 // renderSavedTag renders a tag through a snapshot taken after the save, so the
 // response reflects the relationship and location writes that followed it.
-func (h *TagHandler) renderSavedTag(c echo.Context, id int64, status int) error {
+func (h *TagHandler) renderSavedTag(c *echo.Context, id int64, status int) error {
 	v, err := h.tagView(c)
 	if err != nil {
 		return err
@@ -200,7 +200,7 @@ func (h *TagHandler) renderSavedTag(c echo.Context, id int64, status int) error 
 }
 
 // tagLocation fetches the location for a single tag, returning nil if none.
-func (h *TagHandler) tagLocation(c echo.Context, tagID int64) *models.TagLocation {
+func (h *TagHandler) tagLocation(c *echo.Context, tagID int64) *models.TagLocation {
 	locs, err := h.tagService.GetTagLocationsByTagIDs(c.Request().Context(), []int64{tagID})
 	if err != nil {
 		return nil

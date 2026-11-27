@@ -14,7 +14,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type AuthHandler struct {
@@ -53,7 +53,7 @@ func GenerateToken() string {
 // scheme (direct TLS, or X-Forwarded-Proto from our trusted reverse proxy) when
 // it is unset. Erring toward Secure only ever tightens the cookie, never loosens
 // it, so a spoofed X-Forwarded-Proto can't strip the flag on an HTTPS deployment.
-func secureCookieFor(cfg *config.Config, c echo.Context) bool {
+func secureCookieFor(cfg *config.Config, c *echo.Context) bool {
 	if strings.HasPrefix(cfg.AppURL, "https://") {
 		return true
 	}
@@ -63,11 +63,11 @@ func secureCookieFor(cfg *config.Config, c echo.Context) bool {
 	return c.Request().Header.Get(echo.HeaderXForwardedProto) == "https"
 }
 
-func (h *AuthHandler) secureCookie(c echo.Context) bool {
+func (h *AuthHandler) secureCookie(c *echo.Context) bool {
 	return secureCookieFor(h.cfg, c)
 }
 
-func (h *AuthHandler) Login(c echo.Context) error {
+func (h *AuthHandler) Login(c *echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
@@ -122,7 +122,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	})
 }
 
-func (h *AuthHandler) Logout(c echo.Context) error {
+func (h *AuthHandler) Logout(c *echo.Context) error {
 	cookie, err := c.Cookie("session")
 	if err == nil {
 		session, err := h.authService.ValidateSession(c.Request().Context(), cookie.Value)
@@ -146,7 +146,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
-func (h *AuthHandler) Me(c echo.Context) error {
+func (h *AuthHandler) Me(c *echo.Context) error {
 	user := c.Get("user")
 	userID := extractUserID(user)
 	if userID == 0 {
@@ -188,7 +188,7 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_name"`
 }
 
-func (h *AuthHandler) ChangePassword(c echo.Context) error {
+func (h *AuthHandler) ChangePassword(c *echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	sessionID := extractSessionID(c.Get("user"))
 
@@ -213,7 +213,7 @@ type ChangeEmailRequest struct {
 	Email           string `json:"email"`
 }
 
-func (h *AuthHandler) ChangeEmail(c echo.Context) error {
+func (h *AuthHandler) ChangeEmail(c *echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 
 	var req ChangeEmailRequest
@@ -232,7 +232,7 @@ func (h *AuthHandler) ChangeEmail(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Email changed successfully"})
 }
 
-func (h *AuthHandler) ListSessions(c echo.Context) error {
+func (h *AuthHandler) ListSessions(c *echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	currentSessionID := extractSessionID(c.Get("user"))
 
@@ -275,7 +275,7 @@ func (h *AuthHandler) ListSessions(c echo.Context) error {
 	})
 }
 
-func (h *AuthHandler) DeleteSession(c echo.Context) error {
+func (h *AuthHandler) DeleteSession(c *echo.Context) error {
 	sessionID, err := parseNamedIDParam(c, "session id")
 	if err != nil {
 		return err
@@ -290,7 +290,7 @@ func (h *AuthHandler) DeleteSession(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *AuthHandler) DeleteOtherSessions(c echo.Context) error {
+func (h *AuthHandler) DeleteOtherSessions(c *echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	currentSessionID := extractSessionID(c.Get("user"))
 
@@ -301,7 +301,7 @@ func (h *AuthHandler) DeleteOtherSessions(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Other sessions terminated"})
 }
 
-func (h *AuthHandler) ForgotPassword(c echo.Context) error {
+func (h *AuthHandler) ForgotPassword(c *echo.Context) error {
 	var req struct {
 		Email string `json:"email"`
 	}
@@ -371,7 +371,7 @@ func (h *AuthHandler) ForgotPassword(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"detail": okMsg})
 }
 
-func (h *AuthHandler) ResetPassword(c echo.Context) error {
+func (h *AuthHandler) ResetPassword(c *echo.Context) error {
 	var req struct {
 		Token    string `json:"token"`
 		Password string `json:"name"`
@@ -397,10 +397,10 @@ func (h *AuthHandler) ResetPassword(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"detail": "Password reset successfully. You can now log in."})
 }
 
-func (h *AuthHandler) setRemark42Cookies(c echo.Context, user models.User, expiresAt time.Time) {
+func (h *AuthHandler) setRemark42Cookies(c *echo.Context, user models.User, expiresAt time.Time) {
 	IssueRemark42Cookies(c, h.repo, user.ID, user.DisplayName, user.Username, expiresAt, h.secureCookie(c))
 }
 
-func (h *AuthHandler) clearRemark42Cookies(c echo.Context) {
+func (h *AuthHandler) clearRemark42Cookies(c *echo.Context) {
 	ClearRemark42Cookies(c, h.secureCookie(c))
 }

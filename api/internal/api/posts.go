@@ -18,7 +18,7 @@ import (
 	"point-api/internal/services"
 	"point-api/internal/services/pageview"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type PostHandler struct {
@@ -163,7 +163,7 @@ func (h *PostHandler) fetchPostMedia(ctx context.Context, post models.Post) ([]m
 
 // getFullPostResponse fetches a post by ID with author and tags, returns the response map.
 // Always injects hidden fields since this is called only from auth-required handlers.
-func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[string]interface{}, error) {
+func (h *PostHandler) getFullPostResponse(c *echo.Context, postID int64) (map[string]interface{}, error) {
 	ctx := c.Request().Context()
 	post, err := h.postService.GetPostByID(ctx, postID)
 	if err != nil {
@@ -193,7 +193,7 @@ func (h *PostHandler) getFullPostResponse(c echo.Context, postID int64) (map[str
 	return resp, nil
 }
 
-func (h *PostHandler) ListPosts(c echo.Context) error {
+func (h *PostHandler) ListPosts(c *echo.Context) error {
 	pageParsed, _ := strconv.ParseInt(c.QueryParam("page"), 10, 32)
 	page := int32(pageParsed)
 	if page < 1 {
@@ -316,7 +316,7 @@ func (h *PostHandler) ListPosts(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-func (h *PostHandler) GetPostBySlug(c echo.Context) error {
+func (h *PostHandler) GetPostBySlug(c *echo.Context) error {
 	slug := c.Param("slug")
 	post, err := h.postService.GetPostBySlug(c.Request().Context(), slug)
 	if err != nil {
@@ -375,7 +375,7 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 
 // GetPostPage returns the home-feed (or tag-feed) page number that contains the given post slug.
 // GET /api/posts/:slug/page?tag=some-tag
-func (h *PostHandler) GetPostPage(c echo.Context) error {
+func (h *PostHandler) GetPostPage(c *echo.Context) error {
 	ctx := c.Request().Context()
 	slug := c.Param("slug")
 	tagFilter := c.QueryParam("tag")
@@ -476,7 +476,7 @@ func (h *PostHandler) GetPostPage(c echo.Context) error {
 	})
 }
 
-func (h *PostHandler) GetPostByID(c echo.Context) error {
+func (h *PostHandler) GetPostByID(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -572,7 +572,7 @@ func parseScheduledAt(s *string) (*time.Time, error) {
 	return &t, nil
 }
 
-func (h *PostHandler) CreatePost(c echo.Context) error {
+func (h *PostHandler) CreatePost(c *echo.Context) error {
 	authorID := extractUserID(c.Get("user"))
 
 	var req CreatePostRequest
@@ -667,7 +667,7 @@ type UpdatePostRequest struct {
 	SaveKind string `json:"save_kind"`
 }
 
-func (h *PostHandler) UpdatePost(c echo.Context) error {
+func (h *PostHandler) UpdatePost(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -766,7 +766,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
+func (h *PostHandler) UpdatePostStatus(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -800,7 +800,7 @@ func (h *PostHandler) UpdatePostStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *PostHandler) UpdatePostTags(c echo.Context) error {
+func (h *PostHandler) UpdatePostTags(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -831,7 +831,7 @@ func (h *PostHandler) UpdatePostTags(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *PostHandler) DeletePost(c echo.Context) error {
+func (h *PostHandler) DeletePost(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -853,7 +853,7 @@ func (h *PostHandler) DeletePost(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *PostHandler) RestorePost(c echo.Context) error {
+func (h *PostHandler) RestorePost(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -874,7 +874,7 @@ func (h *PostHandler) RestorePost(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *PostHandler) PermanentlyDeletePost(c echo.Context) error {
+func (h *PostHandler) PermanentlyDeletePost(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -890,7 +890,7 @@ func (h *PostHandler) PermanentlyDeletePost(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *PostHandler) PublishPost(c echo.Context) error {
+func (h *PostHandler) PublishPost(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -912,7 +912,7 @@ func (h *PostHandler) PublishPost(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *PostHandler) GeneratePreviewLink(c echo.Context) error {
+func (h *PostHandler) GeneratePreviewLink(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -935,7 +935,7 @@ func (h *PostHandler) GeneratePreviewLink(c echo.Context) error {
 	})
 }
 
-func (h *PostHandler) GetPostByPreviewToken(c echo.Context) error {
+func (h *PostHandler) GetPostByPreviewToken(c *echo.Context) error {
 	token := c.Param("token")
 	if token == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "token required")
@@ -962,7 +962,7 @@ func (h *PostHandler) GetPostByPreviewToken(c echo.Context) error {
 }
 
 // CreateAudioPost uploads an audio file and creates a draft post linked to it.
-func (h *PostHandler) CreateAudioPost(c echo.Context) error {
+func (h *PostHandler) CreateAudioPost(c *echo.Context) error {
 	authorID := extractUserID(c.Get("user"))
 
 	file, err := c.FormFile("file")
@@ -1040,7 +1040,7 @@ func (h *PostHandler) CreateAudioPost(c echo.Context) error {
 	return c.JSON(http.StatusCreated, resp)
 }
 
-func (h *PostHandler) GetPostNavigation(c echo.Context) error {
+func (h *PostHandler) GetPostNavigation(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -1066,7 +1066,7 @@ func (h *PostHandler) GetPostNavigation(c echo.Context) error {
 }
 
 // parseRevisionIDParam reads the :rev path parameter.
-func parseRevisionIDParam(c echo.Context) (int64, error) {
+func parseRevisionIDParam(c *echo.Context) (int64, error) {
 	rev, err := strconv.ParseInt(c.Param("rev"), 10, 64)
 	if err != nil {
 		return 0, echo.NewHTTPError(http.StatusBadRequest, "invalid revision id")
@@ -1076,7 +1076,7 @@ func parseRevisionIDParam(c echo.Context) (int64, error) {
 
 // ListPostRevisions handles GET /api/posts/:id/revisions. The list is newest
 // first and has no bodies; GetPostRevision reads one revision in full.
-func (h *PostHandler) ListPostRevisions(c echo.Context) error {
+func (h *PostHandler) ListPostRevisions(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -1089,7 +1089,7 @@ func (h *PostHandler) ListPostRevisions(c echo.Context) error {
 }
 
 // GetPostRevision handles GET /api/posts/:id/revisions/:rev.
-func (h *PostHandler) GetPostRevision(c echo.Context) error {
+func (h *PostHandler) GetPostRevision(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -1108,7 +1108,7 @@ func (h *PostHandler) GetPostRevision(c echo.Context) error {
 // RestorePostRevision handles POST /api/posts/:id/revisions/:rev/restore. It
 // writes the revision back to the post and returns the post, as UpdatePost
 // does.
-func (h *PostHandler) RestorePostRevision(c echo.Context) error {
+func (h *PostHandler) RestorePostRevision(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -1144,7 +1144,7 @@ func (h *PostHandler) RestorePostRevision(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *PostHandler) WithdrawPost(c echo.Context) error {
+func (h *PostHandler) WithdrawPost(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -1166,7 +1166,7 @@ func (h *PostHandler) WithdrawPost(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *PostHandler) GetPostAnalytics(c echo.Context) error {
+func (h *PostHandler) GetPostAnalytics(c *echo.Context) error {
 	stats, err := h.postService.GetPostAnalytics(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -1181,7 +1181,7 @@ func (h *PostHandler) GetPostAnalytics(c echo.Context) error {
 
 // PublishToInstagram manually triggers cross-posting to Instagram for a post.
 // POST /api/posts/:id/instagram/publish
-func (h *PostHandler) PublishToInstagram(c echo.Context) error {
+func (h *PostHandler) PublishToInstagram(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -1207,7 +1207,7 @@ func (h *PostHandler) PublishToInstagram(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *PostHandler) PreviewRender(c echo.Context) error {
+func (h *PostHandler) PreviewRender(c *echo.Context) error {
 	var req struct {
 		Content string `json:"content"`
 	}

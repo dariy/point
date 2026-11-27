@@ -9,7 +9,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // httpError extracts the *echo.HTTPError MapError is expected to produce.

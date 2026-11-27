@@ -23,7 +23,7 @@ import (
 
 	exif "github.com/dsoprea/go-exif/v3"
 	jpegstructure "github.com/dsoprea/go-jpeg-image-structure/v2"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // makeTinyMP3 returns bytes that the server-side sniffer recognizes as MP3
@@ -201,8 +201,7 @@ func TestMediaHandler_List(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(mediaID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(mediaID, 10)}})
 	if err := handler.RenameMedia(c); err != nil {
 		t.Fatalf("RenameMedia failed: %v", err)
 	}
@@ -273,8 +272,7 @@ func TestMediaHandler_GetMedia(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/media/1", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(media.ID, 10)}})
 	if err := handler.GetMedia(c); err != nil {
 		t.Fatalf("GetMedia failed: %v", err)
 	}
@@ -286,8 +284,7 @@ func TestMediaHandler_GetMedia(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/media/abc", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	err := handler.GetMedia(c)
 	if err == nil {
 		t.Error("expected error for invalid ID")
@@ -297,8 +294,7 @@ func TestMediaHandler_GetMedia(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/media/9999", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("9999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "9999"}})
 	err = handler.GetMedia(c)
 	if err == nil {
 		t.Error("expected error for non-existent media")
@@ -333,9 +329,7 @@ func TestMediaHandler_UpdateMedia(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(media.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(media.ID, 10)}})
 	if err := handler.UpdateMedia(c); err != nil {
 		t.Fatalf("UpdateMedia failed: %v", err)
 	}
@@ -348,8 +342,7 @@ func TestMediaHandler_UpdateMedia(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	if handler.UpdateMedia(c) == nil {
 		t.Error("expected error for invalid ID")
 	}
@@ -410,8 +403,7 @@ func TestMediaHandler_DeleteMedia(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/media/1", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(media.ID, 10)}})
 	if err := handler.DeleteMedia(c); err != nil {
 		t.Fatalf("DeleteMedia failed: %v", err)
 	}
@@ -423,8 +415,7 @@ func TestMediaHandler_DeleteMedia(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/media/abc", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	if handler.DeleteMedia(c) == nil {
 		t.Error("expected error for invalid ID")
 	}
@@ -445,12 +436,11 @@ func TestMediaHandler_TrashEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	idStr := strconv.FormatInt(media.ID, 10)
-	withID := func(method string) (echo.Context, *httptest.ResponseRecorder) {
+	withID := func(method string) (*echo.Context, *httptest.ResponseRecorder) {
 		req := httptest.NewRequest(method, "/media/"+idStr, nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("id")
-		c.SetParamValues(idStr)
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: idStr}})
 		return c, rec
 	}
 	trashTotal := func() float64 {
@@ -671,8 +661,7 @@ func TestMediaHandler_RenameMedia(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc") // invalid id → should error
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}}) // invalid id → should error
 	if handler.RenameMedia(c) == nil {
 		t.Error("expected error for invalid id")
 	}
@@ -706,8 +695,7 @@ func TestMediaHandler_AnalyzeImageByID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/media/abc/analyze", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	err := handler.AnalyzeImageByID(c)
 	if err == nil {
 		t.Error("expected error for invalid ID")
@@ -717,8 +705,7 @@ func TestMediaHandler_AnalyzeImageByID(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/media/9999/analyze", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("9999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "9999"}})
 	err = handler.AnalyzeImageByID(c)
 	var notFoundErr *echo.HTTPError
 	if err == nil {
@@ -731,8 +718,7 @@ func TestMediaHandler_AnalyzeImageByID(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/media/1/analyze", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(media.ID, 10)}})
 	err = handler.AnalyzeImageByID(c)
 	var badRequestErr *echo.HTTPError
 	if err == nil {
@@ -809,8 +795,7 @@ func TestMediaHandler_UpdateMedia_Metadata(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(media.ID, 10)}})
 	if err := handler.UpdateMedia(c); err != nil {
 		t.Fatalf("UpdateMedia: %v", err)
 	}
@@ -829,8 +814,7 @@ func TestMediaHandler_UpdateMedia_Metadata(t *testing.T) {
 	req2.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	c2.SetParamNames("id")
-	c2.SetParamValues(strconv.FormatInt(media.ID, 10))
+	c2.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(media.ID, 10)}})
 	if err := handler.UpdateMedia(c2); err != nil {
 		t.Fatalf("UpdateMedia2: %v", err)
 	}
@@ -863,8 +847,7 @@ func TestMediaHandler_ReextractEXIF(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(media.ID, 10)}})
 	if err := handler.ReextractEXIF(c); err != nil {
 		t.Fatalf("ReextractEXIF: %v", err)
 	}
@@ -875,8 +858,7 @@ func TestMediaHandler_ReextractEXIF(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	c2.SetParamNames("id")
-	c2.SetParamValues("nope")
+	c2.SetPathValues(echo.PathValues{{Name: "id", Value: "nope"}})
 	if handler.ReextractEXIF(c2) == nil {
 		t.Error("expected error for invalid id")
 	}
@@ -922,8 +904,7 @@ func TestPostHandler_GetPostBySlug_MediaByContentPaths(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues(post.Slug)
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: post.Slug}})
 	c.Set("user", "admin")
 	if err := handler.GetPostBySlug(c); err != nil {
 		t.Fatalf("GetPostBySlug: %v", err)
@@ -1146,9 +1127,7 @@ func TestMediaHandler_UpdateEXIF_ValidInput(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(m.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(m.ID, 10)}})
 	if err := handler.UpdateEXIF(c); err != nil {
 		t.Fatalf("UpdateEXIF handler: %v", err)
 	}
@@ -1188,9 +1167,7 @@ func TestMediaHandler_UpdateEXIF_InvalidChars(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(m.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(m.ID, 10)}})
 	err := handler.UpdateEXIF(c)
 	if err == nil && rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for invalid chars, got %d", rec.Code)
@@ -1207,8 +1184,7 @@ func TestMediaHandler_UpdateEXIF_InvalidID(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	if err := handler.UpdateEXIF(c); err == nil {
 		t.Error("expected error for invalid id")
 	}
@@ -1243,9 +1219,7 @@ func TestMediaHandler_RevertEXIF(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(m.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(m.ID, 10)}})
 	if err := handler.RevertEXIF(c); err != nil {
 		t.Fatalf("RevertEXIF handler: %v", err)
 	}
@@ -1263,8 +1237,7 @@ func TestMediaHandler_RevertEXIF_InvalidID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("bad")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "bad"}})
 	if err := handler.RevertEXIF(c); err == nil {
 		t.Error("expected error for invalid id")
 	}
@@ -1302,8 +1275,7 @@ func TestMediaHandler_UpdateMedia_MetadataOnly_PreservesOtherFields(t *testing.T
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(media.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(media.ID, 10)}})
 	if err := handler.UpdateMedia(c); err != nil {
 		t.Fatalf("UpdateMedia: %v", err)
 	}

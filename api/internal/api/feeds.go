@@ -12,7 +12,7 @@ import (
 	"point-api/internal/services"
 	"point-api/internal/services/pageview"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type FeedsHandler struct {
@@ -42,7 +42,7 @@ func xmlEscape(s string) string {
 	return s
 }
 
-func baseURL(c echo.Context) string {
+func baseURL(c *echo.Context) string {
 	scheme := "http"
 	if c.Request().TLS != nil {
 		scheme = "https"
@@ -57,7 +57,7 @@ func baseURL(c echo.Context) string {
 	return scheme + "://" + host
 }
 
-func (h *FeedsHandler) RSSFeed(c echo.Context) error {
+func (h *FeedsHandler) RSSFeed(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// One render per expiry, however many aggregators arrive at once: this is a
@@ -135,7 +135,7 @@ func (h *FeedsHandler) RSSFeed(c echo.Context) error {
 	return c.Blob(http.StatusOK, "application/rss+xml; charset=utf-8", data)
 }
 
-func (h *FeedsHandler) Sitemap(c echo.Context) error {
+func (h *FeedsHandler) Sitemap(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// As for the feed: crawlers arrive in bursts, and this walks every published
@@ -198,7 +198,7 @@ func (h *FeedsHandler) Sitemap(c echo.Context) error {
 	return c.Blob(http.StatusOK, "application/xml; charset=utf-8", data)
 }
 
-func (h *FeedsHandler) RobotsTxt(c echo.Context) error {
+func (h *FeedsHandler) RobotsTxt(c *echo.Context) error {
 	base := baseURL(c)
 	content := fmt.Sprintf("User-agent: *\nAllow: /\nDisallow: /light/\nDisallow: /api/\nSitemap: %s/sitemap.xml\n", base)
 	return c.String(http.StatusOK, content)

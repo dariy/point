@@ -7,7 +7,7 @@ import (
 
 	"point-api/internal/plugins"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // Plugin presets are named sets of enabled plugins the admin can apply with one
@@ -28,7 +28,7 @@ type presetsResponse struct {
 
 // loadPresets returns the stored preset map, seeding (and persisting) the
 // defaults the first time it is absent or unparseable.
-func (h *PluginsHandler) loadPresets(c echo.Context) (map[string][]string, error) {
+func (h *PluginsHandler) loadPresets(c *echo.Context) (map[string][]string, error) {
 	ctx := c.Request().Context()
 	all, err := h.settingsService.GetAllSettings(ctx)
 	if err != nil {
@@ -49,7 +49,7 @@ func (h *PluginsHandler) loadPresets(c echo.Context) (map[string][]string, error
 	return defaults, nil
 }
 
-func (h *PluginsHandler) savePresets(c echo.Context, m map[string][]string) error {
+func (h *PluginsHandler) savePresets(c *echo.Context, m map[string][]string) error {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func (h *PluginsHandler) savePresets(c echo.Context, m map[string][]string) erro
 }
 
 // GetPresets returns the preset definitions and the active preset id.
-func (h *PluginsHandler) GetPresets(c echo.Context) error {
+func (h *PluginsHandler) GetPresets(c *echo.Context) error {
 	presets, err := h.loadPresets(c)
 	if err != nil {
 		return MapError(err)
@@ -81,7 +81,7 @@ type updatePresetRequest struct {
 
 // UpdatePreset replaces the plugin list of preset :id. Unknown plugin ids are
 // rejected; the preset id must already exist.
-func (h *PluginsHandler) UpdatePreset(c echo.Context) error {
+func (h *PluginsHandler) UpdatePreset(c *echo.Context) error {
 	id := c.Param("id")
 	presets, err := h.loadPresets(c)
 	if err != nil {
@@ -119,7 +119,7 @@ func (h *PluginsHandler) UpdatePreset(c echo.Context) error {
 // every core area keeps at least one enabled member, and records the active
 // preset. It returns the full plugin catalog so the client re-renders in one
 // round-trip.
-func (h *PluginsHandler) ApplyPreset(c echo.Context) error {
+func (h *PluginsHandler) ApplyPreset(c *echo.Context) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
 
@@ -158,7 +158,7 @@ func (h *PluginsHandler) ApplyPreset(c echo.Context) error {
 }
 
 // presetActive reads the active preset id, defaulting to custom.
-func presetActive(c echo.Context, h *PluginsHandler) string {
+func presetActive(c *echo.Context, h *PluginsHandler) string {
 	all, err := h.settingsService.GetAllSettings(c.Request().Context())
 	if err != nil {
 		return presetCustom

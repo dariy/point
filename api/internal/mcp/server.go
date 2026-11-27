@@ -17,8 +17,8 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/time/rate"
 )
@@ -104,18 +104,14 @@ func Register(e *echo.Echo, d Deps) {
 	// Throttle the interactive password POST (the brute-force surface), keyed by
 	// client IP: ~10 burst, refilling 1 every 6s.
 	oauthLoginLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
-			Rate:      rate.Every(6 * time.Second),
+		Store: api.QuietRateStore(middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      float64(rate.Every(6 * time.Second)),
 			Burst:     10,
 			ExpiresIn: 10 * time.Minute,
-		}),
-		DenyHandler: func(c echo.Context, identifier string, err error) error {
+		})),
+		DenyHandler: func(c *echo.Context, identifier string, err error) error {
 			d.Metrics.RateLimited(metrics.LimiterMCPOAuth)
-			return &echo.HTTPError{
-				Code:     http.StatusTooManyRequests,
-				Message:  "rate limit exceeded",
-				Internal: err,
-			}
+			return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded").Wrap(err)
 		},
 	})
 
@@ -169,7 +165,7 @@ func Register(e *echo.Echo, d Deps) {
 // returns 401 with a WWW-Authenticate pointing at OAuth discovery.
 func (d Deps) authMiddleware(provider *oauth.Provider) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			ctx := c.Request().Context()
 			var principal interface{}
 
@@ -209,7 +205,7 @@ type oauthClientResponse struct {
 }
 
 // listOAuthClients answers GET /api/auth/oauth-clients.
-func (d Deps) listOAuthClients(c echo.Context) error {
+func (d Deps) listOAuthClients(c *echo.Context) error {
 	clients, err := d.Repo.ListOAuthClients(c.Request().Context(), time.Now())
 	if err != nil {
 		return err
@@ -233,7 +229,7 @@ func (d Deps) listOAuthClients(c echo.Context) error {
 // revokeOAuthClient answers DELETE /api/auth/oauth-clients/:id. The provider
 // clears its memory tier and the Store together, so the revoke is immediate.
 func revokeOAuthClient(provider *oauth.Provider) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		if err := provider.RevokeClient(c.Request().Context(), c.Param("id")); err != nil {
 			return err
 		}

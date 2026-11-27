@@ -25,6 +25,8 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 	"point-api/internal/utils"
+
+	"github.com/labstack/echo/v5"
 )
 
 // Version is set at build time via -ldflags="-X main.Version=..."
@@ -186,8 +188,25 @@ func main() {
 	// Start server
 	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	slog.Info("Point API starting", "address", address)
+	// echo/v5 runs the server through StartConfig: Start returns when ctx is
+	// done and the graceful shutdown (up to GracefulTimeout) has finished.
+	served := make(chan struct{})
 	go func() {
-		if err := e.Start(address); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		defer close(served)
+		sc := echo.StartConfig{
+			Address:         address,
+			HideBanner:      true,
+			HidePort:        true,
+			GracefulTimeout: 30 * time.Second,
+			OnShutdownError: func(err error) { slog.Error("shutdown error", "error", err) },
+			// StartConfig sets a 30s ReadTimeout; echo v4 set none. Keep none, so
+			// a slow multi-GB "move in" upload is not cut off.
+			BeforeServeFunc: func(s *http.Server) error {
+				s.ReadTimeout = 0
+				return nil
+			},
+		}
+		if err := sc.Start(ctx, e); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("failed to start server", "error", err)
 			os.Exit(1)
 		}
@@ -198,11 +217,9 @@ func main() {
 	stop()
 
 	slog.Info("shutting down...")
+	<-served
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := e.Shutdown(shutdownCtx); err != nil {
-		slog.Error("shutdown error", "error", err)
-	}
 	// Closed before the re-exec below, not just at exit: a restart that left
 	// this port held would fail to rebind it in the new process.
 	if metricsSrv != nil {

@@ -13,7 +13,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // statsImportConfigured runs GetStats and returns its import_configured flag.

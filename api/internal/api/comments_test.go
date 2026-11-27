@@ -11,7 +11,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestCommentsProxy(t *testing.T) {
@@ -41,7 +41,7 @@ func TestCommentsProxy(t *testing.T) {
 	// survive on proxied responses (they'd stack with remark42's own CSP and
 	// X-Frame-Options and block the widget iframe).
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			c.Response().Header().Set("Content-Security-Policy", "frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types point point-leaflet point-codejar")
 			// Nothing sets a report-only header today, but the Del is kept and
 			// so is this: an operator who adds one must not have it survive

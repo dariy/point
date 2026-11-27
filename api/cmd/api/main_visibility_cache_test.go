@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 )
 
 // TestVisibilityCache_LiveCORSChain wires echo exactly as main.go does — global
@@ -21,7 +21,7 @@ func TestVisibilityCache_LiveCORSChain(t *testing.T) {
 		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"*"},
 	}))
-	e.GET("/api/posts", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, visibilityCache)
+	e.GET("/api/posts", func(c *echo.Context) error { return c.NoContent(http.StatusOK) }, visibilityCache)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/posts", nil)
 	req.Header.Set("Origin", "https://example.com")
@@ -51,7 +51,7 @@ func runVisibilityCache(t *testing.T, method, path string, mutate func(*http.Req
 	}
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	h := visibilityCache(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	h := visibilityCache(func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
 	if err := h(c); err != nil {
 		t.Fatalf("handler error: %v", err)
 	}
@@ -163,7 +163,7 @@ func runVisibilityCacheVary(t *testing.T, mutate func(*http.Request), presetVary
 		rec.Header().Add("Vary", v)
 	}
 	c := e.NewContext(req, rec)
-	h := visibilityCache(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	h := visibilityCache(func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
 	if err := h(c); err != nil {
 		t.Fatalf("handler error: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestVisibilityCache_HandlerCacheControlWins(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/2026/07/photo.jpg", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	h := visibilityCache(func(c echo.Context) error {
+	h := visibilityCache(func(c *echo.Context) error {
 		c.Response().Header().Set("Cache-Control", "public, max-age=300, s-maxage=86400")
 		return c.NoContent(http.StatusOK)
 	})

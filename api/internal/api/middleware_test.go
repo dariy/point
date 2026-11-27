@@ -11,7 +11,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestMiddleware_ExtractIDNil(t *testing.T) {
@@ -31,7 +31,7 @@ func TestRequirePlugin(t *testing.T) {
 	svc := services.NewSettingsService(repo)
 	e := echo.New()
 	hit := false
-	handler := func(c echo.Context) error {
+	handler := func(c *echo.Context) error {
 		hit = true
 		return c.NoContent(http.StatusOK)
 	}
@@ -43,7 +43,7 @@ func TestRequirePlugin(t *testing.T) {
 		mw := RequirePlugin(svc, id)
 		err := mw(handler)(e.NewContext(req, rec))
 		if err != nil {
-			e.HTTPErrorHandler(err, e.NewContext(req, rec))
+			e.HTTPErrorHandler(e.NewContext(req, rec), err)
 			var he *echo.HTTPError
 			if errors.As(err, &he) {
 				return he.Code
@@ -124,7 +124,7 @@ func TestAuthMiddleware_APIKeyRefusedWhenPluginDisabled(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+rawKey)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		err := middleware(func(c echo.Context) error {
+		err := middleware(func(c *echo.Context) error {
 			reached = true
 			return c.NoContent(http.StatusOK)
 		})(c)
@@ -187,7 +187,7 @@ func TestAuthMiddleware_LightroomScope(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+key)
 		c := e.NewContext(req, httptest.NewRecorder())
 		c.SetPath(path)
-		err := middleware(func(c echo.Context) error { return c.NoContent(http.StatusOK) })(c)
+		err := middleware(func(c *echo.Context) error { return c.NoContent(http.StatusOK) })(c)
 		var he *echo.HTTPError
 		if errors.As(err, &he) {
 			return he.Code

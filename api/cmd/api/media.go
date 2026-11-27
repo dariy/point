@@ -16,10 +16,11 @@ import (
 	"strconv"
 	"strings"
 
+	"point-api/internal/api"
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // checksumRe matches the 8-char hex checksum embedded in a media filename,
@@ -34,7 +35,7 @@ var checksumRe = regexp.MustCompile(`_([0-9a-f]{8})\.[^.]+$`)
 // content already carry them, and a bare `?thumb` predates the ladder entirely
 // so it resolves to the default rung. A size off the ladder is rejected rather
 // than clamped — accepting arbitrary sizes would let one crawler fill the disk.
-func requestedVariantSize(c echo.Context) (int, error) {
+func requestedVariantSize(c *echo.Context) (int, error) {
 	q := c.Request().URL.Query()
 	raw := ""
 	if v, ok := q["s"]; ok {
@@ -113,7 +114,7 @@ func mediaCacheControl(isPublic bool, filename string, servedVariant, genCurrent
 // The per-response policy denies everything and sandboxes the document, so
 // nothing in the SVG runs regardless of the global policy. Embedding via <img>
 // is unaffected: that context never executes script and ignores this header.
-func neutralizeSVG(c echo.Context, path string) {
+func neutralizeSVG(c *echo.Context, path string) {
 	if !strings.EqualFold(filepath.Ext(path), ".svg") {
 		return
 	}
@@ -182,7 +183,7 @@ func stripGPS(ctx context.Context, settings *services.SettingsService) bool {
 // Non-numeric year/month segments are SPA routes — the public shell from
 // assets() is served instead.
 func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo repository.Repository, mediaSvc *services.MediaService, s3Presigner *services.S3Presigner, settings *services.SettingsService) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		year := c.Param("year")
 		month := c.Param("month")
 		filename := c.Param("filename")
@@ -297,14 +298,14 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 		))
 
 		if servedVariant != "" {
-			return c.File(servedVariant)
+			return api.ServeFile(c, servedVariant)
 		}
 
 		// A video is served as its browser-safe transcode once the job wrote
 		// it. Until then, or when the job failed, the original is served.
 		if variantSize == 0 {
 			if mp4 := mediaSvc.TranscodedVideo(media); mp4 != "" {
-				return c.File(mp4)
+				return api.ServeFile(c, mp4)
 			}
 		}
 
@@ -332,7 +333,7 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 					return echo.NewHTTPError(http.StatusInternalServerError, "media unavailable")
 				}
 				if noGPS != "" {
-					return c.File(noGPS)
+					return api.ServeFile(c, noGPS)
 				}
 			}
 
@@ -360,7 +361,7 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 				}
 			}
 
-			return c.File(origFile)
+			return api.ServeFile(c, origFile)
 		}
 		if m := checksumRe.FindStringSubmatch(filename); m != nil {
 			matches, _ := filepath.Glob(filepath.Join(origDir, "*_"+m[1]+".*"))
@@ -375,7 +376,7 @@ func serveSimplifiedMedia(storagePath string, assets func() *assetSnapshot, repo
 						c.Response().Header().Set("Cache-Control", notFoundCacheControl)
 						return echo.NewHTTPError(http.StatusNotFound, "media not found")
 					}
-					return c.File(matchFile)
+					return api.ServeFile(c, matchFile)
 				}
 			}
 		}
