@@ -371,6 +371,113 @@ func TestImport_RefusesTooLargeArchives(t *testing.T) {
 	}
 }
 
+// rawTarHeader returns one USTAR header block. The test writes the blocks
+// itself because archive/tar does not write sparse files.
+func rawTarHeader(name string, typeflag byte, size int) []byte {
+	b := make([]byte, 512)
+	copy(b[0:100], name)
+	copy(b[100:108], "0000644\x00")
+	copy(b[108:116], "0000000\x00")
+	copy(b[116:124], "0000000\x00")
+	copy(b[124:136], fmt.Sprintf("%011o\x00", size))
+	copy(b[136:148], "00000000000\x00")
+	b[156] = typeflag
+	copy(b[257:265], "ustar\x0000")
+	copy(b[148:156], "        ")
+	var sum int
+	for _, c := range b {
+		sum += int(c)
+	}
+	copy(b[148:156], fmt.Sprintf("%06o\x00 ", sum))
+	return b
+}
+
+// rawTarPad pads data to a whole number of 512-byte blocks.
+func rawTarPad(data []byte) []byte {
+	if r := len(data) % 512; r != 0 {
+		data = append(data, make([]byte, 512-r)...)
+	}
+	return data
+}
+
+// writeSparseImportArchive writes a manifest and one PAX GNU sparse 1.0 entry
+// at name. The stream has 5 data bytes; the tar reader gives realSize bytes.
+func writeSparseImportArchive(t *testing.T, name string, realSize int) string {
+	t.Helper()
+	var tarBuf bytes.Buffer
+	manifest := []byte(fmt.Sprintf(`{"format":%q,"version":%d}`, ExportFormat, ExportFormatVersion))
+	tarBuf.Write(rawTarHeader("manifest.json", tar.TypeReg, len(manifest)))
+	tarBuf.Write(rawTarPad(manifest))
+	var pax []byte
+	for _, kv := range [][2]string{
+		{"GNU.sparse.major", "1"}, {"GNU.sparse.minor", "0"},
+		{"GNU.sparse.name", name}, {"GNU.sparse.realsize", fmt.Sprint(realSize)},
+	} {
+		rec := " " + kv[0] + "=" + kv[1] + "\n"
+		n := len(rec) + 1
+		if len(fmt.Sprint(n)+rec) != n {
+			n++
+		}
+		pax = append(pax, fmt.Sprint(n)+rec...)
+	}
+	tarBuf.Write(rawTarHeader("PaxHeaders/x", tar.TypeXHeader, len(pax)))
+	tarBuf.Write(rawTarPad(pax))
+	// One data region of 5 bytes at the end of the file; the rest is a hole.
+	data := rawTarPad([]byte(fmt.Sprintf("1\n%d\n5\n", realSize-5)))
+	data = append(data, "aaaaa"...)
+	tarBuf.Write(rawTarHeader("GNUSparseFile.0/x", tar.TypeReg, len(data)))
+	tarBuf.Write(rawTarPad(data))
+	tarBuf.Write(make([]byte, 1024))
+
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(tarBuf.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(t.TempDir(), "sparse.tar.gz")
+	if err := os.WriteFile(p, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// TestImport_RefusesSparseEntries checks that a sparse entry is refused, and
+// that the total limit counts the size the tar reader gives, not only the
+// bytes in the stream.
+func TestImport_RefusesSparseEntries(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name     string
+		limits   importLimits
+		realSize int
+		want     string
+		tooLarge bool
+	}{
+		{"sparse entry", importLimits{}, 4096, "sparse file", false},
+		{"logical total above the limit", importLimits{total: 64 << 10}, 1 << 20, "size of its files", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			imp, _, repo := newImportTarget(t)
+			imp.limits = tc.limits
+			path := writeSparseImportArchive(t, "posts/a.md", tc.realSize)
+			if st, err := os.Stat(path); err != nil || (tc.limits.total > 0 && st.Size() >= tc.limits.total) {
+				t.Fatalf("archive size = %v (%v), want below the limit", st, err)
+			}
+			_, err := imp.Import(ctx, path, 1)
+			if !errors.Is(err, ErrInvalidInput) || !strings.Contains(err.Error(), tc.want) || errors.Is(err, errImportTooLarge) != tc.tooLarge {
+				t.Fatalf("Import error = %v, want an invalid-input error with %q (too large: %v)", err, tc.want, tc.tooLarge)
+			}
+			if posts, media, _ := repo.CountContentRows(ctx); posts != 0 || media != 0 {
+				t.Errorf("the refused import wrote %d posts and %d media", posts, media)
+			}
+		})
+	}
+}
+
 // TestImportSizeLimits_MediaFromUploadLimit checks that the media limit is
 // MAX_UPLOAD_SIZE_MB, with 50 MB when it is not set.
 func TestImportSizeLimits_MediaFromUploadLimit(t *testing.T) {

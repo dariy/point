@@ -511,8 +511,9 @@ type importPending struct {
 
 // walkImportArchive reads the archive at path after the manifest and calls v
 // for each item. With readData false, the originals are read but not kept.
-// An entry above its limit in lim, or a total decompressed size above
-// lim.total, stops the walk with errImportTooLarge.
+// An entry above its limit in lim, or a total decompressed size or a total
+// of entry sizes above lim.total, stops the walk with errImportTooLarge. A
+// sparse entry stops the walk.
 func walkImportArchive(ctx context.Context, path string, readData bool, lim importLimits, v importVisitor) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -532,6 +533,10 @@ func walkImportArchive(ctx context.Context, path string, readData bool, lim impo
 	}
 	tr := tar.NewReader(&importTotalReader{r: gz, left: lim.total, max: lim.total})
 	var pending *importPending
+	// logical is the sum of the entry sizes that the tar reader gives. For a
+	// sparse entry it is more than the bytes in the stream, so the
+	// importTotalReader alone does not see it.
+	var logical int64
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -545,6 +550,14 @@ func walkImportArchive(ctx context.Context, path string, readData bool, lim impo
 		}
 		if err != nil {
 			return fmt.Errorf("read archive: %w", err)
+		}
+		logical += max(h.Size, 0)
+		if logical > lim.total {
+			return fmt.Errorf("%w: the size of its files is more than %s, the maximum for this archive",
+				errImportTooLarge, humanizeBytes(lim.total))
+		}
+		if isSparseEntry(h) {
+			return fmt.Errorf("%s is a sparse file; an export has no sparse files", h.Name)
 		}
 		if h.Typeflag != tar.TypeReg {
 			continue
@@ -625,6 +638,21 @@ func walkImportArchive(ctx context.Context, path string, readData bool, lim impo
 		return fmt.Errorf("media/%s has no sidecar", pending.rel)
 	}
 	return nil
+}
+
+// isSparseEntry reports whether h is a GNU sparse file, in the old GNU format
+// or with GNU.sparse.* PAX records. The tar reader gives the holes of a sparse
+// file as zero bytes that are not in the stream.
+func isSparseEntry(h *tar.Header) bool {
+	if h.Typeflag == tar.TypeGNUSparse {
+		return true
+	}
+	for k := range h.PAXRecords {
+		if strings.HasPrefix(k, "GNU.sparse.") {
+			return true
+		}
+	}
+	return false
 }
 
 // readImportEntry reads the entry h from tr. It refuses an entry that declares
