@@ -2,5 +2,5 @@
 # Format: <OSV id> <until YYYY-MM-DD> <reason>. After the date the entry
 # stops applying and the scan fails again, so somebody looks at it again.
 #
-# No exceptions at this time. GO-2026-6875 and GO-2026-6872 (echo/v4) were
+# No exceptions at this time. GO-2026-6875 and GO-2026-6872 (echo v4) were
 # removed when point moved to echo/v5.

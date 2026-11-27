@@ -9,7 +9,7 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 )
 
-// TestQuietRateStore_NoRateLimitHeaders: echo/v4 limiters sent no
+// TestQuietRateStore_NoRateLimitHeaders: echo v4 limiters sent no
 // X-RateLimit-* or Retry-After headers; the wrapped v5 store must not either,
 // on an allowed request and on a denied one.
 func TestQuietRateStore_NoRateLimitHeaders(t *testing.T) {
