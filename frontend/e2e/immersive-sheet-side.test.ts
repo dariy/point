@@ -69,6 +69,23 @@ describe('Immersive sheet in touch landscape', () => {
     await page.locator('.immersive-sheet-mode').waitFor({ state: 'attached' });
   };
 
+  /** Wait for the side layout; on a timeout, say what the side test read. */
+  const waitSide = async () => {
+    try {
+      await page.waitForFunction(() => document.querySelector('.immersive-sheet-side'), undefined, { timeout: 10000 });
+    } catch (e) {
+      const env = await page.evaluate(() => ({
+        url: location.href,
+        html: document.documentElement.className,
+        landscape: matchMedia('(orientation: landscape)').matches,
+        fineQuery: matchMedia('(hover: hover) and (pointer: fine)').matches,
+        size: [innerWidth, innerHeight],
+        wrapper: document.querySelector('.media-viewer-wrapper')?.className ?? null,
+      }));
+      throw new Error(`no side layout: ${JSON.stringify(env)} (${String(e)})`);
+    }
+  };
+
   const layout = () => page.evaluate(() => {
     const r = (sel: string) => {
       const b = document.querySelector(sel)?.getBoundingClientRect();
@@ -163,7 +180,7 @@ describe('Immersive sheet in touch landscape', () => {
   /** Open a post in touch landscape and open the panel with the tab. */
   const openPanel = async (slug: string, size: { width: number; height: number }) => {
     await openPost(slug, size);
-    await page.waitForFunction(() => document.querySelector('.immersive-sheet-side'));
+    await waitSide();
     await settle();
     await page.locator('.immersive-sheet-hint').tap();
     await page.waitForFunction(() => document.querySelector('.immersive-sheet-side.sheet-open'));
@@ -228,7 +245,7 @@ describe('Immersive sheet in touch landscape', () => {
   for (const size of [{ width: 844, height: 390 }, { width: 1180, height: 820 }]) {
     it(`opens full screen and the tab slides the panel in at ${size.width}x${size.height}`, async () => {
       await openPost('side-probe-two', size);
-      await page.waitForFunction(() => document.querySelector('.immersive-sheet-side'));
+      await waitSide();
       await settle();
       assertShut(await layout(), size);
       await page.locator('.immersive-sheet-hint').tap();
@@ -252,7 +269,7 @@ describe('Immersive sheet in touch landscape', () => {
   it('a swipe up opens the panel, a swipe down shuts it, and a second swipe down closes the viewer', async () => {
     const size = { width: 844, height: 390 };
     await openPost('side-probe-two', size);
-    await page.waitForFunction(() => document.querySelector('.immersive-sheet-side'));
+    await waitSide();
     await settle();
     await swipe(400, 300, 400, 120);
     await page.waitForFunction(() => document.querySelector('.immersive-sheet-side.sheet-open'));
@@ -353,7 +370,7 @@ describe('Immersive sheet in touch landscape', () => {
 
   it('a rotation keeps a shut sheet shut, both ways, with no reload', async () => {
     await openPost('side-probe-two', { width: 844, height: 390 });
-    await page.waitForFunction(() => document.querySelector('.immersive-sheet-side'));
+    await waitSide();
     await settle();
     assertShut(await layout(), { width: 844, height: 390 });
     await page.evaluate(() => { (window as unknown as { __noReload: boolean }).__noReload = true; });
@@ -366,7 +383,7 @@ describe('Immersive sheet in touch landscape', () => {
     assert.ok(l.ocean === null || l.ocean === 'hidden', 'portrait: no window with a shut sheet');
 
     await page.setViewportSize({ width: 844, height: 390 });
-    await page.waitForFunction(() => document.querySelector('.immersive-sheet-side'));
+    await waitSide();
     await settle();
     assertShut(await layout(), { width: 844, height: 390 });
     assert.equal(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload), true, 'no reload');
@@ -379,7 +396,7 @@ describe('Immersive sheet in touch landscape', () => {
     await page.waitForFunction(() => document.querySelector('.immersive-sheet-mode.sheet-open'));
     await settle();
     await page.setViewportSize({ width: 844, height: 390 });
-    await page.waitForFunction(() => document.querySelector('.immersive-sheet-side'));
+    await waitSide();
     await settle();
     assertSide(await layout(), { width: 844, height: 390 });
     await windowOnSlot('landscape open');
