@@ -402,7 +402,16 @@ describe('Atlas layer gestures', () => {
     it('a swipe on the list column scrolls it, and a swipe on the map pans the map', async () => {
       await open('split');
       const g = await box('#grid-mount');
-      assert.ok(await spage.evaluate(() => { const gm = document.querySelector('#grid-mount')!; return gm.scrollHeight > gm.clientHeight; }), 'the column overflows');
+      // The page fits whole rows (p-kyo8m), so the column overflows only when it is
+      // shorter than one card. Add a spacer to make it overflow here: the test is
+      // about the gesture, not the fit.
+      assert.ok(await spage.evaluate(() => {
+        const gm = document.querySelector('#grid-mount')!;
+        const spacer = document.createElement('div');
+        spacer.style.height = `${gm.clientHeight}px`;
+        gm.appendChild(spacer);
+        return gm.scrollHeight > gm.clientHeight;
+      }), 'the column overflows');
       await sswipe(g.x + g.width / 2, g.y + g.height - 30, 0, -150);
       await spage.waitForFunction(() => document.querySelector('#grid-mount')!.scrollTop > 0);
       assert.equal(await sstate(), 'mapList');

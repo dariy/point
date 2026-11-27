@@ -269,18 +269,27 @@ describe('Atlas layer', () => {
           assert.ok(Math.abs(h.y) <= 1, 'the header is at the top of the column');
           assert.ok(Math.abs(f.y + f.height - height) <= 1, `the footer is at the bottom: ${f.y + f.height}`);
           assert.ok(g.y >= h.y + h.height - 1 && g.y + g.height <= f.y + 1, 'the list is between the header and the footer');
-          // The column fills: the last card reaches the column end (it scrolls).
+          // Whole rows only (p-kyo8m): every card is inside the column, and the
+          // room under the last row is less than one more row.
           const fill = await touch.evaluate(() => {
             const gm = document.querySelector<HTMLElement>('#grid-mount')!;
             const slots = [...gm.querySelectorAll('.post-card-slot')].map((s) => s.getBoundingClientRect()).filter((r) => r.width > 0);
             const r = gm.getBoundingClientRect();
-            return { overflowY: getComputedStyle(gm).overflowY, bottom: r.bottom, last: Math.max(...slots.map((s) => s.bottom)), n: slots.length };
+            const cs = getComputedStyle(gm);
+            return {
+              top: r.top + (parseFloat(cs.paddingTop) || 0), bottom: r.bottom - (parseFloat(cs.paddingBottom) || 0),
+              first: Math.min(...slots.map((s) => s.top)), last: Math.max(...slots.map((s) => s.bottom)),
+              cell: slots[0]?.height ?? 0, scroll: gm.scrollHeight - gm.clientHeight, n: slots.length,
+            };
           });
-          assert.equal(fill.overflowY, 'auto', 'the column scrolls');
-          assert.ok(fill.last >= fill.bottom - 8 - 1, `no empty column end: ${JSON.stringify(fill)}`);
+          assert.ok(fill.n > 0, 'cards show');
+          assert.ok(fill.first >= fill.top - 1, `the first row is whole: ${JSON.stringify(fill)}`);
+          assert.ok(fill.last <= fill.bottom + 1, `the last row is whole: ${JSON.stringify(fill)}`);
+          assert.ok(fill.scroll <= 1, `the column does not scroll: ${JSON.stringify(fill)}`);
+          assert.ok(fill.bottom - fill.last < fill.cell, `no room for one more row: ${JSON.stringify(fill)}`);
         };
 
-        for (const [width, height] of [[844, 390], [1180, 820]] as const) {
+        for (const [width, height] of [[844, 390], [1024, 768], [1180, 820]] as const) {
           it(`at ${width}x${height} mapList is the map on the left and the list column on the right`, async () => {
             await openTouch(width, height, 'list');
             await touch.locator('#grid-mount .post-card').first().waitFor();
