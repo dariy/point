@@ -5,6 +5,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -314,5 +315,50 @@ func TestSiteHealth_TimeBudgetMarksPartial(t *testing.T) {
 	// The other checks do not share the budget.
 	if ref := item(t, r, HealthItemReferences); ref.Count != 1 {
 		t.Errorf("references count = %d, want 1", ref.Count)
+	}
+}
+
+// TestSiteHealth_RebuildDerivativesRepairs checks the repair of the
+// derivatives item: it writes the missing rung of the listed image, and the
+// next check is ok. It does not touch the thumbnail generation.
+func TestSiteHealth_RebuildDerivativesRepairs(t *testing.T) {
+	f := newSiteHealthFixture(t)
+	ctx := context.Background()
+	gen, _ := f.media.settingsService.GetSetting(ctx, ThumbnailGenerationSetting, "")
+
+	res, err := f.media.RebuildDerivatives(ctx, []int64{f.noRungID, f.noRungID, f.noOrigID, 99999})
+	if err != nil {
+		t.Fatalf("RebuildDerivatives: %v", err)
+	}
+	if res.Rebuilt != 1 {
+		t.Errorf("rebuilt = %d, want 1", res.Rebuilt)
+	}
+	if len(res.Failed) != 2 || res.Failed[0] != f.noOrigID || res.Failed[1] != 99999 {
+		t.Errorf("failed = %v, want [%d 99999]", res.Failed, f.noOrigID)
+	}
+	r, err := f.sh.Refresh(ctx)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if der := item(t, r, HealthItemDerivatives); der.Status != HealthOK || der.Count != 0 {
+		t.Errorf("derivatives after repair = %+v, want ok", der)
+	}
+	if after, _ := f.media.settingsService.GetSetting(ctx, ThumbnailGenerationSetting, ""); after != gen {
+		t.Errorf("thumbnail generation moved from %q to %q", gen, after)
+	}
+}
+
+func TestRebuildDerivatives_Bounds(t *testing.T) {
+	media, dir := setupMediaService(t)
+	t.Cleanup(func() {
+		_ = os.RemoveAll(dir)
+		_ = media.repo.Close()
+	})
+	ctx := context.Background()
+	if _, err := media.RebuildDerivatives(ctx, nil); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("no ids: err = %v, want ErrInvalidInput", err)
+	}
+	if _, err := media.RebuildDerivatives(ctx, make([]int64, MaxDerivativeRebuild+1)); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("too many ids: err = %v, want ErrInvalidInput", err)
 	}
 }

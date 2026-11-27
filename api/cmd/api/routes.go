@@ -183,6 +183,7 @@ func registerMediaRoutes(e *echo.Echo, h *api.MediaHandler, svcs *AppServices) {
 	mediaGroup.POST("/bulk-restore", h.BulkRestoreMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.GET("/trash", h.ListTrashedMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.POST("/thumbnails/rebuild", h.RebuildThumbnails, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	mediaGroup.POST("/derivatives/rebuild", h.RebuildDerivatives, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.GET("/:id", h.GetMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PUT("/:id", h.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	mediaGroup.PATCH("/:id", h.UpdateMedia, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))

@@ -220,6 +220,13 @@ Each item has `status` (`ok`, `warn`, `fail`), `count` and at most 100 `ids`. Th
   media reference. A bare path followed by words also matches the path without the words.
 - **After a rebuild.** A thumbnail rebuild purges the variants and warms only the newest 200
   uploads. Until visitors fill in the rest, `derivatives` counts them.
+- **Repair.** `POST /api/media/derivatives/rebuild` with `{"ids": [...]}` (at most 100, the `ids`
+  of `derivatives`) repairs the listed media only (`MediaService.RebuildDerivatives`). For an
+  image it writes each missing rung up to `UploadMaxVariantSize` from one decode, before it
+  returns. For a video it enqueues the poster job and then the transcode job. It does not roll
+  the thumbnail generation. The response has `rebuilt`, `video_jobs` and `failed` (IDs with no
+  live row, no original, or a file that does not decode). A refresh of the checks then shows the
+  result.
 
 ## Log level
 

@@ -1442,6 +1442,110 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context) (RebuildResult, er
 	return res, nil
 }
 
+// MaxDerivativeRebuild bounds the media IDs that one RebuildDerivatives call
+// takes. Each image costs one decode on the request, so the bound keeps the
+// request short.
+const MaxDerivativeRebuild = 100
+
+// DerivativeRebuildResult reports what RebuildDerivatives did. Rebuilt counts
+// the images whose ladder it wrote. VideoJobs counts the poster and transcode
+// jobs it enqueued. Failed lists the IDs it could not repair: no live row, no
+// original file, or a file that does not decode.
+type DerivativeRebuildResult struct {
+	Rebuilt   int     `json:"rebuilt"`
+	VideoJobs int     `json:"video_jobs"`
+	Failed    []int64 `json:"failed"`
+}
+
+// RebuildDerivatives writes the missing derived files of the given media
+// items only. It is the repair for the derivatives item of the site health
+// checks, and it satisfies the same rule (derivativeMissing):
+//   - for an image, it writes each missing or stale rung up to
+//     UploadMaxVariantSize from one decode;
+//   - for a video, it enqueues the transcode job when no fresh transcode
+//     exists, and the poster job when the poster or its file is gone.
+//
+// It does not purge other files, roll the thumbnail generation or drop the
+// public pages: a rung that was missing has no copy in a cache. Images are
+// done in sequence on the caller's context, because the decode semaphore is
+// shared with live requests. Video jobs run behind it.
+func (s *MediaService) RebuildDerivatives(ctx context.Context, ids []int64) (DerivativeRebuildResult, error) {
+	res := DerivativeRebuildResult{Failed: []int64{}}
+	if len(ids) == 0 {
+		return res, wrapKind(ErrInvalidInput, errors.New("no media ids"))
+	}
+	if len(ids) > MaxDerivativeRebuild {
+		return res, wrapKind(ErrInvalidInput, fmt.Errorf("at most %d media ids per call", MaxDerivativeRebuild))
+	}
+	base := s.mediaBase()
+	seen := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if err := ctx.Err(); err != nil {
+			return res, err
+		}
+		m, err := s.getMedia(ctx, id)
+		if errors.Is(err, ErrMediaNotFound) || (err == nil && m.DeletedAt.Valid) {
+			res.Failed = append(res.Failed, id)
+			continue
+		}
+		if err != nil {
+			return res, err
+		}
+		srcFull := filepath.Clean(filepath.Join(base, m.OriginalPath))
+		if !strings.HasPrefix(srcFull, base+string(filepath.Separator)) || !fileExists(srcFull) {
+			res.Failed = append(res.Failed, id)
+			continue
+		}
+		switch {
+		case strings.EqualFold(m.FileType, "image"):
+			if err := s.rebuildImageLadder(ctx, m, srcFull); err != nil {
+				slog.Warn("derivative rebuild failed", "media_id", id, "error", err)
+				res.Failed = append(res.Failed, id)
+				continue
+			}
+			res.Rebuilt++
+		case s.canRunVideoJobs(m):
+			// The poster goes first. Storing a poster removes the derived
+			// files of the item, the transcode too, so a transcode job goes
+			// after each poster job. The worker runs jobs one at a time in
+			// order of their IDs.
+			poster := !s.posterOnDisk(m) && s.enqueueVideoJob(ctx, JobKindVideoPoster, id)
+			if poster {
+				res.VideoJobs++
+			}
+			if (poster || s.TranscodedVideo(m) == "") && s.enqueueVideoJob(ctx, JobKindVideoTranscode, id) {
+				res.VideoJobs++
+			}
+		}
+	}
+	return res, nil
+}
+
+// rebuildImageLadder decodes an image once and writes each missing or stale
+// rung up to UploadMaxVariantSize. It shares the Variant flight key, so a
+// request for the same image at the same time does not decode it again.
+// It stores the decoded size on a row with
+// none, so the health check then knows which rungs the image needs.
+func (s *MediaService) rebuildImageLadder(ctx context.Context, m models.Medium, srcFull string) error {
+	_, err, _ := s.variantFlight.Do(strconv.FormatInt(m.ID, 10), func() (any, error) {
+		data, err := os.ReadFile(srcFull)
+		if err != nil {
+			return nil, err
+		}
+		src, err := s.decodeImage(ctx, data)
+		if err != nil {
+			return nil, err
+		}
+		s.backfillDimensions(ctx, m, src)
+		return nil, s.writeLadder(ctx, m.OriginalPath, src, extractICC(data), srcFull, UploadMaxVariantSize)
+	})
+	return err
+}
+
 // OrientationFixSetting records that the one-time purge of variants cut
 // before decode applied EXIF orientation has run.
 const OrientationFixSetting = "media_orientation_variants_purged"
