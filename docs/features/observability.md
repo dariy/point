@@ -228,6 +228,14 @@ Each item has `status` (`ok`, `warn`, `fail`), `count` and at most 100 `ids`. Th
   live row, no original, or a file that does not decode). A refresh of the checks then shows the
   result.
 
+**In the admin.** The System page has one **Health** section (`#health`). It groups the site
+checks, the Job Queue, the Background Jobs and the disk. The site checks list one row per item,
+with its status and its repair action: **Retry job** for the newest failed job (failed jobs come
+first, from the job queue), **Rebuild derivatives** for the `derivatives` IDs, and **Open post**
+for the `references` IDs. **Check now** runs the checks again. The dashboard shows one dot in its
+header when an item is `warn` or `fail`, or a job failed. The dot links to `/light/system#health`.
+There is no dot when all items are `ok` or when the report cannot be read.
+
 ## Log level
 
 `LOG_LEVEL` (`debug`, `info`, `warn`, `error`; default `info`) sets the minimum slog

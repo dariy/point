@@ -24,8 +24,11 @@ import {
   retryJob,
   clearFailedJobs,
   getPhotoLibraryStatus,
+  getHealthChecks,
+  refreshHealthChecks,
 } from "../../api/system.ts";
-import type { Migration } from "../../api/system.ts";
+import type { Migration, SiteHealthItem, SiteHealthReport, SiteHealthStatus, JobView } from "../../api/system.ts";
+import { rebuildDerivatives } from "../../api/media.ts";
 import { setToast } from "../../store.ts";
 import { html, raw } from "../../utils/helpers.ts";
 import { formatFileSize } from "../../utils/formatters.ts";
@@ -33,6 +36,9 @@ import { formatFileSize } from "../../utils/formatters.ts";
 const CHEVRON = `<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 
 export default class SystemPage extends Component {
+  /** The page scrolled to #health once; a re-render does not scroll again. */
+  _scrolledToHealth = false;
+
   constructor(container: HTMLElement, props = {}) {
     super(container, props);
     this.state = {
@@ -47,6 +53,9 @@ export default class SystemPage extends Component {
       auditingLinks: false,
       linkAudit: null, // { issues, scanned } after a scan
       health: null, // { tasks, degraded, uptime } from /api/system/health
+      checks: null, // SiteHealthReport from /api/system/health/checks
+      checksRunning: false,
+      rebuildingDerivatives: false,
       // Owner-only and only when PHOTO_LIBRARY_PATH is a readable directory.
       photoLibrary: null, // { configured, path }
     };
@@ -60,7 +69,7 @@ export default class SystemPage extends Component {
   }
 
   _renderContent() {
-    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit, health, jobs, photoLibrary } =
+    const { loading, error, migrations, updatingCoords, coordsResult, diskInfo, migrationsCollapsed, auditingLinks, linkAudit, health, jobs, photoLibrary, checks } =
       this.state;
 
     if (loading)
@@ -69,11 +78,17 @@ export default class SystemPage extends Component {
       return html`<p class="error-state" role="alert">${error}</p>`;
 
     const diskSection = diskInfo ? this._renderDiskSection(diskInfo) : "";
-    const healthSection = this._renderHealthSection(health);
-    const jobsSection = this._renderJobsSection(jobs);
 
     return html`
       <div class="system-grid">
+        <section id="health" class="system-health system-full-width" aria-labelledby="health-title">
+          <h2 id="health-title" class="system-health-title">Health</h2>
+          ${this._renderChecksSection(checks, jobs)}
+          ${this._renderJobsSection(jobs)}
+          ${this._renderHealthSection(health)}
+          ${diskSection}
+        </section>
+
         <section class="card">
           <div class="card-header"><h2>Cache</h2></div>
           <div class="card-body">
@@ -93,8 +108,6 @@ export default class SystemPage extends Component {
           </div>
         </section>
 
-        ${diskSection}
-
         ${photoLibrary ? html`
         <section class="card" data-testid="photo-library-status">
           <div class="card-header"><h2>Photo Library</h2></div>
@@ -103,9 +116,6 @@ export default class SystemPage extends Component {
             <p><code>${photoLibrary.path}</code></p>
           </div>
         </section>` : ""}
-
-        ${healthSection}
-        ${jobsSection}
 
         <section class="card system-full-width">
           <div class="card-header"><h2>Content Health</h2></div>
@@ -151,6 +161,135 @@ export default class SystemPage extends Component {
   }
 
   /**
+   * The site health items: one row per check, each with its status and its
+   * repair action. The failed jobs come first, from the job queue.
+   */
+  _renderChecksSection(report: SiteHealthReport | null, jobs: Awaited<ReturnType<typeof getJobs>> | null) {
+    const { checksRunning } = this.state;
+    const rows: unknown[] = [];
+    const failedJob = this._renderFailedJobsItem(jobs);
+    if (failedJob) rows.push(failedJob);
+    for (const item of report?.items || []) rows.push(this._renderCheckItem(item));
+
+    const checked = report
+      ? html`<p class="health-checked">Checked ${this._ago(report.checked_at)}.</p>`
+      : html`<p class="health-checked">The site checks are not available.</p>`;
+
+    return html`
+      <section class="card" data-testid="health-checks">
+        <div class="card-header">
+          <h3>Site checks</h3>
+          <button type="button" class="btn btn-secondary btn-sm" id="run-health-checks-btn" ${checksRunning ? "disabled" : ""}>
+            ${checksRunning ? "Checking…" : "Check now"}
+          </button>
+        </div>
+        <div class="card-body">
+          ${checked}
+          ${rows.length ? html`<ul class="health-items">${rows}</ul>` : ""}
+        </div>
+      </section>`;
+  }
+
+  _renderFailedJobsItem(jobs: Awaited<ReturnType<typeof getJobs>> | null) {
+    const failed = jobs?.counts?.failed || 0;
+    if (!jobs) return "";
+    if (!failed) {
+      return this._healthRow("jobs", "ok", "Failed jobs", "No failed jobs.", "");
+    }
+    // The list is newest first, so the first failed job has the last error.
+    const last = (jobs.jobs || []).find((j: JobView) => j.state === "failed");
+    const text = html`${failed} failed job${failed === 1 ? "" : "s"}.${last?.last_error
+      ? html`<div class="job-health-error">${last.kind}: ${last.last_error}</div>`
+      : ""}`;
+    const action = last
+      ? html`<button type="button" class="btn btn-secondary btn-sm" data-retry-job="${last.id}">Retry job</button>`
+      : "";
+    return this._healthRow("jobs", "warn", "Failed jobs", text, action);
+  }
+
+  _renderCheckItem(item: SiteHealthItem) {
+    const partial = item.partial
+      ? html` <span class="health-partial">The check stopped at its time limit; the count is not complete.</span>`
+      : "";
+    const n = item.count || 0;
+    const ids = item.ids || [];
+    switch (item.key) {
+      case "derivatives": {
+        const text = item.status === "ok"
+          ? html`All media have their derivatives.${partial}`
+          : html`${n} media file${n === 1 ? " has" : "s have"} missing derivatives.${n > ids.length ? html` A rebuild repairs the first ${ids.length}.` : ""}${partial}`;
+        const action = ids.length
+          ? html`<button type="button" class="btn btn-secondary btn-sm" id="health-rebuild-btn" ${this.state.rebuildingDerivatives ? "disabled" : ""}>
+              ${this.state.rebuildingDerivatives ? "Rebuilding…" : "Rebuild derivatives"}
+            </button>`
+          : "";
+        return this._healthRow(item.key, item.status, "Derivatives", text, action);
+      }
+      case "originals": {
+        const text = item.status === "ok"
+          ? html`All original files are present.${partial}`
+          : html`${n} media file${n === 1 ? " has" : "s have"} no original file. Restore the files from a backup.${ids.length ? html` <small>Media IDs: ${ids.slice(0, 20).join(", ")}${ids.length > 20 ? "…" : ""}</small>` : ""}${partial}`;
+        return this._healthRow(item.key, item.status, "Originals", text, "");
+      }
+      case "references": {
+        const samples = (item.samples || []).slice(0, 3);
+        const text = item.status === "ok"
+          ? html`No published post shows missing media.`
+          : html`${n} published post${n === 1 ? " shows" : "s show"} missing media.${samples.length
+            ? html`<div class="health-samples">${samples.map((p) => html`<code>${p}</code>`)}</div>`
+            : ""}`;
+        const shown = ids.slice(0, 5);
+        const action = shown.length
+          ? html`<span class="health-links">${shown.map((id) => html`<a class="btn btn-secondary btn-sm" href="/light/posts/${id}/edit">Open post ${id}</a>`)}</span>`
+          : "";
+        return this._healthRow(item.key, item.status, "Media in posts", text, action);
+      }
+      case "backup": {
+        const text = item.at
+          ? html`Last backup ${this._ago(item.at)}.${item.detail && item.status !== "ok" ? html` ${this._sentence(item.detail)}` : ""}`
+          : html`${this._sentence(item.detail || "No backup exists.")}`;
+        return this._healthRow(item.key, item.status, "Backup", text, "");
+      }
+      case "restore_check": {
+        const text = item.at
+          ? html`Last restore check ${this._ago(item.at)}.${item.detail && item.status !== "ok" ? html` ${this._sentence(item.detail)}` : ""}`
+          : html`${this._sentence(item.detail || "No restore check has run.")}`;
+        return this._healthRow(item.key, item.status, "Restore check", text, "");
+      }
+      case "storage": {
+        const text = item.total_bytes
+          ? html`${formatFileSize(item.free_bytes || 0)} free of ${formatFileSize(item.total_bytes)}.`
+          : html`${this._sentence(item.detail || "Free storage cannot be read.")}`;
+        return this._healthRow(item.key, item.status, "Storage", text, "");
+      }
+      default:
+        return this._healthRow(String(item.key), item.status, String(item.key), html`${item.detail || ""}`, "");
+    }
+  }
+
+  _healthRow(key: string, status: SiteHealthStatus, label: string, text: unknown, action: unknown) {
+    const badge = status === "fail"
+      ? html`<span class="badge badge-danger">Fail</span>`
+      : status === "warn"
+        ? html`<span class="badge badge-warning">Warn</span>`
+        : html`<span class="badge badge-success">OK</span>`;
+    return html`
+      <li class="health-item health-item--${status}" data-health-item="${key}" data-status="${status}">
+        <div class="health-item-head">${badge}<strong>${label}</strong></div>
+        <div class="health-item-text">${text}</div>
+        ${action ? html`<div class="health-item-action">${action}</div>` : ""}
+      </li>`;
+  }
+
+  /** Capitalise a server detail string and end it with a full stop. */
+  _sentence(s: string) {
+    const t = s.trim();
+    if (!t) return "";
+    const c = t[0].toUpperCase() + t.slice(1);
+    return /[.!?]$/.test(c) ? c : c + ".";
+  }
+
+  /**
    * Background-job health. Answers "is anything quietly broken" — before this
    * a failing scheduled task was only visible by reading the server log.
    */
@@ -177,12 +316,12 @@ export default class SystemPage extends Component {
 
     // No rows is the normal state moments after a restart, not an error.
     const body = rows.length
-      ? html`<table class="table">
+      ? html`<div class="table-container"><table class="table">
            <thead>
              <tr><th>Job</th><th>State</th><th>Last run</th><th>Last success</th><th>Failures</th></tr>
            </thead>
            <tbody>${rows}</tbody>
-         </table>`
+         </table></div>`
       : html`<p>No background jobs have reported yet.</p>`;
 
     const summary =
@@ -191,8 +330,8 @@ export default class SystemPage extends Component {
         : "";
 
     return html`
-      <section class="card system-full-width">
-        <div class="card-header"><h2>Background Jobs</h2></div>
+      <section class="card">
+        <div class="card-header"><h3>Background Jobs</h3></div>
         <div class="card-body">
           <p>Last outcome of each scheduled task, recorded since the server started ${this._ago(new Date(Date.now() - (health.uptime || 0) * 1000).toISOString())}. Restarting clears this.</p>
           ${summary}
@@ -238,18 +377,18 @@ export default class SystemPage extends Component {
     });
 
     const body = rows.length
-      ? html`<table class="table">
+      ? html`<div class="table-container"><table class="table">
            <thead>
              <tr><th>Job</th><th>State</th><th>Attempts</th><th>Next run</th><th></th></tr>
            </thead>
            <tbody>${rows}</tbody>
-         </table>`
+         </table></div>`
       : html`<p>No queued, running or failed jobs.</p>`;
 
     return html`
-      <section class="card system-full-width">
+      <section class="card" id="job-queue">
         <div class="card-header">
-          <h2>Job Queue</h2>
+          <h3>Job Queue</h3>
           ${counts.failed > 0
             ? html`<button type="button" class="btn btn-danger btn-sm" id="clear-failed-jobs-btn">Clear failed</button>`
             : ""}
@@ -325,7 +464,7 @@ export default class SystemPage extends Component {
       usagePercent >= 90 ? "danger" : usagePercent >= 70 ? "warning" : "";
     return html`
       <section class="card">
-        <div class="card-header"><h2>Disk Usage (Server)</h2></div>
+        <div class="card-header"><h3>Disk Usage (Server)</h3></div>
         <div class="card-body">
           <p>
             ${formatFileSize(disk.used)} of ${formatFileSize(disk.total)} used (${usagePercent}%)
@@ -356,11 +495,24 @@ export default class SystemPage extends Component {
     this.container
       .querySelector("#clear-failed-jobs-btn")
       ?.addEventListener("click", () => this._confirmClearFailedJobs());
+    this.container
+      .querySelector("#run-health-checks-btn")
+      ?.addEventListener("click", () => this._handleRunChecks());
+    this.container
+      .querySelector("#health-rebuild-btn")
+      ?.addEventListener("click", () => this._handleRebuildDerivatives());
     this.container.querySelectorAll("[data-retry-job]").forEach((btn) =>
       btn.addEventListener("click", () =>
         this._handleRetryJob(Number(btn.getAttribute("data-retry-job"))),
       ),
     );
+
+    // The dashboard dot links to /light/system#health. Scroll once, after the
+    // first render with data; a later re-render must not move the page.
+    if (location.hash === "#health" && !this._scrolledToHealth) {
+      this._scrolledToHealth = true;
+      this.$("#health")?.scrollIntoView({ block: "start" });
+    }
 
     // Collapse/expand the Database Migrations card (persisted across re-renders).
     const header = this.container.querySelector<HTMLElement>('[data-collapsible="migrations"] .card-header');
@@ -390,12 +542,13 @@ export default class SystemPage extends Component {
     try {
       // Health is best-effort: an older server without the endpoint, or a
       // transient failure, must not blank the whole page.
-      const [migrations, diskInfo, health, jobs, photoLibrary] = await Promise.all([
+      const [migrations, diskInfo, health, jobs, photoLibrary, checks] = await Promise.all([
         getMigrations(),
         getDiskInfo(),
         getHealth().catch(() => null),
         getJobs().catch(() => null),
         getPhotoLibraryStatus(),
+        getHealthChecks().catch(() => null),
       ]);
       this.setState({
         loading: false,
@@ -404,6 +557,7 @@ export default class SystemPage extends Component {
         health,
         jobs,
         photoLibrary,
+        checks,
         error: null,
       });
     } catch (err) {
@@ -426,6 +580,42 @@ export default class SystemPage extends Component {
     } catch (err) {
       setToast({ message: "Could not retry job: " + ((err as Error).message || err), type: "error" });
     }
+  }
+
+  async _handleRunChecks() {
+    this.setState({ checksRunning: true });
+    try {
+      const checks = await refreshHealthChecks();
+      this.setState({ checksRunning: false, checks });
+    } catch (err) {
+      this.setState({ checksRunning: false });
+      setToast({ message: "Could not run the checks: " + ((err as Error).message || err), type: "error" });
+    }
+  }
+
+  /**
+   * Rebuild the derivatives of the listed media only (the ids of the
+   * derivatives item, at most 100), then run the checks again to show the
+   * result. A video stays listed until its jobs finish.
+   */
+  async _handleRebuildDerivatives() {
+    const item = (this.state.checks as SiteHealthReport | null)?.items
+      .find((i) => i.key === "derivatives");
+    const ids = item?.ids || [];
+    if (!ids.length) return;
+    this.setState({ rebuildingDerivatives: true });
+    try {
+      const r = await rebuildDerivatives(ids);
+      const failed = r.failed?.length || 0;
+      const parts = [`Rebuilt ${r.rebuilt}`];
+      if (r.video_jobs) parts.push(`queued ${r.video_jobs} video job${r.video_jobs === 1 ? "" : "s"}`);
+      if (failed) parts.push(`${failed} failed`);
+      setToast({ message: parts.join(", ") + ".", type: failed ? "error" : "success" });
+    } catch (err) {
+      setToast({ message: "Could not rebuild the derivatives: " + ((err as Error).message || err), type: "error" });
+    }
+    const checks = await refreshHealthChecks().catch(() => this.state.checks);
+    this.setState({ rebuildingDerivatives: false, checks });
   }
 
   _confirmClearFailedJobs() {

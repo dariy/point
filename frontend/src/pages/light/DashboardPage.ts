@@ -1,12 +1,13 @@
 /**
  * DashboardPage — admin overview with stats and quick actions.
  *
- * Fetches: GET /api/system/stats, GET /api/system/version
+ * Fetches: GET /api/system/stats, GET /api/system/version,
+ * GET /api/system/health/checks, GET /api/system/jobs
  */
 
 import { Component } from '../../components/Component.ts';
 import { adminLayoutTemplate, setupAdminLayout } from '../../components/light/AdminLayout.ts';
-import { getStats, getVersion } from '../../api/system.ts';
+import { getStats, getVersion, getHealthChecks, getJobs, healthDotStatus } from '../../api/system.ts';
 import { getPostAnalytics, getTopPosts } from '../../api/analytics.ts';
 import { listPosts, createPost } from '../../api/posts.ts';
 import type { Post } from '../../api/posts.ts';
@@ -20,11 +21,11 @@ import { FIRST_POST_PATH, FIRST_POST_BANNER_DISMISSED } from './FirstPostPage.ts
 export default class DashboardPage extends Component {
   constructor(container: HTMLElement, props = {}) {
     super(container, props);
-    this.state = { loading: true, stats: null, analyticsStats: null, topPosts: [], drafts: [], error: null, versionBanner: null };
+    this.state = { loading: true, stats: null, analyticsStats: null, topPosts: [], drafts: [], error: null, versionBanner: null, healthDot: null };
   }
 
   render() {
-    const { versionBanner, stats } = this.state;
+    const { versionBanner, stats, healthDot } = this.state;
     // Until the first post exists, remind the owner of the first-post flow.
     const firstPostBanner = stats && !stats.published_posts
       && !localStorage.getItem(FIRST_POST_BANNER_DISMISSED)
@@ -45,9 +46,19 @@ export default class DashboardPage extends Component {
     return adminLayoutTemplate({
       title: 'Dashboard',
       banner,
-      actions: html`<a href="/light/posts/new" class="btn btn-primary" title="New Post">${raw(PLUS_SVG)}<span class="btn-label">New Post</span></a>`,
+      actions: html`${this._renderHealthDot(healthDot)}<a href="/light/posts/new" class="btn btn-primary" title="New Post">${raw(PLUS_SVG)}<span class="btn-label">New Post</span></a>`,
       content: this._renderContent()
     });
+  }
+
+  /**
+   * One dot when a site health item needs action; it links to the Health
+   * section of the System page. No dot when every item is ok.
+   */
+  _renderHealthDot(status: 'warn' | 'fail' | null) {
+    if (!status) return '';
+    const label = status === 'fail' ? 'Site health: a check failed' : 'Site health: a check needs action';
+    return html`<a href="/light/system#health" class="health-dot health-dot--${status}" data-testid="health-dot" title="${label}" aria-label="${label}"></a>`;
   }
 
   _renderContent() {
@@ -277,6 +288,10 @@ export default class DashboardPage extends Component {
       this.setState({ loading: false, stats: null });
     }
 
+    // The health dot reads the cached report in the background. A failure
+    // shows no dot: the dashboard must not claim a problem it cannot see.
+    this._loadHealthDot();
+
     // Check for available updates in the background — don't block the page.
     try {
       const ver = await getVersion();
@@ -289,5 +304,14 @@ export default class DashboardPage extends Component {
     } catch {
       // Version check failure is non-critical; silently ignore.
     }
+  }
+
+  async _loadHealthDot() {
+    const [report, jobs] = await Promise.all([
+      getHealthChecks().catch(() => null),
+      getJobs().catch(() => null),
+    ]);
+    const healthDot = healthDotStatus(report, jobs?.counts?.failed || 0);
+    if (healthDot !== this.state.healthDot) this.setState({ healthDot });
   }
 }

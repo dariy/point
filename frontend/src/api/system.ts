@@ -83,6 +83,52 @@ export function getHealth(): Promise<{
   return api.get('/api/system/health');
 }
 
+/** The status of one site health item, and of the report (its worst item). */
+export type SiteHealthStatus = 'ok' | 'warn' | 'fail';
+
+/**
+ * One site health check result — services.HealthItem in
+ * api/internal/services/site_health.go. `ids` are the repair targets (media
+ * IDs for derivatives and originals, post IDs for references), at most 100;
+ * `count` is the full number.
+ */
+export interface SiteHealthItem {
+  key: 'derivatives' | 'originals' | 'references' | 'backup' | 'restore_check' | 'storage';
+  status: SiteHealthStatus;
+  count: number;
+  ids?: number[];
+  /** Media paths that a published post shows and that have no live media row. */
+  samples?: string[];
+  /** A short English reason for warn and fail. */
+  detail?: string;
+  /** The time of the last backup or the last restore check. */
+  at?: string;
+  /** The check stopped at its time limit: the count is not complete. */
+  partial?: boolean;
+  free_bytes?: number;
+  total_bytes?: number;
+}
+
+export interface SiteHealthReport {
+  checked_at: string;
+  duration_ms: number;
+  status: SiteHealthStatus;
+  items: SiteHealthItem[];
+}
+
+/**
+ * The cached site health report. The server runs the checks only when no
+ * report exists yet in its process, so this call is cheap.
+ */
+export function getHealthChecks(): Promise<SiteHealthReport> {
+  return api.get('/api/system/health/checks');
+}
+
+/** Run the site health checks again and get the new report. */
+export function refreshHealthChecks(): Promise<SiteHealthReport> {
+  return api.post('/api/system/health/checks');
+}
+
 export interface JobView {
   id: number;
   kind: string;
@@ -347,4 +393,18 @@ export function auditPostLinks(): Promise<{
   scanned: number;
 }> {
   return api.get('/api/system/audit/post-links');
+}
+
+/**
+ * The status of the dashboard health dot: the worst site health item, and
+ * `warn` for any failed job. Null when everything is ok or nothing is known.
+ */
+export function healthDotStatus(
+  report: SiteHealthReport | null,
+  failedJobs: number,
+): 'warn' | 'fail' | null {
+  const items = report?.items || [];
+  if (items.some((i) => i.status === 'fail')) return 'fail';
+  if (failedJobs > 0 || items.some((i) => i.status === 'warn')) return 'warn';
+  return null;
 }
