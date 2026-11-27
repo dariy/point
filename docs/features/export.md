@@ -160,6 +160,12 @@ included). Use it to move a site to a new instance.
 - It reads the archive two times. The first pass reads every entry and writes
   nothing. A damaged archive, a post without front matter, an original without its
   sidecar, or an unsafe path stops the import before it changes the site.
+- Each entry has a maximum size, and the first pass refuses an archive with an
+  entry above it (`400`). An original, or a sidecar that comes alone, can have
+  `MAX_UPLOAD_SIZE_MB` (50 MB if not set): the same limit as an upload. A post
+  file, `tags.json` and a sidecar can have 8 MB. All decompressed data of the
+  archive can have 20 times the size of the archive file, and 1 GiB at minimum.
+  This stops a decompression bomb before it uses all memory or disk.
 - The second pass writes. Tags come first, from `tags.json`, with their parent links
   and sort order. The system tags of the new site stay as they are. Then each post
   goes through the normal post create (`PostService.CreatePost`), with its slug,

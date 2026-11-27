@@ -48,6 +48,34 @@ const importResultFile = "import.json"
 // complete.
 const importMaxProblems = 20
 
+// Size limits for an archive. A crafted archive (a decompression bomb, or an
+// entry with a very large declared size) must not use all memory or disk of
+// the server.
+const (
+	// importMaxTextBytes is the maximum size of a post file, tags.json and a
+	// media sidecar.
+	importMaxTextBytes = 8 << 20
+	// importMinTotalBytes is the smallest total decompressed size that the
+	// import accepts, for each archive.
+	importMinTotalBytes = 1 << 30
+	// importTotalRatio is the maximum ratio of the total decompressed size to
+	// the size of the archive file. Originals are already compressed, so a real
+	// export decompresses to little more than its own size.
+	importTotalRatio = 20
+	// importDefaultMediaMB is the media limit when MAX_UPLOAD_SIZE_MB is not set.
+	importDefaultMediaMB = 50
+)
+
+// importLimits are the size limits of one import.
+type importLimits struct {
+	media int64 // one original or one sidecar alone, in bytes
+	text  int64 // one post file, tags.json or one sidecar, in bytes
+	total int64 // all decompressed data of the archive, in bytes; 0 = from the file size
+}
+
+// errImportTooLarge marks an archive that is above a size limit.
+var errImportTooLarge = errors.New("the archive is too large")
+
 // healthTaskImport is the HealthRegistry key for the import.
 const healthTaskImport = "portable import"
 
@@ -101,6 +129,9 @@ type ImportService struct {
 	tags     *TagService
 	dataPath string
 	health   *HealthRegistry
+	// limits, if not zero, replace the limits from the configuration. Tests
+	// set them.
+	limits importLimits
 
 	mu       sync.Mutex
 	running  bool
@@ -117,6 +148,24 @@ func NewImportService(repo repository.Repository, media *MediaService, posts *Po
 func (s *ImportService) WithHealth(h *HealthRegistry) *ImportService {
 	s.health = h
 	return s
+}
+
+// sizeLimits returns the size limits of an import. The media limit is the
+// upload limit (MAX_UPLOAD_SIZE_MB), so an archive cannot have a file that an
+// upload cannot have.
+func (s *ImportService) sizeLimits() importLimits {
+	lim := s.limits
+	if lim.media == 0 {
+		mb := importDefaultMediaMB
+		if s.media != nil && s.media.cfg != nil && s.media.cfg.MaxUploadSizeMB > 0 {
+			mb = s.media.cfg.MaxUploadSizeMB
+		}
+		lim.media = int64(mb) << 20
+	}
+	if lim.text == 0 {
+		lim.text = importMaxTextBytes
+	}
+	return lim
 }
 
 func (s *ImportService) importDir() string {
@@ -356,7 +405,8 @@ func (s *ImportService) importArchive(ctx context.Context, path string, authorID
 	s.setPhase("check")
 	var total repository.ExportCounts
 	slugs := map[string]bool{}
-	if err := walkImportArchive(ctx, path, false, importVisitor{
+	lim := s.sizeLimits()
+	if err := walkImportArchive(ctx, path, false, lim, importVisitor{
 		tags: func(tags []exportTag) error {
 			total.Tags = int64(len(tags))
 			return nil
@@ -387,7 +437,7 @@ func (s *ImportService) importArchive(ctx context.Context, path string, authorID
 
 	// Pass 2: write.
 	w := &importWriter{s: s, authorID: authorID, res: res, tagIDs: map[string]int64{}, postIDs: map[string]int64{}}
-	if err := walkImportArchive(ctx, path, true, importVisitor{
+	if err := walkImportArchive(ctx, path, true, lim, importVisitor{
 		tags:  w.writeTags,
 		post:  w.writePost,
 		media: w.writeMedia,
@@ -461,17 +511,26 @@ type importPending struct {
 
 // walkImportArchive reads the archive at path after the manifest and calls v
 // for each item. With readData false, the originals are read but not kept.
-func walkImportArchive(ctx context.Context, path string, readData bool, v importVisitor) error {
+// An entry above its limit in lim, or a total decompressed size above
+// lim.total, stops the walk with errImportTooLarge.
+func walkImportArchive(ctx context.Context, path string, readData bool, lim importLimits, v importVisitor) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = f.Close() }()
+	if lim.total == 0 {
+		st, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		lim.total = max(int64(importMinTotalBytes), st.Size()*importTotalRatio)
+	}
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return err
 	}
-	tr := tar.NewReader(gz)
+	tr := tar.NewReader(&importTotalReader{r: gz, left: lim.total, max: lim.total})
 	var pending *importPending
 	for {
 		if err := ctx.Err(); err != nil {
@@ -480,6 +539,9 @@ func walkImportArchive(ctx context.Context, path string, readData bool, v import
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			break
+		}
+		if errors.Is(err, errImportTooLarge) {
+			return err
 		}
 		if err != nil {
 			return fmt.Errorf("read archive: %w", err)
@@ -492,17 +554,21 @@ func walkImportArchive(ctx context.Context, path string, readData bool, v import
 		case name == "manifest.json":
 			continue
 		case name == "tags.json":
+			data, err := readImportEntry(tr, h, lim.text)
+			if err != nil {
+				return err
+			}
 			var tags []exportTag
-			if err := json.NewDecoder(tr).Decode(&tags); err != nil {
+			if err := json.Unmarshal(data, &tags); err != nil {
 				return fmt.Errorf("tags.json: %w", err)
 			}
 			if err := v.tags(tags); err != nil {
 				return err
 			}
 		case strings.HasPrefix(name, "posts/") && strings.HasSuffix(name, ".md"):
-			data, err := io.ReadAll(tr)
+			data, err := readImportEntry(tr, h, lim.text)
 			if err != nil {
-				return fmt.Errorf("read %s: %w", name, err)
+				return err
 			}
 			fm, body, err := parseImportPost(data)
 			if err != nil {
@@ -517,7 +583,11 @@ func walkImportArchive(ctx context.Context, path string, readData bool, v import
 				return fmt.Errorf("unsafe media path %q", name)
 			}
 			if pending != nil && rel == pending.rel+".json" {
-				side, err := readImportSidecar(tr, name)
+				data, err := readImportEntry(tr, h, lim.text)
+				if err != nil {
+					return err
+				}
+				side, err := readImportSidecar(bytes.NewReader(data), name)
 				if err != nil {
 					return err
 				}
@@ -533,9 +603,9 @@ func walkImportArchive(ctx context.Context, path string, readData bool, v import
 			if pending != nil {
 				return fmt.Errorf("media/%s has no sidecar", pending.rel)
 			}
-			data, err := io.ReadAll(tr)
+			data, err := readImportEntry(tr, h, lim.media)
 			if err != nil {
-				return fmt.Errorf("read %s: %w", name, err)
+				return err
 			}
 			// The sidecar of an original that was missing at export time comes
 			// alone. Any other entry is an original, and its sidecar is next.
@@ -555,6 +625,53 @@ func walkImportArchive(ctx context.Context, path string, readData bool, v import
 		return fmt.Errorf("media/%s has no sidecar", pending.rel)
 	}
 	return nil
+}
+
+// readImportEntry reads the entry h from tr. It refuses an entry that declares
+// or gives more than limit bytes.
+func readImportEntry(tr io.Reader, h *tar.Header, limit int64) ([]byte, error) {
+	if h.Size > limit {
+		return nil, fmt.Errorf("%w: %s is %s, and the maximum for this entry is %s",
+			errImportTooLarge, h.Name, humanizeBytes(h.Size), humanizeBytes(limit))
+	}
+	data, err := io.ReadAll(io.LimitReader(tr, limit+1))
+	if err != nil {
+		if errors.Is(err, errImportTooLarge) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("read %s: %w", h.Name, err)
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%w: %s is more than %s, the maximum for this entry",
+			errImportTooLarge, h.Name, humanizeBytes(limit))
+	}
+	return data, nil
+}
+
+// importTotalReader gives at most max bytes of r. After that it returns
+// errImportTooLarge, so a decompression bomb stops the import.
+type importTotalReader struct {
+	r    io.Reader
+	left int64
+	max  int64
+}
+
+func (t *importTotalReader) Read(p []byte) (int, error) {
+	if t.left <= 0 {
+		// Read one byte to know if r has more data than max.
+		var one [1]byte
+		if n, err := t.r.Read(one[:]); n == 0 {
+			return 0, err
+		}
+		return 0, fmt.Errorf("%w: its decompressed size is more than %s, the maximum for this archive",
+			errImportTooLarge, humanizeBytes(t.max))
+	}
+	if int64(len(p)) > t.left {
+		p = p[:t.left]
+	}
+	n, err := t.r.Read(p)
+	t.left -= int64(n)
+	return n, err
 }
 
 func readImportSidecar(r io.Reader, name string) (exportMediaSidecar, error) {

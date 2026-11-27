@@ -335,6 +335,58 @@ func TestImport_RefusesUnknownArchives(t *testing.T) {
 	}
 }
 
+func TestImport_RefusesTooLargeArchives(t *testing.T) {
+	ctx := context.Background()
+	manifest := [2]string{"manifest.json", fmt.Sprintf(`{"format":%q,"version":%d}`, ExportFormat, ExportFormatVersion)}
+	post := func(slug string, size int) [2]string {
+		return [2]string{"posts/" + slug + ".md", "---\nslug: " + slug + "\n---\n" + strings.Repeat("a", size)}
+	}
+	cases := []struct {
+		name    string
+		limits  importLimits
+		entries [][2]string
+		want    string
+	}{
+		{"post file above the text limit", importLimits{text: 1024},
+			[][2]string{manifest, post("a", 2048)}, "posts/a.md is 2.0 KiB"},
+		{"tags.json above the text limit", importLimits{text: 1024},
+			[][2]string{manifest, {"tags.json", "[" + strings.Repeat(" ", 2048) + "]"}}, "tags.json is"},
+		{"original above the media limit", importLimits{media: 1024},
+			[][2]string{manifest, {"media/originals/2024/01/a.jpg", strings.Repeat("x", 2048)}}, "media/originals/2024/01/a.jpg is"},
+		{"total above the archive limit", importLimits{total: 8 << 10},
+			[][2]string{manifest, post("a", 3000), post("b", 3000), post("c", 3000)}, "decompressed size"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			imp, _, repo := newImportTarget(t)
+			imp.limits = tc.limits
+			_, err := imp.Import(ctx, writeImportTestArchive(t, tc.entries...), 1)
+			if !errors.Is(err, ErrInvalidInput) || !errors.Is(err, errImportTooLarge) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Import error = %v, want a too-large error with %q", err, tc.want)
+			}
+			if posts, media, _ := repo.CountContentRows(ctx); posts != 0 || media != 0 {
+				t.Errorf("the refused import wrote %d posts and %d media", posts, media)
+			}
+		})
+	}
+}
+
+// TestImportSizeLimits_MediaFromUploadLimit checks that the media limit is
+// MAX_UPLOAD_SIZE_MB, with 50 MB when it is not set.
+func TestImportSizeLimits_MediaFromUploadLimit(t *testing.T) {
+	imp, _, _ := newImportTarget(t)
+	if got := imp.sizeLimits().media; got != 50<<20 {
+		t.Errorf("default media limit = %d, want %d", got, 50<<20)
+	}
+	imp.media.cfg.MaxUploadSizeMB = 200
+	if got := imp.sizeLimits().media; got != 200<<20 {
+		t.Errorf("media limit = %d, want %d", got, 200<<20)
+	}
+	if got := imp.sizeLimits().text; got != importMaxTextBytes {
+		t.Errorf("text limit = %d, want %d", got, importMaxTextBytes)
+	}
+}
+
 func TestStartImport_RefusesBeforeItRuns(t *testing.T) {
 	ctx := context.Background()
 	imp, dataPath, repo := newImportTarget(t)
