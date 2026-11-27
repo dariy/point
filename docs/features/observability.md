@@ -195,6 +195,32 @@ failed rows and returns `{"deleted": n}`.
 panics from crafted images into a returned error; it now also logs them at `warn` with a
 stack, so a caller that swallows the error does not make the panic invisible.
 
+## Site health checks
+
+`GET /api/system/health/checks` returns one report of site checks. `POST` on the same path runs
+the checks again. The service is `services.SiteHealth` (`api/internal/services/site_health.go`).
+
+| Item | Status | IDs |
+|---|---|---|
+| `derivatives` | warn: an image has no rung that upload writes (up to `UploadMaxVariantSize`), or a video has no poster or transcode that the server can make | media |
+| `originals` | fail: the original file of a media row is gone | media |
+| `references` | fail: a published post shows a media path with no live media row (never uploaded, or in the trash); `samples` has example paths | posts |
+| `backup` | fail: no backup, or older than 7 days; warn: older than 2 days, or scheduled backups are off; ok when the host manages backups | — |
+| `restore_check` | fail: the last restore check failed; warn: none ran, or older than 14 days | — |
+| `storage` | fail: free space under 1 GiB or 5 %; warn: under 10 % | — |
+
+Each item has `status` (`ok`, `warn`, `fail`), `count` and at most 100 `ids`. The report has
+`checked_at` and the worst `status`.
+
+- **Cached.** A GET returns the last report. It runs the checks only when no report exists in
+  this process. The scheduler refreshes the report daily at 6 AM, after the backup.
+- **Bounded.** The file walk reads media rows 500 at a time and stops after 15 seconds. A stopped
+  walk sets `partial` on `derivatives` and `originals`. The other checks are a few queries.
+- **No false references.** A date path after a host name (`https://host/2023/04/post`) is not a
+  media reference. A bare path followed by words also matches the path without the words.
+- **After a rebuild.** A thumbnail rebuild purges the variants and warms only the newest 200
+  uploads. Until visitors fill in the rest, `derivatives` counts them.
+
 ## Log level
 
 `LOG_LEVEL` (`debug`, `info`, `warn`, `error`; default `info`) sets the minimum slog
@@ -248,3 +274,4 @@ to anything — it has been removed.
 | `api/internal/config/config.go` | `METRICS_ENABLED` / `METRICS_BIND` / `METRICS_PORT` / `LOG_LEVEL` |
 | `api/internal/utils/recover.go` | `SafeGo` / `Recovered` — the panic backstop for bare background goroutines |
 | `api/cmd/api/main.go` | `parseLogLevel`, `installLogger` — where `LOG_LEVEL` becomes the slog level |
+| `api/internal/services/site_health.go` | `SiteHealth` — the site health checks behind `/api/system/health/checks` |

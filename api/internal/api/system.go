@@ -58,6 +58,9 @@ type SystemHandler struct {
 	// storageQuotaMB is the operator-configured media allowance (STORAGE_QUOTA_MB)
 	// reported by GetStats. 0 means unlimited and is omitted from the response.
 	storageQuotaMB int
+	// siteHealth runs the site health checks behind GetHealthChecks. Nil is
+	// valid: the endpoints then report 404.
+	siteHealth *services.SiteHealth
 	// photoLibraryPath is PHOTO_LIBRARY_PATH from the environment, the only
 	// source of the photo library root. Empty means no library.
 	photoLibraryPath string
@@ -68,6 +71,41 @@ type SystemHandler struct {
 func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
 	h.health = r
 	return h
+}
+
+// WithSiteHealth attaches the site health checks for GetHealthChecks.
+func (h *SystemHandler) WithSiteHealth(sh *services.SiteHealth) *SystemHandler {
+	h.siteHealth = sh
+	return h
+}
+
+// GetHealthChecks returns the cached site health report: missing derivatives,
+// missing originals, broken media references in published posts, backup age,
+// the last restore check and free storage. Each item has a status (ok, warn,
+// fail), a count and the IDs for its repair action. When no check ran yet in
+// this process, the checks run first.
+func (h *SystemHandler) GetHealthChecks(c echo.Context) error {
+	if h.siteHealth == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "site health not available")
+	}
+	r, err := h.siteHealth.Report(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not run the health checks")
+	}
+	return c.JSON(http.StatusOK, r)
+}
+
+// RefreshHealthChecks runs the site health checks again and returns the new
+// report.
+func (h *SystemHandler) RefreshHealthChecks(c echo.Context) error {
+	if h.siteHealth == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "site health not available")
+	}
+	r, err := h.siteHealth.Refresh(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Could not run the health checks")
+	}
+	return c.JSON(http.StatusOK, r)
 }
 
 // WithJobs attaches the durable job store for ListJobs and RetryJob.

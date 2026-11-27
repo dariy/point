@@ -29,6 +29,9 @@ type SchedulerService struct {
 	metrics *metrics.Registry
 	// jobs is the durable job store. Nil skips the daily prune.
 	jobs *JobService
+	// siteHealth is refreshed daily so the dashboard reads a recent report.
+	// Nil skips the task.
+	siteHealth *SiteHealth
 }
 
 func NewSchedulerService(authService *AuthService, postService *PostService, systemService *SystemService, mediaService *MediaService, settingsService *SettingsService, instagramService *InstagramService) *SchedulerService {
@@ -60,6 +63,13 @@ func (s *SchedulerService) WithMetrics(m *metrics.Registry) *SchedulerService {
 // WithJobs attaches the job store so the daily task prunes old done jobs.
 func (s *SchedulerService) WithJobs(j *JobService) *SchedulerService {
 	s.jobs = j
+	return s
+}
+
+// WithSiteHealth attaches the site health checks so a daily task refreshes
+// their cached report.
+func (s *SchedulerService) WithSiteHealth(h *SiteHealth) *SchedulerService {
+	s.siteHealth = h
 	return s
 }
 
@@ -109,6 +119,12 @@ func (s *SchedulerService) Start(ctx context.Context) {
 	// Daily task: remove posts and media that have been in the trash for
 	// more than TrashRetentionDays (at 2 AM, before the backup).
 	go s.runDaily(ctx, "trash purge", 2, s.purgeTrash)
+
+	// Daily task: site health checks (at 6 AM, after the backup and the
+	// restore check, so the report shows their result).
+	if s.siteHealth != nil {
+		go s.runDaily(ctx, "site health checks", 6, s.siteHealth.RunScheduled)
+	}
 
 	// Daily task: Backups (checked at 3 AM). The cadence (backup_interval_days)
 	// and retention (backup_keep) are admin settings; the check runs daily but
