@@ -289,6 +289,51 @@ describe('Atlas layer', () => {
           assert.ok(fill.bottom - fill.last < fill.cell, `no room for one more row: ${JSON.stringify(fill)}`);
         };
 
+        /**
+         * The next-page preview (core/gridPager.ts) in the column (p-8bo68): its
+         * cards have the same size and the same row grid as the current page,
+         * one swipe stride to the right.
+         */
+        const assertNextPeek = async (width: number, height: number) => {
+          const ghostSlot = '.grid-preview-placeholder[data-edge="next"] .post-card-slot';
+          await touch.locator(ghostSlot).first().waitFor({ state: 'attached' });
+          const peek = await touch.evaluate((sel) => {
+            const rects = (els: Element[]) => els.map((e) => {
+              const r = e.getBoundingClientRect();
+              return { x: r.x, y: r.y, w: r.width, h: r.height };
+            });
+            const ghost = document.querySelector<HTMLElement>('.grid-preview-placeholder[data-edge="next"]')!;
+            const dx = new DOMMatrix(getComputedStyle(ghost).transform).m41;
+            const live = rects([...document.querySelectorAll('#grid-mount .post-card-slot')]);
+            const next = rects([...document.querySelectorAll(sel)]).map((r) => ({ ...r, x: r.x - dx }));
+            const cards = rects([...document.querySelectorAll(`${sel} .post-card`)]).map((r) => ({ ...r, x: r.x - dx }));
+            const gm = document.querySelector<HTMLElement>('#grid-mount')!;
+            const g = gm.getBoundingClientRect();
+            // What a card shows: the title size and the parts of its content that are laid out.
+            const look = (root: Element | null) => {
+              const t = root?.querySelector('.post-card-title');
+              const shown = [...(root?.querySelectorAll('.post-card-content > *') ?? [])].filter((e) => (e as HTMLElement).offsetHeight > 0).length;
+              return `${t ? getComputedStyle(t).fontSize : '-'} ${shown}`;
+            };
+            return {
+              live, next, cards, gridRight: g.right, ghostLeft: ghost.getBoundingClientRect().x - dx, gridLeft: g.x,
+              liveLook: look(gm.querySelector('.post-card')), nextLook: look(ghost.querySelector('.post-card')),
+            };
+          }, ghostSlot);
+          const label = `${width}x${height}: ${JSON.stringify(peek)}`;
+          assert.ok(peek.next.length > 0, 'the next page has a preview: ' + label);
+          assert.ok(Math.abs(peek.ghostLeft - peek.gridLeft) <= 1, 'the preview is on the column: ' + label);
+          assert.equal(peek.nextLook, peek.liveLook, 'a preview card shows what a current card shows: ' + label);
+          const n = Math.min(peek.live.length, peek.next.length);
+          for (let i = 0; i < n; i++) {
+            const [a, b, c] = [peek.live[i], peek.next[i], peek.cards[i]];
+            for (const k of ['x', 'y', 'w', 'h'] as const) {
+              assert.ok(Math.abs(a[k] - b[k]) <= 1, `preview card ${i} ${k} is ${b[k]}, not ${a[k]}: ${label}`);
+              assert.ok(Math.abs(c[k] - b[k]) <= 1, `preview card ${i} fills its cell (${k}): ${label}`);
+            }
+          }
+        };
+
         for (const [width, height] of [[844, 390], [1024, 768], [1180, 820]] as const) {
           it(`at ${width}x${height} mapList is the map on the left and the list column on the right`, async () => {
             await openTouch(width, height, 'list');
@@ -300,6 +345,7 @@ describe('Atlas layer', () => {
             await touch.waitForTimeout(800);
             await assertSide(width, height);
             assert.equal(await firstTitle(), listFirst, 'the same first post as in list');
+            await assertNextPeek(width, height);
             // Paging works: page 2 shows other posts.
             const next = touch.locator('#footer-mount .footer-pagination .page-next');
             assert.ok(await next.isVisible(), 'the paginator is in the footer');

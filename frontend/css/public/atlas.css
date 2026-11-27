@@ -1305,6 +1305,34 @@ body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-targe
     touch-action: pan-y;
 }
 
+/* The neighbour page of a page swipe (core/gridPager.ts::_preloadAdjacentGrids)
+   has the box of the list column, so its cards have the same size and rows as
+   the current page (p-8bo68). The pager pins `top` and `height` inline for the
+   in-flow grid; the column is fixed between the header and the footer, so these
+   values override the pins. */
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .grid-preview-placeholder {
+    position: fixed;
+    top: var(--atlas-layer-header-h, 0px) !important;
+    bottom: var(--atlas-layer-footer-h, 0px);
+    left: var(--atlas-layer-map-w);
+    right: 0;
+    height: auto !important;
+    display: block;
+    padding: var(--atlas-layer-gap, 8px);
+    box-sizing: border-box;
+    z-index: 103;
+}
+
+/* The neighbour page shows only the title, as the current page does. */
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .grid-preview-placeholder .post-card-content > :not(.post-card-title) {
+    display: none;
+}
+
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .grid-preview-placeholder .post-card-title {
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
 /* A drag that snaps to `map`: the rest of the list is right of the map. */
 body[data-atlas-side]:is([data-atlas-layer="map"]:not([data-atlas-drag-target]), [data-atlas-drag-target="map"]) #grid-mount {
     top: var(--atlas-layer-top, var(--atlas-layer-header-h, 0px));
@@ -1315,16 +1343,20 @@ body[data-atlas-side]:is([data-atlas-layer="map"]:not([data-atlas-drag-target]),
     overflow: hidden;
 }
 
-body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .posts-grid {
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .posts-grid,
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .grid-preview-placeholder .posts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
     grid-template-rows: none;
     grid-auto-rows: auto;
+    align-content: start;
+    flex: none;
     gap: var(--atlas-layer-gap, 8px);
     height: auto;
 }
 
-body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .post-card-slot {
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .post-card-slot,
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .grid-preview-placeholder .post-card-slot {
     flex: none;
     width: auto;
     height: auto;
@@ -1332,7 +1364,8 @@ body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-targe
     aspect-ratio: 1;
 }
 
-body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .post-card {
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) #grid-mount .post-card,
+body[data-atlas-side]:is([data-atlas-layer="mapList"]:not([data-atlas-drag-target]), [data-atlas-drag-target="mapList"], [data-atlas-drag-target="list"]) .grid-preview-placeholder .post-card {
     height: 100%;
 }
 
