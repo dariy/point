@@ -15,7 +15,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type SetupHandler struct {
@@ -34,7 +34,7 @@ func NewSetupHandler(authService *services.AuthService, settingsService *service
 	}
 }
 
-func (h *SetupHandler) SetupStatus(c echo.Context) error {
+func (h *SetupHandler) SetupStatus(c *echo.Context) error {
 	_, err := h.repo.GetFirstUser(c.Request().Context())
 	if err == nil {
 		return c.JSON(http.StatusOK, map[string]bool{"setup_complete": true})
@@ -42,7 +42,7 @@ func (h *SetupHandler) SetupStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]bool{"setup_complete": false})
 }
 
-func (h *SetupHandler) Setup(c echo.Context) error {
+func (h *SetupHandler) Setup(c *echo.Context) error {
 	var req struct {
 		Username   string `json:"username"`
 		Password   string `json:"name"`
@@ -211,7 +211,7 @@ func defaultBlogTitle(username string) string {
 // startOwnerSession issues a session cookie for the freshly created owner,
 // exactly as a password login would (same expiry, same cookie flags, same
 // remark42 bridge). Reports whether the session was established.
-func (h *SetupHandler) startOwnerSession(c echo.Context, user models.User) bool {
+func (h *SetupHandler) startOwnerSession(c *echo.Context, user models.User) bool {
 	if h.cfg == nil {
 		return false
 	}

@@ -18,7 +18,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestMediaHandler_UploadMultipleExtended(t *testing.T) {
@@ -99,8 +99,7 @@ func TestMediaHandler_Rename_Error(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "999"}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 
 	err := handler.RenameMedia(c)
@@ -321,8 +320,7 @@ func TestSetVideoPoster(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("id")
-		c.SetParamValues(id)
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: id}})
 		c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 		return rec, h.SetVideoPoster(c)
 	}

@@ -20,7 +20,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // testMediaSvc builds a MediaService backed by the test repo and temp storage,
@@ -97,8 +97,7 @@ func serveMediaRequest(t *testing.T, storagePath, indexHTMLContent string, repo 
 	req := httptest.NewRequest(http.MethodGet, "/"+year+"/"+month+"/"+filename, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("year", "month", "filename")
-	c.SetParamValues(year, month, filename)
+	c.SetPathValues(echo.PathValues{{Name: "year", Value: year}, {Name: "month", Value: month}, {Name: "filename", Value: filename}})
 	if authenticated {
 		c.Set("user", struct{ ID int64 }{ID: 1})
 	}
@@ -340,8 +339,7 @@ func serveQueryRequest(t *testing.T, storagePath string, repo repository.Reposit
 	req := httptest.NewRequest(http.MethodGet, url, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("year", "month", "filename")
-	c.SetParamValues(year, month, filename)
+	c.SetPathValues(echo.PathValues{{Name: "year", Value: year}, {Name: "month", Value: month}, {Name: "filename", Value: filename}})
 	c.Set("user", struct{ ID int64 }{ID: 1}) // authenticated
 	if err := handler(c); err != nil {
 		var he *echo.HTTPError
@@ -879,9 +877,7 @@ func TestServeSimplifiedMedia_S3Direct(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("year", "month", "filename")
-	c.SetParamValues(year, month, filename)
-
+	c.SetPathValues(echo.PathValues{{Name: "year", Value: year}, {Name: "month", Value: month}, {Name: "filename", Value: filename}})
 	err := handler(c)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

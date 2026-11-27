@@ -12,7 +12,7 @@ import (
 	"point-api/internal/config"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -222,9 +222,7 @@ func TestThemeHandler(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/themes/custom/css", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("name")
-		c.SetParamValues("custom")
-
+		c.SetPathValues(echo.PathValues{{Name: "name", Value: "custom"}})
 		err := handler.GetThemeCSS(c)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, rec.Code)
@@ -237,9 +235,7 @@ func TestThemeHandler(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/api/themes/x/css", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
-			c.SetParamNames("name")
-			c.SetParamValues(name)
-
+			c.SetPathValues(echo.PathValues{{Name: "name", Value: name}})
 			err := handler.GetThemeCSS(c)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusNotFound, rec.Code, name)

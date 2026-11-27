@@ -20,7 +20,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestSystemService_CreateBackup_InsufficientDisk(t *testing.T) {
@@ -733,8 +733,7 @@ func TestSystemHandler_RestoreBackup_NotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues("nonexistent.tar.gz")
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: "nonexistent.tar.gz"}})
 	err := h.RestoreBackup(c)
 	if err == nil {
 		t.Error("expected 404")
@@ -748,8 +747,7 @@ func TestSystemHandler_DeleteBackup_NotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues("nonexistent.tar.gz")
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: "nonexistent.tar.gz"}})
 	err := h.DeleteBackup(c)
 	if err == nil {
 		t.Error("expected 404")
@@ -1190,8 +1188,7 @@ func TestSystemHandler_ListAndRetryJobs(t *testing.T) {
 
 	retry := func(idStr string) error {
 		c := e.NewContext(httptest.NewRequest(http.MethodPost, "/", nil), httptest.NewRecorder())
-		c.SetParamNames("id")
-		c.SetParamValues(idStr)
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: idStr}})
 		return h.RetryJob(c)
 	}
 	if err := retry(strconv.FormatInt(id, 10)); err != nil {

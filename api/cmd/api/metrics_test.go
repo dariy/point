@@ -14,7 +14,7 @@ import (
 	"point-api/internal/metrics"
 	"point-api/internal/repository"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // metricsEnv builds a server with metrics turned on, over an in-memory database
@@ -84,7 +84,7 @@ func TestRouteClassCoversEveryRegisteredRoute(t *testing.T) {
 	}
 
 	seen := map[string]bool{}
-	for _, r := range env.e.Routes() {
+	for _, r := range env.e.Router().Routes() {
 		class := metrics.ClassifyRoute(r.Method, r.Path).String()
 		if !known[class] {
 			t.Fatalf("%s %s produced class %q, which is not in the allow-list", r.Method, r.Path, class)
@@ -94,8 +94,8 @@ func TestRouteClassCoversEveryRegisteredRoute(t *testing.T) {
 		}
 		seen[class] = true
 	}
-	if len(env.e.Routes()) < 100 {
-		t.Fatalf("only %d routes registered; the test is not exercising the real router", len(env.e.Routes()))
+	if len(env.e.Router().Routes()) < 100 {
+		t.Fatalf("only %d routes registered; the test is not exercising the real router", len(env.e.Router().Routes()))
 	}
 	// The classes that only exist because a specific route does. If one stops
 	// appearing, a route was renamed out from under ClassifyRoute.
@@ -331,7 +331,7 @@ func TestDBFileBytes(t *testing.T) {
 // "this query failed" from "this handler is broken".
 func TestPanicIsCounted(t *testing.T) {
 	env := newMetricsEnv(t, true)
-	env.e.GET("/api/util/panic-probe", func(echo.Context) error {
+	env.e.GET("/api/util/panic-probe", func(*echo.Context) error {
 		panic("probe")
 	})
 
@@ -339,6 +339,11 @@ func TestPanicIsCounted(t *testing.T) {
 	env.e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/util/panic-probe", nil))
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("panicking route = %d, want 500 (Recover must still answer)", rec.Code)
+	}
+	// echo/v5 Recover puts the stack in the error message; the client must get
+	// only the panic value, as on echo v4.
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"detail":"probe"}` {
+		t.Errorf("panic body = %s, want {\"detail\":\"probe\"}", got)
 	}
 
 	body, _ := env.render(t)

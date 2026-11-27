@@ -13,7 +13,7 @@ import (
 	"point-api/internal/config"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // mockInstagramConnector is a test double for instagramConnector.

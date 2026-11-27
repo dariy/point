@@ -10,7 +10,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // These cover the handlers migrated onto MapError outside posts.go. The two
@@ -28,13 +28,13 @@ func TestMediaHandlerErrorMapping(t *testing.T) {
 	t.Run("missing media is 404", func(t *testing.T) {
 		for _, tc := range []struct {
 			name string
-			call func(*MediaHandler, echo.Context) error
+			call func(*MediaHandler, *echo.Context) error
 		}{
-			{"GetMedia", func(mh *MediaHandler, c echo.Context) error { return mh.GetMedia(c) }},
-			{"ReextractEXIF", func(mh *MediaHandler, c echo.Context) error { return mh.ReextractEXIF(c) }},
-			{"UpdateEXIF", func(mh *MediaHandler, c echo.Context) error { return mh.UpdateEXIF(c) }},
-			{"RevertEXIF", func(mh *MediaHandler, c echo.Context) error { return mh.RevertEXIF(c) }},
-			{"RenameMedia", func(mh *MediaHandler, c echo.Context) error { return mh.RenameMedia(c) }},
+			{"GetMedia", func(mh *MediaHandler, c *echo.Context) error { return mh.GetMedia(c) }},
+			{"ReextractEXIF", func(mh *MediaHandler, c *echo.Context) error { return mh.ReextractEXIF(c) }},
+			{"UpdateEXIF", func(mh *MediaHandler, c *echo.Context) error { return mh.UpdateEXIF(c) }},
+			{"RevertEXIF", func(mh *MediaHandler, c *echo.Context) error { return mh.RevertEXIF(c) }},
+			{"RenameMedia", func(mh *MediaHandler, c *echo.Context) error { return mh.RenameMedia(c) }},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				h := setupHandlers(t)
@@ -45,9 +45,7 @@ func TestMediaHandlerErrorMapping(t *testing.T) {
 				req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"new_filename":"x.jpg","Make":"Nikon"}`))
 				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 				c := e.NewContext(req, httptest.NewRecorder())
-				c.SetParamNames("id")
-				c.SetParamValues("999999")
-
+				c.SetPathValues(echo.PathValues{{Name: "id", Value: "999999"}})
 				if code, _ := statusOf(t, tc.call(mh, c)); code != http.StatusNotFound {
 					t.Errorf("status = %d, want 404", code)
 				}
@@ -71,9 +69,7 @@ func TestMediaHandlerErrorMapping(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(`{"Make":"bad;value"}`))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		c := e.NewContext(req, httptest.NewRecorder())
-		c.SetParamNames("id")
-		c.SetParamValues("1")
-
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 		code, msg := statusOf(t, mh.UpdateEXIF(c))
 		if code != http.StatusBadRequest {
 			t.Errorf("status = %d, want 400", code)
@@ -122,9 +118,7 @@ func TestTagHandlerErrorMapping(t *testing.T) {
 
 		e := echo.New()
 		c := e.NewContext(httptest.NewRequest(http.MethodDelete, "/", nil), httptest.NewRecorder())
-		c.SetParamNames("id")
-		c.SetParamValues("999999")
-
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: "999999"}})
 		if code, _ := statusOf(t, th.DeleteTag(c)); code != http.StatusNotFound {
 			t.Errorf("status = %d, want 404", code)
 		}
@@ -150,9 +144,7 @@ func TestTagHandlerErrorMapping(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		c := e.NewContext(req, httptest.NewRecorder())
-		c.SetParamNames("id")
-		c.SetParamValues(strconv.FormatInt(b.ID, 10))
-
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(b.ID, 10)}})
 		code, msg := statusOf(t, th.MoveTag(c))
 		if code != http.StatusUnprocessableEntity {
 			t.Errorf("status = %d, want 422 (the status this returned before the taxonomy)", code)

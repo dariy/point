@@ -12,7 +12,7 @@ import (
 	"point-api/internal/config"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestSystemHandler_OfflineStats(t *testing.T) {

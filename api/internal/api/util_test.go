@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestParseCoordsFromURL(t *testing.T) {
@@ -288,9 +288,7 @@ func TestParseIDParam(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder())
-			c.SetParamNames("id")
-			c.SetParamValues(tt.param)
-
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: tt.param}})
 			got, err := parseIDParam(c)
 			if tt.wantErr {
 				var he *echo.HTTPError
@@ -319,9 +317,7 @@ func TestParseIDParam(t *testing.T) {
 func TestParseNamedIDParam(t *testing.T) {
 	e := echo.New()
 	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder())
-	c.SetParamNames("id")
-	c.SetParamValues("nope")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "nope"}})
 	_, err := parseNamedIDParam(c, "tag id")
 	var he *echo.HTTPError
 	if !errors.As(err, &he) {

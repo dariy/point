@@ -15,7 +15,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // TestPagesPayloads pins the wire format of every BFF page endpoint against a
@@ -39,7 +39,7 @@ func TestPagesPayloads(t *testing.T) {
 
 	cases := []struct {
 		name string
-		call func(echo.Context) error
+		call func(*echo.Context) error
 		// target is the request URL; params are the route params the endpoint
 		// reads (the router is not involved in a handler unit test).
 		target string
@@ -96,8 +96,7 @@ func TestPagesPayloads(t *testing.T) {
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		for k, v := range tc.params {
-			c.SetParamNames(k)
-			c.SetParamValues(v)
+			c.SetPathValues(echo.PathValues{{Name: k, Value: v}})
 		}
 		if tc.owner {
 			c.Set("user", "owner")

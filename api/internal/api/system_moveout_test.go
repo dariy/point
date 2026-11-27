@@ -11,7 +11,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestRestoreBackup_PasswordGate(t *testing.T) {
@@ -41,13 +41,12 @@ func TestRestoreBackup_PasswordGate(t *testing.T) {
 	user := models.GetSessionByTokenRow{UserID: 1}
 	marker := filepath.Join(h.dataPath, "backups", "pending_restore")
 
-	newCtx := func(body string) (echo.Context, *httptest.ResponseRecorder) {
+	newCtx := func(body string) (*echo.Context, *httptest.ResponseRecorder) {
 		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("filename")
-		c.SetParamValues(name)
+		c.SetPathValues(echo.PathValues{{Name: "filename", Value: name}})
 		c.Set("user", user)
 		return c, rec
 	}
@@ -109,8 +108,7 @@ func TestDownloadBackup_TokenAndRange(t *testing.T) {
 	req.Header.Set("Range", "bytes=0-3")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues(filename)
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: filename}})
 	c.Set("user", user)
 
 	if err := h.DownloadBackup(c); err != nil {
@@ -127,8 +125,7 @@ func TestDownloadBackup_TokenAndRange(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodGet, "/api/system/backups/"+filename+"/download?token="+token, nil)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	c2.SetParamNames("filename")
-	c2.SetParamValues(filename)
+	c2.SetPathValues(echo.PathValues{{Name: "filename", Value: filename}})
 	c2.Set("user", user)
 	if err := h.DownloadBackup(c2); err == nil {
 		t.Fatal("second use of a consumed token should fail")
@@ -142,8 +139,7 @@ func TestDownloadBackup_RejectsBadToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/system/backups/"+filename+"/download?token=nope", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues(filename)
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: filename}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 
 	if err := h.DownloadBackup(c); err == nil {
@@ -160,8 +156,7 @@ func TestDownloadBackup_RejectsTokenFromAnotherUser(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/system/backups/"+filename+"/download?token="+token, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues(filename)
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: filename}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 
 	if err := h.DownloadBackup(c); err == nil {

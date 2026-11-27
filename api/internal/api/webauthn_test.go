@@ -8,7 +8,7 @@ import (
 
 	"point-api/internal/config"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestWebAuthnHandler_Unconfigured(t *testing.T) {
@@ -20,7 +20,7 @@ func TestWebAuthnHandler_Unconfigured(t *testing.T) {
 		name   string
 		method string
 		path   string
-		fn     func(c echo.Context) error
+		fn     func(c *echo.Context) error
 	}{
 		{"BeginRegistration", http.MethodPost, "/api/auth/webauthn/register/begin", h.BeginRegistration},
 		{"FinishRegistration", http.MethodPost, "/api/auth/webauthn/register/finish", h.FinishRegistration},

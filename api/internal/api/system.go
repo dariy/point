@@ -24,7 +24,7 @@ import (
 	"point-api/internal/services"
 	"point-api/internal/utils"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // RestartRequested is set by the restart endpoint so main() re-execs the binary
@@ -85,7 +85,7 @@ func (h *SystemHandler) WithFFmpeg(f *services.FFmpeg) *SystemHandler {
 // ListJobs reports the jobs table: a count per state, and the queued,
 // running and failed jobs (newest first, at most 100). Each job shows its
 // kind and the ids in its payload, not the raw payload.
-func (h *SystemHandler) ListJobs(c echo.Context) error {
+func (h *SystemHandler) ListJobs(c *echo.Context) error {
 	if h.jobs == nil {
 		return c.JSON(http.StatusOK, map[string]any{"counts": map[string]int64{}, "jobs": []services.JobView{}})
 	}
@@ -102,7 +102,7 @@ func (h *SystemHandler) ListJobs(c echo.Context) error {
 }
 
 // RetryJob sets a failed job back to queued so that the worker runs it again.
-func (h *SystemHandler) RetryJob(c echo.Context) error {
+func (h *SystemHandler) RetryJob(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid job id")
@@ -121,7 +121,7 @@ func (h *SystemHandler) RetryJob(c echo.Context) error {
 
 // ClearFailedJobs removes every failed job and returns the count. It is the
 // only path that removes failed jobs; the daily prune leaves them.
-func (h *SystemHandler) ClearFailedJobs(c echo.Context) error {
+func (h *SystemHandler) ClearFailedJobs(c *echo.Context) error {
 	if h.jobs == nil {
 		return c.JSON(http.StatusOK, map[string]any{"deleted": 0})
 	}
@@ -178,7 +178,7 @@ func (h *SystemHandler) photoLibraryRoot() (string, bool) {
 
 // isInstanceOwner reports whether the request comes from the owner's browser
 // session. API keys and other users are not the owner.
-func (h *SystemHandler) isInstanceOwner(c echo.Context) bool {
+func (h *SystemHandler) isInstanceOwner(c *echo.Context) bool {
 	s, ok := c.Get("user").(models.GetSessionByTokenRow)
 	if !ok {
 		return false
@@ -190,7 +190,7 @@ func (h *SystemHandler) isInstanceOwner(c echo.Context) bool {
 // GetPhotoLibraryStatus is the read-only photo library status for the
 // instance owner. It returns 404 when the library is not configured and 403
 // to any caller that is not the owner, so the path stays private.
-func (h *SystemHandler) GetPhotoLibraryStatus(c echo.Context) error {
+func (h *SystemHandler) GetPhotoLibraryStatus(c *echo.Context) error {
 	root, ok := h.photoLibraryRoot()
 	if !ok {
 		return echo.NewHTTPError(http.StatusNotFound, "photo library not configured")
@@ -217,7 +217,7 @@ func (h *SystemHandler) GetPhotoLibraryStatus(c echo.Context) error {
 //
 // The data is per process: a restart clears it, and jobs that have not run yet
 // in this process are absent rather than reported as failing.
-func (h *SystemHandler) GetHealth(c echo.Context) error {
+func (h *SystemHandler) GetHealth(c *echo.Context) error {
 	tasks := h.health.Snapshot()
 	out := make([]map[string]any, 0, len(tasks))
 	degraded := 0
@@ -306,7 +306,7 @@ type versionCheckCache struct {
 
 // GetVersion returns the running version and the latest available version from GitHub.
 // The GitHub response is cached in blog_settings for 24 hours to avoid hammering the API.
-func (h *SystemHandler) GetVersion(c echo.Context) error {
+func (h *SystemHandler) GetVersion(c *echo.Context) error {
 	return c.JSON(http.StatusOK, h.versionStatus(c.Request().Context(), false))
 }
 
@@ -317,7 +317,7 @@ func (h *SystemHandler) GetVersion(c echo.Context) error {
 // the upstream call succeeded a minute ago, failed silently, or never ran at
 // all, so an admin has no way to tell a working check from a dead one. This one
 // moves `checked_at` and reports the fetch error verbatim when there is one.
-func (h *SystemHandler) CheckVersion(c echo.Context) error {
+func (h *SystemHandler) CheckVersion(c *echo.Context) error {
 	return c.JSON(http.StatusOK, h.versionStatus(c.Request().Context(), true))
 }
 
@@ -488,7 +488,7 @@ func semverGreaterThan(a, b string) bool {
 	return aPat > bPat
 }
 
-func (h *SystemHandler) GetStats(c echo.Context) error {
+func (h *SystemHandler) GetStats(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	stats, err := h.repo.GetSystemStats(ctx)
@@ -497,12 +497,12 @@ func (h *SystemHandler) GetStats(c echo.Context) error {
 	}
 
 	resp := map[string]interface{}{
-		"published_posts":   stats.PublishedCount,
-		"total_posts":       stats.PostCount,
-		"total_tags":        stats.TagCount,
-		"total_media":       stats.MediaCount,
-		"storage_used_mb":   float64(stats.StorageBytes) / (1024 * 1024),
-		"uptime_seconds":    int64(time.Since(startTime).Seconds()),
+		"published_posts": stats.PublishedCount,
+		"total_posts":     stats.PostCount,
+		"total_tags":      stats.TagCount,
+		"total_media":     stats.MediaCount,
+		"storage_used_mb": float64(stats.StorageBytes) / (1024 * 1024),
+		"uptime_seconds":  int64(time.Since(startTime).Seconds()),
 		// True only when PHOTO_LIBRARY_PATH names a readable directory.
 		"import_configured": h.photoLibraryConfigured(),
 	}
@@ -538,7 +538,7 @@ func readLogLines(path string) ([]string, error) {
 	return out, scanner.Err()
 }
 
-func (h *SystemHandler) GetLogs(c echo.Context) error {
+func (h *SystemHandler) GetLogs(c *echo.Context) error {
 	lines, _ := strconv.Atoi(c.QueryParam("lines"))
 	if lines < 1 || lines > 1000 {
 		lines = 100
@@ -573,7 +573,7 @@ func (h *SystemHandler) GetLogs(c echo.Context) error {
 	return c.JSON(http.StatusOK, all)
 }
 
-func (h *SystemHandler) CreateBackup(c echo.Context) error {
+func (h *SystemHandler) CreateBackup(c *echo.Context) error {
 	if h.systemService.BackupRunning() {
 		return c.JSON(http.StatusConflict, map[string]string{
 			"status":  "already_running",
@@ -615,7 +615,7 @@ func (h *SystemHandler) CreateBackup(c echo.Context) error {
 	return c.JSON(http.StatusAccepted, map[string]string{"status": "started"})
 }
 
-func (h *SystemHandler) ListBackups(c echo.Context) error {
+func (h *SystemHandler) ListBackups(c *echo.Context) error {
 	backupDir := filepath.Join(h.dataPath, "backups")
 
 	entries, err := os.ReadDir(backupDir)
@@ -670,7 +670,7 @@ func (h *SystemHandler) ListBackups(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-func (h *SystemHandler) RestoreBackup(c echo.Context) error {
+func (h *SystemHandler) RestoreBackup(c *echo.Context) error {
 	ctx := c.Request().Context()
 	userID := extractUserID(c.Get("user"))
 	filename := c.Param("filename")
@@ -703,7 +703,7 @@ func (h *SystemHandler) RestoreBackup(c echo.Context) error {
 // the normal graceful shutdown, after which main() re-execs the binary (same PID
 // and container, a fresh program). No external supervisor is needed. Any pending
 // backup restore is applied by the fresh process before it opens the database.
-func (h *SystemHandler) RestartServer(c echo.Context) error {
+func (h *SystemHandler) RestartServer(c *echo.Context) error {
 	// Respond first, then trigger shutdown from a goroutine — a short delay lets
 	// this response flush before the HTTP server stops accepting connections.
 	utils.SafeGo("system: restart signal", func() {
@@ -719,7 +719,7 @@ func (h *SystemHandler) RestartServer(c echo.Context) error {
 	})
 }
 
-func (h *SystemHandler) GetMigrations(c echo.Context) error {
+func (h *SystemHandler) GetMigrations(c *echo.Context) error {
 	migrations, err := h.repo.GetMigrations(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -727,7 +727,7 @@ func (h *SystemHandler) GetMigrations(c echo.Context) error {
 	return c.JSON(http.StatusOK, migrations)
 }
 
-func (h *SystemHandler) ClearCache(c echo.Context) error {
+func (h *SystemHandler) ClearCache(c *echo.Context) error {
 	_ = h.cacheService.Clear(c.Request().Context())
 	// The Go API now has a file-based cache for feeds and some pages.
 	// We also treat this as an opportunity to synchronize state. We recalculate media visibility
@@ -744,7 +744,7 @@ func (h *SystemHandler) ClearCache(c echo.Context) error {
 	})
 }
 
-func (h *SystemHandler) RecalculateMediaVisibility(c echo.Context) error {
+func (h *SystemHandler) RecalculateMediaVisibility(c *echo.Context) error {
 	changed, err := h.mediaService.RecalculateAllMediaVisibility(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -758,7 +758,7 @@ func (h *SystemHandler) RecalculateMediaVisibility(c echo.Context) error {
 // AuditPostLinks reports internal /posts/<slug> links on publicly reachable
 // posts whose target an anonymous visitor cannot open (missing, unpublished,
 // or hidden by a hides-posts tag).
-func (h *SystemHandler) AuditPostLinks(c echo.Context) error {
+func (h *SystemHandler) AuditPostLinks(c *echo.Context) error {
 	issues, scanned, err := h.postService.AuditPublicPostLinks(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -769,7 +769,7 @@ func (h *SystemHandler) AuditPostLinks(c echo.Context) error {
 	})
 }
 
-func (h *SystemHandler) UpdateMapCoords(c echo.Context) error {
+func (h *SystemHandler) UpdateMapCoords(c *echo.Context) error {
 	result, err := h.tagService.UpdateMissingCoords(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -777,7 +777,7 @@ func (h *SystemHandler) UpdateMapCoords(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-func (h *SystemHandler) DeleteBackup(c echo.Context) error {
+func (h *SystemHandler) DeleteBackup(c *echo.Context) error {
 	filename := c.Param("filename")
 	if filename == "" || strings.Contains(filename, "/") || strings.Contains(filename, "..") {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid filename")
@@ -827,7 +827,7 @@ type AuthorizeDownloadRequest struct {
 // AuthorizeBackupDownload re-verifies the account password and, on success,
 // issues a short-lived single-use token the client exchanges for the actual
 // download (which is a plain GET that can't carry a password body).
-func (h *SystemHandler) AuthorizeBackupDownload(c echo.Context) error {
+func (h *SystemHandler) AuthorizeBackupDownload(c *echo.Context) error {
 	ctx := c.Request().Context()
 	userID := extractUserID(c.Get("user"))
 
@@ -859,7 +859,7 @@ func (h *SystemHandler) AuthorizeBackupDownload(c echo.Context) error {
 // DownloadBackup streams a backup archive as an attachment after validating the
 // one-time token from AuthorizeBackupDownload. c.Attachment serves via
 // http.ServeContent, so Range/resume works for multi-GB files without buffering.
-func (h *SystemHandler) DownloadBackup(c echo.Context) error {
+func (h *SystemHandler) DownloadBackup(c *echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	filename := c.Param("filename")
 
@@ -879,7 +879,7 @@ func (h *SystemHandler) DownloadBackup(c echo.Context) error {
 	if sum := readChecksumSidecar(backupPath); sum != "" {
 		c.Response().Header().Set("X-Archive-SHA256", sum)
 	}
-	return c.Attachment(backupPath, filename)
+	return ServeAttachment(c, backupPath, filename)
 }
 
 // UploadBackupArchive is the "move in" step: it streams an uploaded .tar.gz into
@@ -888,7 +888,7 @@ func (h *SystemHandler) DownloadBackup(c echo.Context) error {
 // The archive is staged to a .partial and only published under its final name
 // once validated, so a half-uploaded file never appears as a usable backup. This
 // route is excluded from the global body-size limit so multi-GB archives fit.
-func (h *SystemHandler) UploadBackupArchive(c echo.Context) error {
+func (h *SystemHandler) UploadBackupArchive(c *echo.Context) error {
 	backupDir := filepath.Join(h.dataPath, "backups")
 	if err := os.MkdirAll(backupDir, 0o755); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "cannot prepare backups directory")
@@ -958,7 +958,7 @@ var importableExtensions = map[string]bool{
 	".heif": true,
 }
 
-func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
+func (h *SystemHandler) ScanMediaImport(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	importPath, ok := h.photoLibraryRoot()
@@ -1031,7 +1031,7 @@ func (h *SystemHandler) ScanMediaImport(c echo.Context) error {
 	})
 }
 
-func (h *SystemHandler) GetDiskInfo(c echo.Context) error {
+func (h *SystemHandler) GetDiskInfo(c *echo.Context) error {
 	info, err := h.systemService.GetDiskInfo()
 	if err != nil {
 		return MapError(err)
@@ -1044,7 +1044,7 @@ type photoLibraryFileEntry struct {
 	Path string `json:"path"`
 }
 
-func (h *SystemHandler) getLibraryRoot(c echo.Context) (string, error) {
+func (h *SystemHandler) getLibraryRoot(c *echo.Context) (string, error) {
 	libraryRoot, ok := h.photoLibraryRoot()
 	if !ok {
 		return "", echo.NewHTTPError(http.StatusBadRequest, "photo library not configured")
@@ -1061,7 +1061,7 @@ func safeJoin(libraryRoot, relPath string) (string, error) {
 	return abs, nil
 }
 
-func (h *SystemHandler) GetPhotoLibraryContents(c echo.Context) error {
+func (h *SystemHandler) GetPhotoLibraryContents(c *echo.Context) error {
 	libraryRoot, err := h.getLibraryRoot(c)
 	if err != nil {
 		return err
@@ -1110,7 +1110,7 @@ func (h *SystemHandler) GetPhotoLibraryContents(c echo.Context) error {
 	})
 }
 
-func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
+func (h *SystemHandler) ImportSelectedPhotos(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	libraryRoot, err := h.getLibraryRoot(c)
@@ -1187,7 +1187,7 @@ func (h *SystemHandler) ImportSelectedPhotos(c echo.Context) error {
 	})
 }
 
-func (h *SystemHandler) GetPhotoLibraryFile(c echo.Context) error {
+func (h *SystemHandler) GetPhotoLibraryFile(c *echo.Context) error {
 	libraryRoot, err := h.getLibraryRoot(c)
 	if err != nil {
 		return err
@@ -1208,5 +1208,5 @@ func (h *SystemHandler) GetPhotoLibraryFile(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, joinErr.Error())
 	}
 
-	return c.File(absPath)
+	return ServeFile(c, absPath)
 }
