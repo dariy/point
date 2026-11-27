@@ -167,6 +167,10 @@ type UploadFileParams struct {
 	AltText  string
 	Caption  string
 	PostID   *int64
+	// OriginalPath, when set, is the path to keep for the original
+	// ("originals/YYYY/MM/file"), as the portable import does. The upload
+	// then refuses a path that is not clean or that is already on disk.
+	OriginalPath string
 }
 
 func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (models.Medium, error) {
@@ -189,21 +193,32 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	now := time.Now().UTC().Round(0)
 	datePath := fmt.Sprintf("%d/%02d", now.Year(), now.Month())
 
-	// Create directories
-	originalsDir := filepath.Join(s.cfg.StoragePath, "media", "originals", datePath)
-	if err := os.MkdirAll(originalsDir, 0755); err != nil {
-		return models.Medium{}, err
-	}
-
 	// Strip any directory components from the user-provided filename to
 	// prevent path traversal (e.g. "../../etc/passwd").
 	safeFilename := filepath.Base(filepath.Clean("/" + p.Filename))
 	uniqueFilename := fmt.Sprintf("%d_%s", now.Unix(), safeFilename)
 	originalRelPath := filepath.Join("originals", datePath, uniqueFilename)
+	if p.OriginalPath != "" {
+		rel, ok := exportMediaPath(p.OriginalPath)
+		if !ok {
+			return models.Medium{}, wrapKind(ErrInvalidInput, fmt.Errorf("invalid media path %q", p.OriginalPath))
+		}
+		originalRelPath = filepath.FromSlash(rel)
+	}
 	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
 	originalFullPath := filepath.Clean(filepath.Join(mediaBase, originalRelPath))
 	if !strings.HasPrefix(originalFullPath, mediaBase+string(filepath.Separator)) {
 		return models.Medium{}, fmt.Errorf("invalid media path")
+	}
+	if p.OriginalPath != "" {
+		if _, err := os.Lstat(originalFullPath); err == nil {
+			return models.Medium{}, wrapKind(ErrConflict, fmt.Errorf("media path %q is already on disk", p.OriginalPath))
+		}
+	}
+
+	// Create directories
+	if err := os.MkdirAll(filepath.Dir(originalFullPath), 0755); err != nil {
+		return models.Medium{}, err
 	}
 
 	// Process media

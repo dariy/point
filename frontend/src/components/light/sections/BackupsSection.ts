@@ -9,7 +9,7 @@
  */
 
 import { Component } from "../../Component.ts";
-import { getHealth, listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackupDownload, backupDownloadUrl, uploadBackupArchive, restartServer, getExport, startExport, authorizeExportDownload, exportDownloadUrl } from "../../../api/system.ts";
+import { getHealth, listBackups, createBackup, restoreBackup, deleteBackup, authorizeBackupDownload, backupDownloadUrl, uploadBackupArchive, restartServer, getExport, startExport, authorizeExportDownload, exportDownloadUrl, getImport, uploadImportArchive } from "../../../api/system.ts";
 import { sha256 } from "../../../api/auth.ts";
 import { getAllSettings, updateSettings } from "../../../api/settings.ts";
 import { setToast } from "../../../store.ts";
@@ -21,7 +21,7 @@ import { showConfirm, showPrompt } from "../../../utils/dialogs.ts";
 import { GestureController } from "../../../core/gestures.ts";
 
 import type { Settings } from '../../../api/settings.ts';
-import type { Backup, ExportStatus } from '../../../api/system.ts';
+import type { Backup, ExportStatus, ImportStatus } from '../../../api/system.ts';
 
 export class BackupsSection extends Component {
   _itemGestures: GestureController[] = [];
@@ -33,6 +33,10 @@ export class BackupsSection extends Component {
   // After Start export: the created_at of the result before the click, so the
   // poll runs until a new result replaces it.
   _exportAwaiting: { since: number; prev: string | null } | null = null;
+  _importPollTimer: ReturnType<typeof setInterval> | null = null;
+  // True from a started import until its result is shown, so the end of the
+  // run gets one toast.
+  _importAwaiting = false;
 
   constructor(container: HTMLElement, props: object = {}) {
     super(container, props);
@@ -51,7 +55,12 @@ export class BackupsSection extends Component {
       keep: 7,
       // Portable export: { running, last } from GET /api/system/export.
       exportStatus: null,
-      startingExport: false
+      startingExport: false,
+      // Portable import: { running, progress, last, empty } from GET
+      // /api/system/import, and the upload progress (0..100).
+      importStatus: null,
+      importUploading: false,
+      importUploadPct: 0
     };
   }
   _renderSettings() {
@@ -161,6 +170,45 @@ export class BackupsSection extends Component {
         ${result}
       </div>`;
   }
+  // The portable import block: an export archive goes into an empty site.
+  _renderImport() {
+    const status = this.state.importStatus as ImportStatus | null;
+    if (!status) return "";
+    const uploading = this.state.importUploading === true;
+    const running = uploading || status.running;
+    const blocked = !status.empty && !running;
+    let body: RawHtml | string = "";
+    if (uploading) {
+      const pct = this.state.importUploadPct as number;
+      body = html`<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <p class="progress-text">Uploading archive… ${pct}%</p>`;
+    } else if (status.running) {
+      const p = status.progress;
+      const total = p ? p.total.posts + p.total.pages + p.total.media : 0;
+      const done = p ? p.done.posts + p.done.pages + p.done.media : 0;
+      const pct = total > 0 ? Math.round(done / total * 100) : 0;
+      const text = !p || p.phase === "check" ? "Checking the archive…" : p.phase === "finish" ? "Finishing…" : `Importing… ${p.done.posts + p.done.pages} of ${p.total.posts + p.total.pages} posts and pages, ${p.done.media} of ${p.total.media} media files`;
+      body = html`<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <p class="progress-text import-progress">${text}</p>`;
+    } else if (status.last?.error) {
+      body = html`<p class="backup-setting-hint export-error import-error">The last import failed: ${status.last.error}</p>`;
+    } else if (status.last) {
+      const c = status.last.counts;
+      body = html`<p class="backup-setting-hint import-result">Imported ${c.posts} posts · ${c.pages} pages · ${c.media} media · ${c.tags} tags on ${new Date(status.last.started_at).toLocaleString()}.
+        ${status.last.problem_count ? html`<span class="export-missing" title="${(status.last.problems ?? []).join("\n")}">${status.last.problem_count} files not imported as they are in the archive</span>` : ""}</p>`;
+    }
+    return html`
+      <div class="section-block">
+        <h3 class="section-subhead">Import</h3>
+        <p class="backup-setting-hint">Move a site in: import an export archive (posts, originals, captions, alt text, EXIF and tags). The import goes into an empty site only.</p>
+        ${blocked ? html`<p class="backup-setting-hint import-blocked">This site has posts or media, so it cannot import. Use a new site.</p>` : ""}
+        <div class="section-actions">
+          <button id="start-import-btn" class="btn btn-sm btn-secondary"${running || blocked ? " disabled" : ""}>${raw(UPLOAD_SVG)}<span>${running ? "Importing…" : "Import archive"}</span></button>
+          <input type="file" id="import-archive-input" accept=".gz,.tar.gz,application/gzip" hidden>
+        </div>
+        ${body}
+      </div>`;
+  }
   render() {
     const {
       loading,
@@ -197,7 +245,8 @@ export class BackupsSection extends Component {
         <h3 class="section-subhead">Backups</h3>
         <ul class="backup-list">${items}</ul>
       </div>
-      ${this._renderExport()}`;
+      ${this._renderExport()}
+      ${this._renderImport()}`;
   }
   afterRender() {
     this.$("#create-backup-btn")?.addEventListener("click", () => this._handleCreate());
@@ -210,6 +259,13 @@ export class BackupsSection extends Component {
     });
     this.$("#restart-server-btn")?.addEventListener("click", () => this._handleRestartServer());
     this.$("#start-export-btn")?.addEventListener("click", () => this._handleStartExport());
+    const importInput = this.$("#import-archive-input") as HTMLInputElement | null;
+    this.$("#start-import-btn")?.addEventListener("click", () => importInput?.click());
+    importInput?.addEventListener("change", () => {
+      const file = importInput.files?.[0];
+      importInput.value = "";
+      if (file) this._handleImport(file);
+    });
     this.$$(".download-export-btn").forEach(btn => {
       btn.addEventListener("click", () => this._handleExportDownload(btn.dataset.filename!));
     });
@@ -383,6 +439,7 @@ export class BackupsSection extends Component {
     this._destroySwipe();
     this._stopPoll();
     this._stopExportPoll();
+    this._stopImportPoll();
   }
   mount() {
     super.mount();
@@ -390,7 +447,7 @@ export class BackupsSection extends Component {
   }
   async _load() {
     try {
-      const [backups, settings, health, exportStatus] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => ({} as Settings)), getHealth().catch(() => null), getExport().catch(() => null)]);
+      const [backups, settings, health, exportStatus, importStatus] = await Promise.all([listBackups().catch(() => []), getAllSettings().catch(() => ({} as Settings)), getHealth().catch(() => null), getExport().catch(() => null), getImport().catch(() => null)]);
       this.setState({
         loading: false,
         backups: Array.isArray(backups) ? backups : [],
@@ -398,10 +455,12 @@ export class BackupsSection extends Component {
         managed: health?.backup?.managed === true,
         intervalDays: parseInt(settings.backup_interval_days, 10) || 1,
         keep: settings.backup_keep != null ? parseInt(settings.backup_keep, 10) || 0 : 7,
-        exportStatus
+        exportStatus,
+        importStatus
       });
       this._syncPoll();
       this._syncExportPoll();
+      this._syncImportPoll();
     } catch (err) {
       this.setState({
         loading: false
@@ -736,6 +795,62 @@ export class BackupsSection extends Component {
             uploadPct: 0
           });
         }
+      }
+    });
+  }
+
+  // Poll the import status while an import runs. When a started import ends,
+  // say how it ended.
+  _syncImportPoll() {
+    const status = this.state.importStatus as ImportStatus | null;
+    if (this._importAwaiting && status && !status.running) {
+      this._importAwaiting = false;
+      setToast(status.last?.error ? { message: "Import failed.", type: "error" } : { message: "Import is done.", type: "success" });
+    }
+    if (status?.running && !this._importPollTimer) {
+      this._importPollTimer = setInterval(() => this._refreshImport(), 2000);
+    } else if (!status?.running) {
+      this._stopImportPoll();
+    }
+  }
+  _stopImportPoll() {
+    if (this._importPollTimer) {
+      clearInterval(this._importPollTimer);
+      this._importPollTimer = null;
+    }
+  }
+  async _refreshImport() {
+    try {
+      this.setState({ importStatus: await getImport() });
+    } catch {
+      /* keep the last status; try again on the next tick */
+    }
+    this._syncImportPoll();
+  }
+  // Move a site in: confirm the password, upload the archive, then poll the
+  // import. The server refuses a site that is not empty and an unknown
+  // archive version before it starts.
+  _handleImport(file: File) {
+    showPrompt({
+      title: "Import archive",
+      message: `Import "${file.name}" into this site? It adds the posts, media and tags of the archive. ` + `Enter your password to confirm:`,
+      inputType: "password",
+      confirmText: "Import",
+      onConfirm: async password => {
+        if (!password) return;
+        this.setState({ importUploading: true, importUploadPct: 0 });
+        try {
+          await uploadImportArchive(file, await sha256(password), frac => {
+            this.setState({ importUploading: true, importUploadPct: Math.round(frac * 100) });
+          });
+          setToast({ message: "Import started…", type: "info" });
+          this._importAwaiting = true;
+        } catch (err) {
+          setToast({ message: (err as Error).message || "Import failed.", type: "error" });
+        } finally {
+          this.setState({ importUploading: false, importUploadPct: 0 });
+        }
+        await this._refreshImport();
       }
     });
   }

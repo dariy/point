@@ -147,3 +147,63 @@ test("BackupsSection export block", async () => {
   root.remove();
   dom.cleanup();
 });
+
+test("BackupsSection import block", async () => {
+  const dom = setupDOM();
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+  const section = new BackupsSection(root);
+  const base = { backups: [], loading: false, uploading: false, uploadPct: 0, exportStatus: null };
+  const zero = { posts: 0, pages: 0, media: 0, tags: 0 };
+
+  // No status yet: no block.
+  section.state = { ...base, importStatus: null };
+  assert.ok(!String(section.render()).includes("start-import-btn"));
+
+  // An empty site can import.
+  section.state = { ...base, importStatus: { running: false, progress: null, last: null, empty: true } };
+  let out = String(section.render());
+  assert.ok(out.includes('id="start-import-btn"'));
+  assert.doesNotMatch(out, /id="start-import-btn"[^>]*disabled/);
+  root.innerHTML = out;
+  section._load = async () => {};
+  const input = must(root.querySelector<HTMLInputElement>("#import-archive-input"));
+  let picked = 0;
+  input.addEventListener("click", () => { picked++; });
+  section.afterRender();
+  must(root.querySelector<HTMLElement>("#start-import-btn")).click();
+  assert.strictEqual(picked, 1, "the button opens the file picker");
+
+  // A site with content cannot import, and says why.
+  section.state = { ...base, importStatus: { running: false, progress: null, last: null, empty: false } };
+  out = String(section.render());
+  assert.match(out, /id="start-import-btn"[^>]*disabled/);
+  assert.ok(out.includes("cannot import"));
+
+  // A running import shows its progress.
+  section.state = { ...base, importStatus: { running: true, empty: false, last: null, progress: {
+    phase: "media", total: { posts: 3, pages: 1, media: 4, tags: 2 }, done: { posts: 3, pages: 1, media: 2, tags: 2 },
+  } } };
+  out = String(section.render());
+  assert.ok(out.includes("4 of 4 posts and pages, 2 of 4 media files"));
+  assert.ok(out.includes("width:75%"));
+  assert.ok(!out.includes("cannot import"));
+
+  // The result and the error of the last import.
+  section.state = { ...base, importStatus: { running: false, progress: null, empty: false, last: {
+    started_at: "2026-11-27T12:00:00Z", exported_at: "2026-11-26T12:00:00Z", counts: { posts: 3, pages: 1, media: 3, tags: 2 },
+    problems: ["originals/a.jpg: missing"], problem_count: 1, duration_ms: 5,
+  } } };
+  out = String(section.render());
+  assert.ok(out.includes("Imported 3 posts · 1 pages · 3 media · 2 tags"));
+  assert.ok(out.includes("1 files not imported"));
+  section.state = { ...base, importStatus: { running: false, progress: null, empty: true, last: {
+    started_at: "2026-11-27T12:00:00Z", exported_at: "0001-01-01T00:00:00Z", counts: zero, problem_count: 0,
+    error: "the archive has export format version 2", duration_ms: 1,
+  } } };
+  out = String(section.render());
+  assert.ok(out.includes("The last import failed: the archive has export format version 2"));
+
+  root.remove();
+  dom.cleanup();
+});

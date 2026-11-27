@@ -162,11 +162,12 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 		uploadLimitMB = 50
 	}
 	e.Use(middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
-		// The "move in" archive upload streams a multi-GB body straight to a temp
-		// file; the global limit would abort it. It's gated by a session cookie
+		// The "move in" archive upload and the portable import stream a
+		// multi-GB body straight to a temp file; the global limit would abort it. It's gated by a session cookie
 		// plus password re-entry instead of a size ceiling.
 		Skipper: func(c echo.Context) bool {
-			return c.Request().Method == http.MethodPost && c.Path() == "/api/system/backups/upload"
+			return c.Request().Method == http.MethodPost &&
+				(c.Path() == "/api/system/backups/upload" || c.Path() == "/api/system/import")
 		},
 		Limit: fmt.Sprintf("%dM", uploadLimitMB),
 	}))

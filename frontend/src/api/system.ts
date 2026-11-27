@@ -238,6 +238,74 @@ export function exportDownloadUrl(filename: string, token: string): string {
   return `/api/system/export/${encodeURIComponent(filename)}/download?token=${encodeURIComponent(token)}`;
 }
 
+/** The state of a running portable import. */
+export interface ImportProgress {
+  /** "check" (the first pass), "tags", "posts", "media" or "finish". */
+  phase: string;
+  total: ExportCounts;
+  done: ExportCounts;
+}
+
+/** The result of the last portable import. */
+export interface ImportResult {
+  started_at: string;
+  source_version?: string;
+  exported_at: string;
+  /** The rows the import wrote. */
+  counts: ExportCounts;
+  /** The first files that were not imported, or not as they are in the archive. */
+  problems?: string[];
+  problem_count: number;
+  error?: string;
+  duration_ms: number;
+}
+
+export interface ImportStatus {
+  running: boolean;
+  progress: ImportProgress | null;
+  last: ImportResult | null;
+  /** The import goes into a site without posts and media only. */
+  empty: boolean;
+}
+
+export function getImport(): Promise<ImportStatus> {
+  return api.get('/api/system/import');
+}
+
+/**
+ * Upload a portable export archive and start the import. The server refuses
+ * a site with posts or media, and an unknown format version. Uses XHR so the
+ * File streams as the raw body and we get upload progress.
+ *
+ * @param sha256pw - sha256-hex of the account password
+ * @param onProgress - 0..1 upload progress
+ */
+export function uploadImportArchive(
+  file: File,
+  sha256pw: string,
+  onProgress?: (fraction: number) => void,
+): Promise<{ status: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/system/import');
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type', 'application/gzip');
+    xhr.setRequestHeader('X-Confirm-Password', sha256pw);
+    xhr.upload.addEventListener('progress', (e) => {
+      if (onProgress && e.lengthComputable) onProgress(e.loaded / e.total);
+    });
+    xhr.addEventListener('load', () => {
+      // An error body is {"detail": "..."} (the API error handler).
+      let body: { status?: string; detail?: string; message?: string } = {};
+      try { body = JSON.parse(xhr.responseText || '{}'); } catch { /* non-JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve({ status: body.status ?? 'started' });
+      else reject(new Error(body.detail || body.message || `Import failed (${xhr.status})`));
+    });
+    xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+    xhr.send(file);
+  });
+}
+
 export interface BackupUpload {
   status: string;
   filename: string;

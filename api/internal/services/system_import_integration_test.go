@@ -1,0 +1,430 @@
+//go:build !unit
+
+package services
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"errors"
+	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"point-api/internal/config"
+	"point-api/internal/repository"
+)
+
+// importTestJPEG returns a small real JPEG, so the import decodes it and
+// writes the derived files as for an upload.
+func importTestJPEG(t *testing.T, c color.Color) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 200, 150))
+	for x := 0; x < 200; x++ {
+		for y := 0; y < 150; y++ {
+			img.Set(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func openImportTestRepo(t *testing.T, dataPath string) repository.Repository {
+	t.Helper()
+	repo, err := repository.NewRepository(filepath.Join(dataPath, "point.db"))
+	if err != nil {
+		t.Fatalf("open repo: %v", err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	if _, err := repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1, 'u', 'u@x.com', 'h', 'U')`); err != nil {
+		t.Fatal(err)
+	}
+	return repo
+}
+
+// newImportTarget is an empty instance with the services the import uses.
+func newImportTarget(t *testing.T) (*ImportService, string, repository.Repository) {
+	t.Helper()
+	dataPath := t.TempDir()
+	repo := openImportTestRepo(t, dataPath)
+	settings := NewSettingsService(repo)
+	tags := NewTagService(repo)
+	media := NewMediaService(repo, &config.Config{StoragePath: dataPath}, settings, tags)
+	posts := NewPostService(repo, settings, nil, tags, "")
+	return NewImportService(repo, media, posts, tags, dataPath), dataPath, repo
+}
+
+// newImportSource is a small site with real files and real checksums: a tag
+// hierarchy, a published post with two photos and a thumbnail, a draft page
+// with a text file, and a media row whose file is not on disk.
+func newImportSource(t *testing.T) (*SystemService, string, repository.Repository) {
+	t.Helper()
+	dataPath := t.TempDir()
+	repo := openImportTestRepo(t, dataPath)
+	river := importTestJPEG(t, color.RGBA{R: 10, G: 80, B: 200, A: 255})
+	bridge := importTestJPEG(t, color.RGBA{R: 200, G: 80, B: 10, A: 255})
+	notes := []byte("field notes\n")
+	files := map[string][]byte{
+		"originals/2024/01/river.jpg":     river,
+		"originals/2024/01/my bridge.jpg": bridge,
+		"originals/2024/02/notes.txt":     notes,
+	}
+	for rel, data := range files {
+		p := filepath.Join(dataPath, "media", filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := repo.DB().Exec(q, args...); err != nil {
+			t.Fatalf("seed %q: %v", q, err)
+		}
+	}
+	exec(`INSERT INTO tags (id, name, slug, kind, description, nav_order, hidden, latitude, longitude)
+		VALUES (101, 'Places', 'places', 'tag', 'Where I was', 2, 0, NULL, NULL),
+		       (102, 'Paris', 'paris', 'location', NULL, NULL, 0, 48.85, 2.35),
+		       (103, 'Notes', 'notes', 'tag', NULL, NULL, 1, NULL, NULL)`)
+	exec(`INSERT INTO tag_relationships (parent_id, child_id, sort_order) VALUES (101, 102, 3)`)
+	exec(`INSERT INTO posts (id, title, slug, content, excerpt, formatter, status, type, is_featured, view_count,
+		published_at, created_at, updated_at, author_id, thumbnail_path, css, meta_description, immersive_mode)
+		VALUES (1, 'Evening walk', 'evening-walk', ?, 'A walk', 'markdown', 'published', 'post', 1, 7,
+		'2024-01-05 18:00:00', '2024-01-05 17:00:00', '2024-01-06 09:00:00', 1, '/2024/01/river.jpg',
+		'.post { color: red; }', 'By the river', 'immersive')`,
+		"/2024/01/river.jpg\n![Bridge](/2024/01/my bridge.jpg) at dusk\nSee https://example.com/2024/01/river.jpg and /2024/01/gone.jpg")
+	exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (1, 102), (1, 101)`)
+	exec(`INSERT INTO posts (id, title, slug, content, formatter, status, type, is_featured, view_count,
+		created_at, updated_at, author_id) VALUES (2, 'About', 'about', 'Hello.
+/2024/02/notes.txt
+', 'markdown', 'draft', 'page', 0, 0, '2024-02-01 10:00:00', '2024-02-03 11:00:00', 1)`)
+	exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (2, 103)`)
+	media := func(id int, name, rel, ftype, mime string, data []byte, w, h any, postID any, public int, meta, orig any) {
+		t.Helper()
+		exec(`INSERT INTO media (id, filename, original_path, file_type, mime_type, file_size, width, height,
+			post_id, uploaded_at, checksum, alt_text, caption, is_public, metadata, original_metadata)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '2024-01-05 16:00:00', ?, ?, ?, ?, ?, ?)`,
+			id, name, rel, ftype, mime, len(data), w, h, postID, CalculateChecksum(data),
+			"Alt "+name, "Caption "+name, public, meta, orig)
+	}
+	media(1, "river.jpg", "originals/2024/01/river.jpg", "image", "image/jpeg", river, 200, 150, 1, 1,
+		`{"Make":"NIKON","FNumber":"28/10"}`, `{"Make":"NIKON"}`)
+	media(2, "my bridge.jpg", "originals/2024/01/my bridge.jpg", "image", "image/jpeg", bridge, 200, 150, 1, 1, nil, nil)
+	media(3, "notes.txt", "originals/2024/02/notes.txt", "file", "text/plain", notes, nil, nil, 2, 0, nil, nil)
+	media(4, "gone.jpg", "originals/2024/01/gone.jpg", "image", "image/jpeg", []byte("gone"), 16, 12, nil, 0, nil, nil)
+	return NewSystemService(repo, dataPath, filepath.Join(dataPath, "point.db")), dataPath, repo
+}
+
+// importSiteView is the content of a site that an export and an import must
+// keep, in a form that compares with reflect.DeepEqual.
+type importSiteView struct {
+	Posts []string
+	Media []string
+	Tags  []string
+}
+
+func readImportSiteView(t *testing.T, repo repository.Repository) importSiteView {
+	t.Helper()
+	rows := func(q string) []string {
+		t.Helper()
+		r, err := repo.DB().Query(q)
+		if err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+		defer func() { _ = r.Close() }()
+		cols, _ := r.Columns()
+		var out []string
+		for r.Next() {
+			vals := make([]any, len(cols))
+			ptrs := make([]any, len(cols))
+			for i := range vals {
+				ptrs[i] = &vals[i]
+			}
+			if err := r.Scan(ptrs...); err != nil {
+				t.Fatal(err)
+			}
+			parts := make([]string, len(cols))
+			for i, v := range vals {
+				if b, ok := v.([]byte); ok {
+					v = string(b)
+				}
+				parts[i] = fmt.Sprintf("%s=%v", cols[i], v)
+			}
+			out = append(out, strings.Join(parts, " | "))
+		}
+		if err := r.Err(); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	tsf := func(col string) string {
+		return "strftime('%Y-%m-%d %H:%M:%S', " + col + ") AS " + strings.ReplaceAll(col, ".", "_")
+	}
+	return importSiteView{
+		Posts: rows(`SELECT p.slug, p.title, p.content, p.excerpt, p.formatter, p.status, p.type, p.is_featured, ` +
+			tsf("p.published_at") + `, ` + tsf("p.scheduled_at") + `, ` + tsf("p.created_at") + `, ` + tsf("p.updated_at") +
+			`, p.thumbnail_path, p.meta_description, p.css, p.immersive_mode,
+			(SELECT GROUP_CONCAT(slug) FROM (SELECT t.slug FROM post_tags pt JOIN tags t ON t.id = pt.tag_id
+				WHERE pt.post_id = p.id ORDER BY t.slug)) AS tags
+			FROM posts p WHERE p.deleted_at IS NULL ORDER BY p.slug`),
+		Media: rows(`SELECT m.original_path, m.filename, m.file_type, m.mime_type, m.file_size, m.width, m.height, ` +
+			tsf("m.uploaded_at") + `, m.checksum, m.alt_text, m.caption, m.metadata, m.original_metadata, m.is_public,
+			p.slug AS post FROM media m LEFT JOIN posts p ON p.id = m.post_id
+			WHERE m.deleted_at IS NULL ORDER BY m.original_path`),
+		Tags: rows(`SELECT t.slug, t.name, t.description, t.kind, t.hidden, t.hides_posts, t.nav_order, t.in_breadcrumbs,
+			t.show_related, t.in_ancestor_flyout, t.latitude, t.longitude, t.post_count,
+			(SELECT GROUP_CONCAT(p.slug || ':' || IFNULL(r.sort_order, '')) FROM tag_relationships r
+				JOIN tags p ON p.id = r.parent_id WHERE r.child_id = t.id) AS parents
+			FROM tags t ORDER BY t.slug`),
+	}
+}
+
+func TestImport_RoundTrip(t *testing.T) {
+	src, srcData, srcRepo := newImportSource(t)
+	ctx := context.Background()
+	exp, err := src.CreateExport(ctx, "v9.9.9")
+	if err != nil {
+		t.Fatalf("CreateExport: %v", err)
+	}
+	if _, err := srcRepo.DB().Exec(`UPDATE tags SET post_count = 0`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srcRepo.UpdateAllTagPostCounts(ctx); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(srcData, "backups", "exports", exp.Filename)
+
+	imp, dstData, dstRepo := newImportTarget(t)
+	res, err := imp.Import(ctx, archive, 1)
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if res.SourceVersion != "v9.9.9" || res.Error != "" {
+		t.Errorf("result = %+v", res)
+	}
+	if res.Counts.Posts != 1 || res.Counts.Pages != 1 || res.Counts.Media != 3 {
+		t.Errorf("counts = %+v, want 1 post, 1 page, 3 media", res.Counts)
+	}
+	// The original that was not on disk at export time is the one problem.
+	if res.ProblemCount != 1 || !strings.Contains(res.Problems[0], "originals/2024/01/gone.jpg") {
+		t.Errorf("problems = %d %v", res.ProblemCount, res.Problems)
+	}
+	if last := imp.LastImport(); last == nil || last.Counts != res.Counts {
+		t.Errorf("LastImport = %+v", last)
+	}
+	if imp.Running() || imp.Progress() != nil {
+		t.Error("the import still shows as running")
+	}
+
+	want := readImportSiteView(t, srcRepo)
+	// The row of the missing file cannot come back: the archive has no file.
+	var wantMedia []string
+	for _, m := range want.Media {
+		if !strings.Contains(m, "gone.jpg") {
+			wantMedia = append(wantMedia, m)
+		}
+	}
+	want.Media = wantMedia
+	got := readImportSiteView(t, dstRepo)
+	for _, part := range []struct {
+		name      string
+		got, want []string
+	}{{"posts", got.Posts, want.Posts}, {"media", got.Media, want.Media}, {"tags", got.Tags, want.Tags}} {
+		if !reflect.DeepEqual(part.got, part.want) {
+			t.Errorf("%s differ after the round trip\n got: %s\nwant: %s", part.name,
+				strings.Join(part.got, "\n      "), strings.Join(part.want, "\n      "))
+		}
+	}
+
+	// The originals are on disk at the same paths, with the same bytes, and
+	// an image has its derived files, as after an upload.
+	for _, rel := range []string{"originals/2024/01/river.jpg", "originals/2024/01/my bridge.jpg", "originals/2024/02/notes.txt"} {
+		a, err := os.ReadFile(filepath.Join(srcData, "media", rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(filepath.Join(dstData, "media", rel))
+		if err != nil {
+			t.Fatalf("imported original %s: %v", rel, err)
+		}
+		if !bytes.Equal(a, b) {
+			t.Errorf("original %s differs", rel)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(dstData, "media", "variants")); len(entries) == 0 {
+		t.Error("the import wrote no derived files")
+	}
+
+	// A second import is refused: the site is not empty now.
+	if _, err := imp.Import(ctx, archive, 1); !errors.Is(err, ErrImportNotEmpty) {
+		t.Errorf("second Import error = %v, want ErrImportNotEmpty", err)
+	}
+}
+
+// writeImportTestArchive writes a .tar.gz with the given entries, in order.
+func writeImportTestArchive(t *testing.T, entries ...[2]string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for _, e := range entries {
+		if err := tw.WriteHeader(&tar.Header{Name: e[0], Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(e[1]))}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(e[1])); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(t.TempDir(), "archive.tar.gz")
+	if err := os.WriteFile(p, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestImport_RefusesUnknownArchives(t *testing.T) {
+	ctx := context.Background()
+	manifest := func(format string, version int) [2]string {
+		return [2]string{"manifest.json", fmt.Sprintf(`{"format":%q,"version":%d}`, format, version)}
+	}
+	cases := []struct {
+		name    string
+		entries [][2]string
+		want    string
+	}{
+		{"higher version", [][2]string{manifest(ExportFormat, ExportFormatVersion+1)}, "format version"},
+		{"other format", [][2]string{manifest("other", 1)}, "archive format"},
+		{"no manifest first", [][2]string{{"tags.json", "[]"}, manifest(ExportFormat, 1)}, "manifest.json"},
+		{"post without front matter", [][2]string{manifest(ExportFormat, 1), {"posts/a.md", "no front matter"}}, "front matter"},
+		{"original without sidecar", [][2]string{manifest(ExportFormat, 1), {"media/originals/2024/01/a.jpg", "x"}}, "no sidecar"},
+		{"unsafe media path", [][2]string{manifest(ExportFormat, 1), {"media/../../etc/passwd", "x"}}, "unsafe"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			imp, _, repo := newImportTarget(t)
+			_, err := imp.Import(ctx, writeImportTestArchive(t, tc.entries...), 1)
+			if !errors.Is(err, ErrInvalidInput) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Import error = %v, want an invalid-input error with %q", err, tc.want)
+			}
+			// The first pass refuses before it writes anything.
+			if posts, media, _ := repo.CountContentRows(ctx); posts != 0 || media != 0 {
+				t.Errorf("the refused import wrote %d posts and %d media", posts, media)
+			}
+			if last := imp.LastImport(); last == nil || last.Error == "" {
+				t.Errorf("LastImport = %+v, want the error", last)
+			}
+		})
+	}
+}
+
+func TestStartImport_RefusesBeforeItRuns(t *testing.T) {
+	ctx := context.Background()
+	imp, dataPath, repo := newImportTarget(t)
+	body := func(version int) *bytes.Reader {
+		data, err := os.ReadFile(writeImportTestArchive(t, [2]string{"manifest.json", fmt.Sprintf(`{"format":%q,"version":%d}`, ExportFormat, version)}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return bytes.NewReader(data)
+	}
+
+	if err := imp.StartImport(ctx, body(ExportFormatVersion+1), 1); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("StartImport of an unknown version = %v, want ErrInvalidInput", err)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(dataPath, "backups", "imports")); len(entries) != 0 {
+		t.Errorf("a refused upload stays on disk: %v", entries)
+	}
+	if imp.Running() {
+		t.Fatal("a refused import shows as running")
+	}
+
+	if _, err := repo.DB().Exec(`INSERT INTO posts (title, slug, content, formatter, status, type, author_id)
+		VALUES ('x', 'x', '', 'markdown', 'draft', 'post', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := imp.StartImport(ctx, body(1), 1); !errors.Is(err, ErrImportNotEmpty) {
+		t.Fatalf("StartImport into a site with a post = %v, want ErrImportNotEmpty", err)
+	}
+	if empty, err := imp.InstanceEmpty(ctx); err != nil || empty {
+		t.Errorf("InstanceEmpty = %v, %v, want false", empty, err)
+	}
+}
+
+func TestParseImportPost(t *testing.T) {
+	fm, body, err := parseImportPost([]byte("---\ntitle: A\nslug: a\n---\n\nline one\n\nline two\n\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fm.Title != "A" || fm.Slug != "a" {
+		t.Errorf("front matter = %+v", fm)
+	}
+	// The export adds one "\n" after the body; the body itself ends in "\n".
+	if body != "line one\n\nline two\n" {
+		t.Errorf("body = %q", body)
+	}
+	if _, _, err := parseImportPost([]byte("---\ntitle: A\n")); err == nil {
+		t.Error("a front matter without an end is accepted")
+	}
+}
+
+func TestImportJSONField(t *testing.T) {
+	for in, want := range map[string]string{
+		``:             "<null>",
+		`null`:         "<null>",
+		`{"Make":"X"}`: `{"Make":"X"}`,
+		`"not json {"`: "not json {",
+		`  {"a":1}  `:  `{"a":1}`,
+	} {
+		got := importJSONField([]byte(in))
+		s := "<null>"
+		if got.Valid {
+			s = got.String
+		}
+		if s != want {
+			t.Errorf("importJSONField(%q) = %q, want %q", in, s, want)
+		}
+	}
+}
+
+func TestUploadFile_KeepsTheGivenPath(t *testing.T) {
+	imp, dataPath, _ := newImportTarget(t)
+	ctx := context.Background()
+	m, err := imp.media.UploadFile(ctx, UploadFileParams{
+		Content: []byte("a"), Filename: "a.txt", MimeType: "text/plain", OriginalPath: "originals/2020/05/a.txt",
+	})
+	if err != nil || m.OriginalPath != "originals/2020/05/a.txt" {
+		t.Fatalf("UploadFile = %q, %v", m.OriginalPath, err)
+	}
+	if _, err := os.Stat(filepath.Join(dataPath, "media", "originals", "2020", "05", "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+	// A path that is on disk already, and a path outside originals/, are refused.
+	if _, err := imp.media.UploadFile(ctx, UploadFileParams{
+		Content: []byte("b"), Filename: "a.txt", MimeType: "text/plain", OriginalPath: "originals/2020/05/a.txt",
+	}); !errors.Is(err, ErrConflict) {
+		t.Errorf("upload over a file on disk = %v, want ErrConflict", err)
+	}
+	if _, err := imp.media.UploadFile(ctx, UploadFileParams{
+		Content: []byte("c"), Filename: "c.txt", MimeType: "text/plain", OriginalPath: "originals/../../c.txt",
+	}); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("upload to an unsafe path = %v, want ErrInvalidInput", err)
+	}
+}

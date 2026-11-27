@@ -141,6 +141,11 @@ type Repository interface {
 	DeleteFailedJobs(ctx context.Context) (int64, error)
 	BackupDB(ctx context.Context, destPath string) error
 
+	// Portable import (services.ImportService)
+	CountContentRows(ctx context.Context) (posts, media int64, err error)
+	SetPostTimestamps(ctx context.Context, id int64, createdAt, updatedAt time.Time, publishedAt sql.NullTime) error
+	SetImportedMediaFields(ctx context.Context, id int64, postID sql.NullInt64, uploadedAt time.Time, metadata, originalMetadata sql.NullString) error
+
 	// Tags
 	SearchTags(ctx context.Context, query string, limit int) ([]models.Tag, error)
 	GetTagAncestors(ctx context.Context, tagID int64) ([]models.Tag, error)

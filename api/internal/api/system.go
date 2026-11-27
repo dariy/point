@@ -40,6 +40,7 @@ type SystemHandler struct {
 	settingsService *services.SettingsService
 	tagService      *services.TagService
 	systemService   *services.SystemService
+	importService   *services.ImportService
 	cacheService    *services.CacheService
 	authService     *services.AuthService
 	downloadTokens  *services.DownloadTokenStore
@@ -67,6 +68,7 @@ type SystemHandler struct {
 // another constructor parameter — NewSystemHandler already takes ten.
 func (h *SystemHandler) WithHealth(r *services.HealthRegistry) *SystemHandler {
 	h.health = r
+	h.importService.WithHealth(r)
 	return h
 }
 
@@ -299,6 +301,7 @@ func NewSystemHandler(repo repository.Repository, mediaService *services.MediaSe
 		settingsService: settingsService,
 		tagService:      tagService,
 		systemService:   systemService,
+		importService:   services.NewImportService(repo, mediaService, postService, tagService, dataPath),
 		cacheService:    cacheService,
 		authService:     authService,
 		downloadTokens:  services.NewDownloadTokenStore(),

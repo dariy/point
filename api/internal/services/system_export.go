@@ -546,9 +546,9 @@ func exportPostMarkdown(p repository.ExportPost, media map[string]bool) ([]byte,
 	buf.Write(head)
 	buf.WriteString("---\n\n")
 	buf.WriteString(exportRewriteMediaRefs(p.Content, media))
-	if !strings.HasSuffix(p.Content, "\n") {
-		buf.WriteByte('\n')
-	}
+	// Always one "\n" after the body, so a reader removes exactly one and gets
+	// the body back as it is stored.
+	buf.WriteByte('\n')
 	return buf.Bytes(), nil
 }
 

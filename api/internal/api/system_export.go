@@ -86,3 +86,36 @@ func (h *SystemHandler) DownloadExport(c echo.Context) error {
 	}
 	return c.Attachment(p, filename)
 }
+
+// GetImport returns the state of the portable import: whether one is running
+// and its progress, the result of the last import (null when none has run),
+// and whether the site is empty, as the import requires.
+func (h *SystemHandler) GetImport(c echo.Context) error {
+	empty, err := h.importService.InstanceEmpty(c.Request().Context())
+	if err != nil {
+		return MapError(err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"running":  h.importService.Running(),
+		"progress": h.importService.Progress(),
+		"last":     h.importService.LastImport(),
+		"empty":    empty,
+	})
+}
+
+// StartImport streams a portable export archive (the raw request body) to
+// disk and starts the import in the background. The X-Confirm-Password header
+// holds the account password, SHA-256-hashed as at login. The import refuses a
+// site that has posts or media, and an archive with an unknown format version.
+// The route is excluded from the global body-size limit.
+func (h *SystemHandler) StartImport(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := extractUserID(c.Get("user"))
+	if err := h.authService.VerifyUserPassword(ctx, userID, c.Request().Header.Get("X-Confirm-Password")); err != nil {
+		return MapError(err)
+	}
+	if err := h.importService.StartImport(ctx, c.Request().Body, userID); err != nil {
+		return MapError(err)
+	}
+	return c.JSON(http.StatusAccepted, map[string]string{"status": "started"})
+}

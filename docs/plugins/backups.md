@@ -51,7 +51,7 @@ password re-entry and tar-traversal hardening cover that.
 
 A backup restores this engine only. To get the content out in open formats (posts as
 Markdown, the originals, a JSON file per photo), use the **portable export**:
-`docs/features/export.md`.
+`docs/features/export.md`. Its **import** reads such an archive into an empty site.
 
 ## Schedule and managed mode (`BACKUP_MANAGED`)
 
@@ -80,6 +80,9 @@ accepts an API key, so no admin session is necessary:
 does not clear it. It is absent when there is no archive.
 
 ## Move out / move in
+
+To move only the content (posts, media, tags) into a new, empty site, use the
+portable export and import instead: `docs/features/export.md` § Import.
 
 The backups list also supports getting an archive off the box and bringing one in.
 Uploading and restoring are **decoupled**: an upload only *stages* the archive in
