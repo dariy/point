@@ -12,7 +12,7 @@ import { Pagination } from "../../components/shared/Pagination.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { listPosts, deletePost, restorePost, permanentlyDeletePost, updatePostTags, setPostStatus, generatePreviewLink } from "../../api/posts.ts";
 import { setToast } from "../../store.ts";
-import { html, setHTML, navigate, raw, debounce, dropBrokenImages } from "../../utils/helpers.ts";
+import { html, setHTML, navigate, raw, debounce, dropBrokenImages, setupLongPress } from "../../utils/helpers.ts";
 import type { Slot } from "../../utils/helpers.ts";
 import type { PageProps } from "../../router.ts";
 import type { Post, PostPage, PostTag } from "../../api/posts.ts";
@@ -564,28 +564,17 @@ export default class PostsListPage extends Component<Partial<PageProps>> {
     this.$$(".post-card").forEach(card => {
       const postId = parseInt(card.dataset.postId ?? "", 10);
       if (!isTrash) {
-        let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-        card.addEventListener("pointerdown", e => {
-          if ((e.target as HTMLElement).closest("select, button, a, input")) return;
-          longPressTimer = setTimeout(() => {
-            longPressTimer = null;
-            if (!this.state.selectMode) {
-              this.setState({
-                selectMode: true,
-                selectedIds: new Set([postId])
-              });
-            }
-          }, 500);
-        });
-        const cancelTimer = () => {
-          if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
+        setupLongPress(card, () => {
+          if (!this.state.selectMode) {
+            this.setState({
+              selectMode: true,
+              selectedIds: new Set([postId])
+            });
           }
-        };
-        card.addEventListener("pointerup", cancelTimer);
-        card.addEventListener("pointermove", cancelTimer);
-        card.addEventListener("pointercancel", cancelTimer);
+        }, {
+          delay: 500,
+          accept: e => !(e.target as HTMLElement).closest("select, button, a, input")
+        });
       }
       card.addEventListener("click", e => {
         if ((e.target as HTMLElement).closest("select, button, a, input")) return;

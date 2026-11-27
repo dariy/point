@@ -457,9 +457,35 @@ describe('tagSelection', () => {
       st.selectMode = false;
       mount();
       const row = rowsFor(4)[0];
-      fire(row, 'pointerdown', { target: row });
-      fire(row, 'pointermove');
+      fire(row, 'pointerdown', { target: row, clientX: 50, clientY: 20 });
+      fire(row, 'pointermove', { clientX: 50, clientY: 40 });
       fire(row, 'pointercancel');            // a second cancel must be harmless
+      t.mock.timers.tick(LONG_PRESS_MS);
+
+      assert.deepEqual(modeChanges, []);
+    });
+
+    test('a pen tip that moves 4 px does not cancel it', (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      st.selectMode = false;
+      mount();
+      const row = rowsFor(4)[0];
+      const pen = { pointerType: 'pen', pointerId: 3 };
+      fire(row, 'pointerdown', { ...pen, target: row, clientX: 50, clientY: 20 });
+      fire(row, 'pointermove', { ...pen, clientX: 53, clientY: 23 });
+      t.mock.timers.tick(LONG_PRESS_MS);
+
+      assert.deepEqual(modeChanges, [{ selectMode: true, ids: [4] }]);
+    });
+
+    test('a pen tip that moves 12 px cancels it', (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      st.selectMode = false;
+      mount();
+      const row = rowsFor(4)[0];
+      const pen = { pointerType: 'pen', pointerId: 3 };
+      fire(row, 'pointerdown', { ...pen, target: row, clientX: 50, clientY: 20 });
+      fire(row, 'pointermove', { ...pen, clientX: 62, clientY: 20 });
       t.mock.timers.tick(LONG_PRESS_MS);
 
       assert.deepEqual(modeChanges, []);

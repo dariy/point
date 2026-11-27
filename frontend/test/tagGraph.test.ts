@@ -657,6 +657,14 @@ describe('pointer gestures', () => {
     g._controls._onLeave(mock<PointerEvent>({ pointerType: 'touch' }));
     assert.strictEqual(g.hovered, g.nodes[0], 'the highlight must survive the finger lifting');
   });
+
+  test('a pen leaving the canvas does not clear the highlight', () => {
+    // A pen fires pointerleave on lift, or when it leaves the hover range.
+    const g = positioned();
+    g._controls.pointerMove(down(9, 50, 100));
+    g._controls._onLeave(mock<PointerEvent>({ pointerType: 'pen' }));
+    assert.strictEqual(g.hovered, g.nodes[0], 'the highlight must survive the pen lifting');
+  });
 });
 
 // ── Wheel zoom ───────────────────────────────────────────────────────────────
