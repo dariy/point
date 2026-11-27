@@ -332,6 +332,56 @@ describe('PostEditPage (mounted)', () => {
       assert.equal(get('#title-input').value, 'August 26');
     });
 
+    test('tells the server it is an autosave; a manual save says manual', async () => {
+      await mountPage({ params: { id: '7' } });
+      type(get('#title-input'), 'Edited');
+      page._onInput();
+      await page._autosave();
+      await settle();
+      assert.equal(last(sent('PUT', '/api/posts/7')).body.save_kind, 'autosave');
+
+      await page._save();
+      await settle();
+      assert.equal(last(sent('PUT', '/api/posts/7')).body.save_kind, 'manual');
+    });
+
+    test('closing the editor sends the last autosave once as autosave_last', async () => {
+      await mountPage({ params: { id: '7' } });
+      type(get('#title-input'), 'First');
+      page._onInput();
+      await page._autosave();
+      type(get('#title-input'), 'Second');
+      page._onInput();
+      await page._autosave();
+      await settle();
+
+      page.unmount();
+      await settle();
+
+      const puts = sent('PUT', '/api/posts/7');
+      assert.equal(puts.length, 3);
+      assert.equal(last(puts).body.save_kind, 'autosave_last');
+      assert.equal(last(puts).body.title, 'Second');
+      page.unmount();
+      await settle();
+      assert.equal(sent('PUT', '/api/posts/7').length, 3, 'sent once only');
+    });
+
+    test('closing the editor after a manual save sends nothing more', async () => {
+      await mountPage({ params: { id: '7' } });
+      type(get('#title-input'), 'First');
+      page._onInput();
+      await page._autosave();
+      await page._save();
+      await settle();
+
+      page.unmount();
+      await settle();
+
+      assert.equal(sent('PUT', '/api/posts/7').length, 2);
+      assert.equal(last(sent('PUT', '/api/posts/7')).body.save_kind, 'manual');
+    });
+
     test('a failure is recorded rather than thrown at the user mid-keystroke', async () => {
       routes['PUT /api/posts/7'] = () => fail(500, 'nope');
       await mountPage({ params: { id: '7' } });

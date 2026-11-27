@@ -544,6 +544,21 @@ type CreatePostRequest struct {
 	MetaDescription string   `json:"meta_description"`
 	Tags            []string `json:"tags"`
 	ScheduledAt     *string  `json:"scheduled_at"`
+	// SaveKind is "manual", "autosave" or "autosave_last". It selects the
+	// revision the save makes (see services.revisionKindForSave). Empty or
+	// unknown is a manual save.
+	SaveKind string `json:"save_kind"`
+}
+
+// clientSaveKind accepts the save kinds a client can send. "restore" is not
+// one of them: only the restore endpoint makes a restore revision.
+func clientSaveKind(kind string) string {
+	switch kind {
+	case services.SaveKindAutosave, services.SaveKindAutosaveLast:
+		return kind
+	default:
+		return services.SaveKindManual
+	}
 }
 
 func parseScheduledAt(s *string) (*time.Time, error) {
@@ -605,6 +620,7 @@ func (h *PostHandler) CreatePost(c echo.Context) error {
 		MetaDescription: req.MetaDescription,
 		Tags:            req.Tags,
 		ScheduledAt:     scheduledAt,
+		SaveKind:        clientSaveKind(req.SaveKind),
 	})
 	if err != nil {
 		if errors.Is(err, services.ErrConflict) {
@@ -645,6 +661,10 @@ type UpdatePostRequest struct {
 	MetaDescription string   `json:"meta_description"`
 	Tags            []string `json:"tags"`
 	ScheduledAt     *string  `json:"scheduled_at"`
+	// SaveKind is "manual", "autosave" or "autosave_last". It selects the
+	// revision the save makes (see services.revisionKindForSave). Empty or
+	// unknown is a manual save.
+	SaveKind string `json:"save_kind"`
 }
 
 func (h *PostHandler) UpdatePost(c echo.Context) error {
@@ -723,6 +743,7 @@ func (h *PostHandler) UpdatePost(c echo.Context) error {
 		MetaDescription: req.MetaDescription,
 		Tags:            req.Tags,
 		ScheduledAt:     scheduledAt,
+		SaveKind:        clientSaveKind(req.SaveKind),
 	})
 	if err != nil {
 		if errors.Is(err, services.ErrConflict) {
@@ -1040,6 +1061,85 @@ func (h *PostHandler) GetPostNavigation(c echo.Context) error {
 	}
 	if next != nil {
 		resp["next"] = map[string]interface{}{"id": next.ID, "title": next.Title, "slug": next.Slug}
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// parseRevisionIDParam reads the :rev path parameter.
+func parseRevisionIDParam(c echo.Context) (int64, error) {
+	rev, err := strconv.ParseInt(c.Param("rev"), 10, 64)
+	if err != nil {
+		return 0, echo.NewHTTPError(http.StatusBadRequest, "invalid revision id")
+	}
+	return rev, nil
+}
+
+// ListPostRevisions handles GET /api/posts/:id/revisions. The list is newest
+// first and has no bodies; GetPostRevision reads one revision in full.
+func (h *PostHandler) ListPostRevisions(c echo.Context) error {
+	id, err := parseIDParam(c)
+	if err != nil {
+		return err
+	}
+	revs, err := h.postService.ListPostRevisions(c.Request().Context(), id)
+	if err != nil {
+		return MapError(err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"revisions": revs})
+}
+
+// GetPostRevision handles GET /api/posts/:id/revisions/:rev.
+func (h *PostHandler) GetPostRevision(c echo.Context) error {
+	id, err := parseIDParam(c)
+	if err != nil {
+		return err
+	}
+	rev, err := parseRevisionIDParam(c)
+	if err != nil {
+		return err
+	}
+	r, err := h.postService.GetPostRevision(c.Request().Context(), id, rev)
+	if err != nil {
+		return MapError(err)
+	}
+	return c.JSON(http.StatusOK, r)
+}
+
+// RestorePostRevision handles POST /api/posts/:id/revisions/:rev/restore. It
+// writes the revision back to the post and returns the post, as UpdatePost
+// does.
+func (h *PostHandler) RestorePostRevision(c echo.Context) error {
+	id, err := parseIDParam(c)
+	if err != nil {
+		return err
+	}
+	rev, err := parseRevisionIDParam(c)
+	if err != nil {
+		return err
+	}
+	authorID := extractUserID(c.Get("user"))
+	ctx := c.Request().Context()
+
+	old, err := h.postService.GetPostByID(ctx, id)
+	if err != nil {
+		return MapError(err)
+	}
+	oldPaths := services.ExtractMediaPaths(old.Content, old.ThumbnailPath.String)
+
+	updated, cssWarnings, err := h.postService.RestorePostRevision(ctx, id, rev, authorID)
+	if err != nil {
+		return MapError(err)
+	}
+
+	newPaths := services.ExtractMediaPaths(updated.Content, updated.ThumbnailPath.String)
+	h.syncMediaVisibility(ctx, "restore_post_revision", append(oldPaths, newPaths...))
+
+	resp, err := h.getFullPostResponse(c, id)
+	if err != nil {
+		return MapError(err)
+	}
+	if len(cssWarnings) > 0 {
+		resp["css_warnings"] = cssWarnings
 	}
 	return c.JSON(http.StatusOK, resp)
 }

@@ -12,7 +12,7 @@ import { TagsInput } from "../../components/light/TagsInput.ts";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.ts";
 import { CssEditor } from "../../components/light/CssEditor.ts";
 import { MarkdownEditor } from "../../components/light/MarkdownEditor.ts";
-import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender } from "../../api/posts.ts";
+import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender, type PostInput } from "../../api/posts.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
 import { uploadMedia } from "../../api/media.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
@@ -67,6 +67,12 @@ export default class PostEditPage extends Component<PageProps> {
   _debouncedPreview: (() => void) | null;
   _previewMql: MediaQueryList | null;
   _onPreviewMqlChange: ((e: MediaQueryListEvent) => void) | null;
+  /**
+   * The body of the last autosave after the last save that made a revision,
+   * or null. When the editor closes, it is sent once more as `autosave_last`,
+   * so the last autosave of the session becomes a revision (NF-9).
+   */
+  _lastAutosave: PostInput | null;
 
   constructor(container: HTMLElement, props?: PageProps) {
     super(container, props);
@@ -98,6 +104,7 @@ export default class PostEditPage extends Component<PageProps> {
     this._unmounted = false;
     this._analyzing = false;
     this._idleTimer = null;
+    this._lastAutosave = null;
     this._maxWaitTimer = null;
     this._chipInterval = null;
     this._detachReorder = null;
@@ -808,10 +815,9 @@ export default class PostEditPage extends Component<PageProps> {
     });
     try {
       if (this.state.isNew) {
-        const result = await createPost({
-          ...data,
-          status: 'draft'
-        });
+        const body: PostInput = { ...data, status: 'draft', save_kind: 'autosave' };
+        const result = await createPost(body);
+        this._lastAutosave = body;
         this.state.isNew = false;
         this.state.postId = result.id;
         this.state.post = result;
@@ -821,9 +827,14 @@ export default class PostEditPage extends Component<PageProps> {
         if (titleEl && !titleEl.value.trim() && result.title) titleEl.value = result.title;
         history.replaceState(null, "", `/light/posts/${result.id}/edit`);
       } else {
-        const result = await updatePost(this.state.postId, data);
+        const body: PostInput = { ...data, save_kind: 'autosave' };
+        const result = await updatePost(this.state.postId, body);
         this.state.post = result;
+        this._lastAutosave = body;
       }
+      // The editor closed while this save was in flight: beforeUnmount found
+      // nothing to send, so send it now.
+      if (this._unmounted) this._sendLastAutosave();
       this.state.hasPendingEdits = false;
       setAutosaveStatus({
         status: 'saved',
@@ -863,10 +874,13 @@ export default class PostEditPage extends Component<PageProps> {
     };
   }
   async _save(overrides = {}) {
-    const data = this._applyPageType({
-      ...this._collectFormData(),
-      ...overrides
-    });
+    const data = {
+      ...this._applyPageType({
+        ...this._collectFormData(),
+        ...overrides
+      }),
+      save_kind: 'manual' as const
+    };
     this.setState({
       saving: true
     });
@@ -884,6 +898,8 @@ export default class PostEditPage extends Component<PageProps> {
         result = await updatePost(this.state.postId, data);
       }
       this.state.hasPendingEdits = false;
+      // This save made a revision, so an earlier autosave needs none.
+      this._lastAutosave = null;
       this.setState({
         saving: false,
         post: result
@@ -909,7 +925,20 @@ export default class PostEditPage extends Component<PageProps> {
       });
     }
   }
+  /**
+   * Send the last autosave again as `autosave_last`, so that the server keeps
+   * it as a revision. The body is what the server already has, so the save
+   * changes nothing else. A failure is ignored: the content is saved already,
+   * only the revision is lost.
+   */
+  _sendLastAutosave() {
+    const body = this._lastAutosave;
+    this._lastAutosave = null;
+    if (!body || this.state.deleting || !this.state.postId) return;
+    updatePost(this.state.postId, { ...body, save_kind: 'autosave_last' }).catch(() => {});
+  }
   beforeUnmount() {
+    this._sendLastAutosave();
     this._detachReorder?.();
     this._unmounted = true;
     if (this._onAutosaveRetry) window.removeEventListener("autosave:retry", this._onAutosaveRetry);

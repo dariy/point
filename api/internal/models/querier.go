@@ -24,6 +24,7 @@ type Querier interface {
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
+	CreatePostRevision(ctx context.Context, arg CreatePostRevisionParams) (PostRevision, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -45,6 +46,7 @@ type Querier interface {
 	GetPost(ctx context.Context, id int64) (Post, error)
 	GetPostAnalytics(ctx context.Context) (GetPostAnalyticsRow, error)
 	GetPostBySlug(ctx context.Context, slug string) (Post, error)
+	GetPostRevision(ctx context.Context, arg GetPostRevisionParams) (PostRevision, error)
 	GetPostsByTag(ctx context.Context, arg GetPostsByTagParams) ([]Post, error)
 	// SECRETS
 	GetSecret(ctx context.Context, key string) (BlogSecret, error)
@@ -68,6 +70,9 @@ type Querier interface {
 	// The trash keeps a media file for 30 days (services.TrashRetentionDays).
 	ListExpiredTrashedMediaIDs(ctx context.Context) ([]int64, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
+	// The history list. It leaves out the body and the CSS, which can be large;
+	// GetPostRevision reads one revision in full.
+	ListPostRevisions(ctx context.Context, postID int64) ([]ListPostRevisionsRow, error)
 	ListSettings(ctx context.Context) ([]BlogSetting, error)
 	ListTags(ctx context.Context, includeEmptyFilter interface{}) ([]Tag, error)
 	ListTrashedMedia(ctx context.Context, arg ListTrashedMediaParams) ([]Medium, error)
@@ -75,6 +80,8 @@ type Querier interface {
 	MergePostTags(ctx context.Context, arg MergePostTagsParams) error
 	MergeTagChildren(ctx context.Context, arg MergeTagChildrenParams) error
 	MergeTagParents(ctx context.Context, arg MergeTagParentsParams) error
+	// Keep the newest `keep` revisions of a post and every publish revision.
+	PrunePostRevisions(ctx context.Context, arg PrunePostRevisionsParams) (int64, error)
 	PublishPost(ctx context.Context, id int64) (Post, error)
 	// The trash keeps a post for 30 days (services.TrashRetentionDays). deleted_at
 	// is set with CURRENT_TIMESTAMP, so datetime() compares like with like.
