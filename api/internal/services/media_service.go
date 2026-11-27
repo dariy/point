@@ -165,9 +165,11 @@ func (s *MediaService) GetStorageUsage(ctx context.Context) (int64, error) {
 type DuplicatePolicy int
 
 const (
-	// DuplicateReuse returns the existing media and creates no row. A trashed
-	// match is restored first. This is the default for callers with no user
-	// to ask: the Instagram import, the audio post, the bulk endpoint.
+	// DuplicateReuse returns a live match and creates no row. A match that is
+	// only in the trash stays there, and the upload becomes a new row: only
+	// the user restores from the trash ("Use the existing file"). This is the
+	// default for callers with no user to ask: the Instagram import, the
+	// audio post, the MCP upload, a client that sends no on_duplicate.
 	DuplicateReuse DuplicatePolicy = iota
 	// DuplicateAsk returns a *DuplicateMediaError and changes nothing, so the
 	// client can offer "Use the existing file" or "Upload again".
@@ -221,15 +223,11 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 			if p.OnDuplicate == DuplicateAsk {
 				return models.Medium{}, &DuplicateMediaError{Existing: existing}
 			}
-			// The same bytes in the trash: an upload of them is a restore, or
-			// the file would stay out of the library.
-			if existing.DeletedAt.Valid {
-				if _, err := s.RestoreMedia(ctx, []int64{existing.ID}); err != nil {
-					return models.Medium{}, err
-				}
-				return s.getMedia(ctx, existing.ID)
+			// GetMediaByChecksum gives a live row first, so a trashed match
+			// means no live copy. No silent restore: store a new row.
+			if !existing.DeletedAt.Valid {
+				return existing, nil
 			}
-			return existing, nil
 		}
 	}
 

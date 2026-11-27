@@ -108,4 +108,52 @@ describe('duplicate upload', () => {
     assert.equal(res.choice, 'existing');
     assert.equal(seen.length, 3);
   });
+  // The callers outside the media library: no trashed match comes back from
+  // the trash with no question.
+  const trashed = () => existing({ deleted_at: '2026-01-02T00:00:00Z' });
+
+  test('an offline share draft asks on a trashed match; a closed question leaves it out', async () => {
+    const seen = serve([
+      () => jsonResponse({ ok: true, status: 201, body: { id: 40 } }),
+      () => conflict(trashed()),
+      () => created(3),
+      () => jsonResponse({ ok: true, status: 200, body: { id: 40 } }),
+    ]);
+    const { saveShareDraft } = await import('../src/utils/shareDrafts.ts');
+    const data = (name: string) => ({ name, type: 'image/jpeg', data: new TextEncoder().encode(name).buffer });
+    const pending = saveShareDraft({ id: 's', title: 'Trip', timestamp: 1, files: [data('a.jpg'), data('b.jpg')] });
+    for (let i = 0; i < 6; i++) await tick();
+    assert.match(document.body.textContent ?? '', /in the trash/);
+    click('modal-close-btn');
+    const res = await pending;
+    assert.deepEqual(res, { postId: 40, skipped: 1 });
+    assert.deepEqual(seen, [
+      '/api/posts POST',
+      '/api/media/upload ask',
+      '/api/media/upload ask',
+      '/api/posts/40 PUT',
+    ]);
+    assert.ok(!seen.some(s => s.includes('restore')), 'nothing restored with no question');
+  });
+
+  test('the first-post page asks on a trashed match and adds the restored file', async () => {
+    const seen = serve([
+      () => conflict(trashed()),
+      () => jsonResponse({ ok: true, status: 200, body: { message: 'ok' } }),
+      () => jsonResponse({ ok: true, status: 200, body: existing() }),
+    ]);
+    const { default: FirstPostPage } = await import('../src/pages/light/FirstPostPage.ts');
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const page = new FirstPostPage(root);
+    page.mount();
+    const pending = page._upload([file('a.jpg')]);
+    await tick(); await tick();
+    assert.match(document.body.textContent ?? '', /"a\.jpg" is already in the library, in the trash\./);
+    click('duplicate-existing-btn');
+    await pending;
+    assert.deepEqual(page.state.media.map(m => m.id), [7]);
+    assert.equal(page.state.step, 'review');
+    assert.deepEqual(seen, ['/api/media/upload ask', '/api/media/7/restore POST', '/api/media/7 GET']);
+  });
 });

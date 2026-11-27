@@ -100,8 +100,9 @@ export function getMedia(id: number): Promise<Media> {
 
 /**
  * What the server does when the library already has a file with the same
- * SHA-256. 'existing' (also the default when none is sent) returns the
- * existing media and restores it from the trash; 'ask' answers 409 with the
+ * SHA-256. 'existing' (also the default when none is sent) returns a live
+ * match, and stores a new row when the only match is in the trash (no silent
+ * restore); 'ask' answers 409 with the
  * existing media and changes nothing; 'new' stores a second copy.
  */
 export type OnDuplicate = 'ask' | 'new' | 'existing';

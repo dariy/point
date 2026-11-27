@@ -12,7 +12,7 @@
 
 import { Component } from '../../components/Component.ts';
 import { html } from '../../utils/helpers.ts';
-import { uploadMultiple } from '../../api/media.ts';
+import { uploadBatchAskingOnDuplicate } from '../../utils/duplicateUpload.ts';
 import type { Media } from '../../api/media.ts';
 import { createPost } from '../../api/posts.ts';
 import type { Post } from '../../api/posts.ts';
@@ -186,10 +186,11 @@ export default class FirstPostPage extends Component {
     if (this.state.busy) return;
     this.setState({ busy: true, error: null });
     try {
-      const res = await uploadMultiple(files);
-      const media = [...this.state.media, ...(res.uploaded || [])];
-      const error = res.total_failed
-        ? `${res.total_failed} file(s) could not be uploaded.`
+      // An exact duplicate gets the media library's question, once per batch.
+      const res = await uploadBatchAskingOnDuplicate(files);
+      const media = [...this.state.media, ...res.media];
+      const error = res.failed
+        ? `${res.failed} file(s) could not be uploaded.`
         : null;
       this.setState({ busy: false, media, error, step: media.length ? 'review' : 'pick' });
     } catch (err) {

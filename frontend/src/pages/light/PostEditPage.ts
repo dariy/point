@@ -14,8 +14,8 @@ import { CssEditor } from "../../components/light/CssEditor.ts";
 import { MarkdownEditor } from "../../components/light/MarkdownEditor.ts";
 import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender, type PostInput } from "../../api/posts.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
-import { uploadMedia } from "../../api/media.ts";
 import { uploadAskingOnDuplicate } from "../../utils/duplicateUpload.ts";
+import { saveShareDraft } from "../../utils/shareDrafts.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.ts";
 import {
@@ -1112,28 +1112,8 @@ export default class PostEditPage extends Component<PageProps> {
     }
     for (const entry of backlog) {
       try {
-        const title = entry.title || entry.files.map(f => f.name).join(", ") || "Shared photo";
-        const post = await createPost({
-          title,
-          status: "draft",
-          content: ""
-        });
-        let content = "";
-        for (const fileEntry of entry.files) {
-          const blob = new Blob([fileEntry.data], {
-            type: fileEntry.type
-          });
-          const file = new File([blob], fileEntry.name, {
-            type: fileEntry.type
-          });
-          const media = await uploadMedia(file, {
-            post_id: post.id
-          });
-          content += `${media.path}\n`;
-        }
-        await updatePost(post.id, {
-          content: content.trim()
-        });
+        // An exact duplicate asks once per draft, like the media library.
+        await saveShareDraft(entry);
       } catch (err) {
         setToast({
           message: `Failed to save offline share: ${(err as Error).message}`,
