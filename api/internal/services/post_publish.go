@@ -15,12 +15,20 @@ import (
 )
 
 func (s *PostService) PublishPost(ctx context.Context, id int64) (models.Post, error) {
+	// A publish of a post that is already published makes no new revision.
+	wasPublished := false
+	if old, err := s.repo.GetPost(ctx, id); err == nil {
+		wasPublished = strings.EqualFold(old.Status, "published")
+	}
 	post, err := s.repo.PublishPost(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return post, ErrPostNotFound
 		}
 		return post, err
+	}
+	if !wasPublished {
+		s.recordPublishRevision(ctx, post)
 	}
 	s.onPostsChanged(ctx)
 	if s.settingsService != nil && post.InstagramShare {
@@ -113,6 +121,9 @@ func (s *PostService) PublishDueScheduledPosts(ctx context.Context) ([]models.Po
 		return nil, err
 	}
 	if len(published) > 0 {
+		for _, p := range published {
+			s.recordPublishRevision(ctx, p)
+		}
 		s.onPostsChanged(ctx)
 		slog.Info("scheduled publishing: published posts", "count", len(published))
 		if s.settingsService != nil {

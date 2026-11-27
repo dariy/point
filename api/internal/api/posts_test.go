@@ -1710,3 +1710,118 @@ func TestListPosts_TrashSendsDeletedAtAsTime(t *testing.T) {
 		t.Errorf("deleted_at %q is not RFC 3339: %v", s, err)
 	}
 }
+
+func TestPostHandler_Revisions(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	post, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "First", Slug: "first", Content: "first body", Status: "draft", AuthorID: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	idStr := strconv.FormatInt(post.ID, 10)
+
+	call := func(method string, body any, handler echo.HandlerFunc, names []string, values []string) (*httptest.ResponseRecorder, error) {
+		var reader *bytes.Reader
+		if body != nil {
+			b, _ := json.Marshal(body)
+			reader = bytes.NewReader(b)
+		} else {
+			reader = bytes.NewReader(nil)
+		}
+		req := httptest.NewRequest(method, "/", reader)
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames(names...)
+		c.SetParamValues(values...)
+		c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+		return rec, handler(c)
+	}
+
+	// An autosave makes no revision; "restore" from a client is a manual save.
+	for _, kind := range []string{"autosave", "restore"} {
+		if _, err := call(http.MethodPut, UpdatePostRequest{Title: "Second", Content: "second body", SaveKind: kind}, h.UpdatePost, []string{"id"}, []string{idStr}); err != nil {
+			t.Fatalf("UpdatePost(%s): %v", kind, err)
+		}
+	}
+
+	rec, err := call(http.MethodGet, nil, h.ListPostRevisions, []string{"id"}, []string{idStr})
+	if err != nil {
+		t.Fatalf("ListPostRevisions: %v", err)
+	}
+	var list struct {
+		Revisions []services.PostRevisionSummary `json:"revisions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Revisions) != 2 || list.Revisions[0].Kind != "manual" || list.Revisions[1].Kind != "manual" {
+		t.Fatalf("revisions = %+v, want two manual", list.Revisions)
+	}
+	firstRev := strconv.FormatInt(list.Revisions[1].ID, 10)
+
+	rec, err = call(http.MethodGet, nil, h.GetPostRevision, []string{"id", "rev"}, []string{idStr, firstRev})
+	if err != nil {
+		t.Fatalf("GetPostRevision: %v", err)
+	}
+	var rev services.PostRevision
+	if err := json.Unmarshal(rec.Body.Bytes(), &rev); err != nil {
+		t.Fatal(err)
+	}
+	if rev.Content != "first body" {
+		t.Errorf("revision content = %q, want %q", rev.Content, "first body")
+	}
+
+	rec, err = call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{idStr, firstRev})
+	if err != nil {
+		t.Fatalf("RestorePostRevision: %v", err)
+	}
+	var restored map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored["title"] != "First" || restored["content"] != "first body" {
+		t.Errorf("restored post = title %v content %v", restored["title"], restored["content"])
+	}
+
+	// Bad and missing ids.
+	if _, err := call(http.MethodGet, nil, h.GetPostRevision, []string{"id", "rev"}, []string{idStr, "x"}); err == nil {
+		t.Error("GetPostRevision with a bad rev: expected an error")
+	}
+	if _, err := call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{idStr, "99999"}); err == nil {
+		t.Error("RestorePostRevision of a missing revision: expected an error")
+	}
+	if _, err := call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{"x", firstRev}); err == nil {
+		t.Error("RestorePostRevision with a bad id: expected an error")
+	}
+	if _, err := call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{idStr, "x"}); err == nil {
+		t.Error("RestorePostRevision with a bad rev: expected an error")
+	}
+	if _, err := call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{"99999", firstRev}); err == nil {
+		t.Error("RestorePostRevision of a missing post: expected an error")
+	}
+	if _, err := call(http.MethodGet, nil, h.ListPostRevisions, []string{"id"}, []string{"99999"}); err == nil {
+		t.Error("ListPostRevisions of a missing post: expected an error")
+	}
+	if _, err := call(http.MethodGet, nil, h.ListPostRevisions, []string{"id"}, []string{"x"}); err == nil {
+		t.Error("ListPostRevisions with a bad id: expected an error")
+	}
+	if _, err := call(http.MethodGet, nil, h.GetPostRevision, []string{"id", "rev"}, []string{"x", firstRev}); err == nil {
+		t.Error("GetPostRevision with a bad id: expected an error")
+	}
+	if _, err := call(http.MethodGet, nil, h.GetPostRevision, []string{"id", "rev"}, []string{idStr, "99999"}); err == nil {
+		t.Error("GetPostRevision of a missing revision: expected an error")
+	}
+}

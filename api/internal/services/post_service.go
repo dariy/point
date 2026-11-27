@@ -324,6 +324,9 @@ type CreatePostParams struct {
 	MetaDescription string
 	Tags            []string
 	ScheduledAt     *time.Time
+	// SaveKind is the same as UpdatePostParams.SaveKind. A post created as
+	// "published" makes a publish revision.
+	SaveKind string
 }
 
 // classifyPostSaveError classifies the two foreseeable ways a post save fails.
@@ -457,6 +460,8 @@ func (s *PostService) CreatePost(ctx context.Context, p CreatePostParams) (model
 		})
 	}
 
+	s.recordRevision(ctx, post, revisionKindForSave(p.SaveKind, strings.EqualFold(post.Status, "published")), p.Tags)
+
 	s.onPostsChanged(ctx)
 
 	return post, strippedProps, nil
@@ -520,6 +525,10 @@ type UpdatePostParams struct {
 	MetaDescription string
 	Tags            []string
 	ScheduledAt     *time.Time
+	// SaveKind tells which save this is (SaveKindManual, SaveKindAutosave,
+	// SaveKindAutosaveLast, SaveKindRestore). It selects the revision the
+	// save makes; see revisionKindForSave.
+	SaveKind string
 }
 
 func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (models.Post, []string, error) {
@@ -538,6 +547,15 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 
 	if p.Type == "" {
 		p.Type = "post"
+	}
+
+	// A save that moves the post to "published" is a publish revision. Only
+	// then is the stored status needed.
+	publishes := false
+	if strings.EqualFold(p.Status, "published") {
+		if old, err := s.repo.GetPost(ctx, p.ID); err == nil {
+			publishes = !strings.EqualFold(old.Status, "published")
+		}
 	}
 
 	post, err := s.repo.UpdatePost(ctx, models.UpdatePostParams{
@@ -577,6 +595,8 @@ func (s *PostService) UpdatePost(ctx context.Context, p UpdatePostParams) (model
 		}
 		_ = s.repo.AddTagToPost(ctx, models.AddTagToPostParams{PostID: post.ID, TagID: tag.ID})
 	}
+
+	s.recordRevision(ctx, post, revisionKindForSave(p.SaveKind, publishes), p.Tags)
 
 	s.onPostsChanged(ctx)
 
@@ -648,9 +668,14 @@ func (s *PostService) UpdatePostStatus(ctx context.Context, id int64, status str
 		ScheduledAt:     post.ScheduledAt,
 	}
 
+	wasPublished := strings.EqualFold(post.Status, "published")
+
 	// published_at logic handled in repository.UpdatePost based on status
 	post, err = s.repo.UpdatePost(ctx, params)
 	if err == nil {
+		if newStatus == "published" && !wasPublished {
+			s.recordPublishRevision(ctx, post)
+		}
 		s.onPostsChanged(ctx)
 	}
 	return post, err
