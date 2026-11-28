@@ -646,6 +646,8 @@ describe('PostEditPage (mounted)', () => {
 
       assert.equal(sent('POST', '/api/posts/7/revisions/3/restore').length, 0);
       assert.equal(getToast().type, 'error');
+      assert.equal(get('#title-input').value, 'Harbour lights at night', 'the typed title stays in the form');
+      assert.equal(page.state.hasPendingEdits, true, 'the edits stay unsaved');
     });
 
     test('an autosave in flight during a restore is not sent again on leave', async () => {
