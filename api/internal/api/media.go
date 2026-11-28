@@ -485,6 +485,36 @@ func (h *MediaHandler) ListTrashedMedia(c *echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaListEnvelope(c, media, total, page, perPage, pages))
 }
 
+// ListPossibleDuplicates lists the groups of images whose perceptual hashes
+// are near (NF-16). The envelope is the shape of ListMedia: media is flat, in
+// group order, and each item has duplicate_group, the index of its group on
+// this page. A page holds whole groups.
+// GET /api/media/duplicates
+func (h *MediaHandler) ListPossibleDuplicates(c *echo.Context) error {
+	page, perPage := ParsePaginationParams(c, 20)
+	res, err := h.mediaService.PossibleDuplicates(c.Request().Context(), int(page), int(perPage))
+	if err != nil {
+		return MapError(err)
+	}
+	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
+	items := []map[string]interface{}{}
+	for i, g := range res.Groups {
+		for _, m := range g.Media {
+			item := h.withVideoNote(mediaToResponse(m, gen), m)
+			item["duplicate_group"] = i
+			items = append(items, item)
+		}
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"media":    items,
+		"total":    res.Total,
+		"groups":   res.GroupCount,
+		"page":     res.Page,
+		"per_page": perPage,
+		"pages":    res.Pages,
+	})
+}
+
 func (h *MediaHandler) DeleteMedia(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {

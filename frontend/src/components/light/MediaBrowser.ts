@@ -16,7 +16,7 @@ import { Pagination } from "../shared/Pagination.ts";
 import { MediaLightbox } from "../public/MediaLightbox.ts";
 import { ConfirmDialog } from "../shared/ConfirmDialog.ts";
 import { PromptDialog } from "../shared/PromptDialog.ts";
-import { listMedia, listTrashedMedia, restoreMedia, bulkRestoreMedia, permanentlyDeleteMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
+import { listMedia, listTrashedMedia, listPossibleDuplicates, restoreMedia, bulkRestoreMedia, permanentlyDeleteMedia, deleteMedia, renameMedia, getMediaFolders, reextractMediaEXIF, updateMediaEXIF, revertMediaEXIF, setVideoPoster } from "../../api/media.ts";
 import { captureVideoPoster } from "../../utils/videoPoster.ts";
 import { MediaPager } from "../../core/mediaPager.ts";
 import { monthLabel, folderChips } from "../../utils/mediaFolders.ts";
@@ -37,6 +37,16 @@ import type { Slot } from "../../utils/helpers.ts";
 // the previews are object-fit: cover, so the browser rounding a rung up is the
 // forgiving direction.
 const GRID_THUMB_SIZES = "(max-width: 48em) 50vw, 220px";
+
+/**
+ * True when items[i] is the first item of a possible duplicates group. The
+ * card gets a class that starts a new grid row, so each group reads as one
+ * row (or more) of its own.
+ */
+function startsDuplicateGroup(items: Media[], i: number): boolean {
+  const g = items[i]?.duplicate_group;
+  return g !== undefined && (i === 0 || items[i - 1].duplicate_group !== g);
+}
 
 export interface MediaBrowserProps {
   /** Show checkboxes on items, hide the delete/copy actions, and scope drag-drop to the component container. */
@@ -90,9 +100,20 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     return !this.props.pickerMode && this.state.typeFilter === "trash";
   }
 
-  /** One page of the current listing: the trash, or the library with its filters. */
+  /**
+   * The possible duplicates view: the "Possible duplicates" entry of the type
+   * filter. Standalone only. It lists groups of images that show the same
+   * picture at another size or in another format (NF-16), so the owner can
+   * open each copy and move one to the trash.
+   */
+  _isDuplicates() {
+    return !this.props.pickerMode && this.state.typeFilter === "duplicates";
+  }
+
+  /** One page of the current listing: the trash, the possible duplicates, or the library with its filters. */
   _fetchPage(page: number, perPage: number) {
     if (this._isTrash()) return listTrashedMedia({ page, per_page: perPage });
+    if (this._isDuplicates()) return listPossibleDuplicates({ page, per_page: perPage });
     const params: Parameters<typeof listMedia>[0] = { page, per_page: perPage };
     if (this.state.typeFilter) params.file_type = this.state.typeFilter;
     if (this.state.filenameFilter) params.filename = this.state.filenameFilter;
@@ -146,7 +167,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     const items = data.media || [];
     if (!items.length) return html`<p class="empty-state">No media files.</p>`;
     const none = new Set<number>();
-    return html`<div class="media-grid">${items.map(m => this._renderItem(m, none))}</div>`;
+    return html`<div class="media-grid">${items.map((m, i) => this._renderItem(m, none, startsDuplicateGroup(items, i)))}</div>`;
   }
 
   /**
@@ -177,7 +198,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       const grid = loading
           ? html`<div class="loading-spinner" aria-label="Loading media…"></div>`: error
               ? html`<p class="error-state" role="alert">${error}</p>`: !media.length
-                  ? html`<p class="empty-state">${this._isTrash() ? "Trash is empty." : raw("No media files. Drag &amp; drop to upload.")}</p>`: html`<div class="media-grid">${media.map((m: Media) => this._renderItem(m, selectedIds))}</div>`;
+                  ? html`<p class="empty-state">${this._isTrash() ? "Trash is empty." : this._isDuplicates() ? "No possible duplicates." : raw("No media files. Drag &amp; drop to upload.")}</p>`: html`<div class="media-grid">${media.map((m: Media, i: number) => this._renderItem(m, selectedIds, startsDuplicateGroup(media, i)))}</div>`;
       const dropOverlay = pickerMode
           ? html`<div class="media-browser-drop-overlay${draggingOver? " visible": ""}" aria-hidden="true">
            <div class="drop-overlay-inner">
@@ -226,9 +247,9 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
   /** Media type filter — first control on the folder (media/year/month) line. */
   _renderTypeFilter(typeFilter: string) {
     const types = ["", "image", "video", "audio", "file"];
-    if (!this.props.pickerMode) types.push("trash");
+    if (!this.props.pickerMode) types.push("duplicates", "trash");
     const typeOptions = types.map(t => {
-      const label = t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
+      const label = t === "duplicates" ? "Possible duplicates" : t ? t.charAt(0).toUpperCase() + t.slice(1) : "All types";
       return html`<option value="${t}"${typeFilter === t ? " selected" : ""}>${label}</option>`;
     });
     return html`<select class="mb-type-filter filter-select" aria-label="Filter by type">${typeOptions}</select>`;
@@ -363,7 +384,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
         <button id="mb-sel-cancel" class="btn btn-sm btn-secondary" title="Exit selection mode">✕ Cancel</button>
       </div>`;
   }
-  _renderItem(m: Media, selectedIds: Set<number>) {
+  _renderItem(m: Media, selectedIds: Set<number>, groupStart = false) {
     const pickerMode = this.props.pickerMode;
     const fileType = (m.file_type || "").toLowerCase();
     const isImage = fileType === "image";
@@ -425,7 +446,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
 
       </div>`;
     return html`
-      <div class="media-item${isSelected ? " media-item--selected" : ""}"
+      <div class="media-item${isSelected ? " media-item--selected" : ""}${groupStart ? " media-item--group-start" : ""}"
            data-id="${String(m.id)}"${isImage ? html` data-src="${m.path || ""}" data-alt="${m.filename}"` : ""}>
         ${pickerCheckbox}
         ${publicStatus}
@@ -441,6 +462,7 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
             ${formatFileSize(m.file_size)} · ${isTrash && m.deleted_at ? `Deleted ${formatDateShort(m.deleted_at)}` : formatDateShort(m.uploaded_at)}
           </div>
           ${isTrash && trashRemovalDate(m.deleted_at) ? html`<div class="media-item-meta trash-removal-date">Removed on ${trashRemovalDate(m.deleted_at)}</div>` : ""}
+          ${m.duplicate_group !== undefined ? html`<div class="media-item-meta media-item-dup-set" title="Images in one set show the same picture">Set ${m.duplicate_group + 1}${m.width && m.height ? ` · ${m.width}×${m.height}` : ""}</div>` : ""}
           ${m.hevc_note ? html`<div class="media-item-note" title="Most browsers cannot play HEVC. This install has no ffmpeg to convert it to H.264.">HEVC: may not play in browsers</div>` : ""}
         </div>
         ${actions}
@@ -801,8 +823,8 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
       const typeFilter = (e.target as HTMLSelectElement).value;
       this.setState({
         typeFilter,
-        // The trash has no folders and no selection.
-        ...(typeFilter === "trash" ? { selectedFolder: null, selectMode: false, selectedIds: new Set() } : {})
+        // The trash and the possible duplicates have no folders and no selection.
+        ...(typeFilter === "trash" || typeFilter === "duplicates" ? { selectedFolder: null, selectMode: false, selectedIds: new Set() } : {})
       });
       this._load({
         page: 1
@@ -1243,8 +1265,9 @@ export class MediaBrowser extends Component<MediaBrowserProps> {
     this._load();
   }
   async _loadFolders() {
-    // The trash is one flat list, newest first: no folders.
-    if (this._isTrash()) {
+    // The trash is one flat list, newest first, and the possible duplicates
+    // are a list of groups: no folders.
+    if (this._isTrash() || this._isDuplicates()) {
       this.setState({ folders: [] });
       return;
     }

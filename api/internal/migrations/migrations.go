@@ -555,6 +555,23 @@ var schema = []struct{ name, sql string }{
 		CREATE INDEX IF NOT EXISTS idx_media_trashed ON media(deleted_at DESC) WHERE deleted_at IS NOT NULL;
 		PRAGMA foreign_keys = ON;`,
 	},
+	{
+		// Possible duplicates (NF-16): the perceptual hash of each image.
+		// Must come after media_checksum_not_unique, whose rebuild lists the
+		// columns it keeps.
+		"add_media_phash",
+		`ALTER TABLE media ADD COLUMN phash INTEGER`,
+	},
+	{
+		// Queue one perceptual hash backfill (services.JobKindMediaPhash)
+		// for an install that already has images. Uploads compute the hash
+		// themselves, so a fresh install gets no job.
+		"enqueue_media_phash_backfill",
+		`INSERT INTO jobs (kind, payload, state, max_attempts, next_run_at, created_at, updated_at)
+			SELECT 'media.phash', '{}', 'queued', 5, CAST(strftime('%s', 'now') AS INTEGER),
+				CAST(strftime('%s', 'now') AS INTEGER), CAST(strftime('%s', 'now') AS INTEGER)
+			WHERE EXISTS (SELECT 1 FROM media WHERE file_type = 'image' AND phash IS NULL)`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

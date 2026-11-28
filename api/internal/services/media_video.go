@@ -49,13 +49,15 @@ type videoTranscodePayload struct {
 
 // WithVideo attaches the job store and ffmpeg, and registers the transcode
 // handler. Without ffmpeg (the slim image) no job is enqueued and the original
-// is served.
+// is served. It also registers the perceptual hash backfill (JobKindMediaPhash),
+// which needs no ffmpeg.
 func (s *MediaService) WithVideo(jobs *JobService, ff *FFmpeg) *MediaService {
 	s.jobs, s.ffmpeg = jobs, ff
 	s.videoTimeout, s.videoThreads = defaultVideoTimeout, defaultVideoThreads
 	if jobs != nil {
 		jobs.Register(JobKindVideoTranscode, s.videoJob(s.TranscodeVideo))
 		jobs.Register(JobKindVideoPoster, s.videoJob(s.WriteServerPoster))
+		jobs.Register(JobKindMediaPhash, s.phashJob)
 	}
 	return s
 }

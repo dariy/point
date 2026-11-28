@@ -26,6 +26,19 @@ by upload date (`/YYYY/MM/…`).
   matches. "Use the existing file" restores a trashed match, and in the editor it inserts
   the existing media. Folder import from the photo library skips exact matches, trashed
   ones too, and reports them in one summary line; it does not restore them.
+- **Possible duplicates**: the same picture at another size or in another format has other
+  bytes, so its checksum differs. `media.phash` holds a 64-bit difference hash (dHash) of
+  the decoded, oriented image (`api/internal/services/phash.go::perceptualHash`). Upload
+  and folder import compute it from the decode they already do; a HEIC or AVIF gets it
+  from its deferred decode. Two live images whose hashes differ in 10 bits or fewer
+  (`PhashMaxDistance`) are possible duplicates, and the groups are transitive
+  (`MediaService.PossibleDuplicates`, `GET /api/media/duplicates`). A possible duplicate
+  never blocks an upload: only an exact match asks. The "Possible duplicates" entry of the
+  type filter in the media library shows each group as a set that starts a new row, with
+  the size of each copy. Open a copy to compare, and use "Move to Trash" on the copy to
+  remove. The migration `enqueue_media_phash_backfill` queues one `media.phash` job when
+  old images exist. The job hashes 50 images, then queues the next batch; an image that
+  does not decode keeps no hash and is not listed.
 - **Thumbnails**: a fixed ladder of six rungs — 128/256/512/1024/1600/2048 px on the
   **longest side**, aspect-preserving (`fitImage`, Catmull-Rom from `golang.org/x/image/draw`), JPEG only (the binary is CGO-free,
   so no WebP/AVIF encoder). Upload and import write the rungs up to 1024

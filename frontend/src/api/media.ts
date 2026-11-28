@@ -35,6 +35,8 @@ export interface Media {
   deleted_at?: string | null;
   /** Admin responses only: set on an HEVC video that this install cannot convert. */
   hevc_note?: boolean;
+  /** listPossibleDuplicates only: the index of the item's group on the page. */
+  duplicate_group?: number;
 }
 
 /**
@@ -213,6 +215,18 @@ export function listTrashedMedia(params: { page?: number; per_page?: number } = 
   media: Media[], total: number, page: number, per_page: number, pages: number,
 }> {
   return api.get('/api/media/trash', params);
+}
+
+/**
+ * List the possible duplicates: groups of live images whose perceptual hashes
+ * are near (the same picture at another size or in another format). `media` is
+ * flat, in group order, and each item has `duplicate_group`. A page holds
+ * whole groups, so it can hold fewer than `per_page` items.
+ */
+export function listPossibleDuplicates(params: { page?: number; per_page?: number } = {}): Promise<{
+  media: Media[], total: number, groups: number, page: number, per_page: number, pages: number,
+}> {
+  return api.get('/api/media/duplicates', params);
 }
 
 /** Take a media item out of the trash. The server calculates its visibility again. */

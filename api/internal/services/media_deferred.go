@@ -117,6 +117,7 @@ func (s *MediaService) finishDeferred(ctx context.Context, media models.Medium, 
 	if err != nil {
 		return err
 	}
+	s.storePhash(ctx, media.ID, src)
 	icc := extractICC(content)
 	if !isHEIF(media.MimeType) {
 		s.backfillDimensions(ctx, media, src)
