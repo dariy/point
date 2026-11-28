@@ -282,6 +282,22 @@ describe('PostEditPage (mounted)', () => {
       assert.equal(getAutosaveStatus().status, 'failed');
       assert.equal(page.state.saving, false);
     });
+
+    test('a failed save keeps the values the user typed', async () => {
+      routes['PUT /api/posts/7'] = () => fail(500, 'Server error');
+      await mountPage({ params: { id: '7' } });
+      type(get('#title-input'), 'Typed, not saved');
+      type(get('#slug-input'), 'typed-not-saved');
+
+      await page._save({ status: 'hidden' });
+      await settle();
+
+      assert.equal(getToast().type, 'error');
+      assert.equal(get('#title-input').value, 'Typed, not saved');
+      assert.equal(get('#slug-input').value, 'typed-not-saved');
+      // The override was not saved, so the form does not show it.
+      assert.equal(get('#status-select').value, 'published');
+    });
   });
 
   describe('autosave', () => {

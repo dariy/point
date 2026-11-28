@@ -30,6 +30,9 @@
  * `--atlas-window-right` (box px). The hint is off during a tween, so it fades
  * out when the window grows and comes back when the window is on its slot.
  *
+ * A window that goes to `hidden` goes at once, with no slide: without its
+ * clip the whole map would slide up over the page.
+ *
  * A box change (a rotation) puts the window on the new box at once: a new clip
  * and a new offset, and the point at the window centre stays there. A present
  * with no centre after a size change pans the map by the move of the slot
@@ -607,10 +610,21 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       presentWindow(req);
       return;
     }
+    const fromWindow = current === 'window';
     leaveWindow();
     const p = req;
     current = p;
     if (container) container.dataset.atlasOcean = p;
+    // A window goes at once. Without the clip the whole map is on screen, and
+    // the `hidden` rule would slide it up over the page for 0.28s: the blink
+    // after each shut of a post's sheet (p-sheet-close-blink-dnq6l). The style
+    // is computed with no transition, then the transition comes back, so the
+    // next slide of a list page still runs.
+    if (fromWindow && p === 'hidden' && container) {
+      container.style.transition = 'none';
+      void container.offsetHeight;
+      container.style.transition = '';
+    }
     // A hidden map keeps its view: its box changes size, and the next show
     // must not find a centre that `maxBounds` moved (atlasLayerMap.ts::park).
     if (p === 'hidden') map?.park();

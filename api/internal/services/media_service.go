@@ -66,6 +66,9 @@ type MediaService struct {
 	// prewarming is held for the life of a background prewarm so a second
 	// rebuild does not start a duplicate one. See startPrewarm.
 	prewarming atomic.Bool
+	// prewarmDone counts the background prewarm in flight, so tests can wait
+	// for the end of the work instead of polling the flag on a clock.
+	prewarmDone sync.WaitGroup
 
 	// jobs and ffmpeg run the video transcode. See media_video.go.
 	jobs         *JobService
@@ -1074,8 +1077,9 @@ func (s *MediaService) storePoster(ctx context.Context, media models.Medium, pos
 
 	// Drop the rungs cut from the previous poster. Variant would notice the
 	// newer source on its own, but a re-capture that lands within the same
-	// filesystem timestamp granularity would not move mtime forward.
-	s.removeAllVariants(media.OriginalPath)
+	// filesystem timestamp granularity would not move mtime forward. Keep the
+	// transcode: it comes from the video, not from the poster.
+	s.removeImageVariants(media.OriginalPath)
 
 	if media.ThumbnailPath.Valid && media.ThumbnailPath.String != thumbRel {
 		_ = os.Remove(filepath.Join(mediaBase, media.ThumbnailPath.String))
@@ -1404,10 +1408,17 @@ func (s *MediaService) writeLadder(ctx context.Context, originalPath string, src
 // is keyed on the original's path and has no DB row, so one left behind is
 // invisible and permanent. Best-effort — a missing file is the common case.
 func (s *MediaService) removeAllVariants(originalPath string) {
+	s.removeImageVariants(originalPath)
+	_ = os.Remove(filepath.Join(s.mediaBase(), VideoTranscodeRelPath(originalPath)))
+}
+
+// removeImageVariants deletes the image rungs of a media item and keeps its
+// video transcode. A new poster replaces the source of the rungs only; the
+// transcode comes from the original video, which does not change.
+func (s *MediaService) removeImageVariants(originalPath string) {
 	for _, size := range VariantSizes {
 		_ = os.Remove(s.variantFullPath(originalPath, size))
 	}
-	_ = os.Remove(filepath.Join(s.mediaBase(), VideoTranscodeRelPath(originalPath)))
 }
 
 // prewarmLimit bounds the eager regeneration a rebuild kicks off: the N most
@@ -1667,7 +1678,9 @@ func (s *MediaService) startPrewarm(ctx context.Context) int {
 	// The request's context is cancelled the moment the response is written;
 	// the values on it are still worth carrying into the background work.
 	bg := context.WithoutCancel(ctx)
+	s.prewarmDone.Add(1)
 	go func() {
+		defer s.prewarmDone.Done()
 		defer s.prewarming.Store(false)
 		s.prewarm(bg, rows)
 	}()
