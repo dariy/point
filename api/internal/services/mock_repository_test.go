@@ -1290,6 +1290,18 @@ func (m *mockRepository) BackupDB(ctx context.Context, destPath string) error {
 	return fmt.Errorf("BackupDB not implemented")
 }
 
+func (m *mockRepository) CountContentRows(ctx context.Context) (int64, int64, error) {
+	return 0, 0, fmt.Errorf("CountContentRows not implemented")
+}
+
+func (m *mockRepository) SetPostTimestamps(ctx context.Context, id int64, createdAt, updatedAt time.Time, publishedAt sql.NullTime) error {
+	return fmt.Errorf("SetPostTimestamps not implemented")
+}
+
+func (m *mockRepository) SetImportedMediaFields(ctx context.Context, id int64, postID sql.NullInt64, uploadedAt time.Time, metadata, originalMetadata sql.NullString) error {
+	return fmt.Errorf("SetImportedMediaFields not implemented")
+}
+
 func (m *mockRepository) SearchTags(ctx context.Context, query string, limit int) ([]models.Tag, error) {
 	if m.MockSearchTags != nil {
 		return m.MockSearchTags(ctx, query, limit)

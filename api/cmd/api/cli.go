@@ -2,8 +2,8 @@ package main
 
 // Subcommand dispatch. `point` is one binary: with no subcommand it starts the
 // server, otherwise it runs an operator command and exits. The commands
-// themselves live one per file (setup.go, resetpassword.go, apikey.go); this
-// file only decides which one the args name.
+// themselves live one per file (setup.go, resetpassword.go, apikey.go,
+// verifybackup.go); this file only decides which one the args name.
 
 import (
 	"fmt"
@@ -59,6 +59,10 @@ func runEarlyCLI() {
 		runResetPasswordCLI(repo)
 		os.Exit(0)
 	}
+
+	// Restore check of a backup: `point verify-backup [<archive>]`. It needs no
+	// repository, because it opens only the copy it unpacks (verifybackup.go).
+	runVerifyBackupFromArgs(os.Args[1:])
 
 	for _, arg := range os.Args[1:] {
 		if arg == "-v" || arg == "--version" || arg == "-version" {

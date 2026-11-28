@@ -39,6 +39,19 @@ func (s *MediaService) storePhash(ctx context.Context, id int64, src image.Image
 	}
 }
 
+// enqueuePhash queues a phash job that starts at media id, for an image that
+// was stored with no decode (UploadFileFromPath above the upload limit). The
+// job hashes each image with no media.phash from id on, so a later job of a
+// run finds less work.
+func (s *MediaService) enqueuePhash(ctx context.Context, id int64) {
+	if s.jobs == nil {
+		return
+	}
+	if _, err := s.jobs.Enqueue(ctx, JobKindMediaPhash, phashPayload{AfterID: id - 1}); err != nil {
+		slog.Warn("phash job: enqueue failed", "media_id", id, "error", err)
+	}
+}
+
 // phashJob hashes one batch of images with no media.phash, in id order, and
 // queues the next batch when this one was full. An image that does not decode
 // keeps a NULL hash and the batch continues: the cursor in the payload moves

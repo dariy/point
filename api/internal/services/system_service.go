@@ -49,6 +49,14 @@ type SystemService struct {
 	backupMu      sync.Mutex
 	backupRunning bool
 
+	// checkMu guards checkRunning: one restore check runs at a time.
+	checkMu      sync.Mutex
+	checkRunning bool
+
+	// exportMu guards exportRunning: one portable export runs at a time.
+	exportMu      sync.Mutex
+	exportRunning bool
+
 	// backupHook, when set, is a `sh -c` command run against each finished
 	// archive to copy it off-host; backupHookTimeout bounds one run. health
 	// receives the hook's outcome under healthTaskBackupHook. All optional —
@@ -295,6 +303,7 @@ func (s *SystemService) removePartials(backupDir string) {
 // at startup: a freshly started process has no backup running.
 func (s *SystemService) CleanupPartialBackups() {
 	s.removePartials(filepath.Join(s.dataPath, "backups"))
+	s.removePartials(s.exportDir())
 }
 
 // RotateBackups keeps only the `keep` most recent .tar.gz backups, deleting the
@@ -346,11 +355,19 @@ func (s *SystemService) RotateBackups(keep int) (int, error) {
 // zero time when there are none. It reads the disk, so a restart does not
 // reset it.
 func (s *SystemService) LastBackupTime() time.Time {
+	_, t := s.newestBackup()
+	return t
+}
+
+// newestBackup returns the name and modification time of the newest finished
+// archive in the backups directory, or "" and the zero time when none exists.
+func (s *SystemService) newestBackup() (string, time.Time) {
 	backupDir := filepath.Join(s.dataPath, "backups")
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
-		return time.Time{}
+		return "", time.Time{}
 	}
+	var name string
 	var newest time.Time
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
@@ -361,10 +378,10 @@ func (s *SystemService) LastBackupTime() time.Time {
 			continue
 		}
 		if info.ModTime().After(newest) {
-			newest = info.ModTime()
+			name, newest = e.Name(), info.ModTime()
 		}
 	}
-	return newest
+	return name, newest
 }
 
 // BackupDue reports whether a scheduled backup should run now given the
@@ -458,6 +475,11 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (sum s
 	}
 	tw := tar.NewWriter(gz)
 
+	// The manifest records the SHA-256 of each file as it goes into the
+	// archive, and the row counts of the database snapshot. VerifyBackup
+	// compares a restored copy with it.
+	manifest := newBackupManifest()
+
 	// Take a consistent snapshot of the live SQLite database rather than copying
 	// the WAL-mode file byte-for-byte (which can capture a torn DB with pages
 	// still sitting in the -wal sidecar). We VACUUM INTO a temp file, tar that in
@@ -527,6 +549,11 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (sum s
 		if info.IsDir() && excludeDirs[relPath] {
 			return filepath.SkipDir
 		}
+		// The manifest is written once, at the end; a stray copy in the data
+		// directory must not go in as a second entry of the same name.
+		if relPath == backupManifestName {
+			return nil
+		}
 
 		if !info.Mode().IsRegular() {
 			header, err := tar.FileInfoHeader(info, "")
@@ -537,13 +564,15 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (sum s
 			return tw.WriteHeader(header)
 		}
 
-		ok, err := addFileToTar(tw, path, relPath)
+		sum, ok, err := addFileToTar(tw, path, relPath)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			skipped++
+			return nil
 		}
+		manifest.Files[filepath.ToSlash(relPath)] = sum
 		return nil
 	}); err != nil {
 		return "", 0, err
@@ -551,13 +580,22 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (sum s
 
 	// Add the consistent DB snapshot under the live DB's relative name.
 	if dbSnapshot != "" {
-		ok, err := addFileToTar(tw, dbSnapshot, dbTarName)
+		sum, ok, err := addFileToTar(tw, dbSnapshot, dbTarName)
 		if err != nil {
 			return "", 0, err
 		}
 		if !ok {
 			return "", 0, fmt.Errorf("db snapshot vanished before archiving")
 		}
+		manifest.Files[filepath.ToSlash(dbTarName)] = sum
+		tables, err := repository.SnapshotTableCounts(ctx, dbSnapshot)
+		if err != nil {
+			return "", 0, fmt.Errorf("db snapshot row counts: %w", err)
+		}
+		manifest.Tables = tables
+	}
+	if err := writeManifestToTar(tw, manifest); err != nil {
+		return "", 0, err
 	}
 
 	// Finalize the streams before reading the digest so every compressed byte has
@@ -571,36 +609,38 @@ func (s *SystemService) createTarGz(ctx context.Context, destPath string) (sum s
 	return hex.EncodeToString(hasher.Sum(nil)), skipped, nil
 }
 
-// addFileToTar writes a single on-disk file into tw under the given tar name.
+// addFileToTar writes a single on-disk file into tw under the given tar name,
+// and returns the SHA-256 (hex) of the bytes it copied.
 // The file is opened first and stat-ed through the handle, so the header always
 // matches the bytes copied. It returns ok=false, with nothing written, when the
 // file cannot be opened (it vanished or is unreadable); the caller counts the
 // skip. A failure after the header is written corrupts the archive, so it is
 // returned as an error.
-func addFileToTar(tw *tar.Writer, srcPath, tarName string) (bool, error) {
+func addFileToTar(tw *tar.Writer, srcPath, tarName string) (string, bool, error) {
 	src, err := os.Open(srcPath)
 	if err != nil {
 		slog.Warn("backup: skipped file", "path", srcPath, "err", err)
-		return false, nil
+		return "", false, nil
 	}
 	defer func() { _ = src.Close() }()
 	info, err := src.Stat()
 	if err != nil {
 		slog.Warn("backup: skipped file", "path", srcPath, "err", err)
-		return false, nil
+		return "", false, nil
 	}
 	header, err := tar.FileInfoHeader(info, "")
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	header.Name = tarName
 	if err := tw.WriteHeader(header); err != nil {
-		return false, err
+		return "", false, err
 	}
-	if _, err := io.CopyN(tw, src, info.Size()); err != nil {
-		return false, fmt.Errorf("copy %s: %w", tarName, err)
+	h := sha256.New()
+	if _, err := io.CopyN(io.MultiWriter(tw, h), src, info.Size()); err != nil {
+		return "", false, fmt.Errorf("copy %s: %w", tarName, err)
 	}
-	return true, nil
+	return hex.EncodeToString(h.Sum(nil)), true, nil
 }
 
 // pendingRestoreMarker is the file (inside the backups dir, so it's never itself
@@ -719,6 +759,13 @@ func (s *SystemService) ValidateArchive(archivePath string) error {
 }
 
 func (s *SystemService) extractTarGz(srcPath, destDir string) error {
+	return s.extractArchive(srcPath, destDir, false)
+}
+
+// extractArchive unpacks a backup into destDir. The manifest entry is written
+// only when keepManifest is true (the restore check reads it); a restore into
+// the data directory leaves it out.
+func (s *SystemService) extractArchive(srcPath, destDir string, keepManifest bool) error {
 	// srcPath is resolved against the backups directory by the caller, which
 	// rejects any name that is not a bare filename in it.
 	//nolint:gosec // G703: caller-validated path under the backups directory
@@ -777,6 +824,9 @@ func (s *SystemService) extractTarGz(srcPath, destDir string) error {
 		}
 		if !filepath.IsLocal(name) {
 			return fmt.Errorf("restore: unsafe path in archive: %q", header.Name)
+		}
+		if name == backupManifestName && !keepManifest {
+			continue
 		}
 
 		switch header.Typeflag {

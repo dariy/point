@@ -89,6 +89,7 @@ You can customize Point by editing the `.env` file.
 | `APP_NAME` | `Point` | The name of your blog displayed in the UI |
 | `APP_ENV` | `development` | Set to `production` for live environments |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Maximum allowed size for uploaded photos |
+| `MAX_IMPORT_ENTRY_MB` | `2048` | Maximum size of one original in a portable import archive |
 | `JPEG_QUALITY` | `85` | Compression quality for JPEG images (1-100) |
 | `SESSION_EXPIRY_HOURS` | `720` | How long an admin session remains valid |
 | `SESSION_EXPIRY_PUBLIC_HOURS` | `24` | How long a public session remains valid |

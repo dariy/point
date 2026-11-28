@@ -88,6 +88,7 @@ The app is configured via environment variables (or a `.env` file in the working
 | `PHOTO_LIBRARY_PATH` | *(empty)* | Path to a read-only photo library to import from |
 | `SESSION_EXPIRY_HOURS` | `720` | Auth session TTL (30 days) |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Upload size limit |
+| `MAX_IMPORT_ENTRY_MB` | `2048` | Size limit of one original or media sidecar in a portable import archive; separate from the upload limit, so an export of a folder-imported site imports again |
 | `STORAGE_QUOTA_MB` | `0` | Media storage allowance the dashboard reports usage against; `0` = unlimited (no usage bar) |
 | `PAGE_CACHE_BUDGET_MB` | `64` | Size ceiling for the rendered-page cache (`<STORAGE_PATH>/cache`); oldest entries are evicted first once it is passed, `0` = no eviction |
 | `HEAD_HTML` | *(empty)* | Extra HTML injected into `<head>` at serve time (analytics, verification tags) — public shell only, never served to admin/authenticated pages |
