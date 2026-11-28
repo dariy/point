@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -65,6 +66,10 @@ func parseLogLevel(s string) slog.Level {
 		return slog.LevelInfo
 	}
 }
+
+// onListening, when set, is called once the HTTP listener is bound. It is nil
+// in production; tests set it to learn when main is ready to serve.
+var onListening func(addr net.Addr)
 
 func main() {
 	// Start on stdout alone: the log file lives under the storage path, which
@@ -199,6 +204,11 @@ func main() {
 			HidePort:        true,
 			GracefulTimeout: 30 * time.Second,
 			OnShutdownError: func(err error) { slog.Error("shutdown error", "error", err) },
+			ListenerAddrFunc: func(addr net.Addr) {
+				if onListening != nil {
+					onListening(addr)
+				}
+			},
 			// StartConfig sets a 30s ReadTimeout; echo v4 set none. Keep none, so
 			// a slow multi-GB "move in" upload is not cut off.
 			BeforeServeFunc: func(s *http.Server) error {

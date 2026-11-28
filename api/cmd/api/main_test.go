@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -747,9 +748,13 @@ func TestMain_FullRun(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "dummy_key")
 	t.Setenv("PHOTO_LIBRARY_PATH", "/dummy/path")
 
-	// Run a background goroutine to signal interrupt after startup
+	// Send the interrupt only after the HTTP listener is bound. A signal that
+	// arrives earlier cancels the migrations, and main exits with an error.
+	listening := make(chan struct{})
+	onListening = func(net.Addr) { close(listening) }
+	defer func() { onListening = nil }()
 	go func() {
-		time.Sleep(200 * time.Millisecond)
+		<-listening
 		proc, err := os.FindProcess(os.Getpid())
 		if err == nil {
 			_ = proc.Signal(os.Interrupt)
