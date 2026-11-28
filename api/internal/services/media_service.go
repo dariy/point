@@ -66,6 +66,9 @@ type MediaService struct {
 	// prewarming is held for the life of a background prewarm so a second
 	// rebuild does not start a duplicate one. See startPrewarm.
 	prewarming atomic.Bool
+	// prewarmDone counts the background prewarm in flight, so tests can wait
+	// for the end of the work instead of polling the flag on a clock.
+	prewarmDone sync.WaitGroup
 
 	// jobs and ffmpeg run the video transcode. See media_video.go.
 	jobs         *JobService
@@ -1610,7 +1613,9 @@ func (s *MediaService) startPrewarm(ctx context.Context) int {
 	// The request's context is cancelled the moment the response is written;
 	// the values on it are still worth carrying into the background work.
 	bg := context.WithoutCancel(ctx)
+	s.prewarmDone.Add(1)
 	go func() {
+		defer s.prewarmDone.Done()
 		defer s.prewarming.Store(false)
 		s.prewarm(bg, rows)
 	}()

@@ -965,18 +965,17 @@ func TestUpdateMediaVisibilityForPaths_BatchResolvesEveryPath(t *testing.T) {
 	}
 }
 
-// waitPrewarm blocks until a rebuild's background prewarm has finished. The
-// flag is raised synchronously inside RebuildThumbnails, before the goroutine
-// starts, so there is no window where this returns early.
+// waitPrewarm blocks until a rebuild's background prewarm has finished. It
+// waits on the end of the work, not on a clock: 200 sequential decodes take
+// much longer on a loaded machine (scripts/check.sh runs e2e beside go-test),
+// and a fixed deadline failed there. The go test -timeout still bounds a
+// prewarm that never ends.
 func waitPrewarm(t *testing.T, svc *MediaService) {
 	t.Helper()
-	for i := 0; i < 500; i++ {
-		if !svc.prewarming.Load() {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
+	svc.prewarmDone.Wait()
+	if svc.prewarming.Load() {
+		t.Fatal("prewarm flag is still held after the prewarm finished")
 	}
-	t.Fatal("prewarm did not finish")
 }
 
 // uploadTestImage uploads a JPEG of the given size and returns its media row.
