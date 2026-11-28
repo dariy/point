@@ -195,6 +195,51 @@ failed rows and returns `{"deleted": n}`.
 panics from crafted images into a returned error; it now also logs them at `warn` with a
 stack, so a caller that swallows the error does not make the panic invisible.
 
+## Site health checks
+
+`GET /api/system/health/checks` returns one report of site checks. `POST` on the same path runs
+the checks again. The service is `services.SiteHealth` (`api/internal/services/site_health.go`).
+
+| Item | Status | IDs |
+|---|---|---|
+| `derivatives` | warn: an image has no rung that upload writes (up to `UploadMaxVariantSize`), or a video has no poster or transcode that the server can make | media |
+| `originals` | fail: the original file of a media row is gone | media |
+| `references` | fail: a published post shows a media path with no live media row (never uploaded, or in the trash); `samples` has example paths | posts |
+| `backup` | fail: no backup, or older than 7 days; warn: older than 2 days; info: scheduled backups are off (the backups plugin or `enable_backup` is off); ok when the host manages backups | — |
+| `restore_check` | fail: the last restore check failed; warn: none ran, or older than 14 days; info: none ran or older than 14 days while scheduled backups are off | — |
+| `storage` | fail: free space under 1 GiB or 5 %; warn: under 10 % | — |
+
+Each item has `status` (`ok`, `info`, `warn`, `fail`), `count` and at most 100 `ids`. `info` is a
+choice of the admin, not a problem. The report has `checked_at` and the worst `status`
+(`ok` < `info` < `warn` < `fail`).
+
+- **Cached.** A GET returns the last report. It runs the checks only when no report exists in
+  this process. The scheduler refreshes the report daily at 6 AM, after the backup.
+- **Bounded.** The file walk reads media rows 500 at a time and stops after 15 seconds. A stopped
+  walk sets `partial` on `derivatives` and `originals`. The other checks are a few queries.
+- **No false references.** A date path after a host name (`https://host/2023/04/post`) is not a
+  media reference. A bare path followed by words also matches the path without the words.
+- **After a rebuild.** A thumbnail rebuild purges the variants and warms only the newest 200
+  uploads. Until visitors fill in the rest, `derivatives` counts them.
+- **Repair.** `POST /api/media/derivatives/rebuild` with `{"ids": [...]}` (at most 100, the `ids`
+  of `derivatives`) repairs the listed media only (`MediaService.RebuildDerivatives`). For an
+  image it writes each missing rung up to `UploadMaxVariantSize` from one decode, before it
+  returns. For a video it enqueues the poster job and then the transcode job. It does not roll
+  the thumbnail generation. The response has `rebuilt`, `video_jobs` and `failed` (IDs with no
+  live row, no original, or a file that does not decode). A refresh of the checks then shows the
+  result.
+
+**In the admin.** The System page has one **Health** section (`#health`). It groups the site
+checks, the Job Queue, the Background Jobs and the disk. The site checks list one row per item,
+with its status and its repair action: **Retry job** for the newest failed job (failed jobs come
+first, from the job queue), **Rebuild derivatives** for the `derivatives` IDs, and **Open post**
+for the `references` IDs. An `info` backup or restore check row has **Enable backups**, a link to
+`/light/plugins?plugin=backups`: the Plugins page shows the backups row and, when the plugin is
+on, opens its settings drawer. **Check now** runs the checks again. The dashboard shows one dot in its
+header when an item is `warn` or `fail`, or a job failed. The dot links to `/light/system#health`.
+There is no dot when all items are `ok` or `info`, or when the report cannot be read. A fresh
+install has the backups plugin off, so it shows no dot.
+
 ## Log level
 
 `LOG_LEVEL` (`debug`, `info`, `warn`, `error`; default `info`) sets the minimum slog
@@ -248,3 +293,4 @@ to anything — it has been removed.
 | `api/internal/config/config.go` | `METRICS_ENABLED` / `METRICS_BIND` / `METRICS_PORT` / `LOG_LEVEL` |
 | `api/internal/utils/recover.go` | `SafeGo` / `Recovered` — the panic backstop for bare background goroutines |
 | `api/cmd/api/main.go` | `parseLogLevel`, `installLogger` — where `LOG_LEVEL` becomes the slog level |
+| `api/internal/services/site_health.go` | `SiteHealth` — the site health checks behind `/api/system/health/checks` |

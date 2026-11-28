@@ -294,3 +294,18 @@ export function rebuildThumbnails(): Promise<{
   return api.post("/api/media/thumbnails/rebuild");
 }
 
+/**
+ * Write the missing derivatives of the listed media only (1 to 100 IDs). An
+ * image gets its missing rungs before the call returns; a video gets a poster
+ * job and a transcode job that run later. `failed` has the IDs with no live
+ * row, no original, or a file that does not decode. Unlike rebuildThumbnails,
+ * no other file is purged.
+ */
+export function rebuildDerivatives(ids: number[]): Promise<{
+  rebuilt: number;
+  video_jobs: number;
+  failed: number[] | null;
+}> {
+  return api.post("/api/media/derivatives/rebuild", { ids });
+}
+

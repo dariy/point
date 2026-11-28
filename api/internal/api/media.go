@@ -616,6 +616,25 @@ func (h *MediaHandler) RebuildThumbnails(c *echo.Context) error {
 	})
 }
 
+// RebuildDerivatives writes the missing derived files of the listed media
+// items only: the image rungs up to the upload size, and the video poster and
+// transcode jobs. It is the repair for the derivatives item of the site
+// health checks. It does not roll the thumbnail generation. The body is
+// {"ids": [...]}, with at most services.MaxDerivativeRebuild IDs.
+func (h *MediaHandler) RebuildDerivatives(c *echo.Context) error {
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+	res, err := h.mediaService.RebuildDerivatives(c.Request().Context(), req.IDs)
+	if err != nil {
+		return MapError(err)
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
 func (h *MediaHandler) AnalyzeImage(c *echo.Context) error {
 	file, err := c.FormFile("image")
 	if err != nil {

@@ -651,6 +651,38 @@ func TestMediaHandler_RebuildThumbnails(t *testing.T) {
 	}
 }
 
+func TestMediaHandler_RebuildDerivatives(t *testing.T) {
+	handler, cleanup := setupMediaHandler(t)
+	defer cleanup()
+	e := echo.New()
+	call := func(body string) (*httptest.ResponseRecorder, error) {
+		req := httptest.NewRequest(http.MethodPost, "/media/derivatives/rebuild", strings.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		return rec, handler.RebuildDerivatives(e.NewContext(req, rec))
+	}
+
+	rec, err := call(`{"ids":[424242]}`)
+	if err != nil {
+		t.Fatalf("RebuildDerivatives: %v", err)
+	}
+	var res services.DerivativeRebuildResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || len(res.Failed) != 1 || res.Failed[0] != 424242 {
+		t.Errorf("unknown id: status %d, result %+v; want 200 with the id failed", rec.Code, res)
+	}
+
+	for _, body := range []string{`{"ids":[]}`, `{`} {
+		_, err := call(body)
+		var he *echo.HTTPError
+		if !errors.As(err, &he) || he.Code != http.StatusBadRequest {
+			t.Errorf("body %s: err = %v, want 400", body, err)
+		}
+	}
+}
+
 func TestMediaHandler_RenameMedia(t *testing.T) {
 	handler, cleanup := setupMediaHandler(t)
 	defer cleanup()

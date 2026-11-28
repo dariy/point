@@ -30,6 +30,8 @@ type AppServices struct {
 	Scheduler *services.SchedulerService
 	Jobs      *services.JobService
 	Health    *services.HealthRegistry
+	// SiteHealth runs the site health checks and caches the last report.
+	SiteHealth *services.SiteHealth
 	// FFmpeg is the detected ffmpeg/ffprobe pair. Not available in the slim image.
 	FFmpeg      *services.FFmpeg
 	Theme       *services.ThemeService
@@ -84,7 +86,8 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 	systemService.CleanupPartialBackups()
 	themeService := services.NewThemeService(cfg, settingsService)
 	timelineService := services.NewTimelineService(repo)
-	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry).WithMetrics(metricsRegistry).WithJobs(jobService)
+	siteHealth := services.NewSiteHealth(mediaService, systemService, settingsService)
+	schedulerService := services.NewSchedulerService(authService, postService, systemService, mediaService, settingsService, instagramService).WithHealth(healthRegistry).WithMetrics(metricsRegistry).WithJobs(jobService).WithSiteHealth(siteHealth)
 
 	s3Presigner, err := services.NewS3Presigner(
 		os.Getenv("S3_ENDPOINT"),
@@ -110,6 +113,7 @@ func initServices(cfg *config.Config, repo repository.Repository) *AppServices {
 		Jobs:        jobService,
 		FFmpeg:      ffmpeg,
 		Health:      healthRegistry,
+		SiteHealth:  siteHealth,
 		Theme:       themeService,
 		Timeline:    timelineService,
 		Instagram:   instagramService,
@@ -177,7 +181,7 @@ func initHandlers(cfg config.Config, repo repository.Repository, svcs *AppServic
 		Settings:  api.NewSettingsHandler(svcs.Settings, remarkSupervisor),
 		Plugins:   api.NewPluginsHandler(svcs.Settings),
 		Theme:     api.NewThemeHandler(svcs.Theme),
-		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithJobs(svcs.Jobs).WithFFmpeg(svcs.FFmpeg).WithStorageQuotaMB(cfg.StorageQuotaMB).WithPhotoLibraryPath(cfg.PhotoLibraryPath),
+		System:    api.NewSystemHandler(repo, svcs.Media, svcs.Post, svcs.Settings, svcs.Tag, svcs.System, svcs.Cache, svcs.Auth, cfg.StoragePath, cfg.AppVersion).WithHealth(svcs.Health).WithSiteHealth(svcs.SiteHealth).WithJobs(svcs.Jobs).WithFFmpeg(svcs.FFmpeg).WithStorageQuotaMB(cfg.StorageQuotaMB).WithPhotoLibraryPath(cfg.PhotoLibraryPath),
 		Feeds:     api.NewFeedsHandler(repo, svcs.Post, svcs.Tag, svcs.Settings, svcs.Cache),
 		Pages:     api.NewPagesHandler(repo, svcs.Post, svcs.Tag, svcs.Media, svcs.Settings, svcs.Cache),
 		Timeline:  api.NewTimelineHandler(svcs.Timeline, svcs.Settings),
