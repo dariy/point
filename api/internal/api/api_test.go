@@ -22,7 +22,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestFullWorkflow(t *testing.T) {
@@ -146,8 +146,7 @@ func TestFullWorkflow(t *testing.T) {
 		// Delete backup
 		rec = httptest.NewRecorder()
 		c = e.NewContext(httptest.NewRequest(http.MethodDelete, "/system/backups/"+backupFile, nil), rec)
-		c.SetParamNames("filename")
-		c.SetParamValues(backupFile)
+		c.SetPathValues(echo.PathValues{{Name: "filename", Value: backupFile}})
 		_ = systemH.DeleteBackup(c)
 
 		// Create another backup to test restore
@@ -158,8 +157,7 @@ func TestFullWorkflow(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		c = e.NewContext(httptest.NewRequest(http.MethodPost, "/system/restore/"+backupFile2, nil), rec)
-		c.SetParamNames("filename")
-		c.SetParamValues(backupFile2)
+		c.SetPathValues(echo.PathValues{{Name: "filename", Value: backupFile2}})
 		_ = systemH.RestoreBackup(c)
 	}
 
@@ -181,8 +179,7 @@ func TestFullWorkflow(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/posts/999", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "999"}})
 	_ = postH.GetPostByID(c)
 
 	// 9. Post lifecycle
@@ -190,30 +187,26 @@ func TestFullWorkflow(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/posts/slug/hello-world", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("hello-world")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "hello-world"}})
 	_ = postH.GetPostBySlug(c)
 
 	// Publish
 	req = httptest.NewRequest(http.MethodPost, "/posts/1/publish", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	_ = postH.PublishPost(c)
 
 	// Withdraw
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	_ = postH.WithdrawPost(c)
 
 	// Preview link
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	if err := postH.GeneratePreviewLink(c); err != nil {
 		t.Fatalf("GeneratePreviewLink failed: %v", err)
 	}
@@ -231,8 +224,7 @@ func TestFullWorkflow(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/posts/preview/"+token, nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("token")
-	c.SetParamValues(token)
+	c.SetPathValues(echo.PathValues{{Name: "token", Value: token}})
 	_ = postH.GetPostByPreviewToken(c)
 
 	// Update post
@@ -241,8 +233,7 @@ func TestFullWorkflow(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	c.Set("user", session)
 	_ = postH.UpdatePost(c)
 
@@ -277,7 +268,7 @@ func TestAuthMiddleware(t *testing.T) {
 	middleware := AuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
-	handler := func(c echo.Context) error {
+	handler := func(c *echo.Context) error {
 		return c.String(http.StatusOK, "ok")
 	}
 
@@ -342,7 +333,7 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 	middleware := OptionalAuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
-	handler := func(c echo.Context) error {
+	handler := func(c *echo.Context) error {
 		return c.String(http.StatusOK, "ok")
 	}
 
@@ -392,7 +383,7 @@ func TestOptionalAuthMiddleware_RevelioOff(t *testing.T) {
 	middleware := OptionalAuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
-	handler := func(c echo.Context) error { return c.String(http.StatusOK, "ok") }
+	handler := func(c *echo.Context) error { return c.String(http.StatusOK, "ok") }
 
 	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
 		Username: "u3", Email: "u3@t.com", PasswordHash: "h", DisplayName: "U3",
@@ -467,7 +458,7 @@ func TestOptionalAuthMiddleware_RevelioOffFromAdminArea(t *testing.T) {
 	middleware := OptionalAuthMiddleware(authSvc, apiKeySvc)
 
 	e := echo.New()
-	handler := func(c echo.Context) error { return c.String(http.StatusOK, "ok") }
+	handler := func(c *echo.Context) error { return c.String(http.StatusOK, "ok") }
 
 	user, _ := repo.CreateUser(context.Background(), models.CreateUserParams{
 		Username: "u4", Email: "u4@t.com", PasswordHash: "h", DisplayName: "U4",
@@ -572,7 +563,7 @@ func TestCustomHTTPErrorHandler(t *testing.T) {
 
 	var err error
 	err = echo.NewHTTPError(http.StatusNotFound, "not found test")
-	e.HTTPErrorHandler(err, c)
+	e.HTTPErrorHandler(c, err)
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", rec.Code)
@@ -593,7 +584,7 @@ func TestCustomHTTPErrorHandler(t *testing.T) {
 	c = e.NewContext(req, rec)
 
 	err = fmt.Errorf("generic error test")
-	e.HTTPErrorHandler(err, c)
+	e.HTTPErrorHandler(c, err)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", rec.Code)
@@ -605,6 +596,27 @@ func TestCustomHTTPErrorHandler(t *testing.T) {
 
 	if resp["detail"] != "generic error test" {
 		t.Errorf("expected detail 'generic error test', got '%s'", resp["detail"])
+	}
+
+	// 3. echo/v5 predefined errors are not *echo.HTTPError: they must keep
+	// their status, not turn into a 500. 4. An empty message gives the status
+	// text, as echo v4 NewHTTPError(code) did.
+	for _, tc := range []struct {
+		err    error
+		code   int
+		detail string
+	}{
+		{echo.ErrNotFound, http.StatusNotFound, "Not Found"},
+		{echo.ErrMethodNotAllowed, http.StatusMethodNotAllowed, "Method Not Allowed"},
+		{echo.NewHTTPError(http.StatusForbidden, ""), http.StatusForbidden, "Forbidden"},
+	} {
+		rec = httptest.NewRecorder()
+		e.HTTPErrorHandler(e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec), tc.err)
+		resp = nil
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if rec.Code != tc.code || resp["detail"] != tc.detail {
+			t.Errorf("%v: got %d %q, want %d %q", tc.err, rec.Code, resp["detail"], tc.code, tc.detail)
+		}
 	}
 }
 
@@ -647,7 +659,7 @@ func setupHandlers(t *testing.T) *testHandlers {
 
 func (h *testHandlers) close() { _ = h.repo.Close() }
 
-func echoCtx(method, target string, body string) (echo.Context, *httptest.ResponseRecorder) {
+func echoCtx(method, target string, body string) (*echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
 	var reqBody *strings.Reader
 	if body != "" {
@@ -867,8 +879,7 @@ func TestPublishPost_BadID(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	c, _ := echoCtx(http.MethodPost, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	err := ph.PublishPost(c)
 	if err == nil {
 		t.Error("expected error for bad id")
@@ -879,8 +890,7 @@ func TestGeneratePreviewLink_BadID(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	c, _ := echoCtx(http.MethodPost, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	err := ph.GeneratePreviewLink(c)
 	if err == nil {
 		t.Error("expected error for bad id")
@@ -891,8 +901,7 @@ func TestWithdrawPost_BadID(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	c, _ := echoCtx(http.MethodPost, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	err := ph.WithdrawPost(c)
 	if err == nil {
 		t.Error("expected error for bad id")
@@ -907,8 +916,7 @@ func TestGetPostPage_DraftSlug(t *testing.T) {
 		Title: "Draft Post", Slug: "draft-post-page", Status: "draft", Formatter: "markdown", AuthorID: userID,
 	})
 	c, _ := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("slug")
-	c.SetParamValues("draft-post-page")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "draft-post-page"}})
 	err := ph.GetPostPage(c)
 	if err == nil {
 		t.Error("expected error (404) for draft post slug in GetPostPage")
@@ -934,8 +942,7 @@ func TestGetPostNavigation_WithNeighbors(t *testing.T) {
 	var midID int64
 	_ = h.repo.DB().QueryRow(`SELECT id FROM posts WHERE slug='nav-middle'`).Scan(&midID)
 	c, rec := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(midID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(midID, 10)}})
 	if err := ph.GetPostNavigation(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -953,8 +960,7 @@ func TestGetPostBySlug_Published_NoAuth(t *testing.T) {
 	})
 	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE slug='public-slug-test'`)
 	c, rec := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("slug")
-	c.SetParamValues("public-slug-test")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "public-slug-test"}})
 	if err := ph.GetPostBySlug(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -968,8 +974,7 @@ func TestGeocodeTag_BadID(t *testing.T) {
 	defer h.close()
 	th := NewTagHandler(h.tagSvc, h.settingsSvc)
 	c, _ := echoCtx(http.MethodPost, "/", `{"lat":1.0,"lng":2.0}`)
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	err := th.GeocodeTag(c)
 	if err == nil {
 		t.Error("expected error for bad id")
@@ -1053,8 +1058,7 @@ func TestGetTagPage_HiddenPostFiltered(t *testing.T) {
 	_, _ = h.repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, postID, hideTagID)
 	_, _ = h.repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, postID, tag.ID)
 	c, rec := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("slug")
-	c.SetParamValues(tag.Slug)
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: tag.Slug}})
 	if err := ph.GetTagPage(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1076,8 +1080,7 @@ func TestGetPostBySlug_HiddenPostsTag(t *testing.T) {
 	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE id=?`, postID)
 	_, _ = h.repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, postID, hideTagID)
 	c, _ := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("slug")
-	c.SetParamValues("hidden-slug-post")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "hidden-slug-post"}})
 	err := ph.GetPostBySlug(c)
 	if err == nil {
 		t.Error("expected 404 for post with hides_posts tag (public user)")
@@ -1097,8 +1100,7 @@ func TestGetPostByID_HiddenPostsTag(t *testing.T) {
 	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE id=?`, postID)
 	_, _ = h.repo.DB().Exec(`INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)`, postID, hideTagID)
 	c, _ := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(postID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(postID, 10)}})
 	err := ph.GetPostByID(c)
 	if err == nil {
 		t.Error("expected 404 for post with hides_posts tag (public user)")
@@ -1114,8 +1116,7 @@ func TestGetPostBySlug_Admin(t *testing.T) {
 	})
 	_, _ = h.repo.DB().Exec(`UPDATE posts SET status='published', published_at=datetime('now') WHERE slug='admin-view-post'`)
 	c, rec := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("slug")
-	c.SetParamValues("admin-view-post")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "admin-view-post"}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 	if err := ph.GetPostBySlug(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)

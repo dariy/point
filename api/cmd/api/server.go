@@ -10,12 +10,11 @@ import (
 	"point-api/internal/config"
 	"point-api/internal/repository"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func setupEcho(cfg config.Config, repo repository.Repository, svcs *AppServices) *echo.Echo {
 	e := echo.New()
-	e.HideBanner = true
 
 	// Handlers wrapping the wired services (see initHandlers in wiring.go).
 	h := initHandlers(cfg, repo, svcs)

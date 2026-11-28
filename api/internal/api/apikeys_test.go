@@ -13,7 +13,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestApiKeyHandler(t *testing.T) {
@@ -37,7 +37,7 @@ func TestApiKeyHandler(t *testing.T) {
 	}
 
 	// Helper to create context with user
-	createCtx := func(method, path string, body interface{}) (echo.Context, *httptest.ResponseRecorder) {
+	createCtx := func(method, path string, body interface{}) (*echo.Context, *httptest.ResponseRecorder) {
 		var req *http.Request
 		if body != nil {
 			b, _ := json.Marshal(body)
@@ -129,9 +129,7 @@ func TestApiKeyHandler(t *testing.T) {
 
 		// Revoke
 		c, rec := createCtx(http.MethodPost, "/api/auth/api-keys/"+idStr+"/revoke", nil)
-		c.SetParamNames("id")
-		c.SetParamValues(idStr)
-
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: idStr}})
 		err := handler.RevokeKey(c)
 		if err != nil {
 			t.Fatalf("RevokeKey failed: %v", err)
@@ -142,9 +140,7 @@ func TestApiKeyHandler(t *testing.T) {
 
 		// Delete
 		c, rec = createCtx(http.MethodDelete, "/api/auth/api-keys/"+idStr, nil)
-		c.SetParamNames("id")
-		c.SetParamValues(idStr)
-
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: idStr}})
 		err = handler.DeleteKey(c)
 		if err != nil {
 			t.Fatalf("DeleteKey failed: %v", err)
@@ -156,16 +152,14 @@ func TestApiKeyHandler(t *testing.T) {
 
 	t.Run("InvalidID", func(t *testing.T) {
 		c, _ := createCtx(http.MethodPost, "/api/auth/api-keys/invalid/revoke", nil)
-		c.SetParamNames("id")
-		c.SetParamValues("invalid")
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: "invalid"}})
 		err := handler.RevokeKey(c)
 		if err == nil {
 			t.Error("expected error for invalid id")
 		}
 
 		c, _ = createCtx(http.MethodDelete, "/api/auth/api-keys/invalid", nil)
-		c.SetParamNames("id")
-		c.SetParamValues("invalid")
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: "invalid"}})
 		err = handler.DeleteKey(c)
 		if err == nil {
 			t.Error("expected error for invalid id")

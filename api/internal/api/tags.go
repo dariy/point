@@ -15,7 +15,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type TagHandler struct {
@@ -30,7 +30,7 @@ func NewTagHandler(tagService *services.TagService, settingsService *services.Se
 	}
 }
 
-func (h *TagHandler) ListTags(c echo.Context) error {
+func (h *TagHandler) ListTags(c *echo.Context) error {
 	includeEmpty := c.QueryParam("include_empty") != "false"
 	searchQuery := strings.ToLower(strings.TrimSpace(c.QueryParam("q")))
 
@@ -72,7 +72,7 @@ func (h *TagHandler) ListTags(c echo.Context) error {
 	})
 }
 
-func (h *TagHandler) GetTagCloud(c echo.Context) error {
+func (h *TagHandler) GetTagCloud(c *echo.Context) error {
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
 	if limit < 1 {
 		limit = 20
@@ -88,7 +88,7 @@ func (h *TagHandler) GetTagCloud(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{"tags": cloud})
 }
 
-func (h *TagHandler) GetTagByID(c echo.Context) error {
+func (h *TagHandler) GetTagByID(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -106,7 +106,7 @@ func (h *TagHandler) GetTagByID(c echo.Context) error {
 	return h.renderTag(c, v, tag, http.StatusOK)
 }
 
-func (h *TagHandler) GetTagBySlug(c echo.Context) error {
+func (h *TagHandler) GetTagBySlug(c *echo.Context) error {
 	v, err := h.tagView(c)
 	if err != nil {
 		return err
@@ -142,7 +142,7 @@ type CreateTagRequest struct {
 	Locations        []TagLocationInput `json:"locations"`
 }
 
-func (h *TagHandler) CreateTag(c echo.Context) error {
+func (h *TagHandler) CreateTag(c *echo.Context) error {
 	var req CreateTagRequest
 	if err := c.Bind(&req); err != nil {
 		return badTagRequest()
@@ -180,14 +180,14 @@ func (h *TagHandler) CreateTag(c echo.Context) error {
 
 // UpdateTag handles PUT /api/tags/:id: a partial update of the tag's own
 // fields plus its relationships and location.
-func (h *TagHandler) UpdateTag(c echo.Context) error {
+func (h *TagHandler) UpdateTag(c *echo.Context) error {
 	return h.applyTagPatch(c, true)
 }
 
 // PatchTag handles PATCH /api/tags/:id: a partial update of the tag's scalar
 // fields only. Relationship keys in the body are ignored — the dedicated
 // parents/children endpoints own those.
-func (h *TagHandler) PatchTag(c echo.Context) error {
+func (h *TagHandler) PatchTag(c *echo.Context) error {
 	return h.applyTagPatch(c, false)
 }
 
@@ -195,7 +195,7 @@ func (h *TagHandler) PatchTag(c echo.Context) error {
 // the JSON body are changed; absent fields keep their current values, and for
 // parent_ids/child_ids an explicit empty array removes all relationships while
 // an omitted key leaves them untouched.
-func (h *TagHandler) applyTagPatch(c echo.Context, withRelations bool) error {
+func (h *TagHandler) applyTagPatch(c *echo.Context, withRelations bool) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -231,7 +231,7 @@ func (h *TagHandler) applyTagPatch(c echo.Context, withRelations bool) error {
 // body. Each is best-effort: the tag's own fields are already saved, so a
 // malformed or failing relationship write leaves that relationship as it was
 // rather than failing the whole request.
-func (h *TagHandler) applyTagRelations(c echo.Context, id int64, fields map[string]json.RawMessage) {
+func (h *TagHandler) applyTagRelations(c *echo.Context, id int64, fields map[string]json.RawMessage) {
 	ctx := c.Request().Context()
 
 	if ids, ok := patchIDList(fields, "parent_ids"); ok {
@@ -248,7 +248,7 @@ func (h *TagHandler) applyTagRelations(c echo.Context, id int64, fields map[stri
 	}
 }
 
-func (h *TagHandler) DeleteTag(c echo.Context) error {
+func (h *TagHandler) DeleteTag(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -267,7 +267,7 @@ type ReorderTagRequest struct {
 	ParentID *int64 `json:"parent_id"`
 }
 
-func (h *TagHandler) ReorderTag(c echo.Context) error {
+func (h *TagHandler) ReorderTag(c *echo.Context) error {
 	id, err := parseNamedIDParam(c, "tag id")
 	if err != nil {
 		return err
@@ -287,7 +287,7 @@ func (h *TagHandler) ReorderTag(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (h *TagHandler) GeocodeTag(c echo.Context) error {
+func (h *TagHandler) GeocodeTag(c *echo.Context) error {
 	id, err := parseNamedIDParam(c, "tag id")
 	if err != nil {
 		return err
@@ -302,7 +302,7 @@ func (h *TagHandler) GeocodeTag(c echo.Context) error {
 	})
 }
 
-func (h *TagHandler) RecalculateCounts(c echo.Context) error {
+func (h *TagHandler) RecalculateCounts(c *echo.Context) error {
 	if err := h.tagService.UpdateAllPostCounts(c.Request().Context()); err != nil {
 		return MapError(err)
 	}
@@ -311,19 +311,19 @@ func (h *TagHandler) RecalculateCounts(c echo.Context) error {
 
 // SetTagParents replaces all parent relationships for a tag.
 // Accepts {"ids": [1, 2, 3]}. An empty array removes all parents (tag becomes unfiled).
-func (h *TagHandler) SetTagParents(c echo.Context) error {
+func (h *TagHandler) SetTagParents(c *echo.Context) error {
 	return h.setTagRelations(c, h.tagService.SetTagParents)
 }
 
 // SetTagChildren replaces all child relationships for a tag.
 // Accepts {"ids": [1, 2, 3]}. An empty array removes all children.
-func (h *TagHandler) SetTagChildren(c echo.Context) error {
+func (h *TagHandler) SetTagChildren(c *echo.Context) error {
 	return h.setTagRelations(c, h.tagService.SetTagChildren)
 }
 
 // setTagRelations is the shared body of the parents and children endpoints,
 // which differ only in the service call they make.
-func (h *TagHandler) setTagRelations(c echo.Context, set func(ctx context.Context, id int64, ids []int64) error) error {
+func (h *TagHandler) setTagRelations(c *echo.Context, set func(ctx context.Context, id int64, ids []int64) error) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -352,7 +352,7 @@ type MoveTagRequest struct {
 // MoveTag repositions a tag within its sibling group under a specific parent.
 // Only that sibling group's sort_order values are renumbered; all other parents
 // are untouched.
-func (h *TagHandler) MoveTag(c echo.Context) error {
+func (h *TagHandler) MoveTag(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -374,7 +374,7 @@ func (h *TagHandler) MoveTag(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (h *TagHandler) GetPostsByTag(c echo.Context) error {
+func (h *TagHandler) GetPostsByTag(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	v, err := h.tagView(c)
@@ -429,7 +429,7 @@ func (h *TagHandler) GetPostsByTag(c echo.Context) error {
 	})
 }
 
-func (h *TagHandler) MergeTags(c echo.Context) error {
+func (h *TagHandler) MergeTags(c *echo.Context) error {
 	loserID, err := parseIDParam(c)
 	if err != nil {
 		return err

@@ -7,7 +7,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type NavMenuHandler struct {
@@ -21,7 +21,7 @@ func NewNavMenuHandler(settingsService *services.SettingsService, tagService *se
 
 // GetAdminNavMenu returns the current nav menu configuration for the admin editor.
 // GET /api/nav-menu
-func (h *NavMenuHandler) GetAdminNavMenu(c echo.Context) error {
+func (h *NavMenuHandler) GetAdminNavMenu(c *echo.Context) error {
 	ctx := c.Request().Context()
 	all, _ := h.settingsService.GetAllSettings(ctx)
 
@@ -74,7 +74,7 @@ func inlineMaxOrDefault(raw string) int {
 
 // UpdateAdminNavMenu saves the nav menu mode and custom items.
 // PUT /api/nav-menu
-func (h *NavMenuHandler) UpdateAdminNavMenu(c echo.Context) error {
+func (h *NavMenuHandler) UpdateAdminNavMenu(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	var body struct {

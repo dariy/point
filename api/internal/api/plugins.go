@@ -8,7 +8,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // PluginsHandler serves the admin Plugins page API: listing the full plugin
@@ -90,7 +90,7 @@ type togglePluginRequest struct {
 
 // ListPlugins returns the full plugin catalog (enabled and disabled) with each
 // plugin's resolved enabled state, in registry order.
-func (h *PluginsHandler) ListPlugins(c echo.Context) error {
+func (h *PluginsHandler) ListPlugins(c *echo.Context) error {
 	all, err := h.settingsService.GetAllSettings(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -101,7 +101,7 @@ func (h *PluginsHandler) ListPlugins(c echo.Context) error {
 // TogglePlugin sets the enabled state for the plugin identified by :id. Unknown
 // plugin ids 404 so the endpoint never persists state for a plugin outside the
 // registry. The updated plugin view is returned.
-func (h *PluginsHandler) TogglePlugin(c echo.Context) error {
+func (h *PluginsHandler) TogglePlugin(c *echo.Context) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
 

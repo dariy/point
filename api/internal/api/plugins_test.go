@@ -12,7 +12,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // registryDefaultIDs picks one plugin that ships enabled and one that ships
@@ -133,8 +133,7 @@ func TestTogglePlugin_DisableThenEnable(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("id")
-		c.SetParamValues(id)
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: id}})
 		err := h.TogglePlugin(c)
 		if err != nil {
 			var he *echo.HTTPError
@@ -179,8 +178,7 @@ func TestTogglePlugin_RequiredSlotCannotBeEmptied(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("id")
-		c.SetParamValues(id)
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: id}})
 		if err := h.TogglePlugin(c); err != nil {
 			var he *echo.HTTPError
 			if errors.As(err, &he) {
@@ -232,8 +230,7 @@ func TestTogglePlugin_SingleClaimSlotKeepsAtMostOne(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("id")
-		c.SetParamValues(id)
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: id}})
 		if err := h.TogglePlugin(c); err != nil {
 			var he *echo.HTTPError
 			if errors.As(err, &he) {
@@ -295,8 +292,7 @@ func TestApplyPreset_SetsStateAndKeepsRequiredSlotsFilled(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/plugins/presets/minimalistic/apply", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("minimalistic")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "minimalistic"}})
 	if err := h.ApplyPreset(c); err != nil {
 		t.Fatalf("ApplyPreset error: %v", err)
 	}
@@ -330,9 +326,7 @@ func TestTogglePlugin_UnknownID404(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("nope")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "nope"}})
 	err := h.TogglePlugin(c)
 	var he *echo.HTTPError
 	ok := errors.As(err, &he)

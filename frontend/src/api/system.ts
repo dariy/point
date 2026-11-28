@@ -336,10 +336,11 @@ export function uploadBackupArchive(
       if (onProgress && e.lengthComputable) onProgress(e.loaded / e.total);
     });
     xhr.addEventListener('load', () => {
-      let body: Partial<BackupUpload> = {};
+      // The API error handler writes {"detail": "..."}; a success body has "message".
+      let body: Partial<BackupUpload> & { detail?: string } = {};
       try { body = JSON.parse(xhr.responseText || '{}'); } catch { /* non-JSON */ }
       if (xhr.status >= 200 && xhr.status < 300) resolve(body as BackupUpload);
-      else reject(new Error(body.message || `Upload failed (${xhr.status})`));
+      else reject(new Error(body.detail || body.message || `Upload failed (${xhr.status})`));
     });
     xhr.addEventListener('error', () => reject(new Error('Upload failed')));
     xhr.send(file);

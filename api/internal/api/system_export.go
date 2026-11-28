@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"point-api/internal/services"
 	"point-api/internal/utils"
@@ -17,7 +17,7 @@ const exportTokenPrefix = "export/"
 
 // GetExport returns the result of the last portable export (null when none
 // has run) and whether an export is running now.
-func (h *SystemHandler) GetExport(c echo.Context) error {
+func (h *SystemHandler) GetExport(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{
 		"running": h.systemService.ExportRunning(),
 		"last":    h.systemService.LastExport(),
@@ -26,7 +26,7 @@ func (h *SystemHandler) GetExport(c echo.Context) error {
 
 // StartExport starts a portable export in the background. The archive holds a
 // copy of every original, so it can take minutes; GetExport shows the result.
-func (h *SystemHandler) StartExport(c echo.Context) error {
+func (h *SystemHandler) StartExport(c *echo.Context) error {
 	if h.systemService.ExportRunning() {
 		return MapError(services.ErrExportInProgress)
 	}
@@ -47,7 +47,7 @@ func (h *SystemHandler) StartExport(c echo.Context) error {
 // AuthorizeExportDownload re-verifies the account password and issues a
 // short-lived single-use token for DownloadExport, as for a backup: the
 // export holds every original, private files included.
-func (h *SystemHandler) AuthorizeExportDownload(c echo.Context) error {
+func (h *SystemHandler) AuthorizeExportDownload(c *echo.Context) error {
 	ctx := c.Request().Context()
 	userID := extractUserID(c.Get("user"))
 	filename := c.Param("filename")
@@ -69,8 +69,8 @@ func (h *SystemHandler) AuthorizeExportDownload(c echo.Context) error {
 }
 
 // DownloadExport streams the export archive after it validates the one-time
-// token from AuthorizeExportDownload. c.Attachment supports Range requests.
-func (h *SystemHandler) DownloadExport(c echo.Context) error {
+// token from AuthorizeExportDownload. ServeAttachment supports Range requests.
+func (h *SystemHandler) DownloadExport(c *echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	filename := c.Param("filename")
 	tokUserID, tokFile, ok := h.downloadTokens.Consume(c.QueryParam("token"))
@@ -84,13 +84,13 @@ func (h *SystemHandler) DownloadExport(c echo.Context) error {
 	if last := h.systemService.LastExport(); last != nil && last.Filename == filename && last.Sha256 != "" {
 		c.Response().Header().Set("X-Archive-SHA256", last.Sha256)
 	}
-	return c.Attachment(p, filename)
+	return ServeAttachment(c, p, filename)
 }
 
 // GetImport returns the state of the portable import: whether one is running
 // and its progress, the result of the last import (null when none has run),
 // and whether the site is empty, as the import requires.
-func (h *SystemHandler) GetImport(c echo.Context) error {
+func (h *SystemHandler) GetImport(c *echo.Context) error {
 	empty, err := h.importService.InstanceEmpty(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -108,7 +108,7 @@ func (h *SystemHandler) GetImport(c echo.Context) error {
 // holds the account password, SHA-256-hashed as at login. The import refuses a
 // site that has posts or media, and an archive with an unknown format version.
 // The route is excluded from the global body-size limit.
-func (h *SystemHandler) StartImport(c echo.Context) error {
+func (h *SystemHandler) StartImport(c *echo.Context) error {
 	ctx := c.Request().Context()
 	userID := extractUserID(c.Get("user"))
 	if err := h.authService.VerifyUserPassword(ctx, userID, c.Request().Header.Get("X-Confirm-Password")); err != nil {

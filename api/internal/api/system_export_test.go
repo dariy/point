@@ -16,7 +16,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type exportStatus struct {
@@ -98,8 +98,7 @@ func TestExport_StartAuthorizeDownload(t *testing.T) {
 	download := func(token string) (*httptest.ResponseRecorder, error) {
 		rec := httptest.NewRecorder()
 		c := e.NewContext(httptest.NewRequest(http.MethodGet, "/?token="+token, nil), rec)
-		c.SetParamNames("filename")
-		c.SetParamValues(name)
+		c.SetPathValues(echo.PathValues{{Name: "filename", Value: name}})
 		c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 		return rec, h.DownloadExport(c)
 	}

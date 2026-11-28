@@ -403,43 +403,85 @@ body.ui-hidden .immersive-sheet-hint {
     margin-left: auto;
 }
 
-/* ── Touch landscape: photo left, sheet column right ──────────────────────── */
+/* ── Touch landscape: a panel that slides in from the right ───────────────── */
 /* ImmersiveSheetViewer.ts::_applySide sets .immersive-sheet-side for touch
    input in landscape (atlasLayerLayout.ts::onAtlasSide, the same test as the
-   map layer's side split). The sheet is a right column that is always open and
-   scrolls; it has no slide, so JS sets no transform. The photo stage, its nav
-   panels, its dots and the chrome cluster use the area left of the column. */
+   map layer's side split). The sheet is a right panel with two states. Shut:
+   the photo fills the screen, the panel is off the screen on the right, and
+   the "Details" tab shows at the right edge. Open (.sheet-open): the panel
+   slides in over the photo, and in the same time the photo stage shrinks to
+   the area left of the panel. The nav panels, the dots and the chrome cluster
+   then use that area too. CSS does the slide (0.34s, SHEET_ANIM_MS); JS sets
+   no transform, and sets `transition: none` inline for a change with no slide
+   (a rotation, a kept open state). The panel scrolls and has no drag. */
 .immersive-sheet-mode.immersive-sheet-side {
     --immersive-sheet-side-w: clamp(18rem, 38vw, 26rem);
-    /* The ladder's right inset starts at the column edge. --viewer-btn-top is
+    --immersive-sheet-side-anim: 0.34s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.immersive-sheet-mode.immersive-sheet-side.sheet-open {
+    /* The ladder's right inset starts at the panel edge. --viewer-btn-top is
        computed on body (the plain inset in sheet mode), so the top stays. */
     --viewer-btn-inset: calc(var(--immersive-sheet-side-w) + var(--viewer-btn-top));
 }
 
 .immersive-sheet-side .immersive-visuals {
-    right: var(--immersive-sheet-side-w);
+    right: 0;
     overflow: hidden;
+    will-change: auto;
+    transition: right var(--immersive-sheet-side-anim), background-color var(--transition-theme);
 }
 
-.immersive-sheet-side .immersive-nav-panel {
+.immersive-sheet-side.sheet-open .immersive-visuals {
+    right: var(--immersive-sheet-side-w);
+}
+
+.immersive-sheet-side.sheet-open .immersive-nav-panel {
     width: calc((100% - var(--immersive-sheet-side-w)) * 0.6666);
 }
 
-.immersive-sheet-side .immersive-nav-prev {
+.immersive-sheet-side.sheet-open .immersive-nav-prev {
     left: calc((100% - var(--immersive-sheet-side-w)) * -0.3333);
 }
 
-.immersive-sheet-side .immersive-nav-next {
+.immersive-sheet-side.sheet-open .immersive-nav-next {
     right: calc(var(--immersive-sheet-side-w) - (100% - var(--immersive-sheet-side-w)) * 0.3333);
 }
 
-.immersive-sheet-side .carousel-indicators {
+.immersive-sheet-side.sheet-open .carousel-indicators {
     left: calc((100% - var(--immersive-sheet-side-w)) / 2);
 }
 
-.immersive-sheet-side .immersive-sheet-hint,
-.immersive-sheet-side .immersive-sheet-grip {
-    display: none;
+/* The "Details" tab: at the right edge, in the middle of the height. */
+.immersive-sheet-side .immersive-sheet-hint {
+    left: auto;
+    right: 0;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    flex-direction: column;
+    padding: var(--spacing-md) var(--spacing-xs);
+    padding-right: max(var(--spacing-xs), env(safe-area-inset-right, 0));
+    border-radius: var(--border-radius-full, 999px) 0 0 var(--border-radius-full, 999px);
+}
+
+.immersive-sheet-side .immersive-sheet-hint-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+.immersive-sheet-side .immersive-sheet-hint-chevron {
+    animation-name: immersiveSheetHintBobSide;
+}
+
+@keyframes immersiveSheetHintBobSide {
+    0%, 100% { transform: rotate(90deg) translateY(0); } /* point the chevron left */
+    50% { transform: rotate(90deg) translateY(2px); }
+}
+
+.immersive-sheet-side.sheet-open .immersive-sheet-hint,
+body.ui-hidden .immersive-sheet-side .immersive-sheet-hint {
+    transform: translateY(-50%) translateX(20px);
 }
 
 .immersive-sheet-side .immersive-sheet {
@@ -452,11 +494,56 @@ body.ui-hidden .immersive-sheet-hint {
     border-radius: 0;
     box-shadow: -8px 0 32px var(--color-black-alpha-30);
     padding-bottom: 0;
-    will-change: auto;
+    will-change: transform;
+    /* Shut: off the screen on the right. The shadow goes too (visibility). */
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform var(--immersive-sheet-side-anim), visibility 0s linear 0.34s;
+}
+
+.immersive-sheet-side.sheet-open .immersive-sheet {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--immersive-sheet-side-anim), visibility 0s;
 }
 
 [data-theme="dark"] .immersive-sheet-side .immersive-sheet {
     border-width: 0 0 0 var(--border-width);
+}
+
+/* The grip: a bar on the left edge of the open panel. A tap shuts the panel. */
+.immersive-sheet-side .immersive-sheet-grip {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    z-index: 1;
+    width: 1.25rem;
+    height: 4rem;
+    margin: 0;
+    transform: translateY(-50%);
+    border-radius: 0;
+    background: transparent;
+}
+
+.immersive-sheet-side .immersive-sheet-grip::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0.3rem;
+    height: 2.5rem;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    background: var(--border-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .immersive-sheet-side .immersive-visuals,
+    .immersive-sheet-side .immersive-sheet,
+    .immersive-sheet-side.sheet-open .immersive-sheet {
+        transition-duration: 0s;
+        transition-delay: 0s;
+    }
 }
 
 .immersive-sheet-side .immersive-sheet-scroll {

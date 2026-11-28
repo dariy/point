@@ -20,7 +20,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // The OAuth provider is well covered by internal/mcp/oauth; what was not
@@ -62,7 +62,7 @@ func enableAPIKeys(t *testing.T, d Deps) {
 // okHandler records that the request got past the middleware and reports which
 // principal it was given.
 func okHandler(seen *interface{}) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		*seen = c.Request().Context().Value(principalKey{})
 		return c.NoContent(http.StatusOK)
 	}

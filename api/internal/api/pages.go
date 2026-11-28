@@ -13,7 +13,7 @@ import (
 	"point-api/internal/services"
 	"point-api/internal/services/pageview"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // PagesHandler serves the BFF page endpoints: one aggregate per screen the SPA
@@ -52,7 +52,7 @@ func viewError(err error, notFoundMessage string) error {
 // perPage is bounded here rather than in pageview, because the ceiling is a
 // property of what this handler is willing to render and cache, not of the
 // view being built.
-func feedParams(c echo.Context, settings map[string]string, publicOnly bool) pageview.FeedParams {
+func feedParams(c *echo.Context, settings map[string]string, publicOnly bool) pageview.FeedParams {
 	defaultPerPage64, _ := strconv.ParseInt(pageview.SettingOr(settings, "posts_per_page", "10"), 10, 32)
 	defaultPerPage := int(defaultPerPage64)
 	page, perPage := ParsePaginationParams(c, defaultPerPage)
@@ -74,7 +74,7 @@ func feedParams(c echo.Context, settings map[string]string, publicOnly bool) pag
 }
 
 // GetHomePage returns all data needed to render the public homepage.
-func (h *PagesHandler) GetHomePage(c echo.Context) error {
+func (h *PagesHandler) GetHomePage(c *echo.Context) error {
 	ctx := c.Request().Context()
 	publicOnly := c.Get("user") == nil
 
@@ -150,7 +150,7 @@ func homeResponse(v *pageview.HomeView, publicOnly bool) map[string]interface{} 
 }
 
 // GetTagPage returns all data needed to render a tag archive page.
-func (h *PagesHandler) GetTagPage(c echo.Context) error {
+func (h *PagesHandler) GetTagPage(c *echo.Context) error {
 	ctx := c.Request().Context()
 	publicOnly := c.Get("user") == nil
 
@@ -246,7 +246,7 @@ func paginationResponse(p pageview.Pagination) map[string]interface{} {
 }
 
 // GetTagsPage returns data for the tags directory page.
-func (h *PagesHandler) GetTagsPage(c echo.Context) error {
+func (h *PagesHandler) GetTagsPage(c *echo.Context) error {
 	ctx := c.Request().Context()
 	publicOnly := c.Get("user") == nil
 
@@ -280,7 +280,7 @@ func (h *PagesHandler) GetTagsPage(c echo.Context) error {
 // GetTagsGraph returns the data for the /tags force-graph view: tag nodes,
 // post ("shadow") nodes, parent/child (hierarchy) edges, and post→tag
 // (membership) edges.
-func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
+func (h *PagesHandler) GetTagsGraph(c *echo.Context) error {
 	ctx := c.Request().Context()
 	publicOnly := c.Get("user") == nil
 
@@ -316,7 +316,7 @@ func (h *PagesHandler) GetTagsGraph(c echo.Context) error {
 // tags, plus the edges connecting that subset, so the frontend can render the
 // cloud without loading the whole graph. Accepts optional year_from/year_to to
 // scope posts to a timeline range.
-func (h *PagesHandler) GetTagCloud(c echo.Context) error {
+func (h *PagesHandler) GetTagCloud(c *echo.Context) error {
 	ctx := c.Request().Context()
 	publicOnly := c.Get("user") == nil
 
@@ -415,7 +415,7 @@ func membershipEdges(edges []pageview.MembershipEdge) []map[string]interface{} {
 
 // GetMapPage returns all tags that have coordinates, categorised by type
 // (country / city / other) for the public /map page.
-func (h *PagesHandler) GetMapPage(c echo.Context) error {
+func (h *PagesHandler) GetMapPage(c *echo.Context) error {
 	ctx := c.Request().Context()
 	publicOnly := c.Get("user") == nil
 
@@ -469,7 +469,7 @@ func mapMarkers(places []pageview.MapPlace, publicOnly bool) []map[string]interf
 // `year_from`/`year_to`. ok is false unless both parse to a sane, ordered pair,
 // which callers read as "no scope" — a malformed range widens to everything
 // rather than filtering to nothing.
-func parseYearRangeParams(c echo.Context) (from, to int, ok bool) {
+func parseYearRangeParams(c *echo.Context) (from, to int, ok bool) {
 	from, errFrom := strconv.Atoi(c.QueryParam("year_from"))
 	to, errTo := strconv.Atoi(c.QueryParam("year_to"))
 	if errFrom != nil || errTo != nil || from <= 0 || to <= 0 || from > to {
@@ -489,7 +489,7 @@ func parseYearRangeParams(c echo.Context) (from, to int, ok bool) {
 // `menu`); in "none" mode the site is deliberately menuless, so neither the
 // menu nor the title offers tags.
 // GET /api/pages/nav
-func (h *PagesHandler) GetNavMenu(c echo.Context) error {
+func (h *PagesHandler) GetNavMenu(c *echo.Context) error {
 	ctx := c.Request().Context()
 	publicOnly := c.Get("user") == nil
 

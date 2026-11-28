@@ -13,7 +13,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestTagHandler_PatchPartialSemantics(t *testing.T) {
@@ -55,9 +55,7 @@ func TestTagHandler_PatchPartialSemantics(t *testing.T) {
 	req1.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec1 := httptest.NewRecorder()
 	c1 := e.NewContext(req1, rec1)
-	c1.SetParamNames("id")
-	c1.SetParamValues(tagIDStr)
-
+	c1.SetPathValues(echo.PathValues{{Name: "id", Value: tagIDStr}})
 	if err := handler.PatchTag(c1); err != nil {
 		t.Fatalf("PatchTag 1 failed: %v", err)
 	}
@@ -95,9 +93,7 @@ func TestTagHandler_PatchPartialSemantics(t *testing.T) {
 	req2.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	c2.SetParamNames("id")
-	c2.SetParamValues(tagIDStr)
-
+	c2.SetPathValues(echo.PathValues{{Name: "id", Value: tagIDStr}})
 	if err := handler.PatchTag(c2); err != nil {
 		t.Fatalf("PatchTag 2 failed: %v", err)
 	}
@@ -158,9 +154,7 @@ func TestTagHandler_PutPartialSemantics(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(tagIDStr)
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: tagIDStr}})
 	if err := handler.UpdateTag(c); err != nil {
 		t.Fatalf("UpdateTag failed: %v", err)
 	}
@@ -195,8 +189,7 @@ func TestTagHandler_PutPartialSemantics(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(tagIDStr)
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: tagIDStr}})
 	if err := handler.UpdateTag(c); err != nil {
 		t.Fatalf("UpdateTag clear parents failed: %v", err)
 	}

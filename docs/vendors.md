@@ -56,7 +56,7 @@ server-side, see below).
 Direct dependencies from `api/go.mod`, grouped by purpose:
 
 **Web framework & auth**
-- [`labstack/echo/v4`](https://echo.labstack.com) — HTTP router/framework.
+- [`labstack/echo/v5`](https://echo.labstack.com) — HTTP router/framework.
 - [`go-pkgz/auth/v2`](https://github.com/go-pkgz/auth) — session/JWT auth middleware, OAuth provider support (`api/internal/api/auth.go`).
 - [`go-webauthn/webauthn`](https://github.com/go-webauthn/webauthn) — WebAuthn/passkey registration and login.
 - [`golang-jwt/jwt/v5`](https://github.com/golang-jwt/jwt) — JWT signing, including the remark42 SSO cookie.

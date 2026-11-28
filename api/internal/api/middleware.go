@@ -11,7 +11,7 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // extractUserID pulls the user ID from the session or API key stored in echo context.
@@ -45,7 +45,7 @@ func extractSessionID(v interface{}) int64 {
 // lightroomAllowed reports whether a lightroom-scoped key may call the route:
 // create-only, so POST to the create endpoints for posts, tags and media.
 // c.Path() is the registered route pattern, so a lookalike URL cannot match.
-func lightroomAllowed(c echo.Context) bool {
+func lightroomAllowed(c *echo.Context) bool {
 	if c.Request().Method != http.MethodPost {
 		return false
 	}
@@ -58,7 +58,7 @@ func lightroomAllowed(c echo.Context) bool {
 
 func AuthMiddleware(authService *services.AuthService, apiKeyService *services.ApiKeyService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			// 1. Try Bearer token (API Key)
 			if h := c.Request().Header.Get("Authorization"); h != "" {
 				const prefix = "Bearer "
@@ -109,7 +109,7 @@ const RevelioHeader = "X-Point-Revelio"
 // The narrowing applies to the public site only. Revelio is the owner's view of
 // their *published* pages; the admin area always shows everything there is to
 // administer, so a read issued from it is never narrowed (see fromAdminArea).
-func guestViewRequested(c echo.Context) bool {
+func guestViewRequested(c *echo.Context) bool {
 	if !strings.EqualFold(c.Request().Header.Get(RevelioHeader), "off") {
 		return false
 	}
@@ -153,7 +153,7 @@ func fromAdminArea(r *http.Request) bool {
 // deliberately browsing as a guest (see RevelioHeader). Handlers use it for the
 // side effects a real guest would cause but the owner should not — currently
 // the post view counter.
-func IsGuestView(c echo.Context) bool {
+func IsGuestView(c *echo.Context) bool {
 	v, _ := c.Get(guestViewKey).(bool)
 	return v
 }
@@ -164,7 +164,7 @@ const guestViewKey = "guest_view"
 
 func OptionalAuthMiddleware(authService *services.AuthService, apiKeyService *services.ApiKeyService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			// Revelio off: resolve the principal as usual, then withhold it, so
 			// every downstream `c.Get("user") == nil` visibility test takes the
 			// public branch. Only the routes behind OptionalAuth are affected —
@@ -215,7 +215,7 @@ func OptionalAuthMiddleware(authService *services.AuthService, apiKeyService *se
 // certain actions (like password changes or key management) are only performed
 // via a traditional session cookie.
 func SessionOnlyMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		user := c.Get("user")
 		if _, ok := user.(models.GetSessionByTokenRow); !ok {
 			return echo.NewHTTPError(http.StatusForbidden, "this action requires a session cookie (API keys not allowed)")
@@ -230,7 +230,7 @@ func SessionOnlyMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 // extraction (Phase 4).
 func RequirePlugin(settingsService *services.SettingsService, id string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			// Snapshot, not GetAllSettings: this runs on every request to a
 			// plugin-gated route and only reads.
 			all, err := settingsService.Snapshot(c.Request().Context())
@@ -247,21 +247,29 @@ func RequirePlugin(settingsService *services.SettingsService, id string) echo.Mi
 
 // CustomHTTPErrorHandler handles Echo errors and returns them in a format
 // compatible with the frontend (JSON with a "detail" key).
-func CustomHTTPErrorHandler(err error, c echo.Context) {
+func CustomHTTPErrorHandler(c *echo.Context, err error) {
 	code := http.StatusInternalServerError
 	var detail interface{}
 	detail = err.Error()
 
+	// echo/v5 predefined errors (echo.ErrNotFound, ...) are not *HTTPError:
+	// they carry only a status code, and Error() gives the status text.
+	if sc := echo.StatusCode(err); sc != 0 {
+		code = sc
+	}
 	var he *echo.HTTPError
 	if errors.As(err, &he) {
 		code = he.Code
 		detail = he.Message
+		if he.Message == "" {
+			detail = http.StatusText(he.Code)
+		}
 	}
 
 	// For non-JSON requests (like direct browser navigation to a missing page),
 	// Echo's default behavior might be preferred, but here we enforce JSON
 	// for consistency across the API.
-	if !c.Response().Committed {
+	if resp, uerr := echo.UnwrapResponse(c.Response()); uerr != nil || !resp.Committed {
 		if c.Request().Method == http.MethodHead {
 			err = c.NoContent(code)
 		} else {

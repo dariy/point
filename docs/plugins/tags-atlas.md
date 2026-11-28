@@ -25,8 +25,8 @@ layout: the map is a square on the left, from the top to the bottom of the viewp
 width `--atlas-layer-map-w = min(100dvh, 100vw - 20rem)`. The header, the list and the
 footer are in the column on the right. In `mapList` and `map` the handle is a vertical bar on
 the map's right edge (see [Gestures](#gestures)). HeaderFold folds the header for the column
-width. The list is a grid of square cards that scrolls. `gridFit.ts::computePerPage` fits the
-page to the column: whole rows, enough to fill its height. A rotation or a change of input
+width. The list is a grid of square cards. `gridFit.ts::computePerPage` fits the page to the
+column: only the whole rows that fit in its height, so the footer does not cut a card. A rotation or a change of input
 changes the layout without a reload, and the map keeps its centre. `list` and `map` keep the
 layout of the table above; in `map` the handle is the vertical bar on the right edge.
 The post viewer (`immersive-sheet`) uses the same test for its own side layout: see

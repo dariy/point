@@ -36,7 +36,7 @@ import (
 	"point-api/internal/services"
 	"point-api/internal/services/pageview"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // seoMeta is what one URL is worth telling a crawler. The zero value means
@@ -131,7 +131,7 @@ func (m seoMeta) rewriteShell(shell string) string {
 // shellMeta resolves the requested URL to the metadata its document should
 // carry. It returns the zero value for every route it does not know, for an
 // entity it cannot find, and for anything the public may not see.
-func shellMeta(c echo.Context, svcs *AppServices) seoMeta {
+func shellMeta(c *echo.Context, svcs *AppServices) seoMeta {
 	// The client router ignores a trailing slash; so does the lookup.
 	path := c.Request().URL.Path
 	if len(path) > 1 {
@@ -164,7 +164,7 @@ func shellMeta(c echo.Context, svcs *AppServices) seoMeta {
 // is what a bare domain shared in a chat should unfurl as. A pinned home page
 // (home_page_post_id) does not override this — the card for "/" is the site's
 // identity, not whichever page happens to be pinned behind it today.
-func homeMeta(c echo.Context, settings map[string]string) seoMeta {
+func homeMeta(c *echo.Context, settings map[string]string) seoMeta {
 	site := pageview.SettingOr(settings, "blog_title", "")
 	return seoMeta{
 		Title:        site,
@@ -183,7 +183,7 @@ func homeMeta(c echo.Context, settings map[string]string) seoMeta {
 // a tag marked hidden, or one under the min_tag_posts_to_show floor, is not
 // described at all. The snapshot failing is treated as "hidden" rather than
 // "visible" — an unreadable graph must not become a leak.
-func tagMeta(c echo.Context, svcs *AppServices, settings map[string]string, slug string) seoMeta {
+func tagMeta(c *echo.Context, svcs *AppServices, settings map[string]string, slug string) seoMeta {
 	ctx := c.Request().Context()
 	tag, err := svcs.Tag.GetTagBySlug(ctx, slug)
 	if err != nil {
@@ -245,7 +245,7 @@ func tagMeta(c echo.Context, svcs *AppServices, settings map[string]string, slug
 // photograph. Only a published post is described: a draft, a post withdrawn to
 // hidden and a scheduled post whose time has not come all fall through to the
 // generic shell, so a guessed or leaked URL unfurls as nothing.
-func postMeta(c echo.Context, svcs *AppServices, settings map[string]string, slug string) seoMeta {
+func postMeta(c *echo.Context, svcs *AppServices, settings map[string]string, slug string) seoMeta {
 	ctx := c.Request().Context()
 	post, err := svcs.Post.GetPostBySlug(ctx, slug)
 	if err != nil || !strings.EqualFold(post.Status, "published") {
@@ -289,7 +289,7 @@ func postMeta(c echo.Context, svcs *AppServices, settings map[string]string, slu
 //
 // A graph that fails to load counts as hidden, the same way tagMeta treats an
 // unreadable snapshot: staying quiet costs a card, guessing costs the rule.
-func postHiddenByTag(c echo.Context, svcs *AppServices, postID int64) bool {
+func postHiddenByTag(c *echo.Context, svcs *AppServices, postID int64) bool {
 	ctx := c.Request().Context()
 	snap, err := svcs.Tag.GetTagSnapshot(ctx)
 	if err != nil || snap == nil {
@@ -311,7 +311,7 @@ func postHiddenByTag(c echo.Context, svcs *AppServices, postID int64) bool {
 // video without a captured poster has no still behind it, so it is skipped
 // rather than pointed at: the crawler would fetch the whole stream and show
 // nothing.
-func postCardImage(c echo.Context, svcs *AppServices, settings map[string]string, post models.Post) string {
+func postCardImage(c *echo.Context, svcs *AppServices, settings map[string]string, post models.Post) string {
 	ctx := c.Request().Context()
 	media, _ := svcs.Media.GetMediaByContent(ctx, post.Content, post.ThumbnailPath.String)
 	for _, m := range media {
@@ -331,7 +331,7 @@ func postCardImage(c echo.Context, svcs *AppServices, settings map[string]string
 // about one photograph: the blog's logo. It is used as configured — no variant
 // rung — because logo_url may be an SVG or an off-site URL, neither of which
 // the media ladder can resize, and a logo is small to begin with.
-func siteCardImage(c echo.Context, settings map[string]string) string {
+func siteCardImage(c *echo.Context, settings map[string]string) string {
 	logo := strings.TrimSpace(pageview.SettingOr(settings, "logo_url", ""))
 	if logo == "" {
 		return ""
@@ -389,7 +389,7 @@ func titleWithSite(part, site string) string {
 // Page 2 canonicalises to itself, not to page 1: a self-referencing canonical
 // keeps the deeper pages crawlable instead of asking for them to be collapsed
 // into the first.
-func canonicalURL(c echo.Context, path string) string {
+func canonicalURL(c *echo.Context, path string) string {
 	url := requestOrigin(c) + path
 	if n, err := strconv.Atoi(c.QueryParam("page")); err == nil && n > 1 {
 		url += "?page=" + strconv.Itoa(n)
@@ -405,7 +405,7 @@ func canonicalURL(c echo.Context, path string) string {
 // public, max-age=60, shared caches key on Host, and honouring a header they do
 // not key on is how one visitor's spoofed request poisons everyone else's
 // canonical and og:url.
-func requestOrigin(c echo.Context) string {
+func requestOrigin(c *echo.Context) string {
 	scheme := c.Scheme()
 	// Read as an enum, not as a string. A chain of proxies appends to this
 	// header rather than replacing it ("https, http"), and nothing stops a

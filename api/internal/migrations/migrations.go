@@ -482,6 +482,24 @@ var schema = []struct{ name, sql string }{
 		"add_media_trashed_index",
 		`CREATE INDEX IF NOT EXISTS idx_media_trashed ON media(deleted_at DESC) WHERE deleted_at IS NOT NULL`,
 	},
+	{
+		// Post revisions (NF-9). See post_revisions in sql/schema.sql.
+		"add_post_revisions",
+		`CREATE TABLE IF NOT EXISTS post_revisions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+			kind TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			tags TEXT NOT NULL DEFAULT '[]',
+			css TEXT NOT NULL DEFAULT ''
+		)`,
+	},
+	{
+		"add_post_revisions_index",
+		`CREATE INDEX IF NOT EXISTS idx_post_revisions_post_id ON post_revisions(post_id, id DESC)`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

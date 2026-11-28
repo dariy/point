@@ -28,8 +28,8 @@ import (
 	"point-api/internal/plugins"
 	"point-api/internal/repository"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"golang.org/x/time/rate"
 )
 
@@ -39,7 +39,7 @@ import (
 // container health checks and uptime monitors hit it before the install is
 // configured, and publicLimiter skips it by path (see main.go).
 func registerHealthRoutes(e *echo.Echo, cfg config.Config) {
-	e.GET("/health", func(c echo.Context) error {
+	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{
 			"status":  "ok",
 			"version": cfg.AppVersion,
@@ -77,11 +77,11 @@ func registerSetupRoutes(e *echo.Echo, h *api.SetupHandler) {
 // independent bucket for the same secret.
 func newCredentialLimiter(reg *metrics.Registry) echo.MiddlewareFunc {
 	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
-			Rate:      rate.Every(6 * time.Second),
+		Store: api.QuietRateStore(middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      float64(rate.Every(6 * time.Second)),
 			Burst:     10,
 			ExpiresIn: 10 * time.Minute,
-		}),
+		})),
 		DenyHandler: countRateLimited(reg, metrics.LimiterCredential),
 	})
 }
@@ -140,6 +140,9 @@ func registerPostRoutes(e *echo.Echo, h *api.PostHandler, svcs *AppServices) {
 	postsGroup.GET("/:id/navigation", h.GetPostNavigation, api.OptionalAuthMiddleware(svcs.Auth, svcs.ApiKey), visibilityCache)
 	postsGroup.POST("/:id/publish", h.PublishPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("/:id/withdraw", h.WithdrawPost, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/:id/revisions", h.ListPostRevisions, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.GET("/:id/revisions/:rev", h.GetPostRevision, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
+	postsGroup.POST("/:id/revisions/:rev/restore", h.RestorePostRevision, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.GET("/preview/:token", h.GetPostByPreviewToken)
 	postsGroup.POST("/:id/preview", h.GeneratePreviewLink, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
 	postsGroup.POST("/:id/instagram/publish", h.PublishToInstagram, api.AuthMiddleware(svcs.Auth, svcs.ApiKey))
@@ -370,11 +373,11 @@ func registerPageRoutes(e *echo.Echo, h *api.PagesHandler, svcs *AppServices) {
 	// load. ~1/s sustained, 20 burst — well above what rendering the graph page
 	// needs, far below what makes it a cheap way to pin a CPU.
 	graphLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
-			Rate:      rate.Every(time.Second),
+		Store: api.QuietRateStore(middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      float64(rate.Every(time.Second)),
 			Burst:     20,
 			ExpiresIn: 3 * time.Minute,
-		}),
+		})),
 	})
 
 	// visibilityCache is group-level: every route here is an OptionalAuth public
@@ -452,7 +455,7 @@ func registerStaticRoutes(e *echo.Echo, svcs *AppServices, fe frontendAssets) {
 		// Registered before the broad /assets/js static route so the more
 		// specific prefix wins. Chunks live under <jsDir>/p/.
 		pluginChunkDir := filepath.Join(fe.JSDir, "p")
-		e.GET("/assets/js/p/*", func(c echo.Context) error {
+		e.GET("/assets/js/p/*", func(c *echo.Context) error {
 			name := filepath.Base(filepath.Clean("/" + c.Param("*")))
 			if name == "." || name == "/" || name == "" {
 				return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -471,7 +474,7 @@ func registerStaticRoutes(e *echo.Echo, svcs *AppServices, fe frontendAssets) {
 					return echo.NewHTTPError(http.StatusNotFound, "not found")
 				}
 			}
-			return c.File(filepath.Join(pluginChunkDir, name))
+			return api.ServeFile(c, filepath.Join(pluginChunkDir, name))
 		})
 		e.Static("/assets/js", fe.JSDir)
 	}
@@ -489,14 +492,14 @@ func registerStaticRoutes(e *echo.Echo, svcs *AppServices, fe frontendAssets) {
 func registerPWARoutes(e *echo.Echo, cfg config.Config) {
 	manifestPath := filepath.Join(cfg.FrontendDir, "manifest.webmanifest")
 	if fi, err := os.Stat(manifestPath); err == nil && !fi.IsDir() {
-		e.GET("/manifest.webmanifest", func(c echo.Context) error {
+		e.GET("/manifest.webmanifest", func(c *echo.Context) error {
 			c.Response().Header().Set("Content-Type", "application/manifest+json")
 			// One image can serve several sites, so the installed-app name comes
 			// from the host the manifest was fetched from rather than the file's
 			// placeholder name.
 			raw, err := os.ReadFile(manifestPath)
 			if err != nil {
-				return c.File(manifestPath)
+				return api.ServeFile(c, manifestPath)
 			}
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
@@ -515,14 +518,14 @@ func registerPWARoutes(e *echo.Echo, cfg config.Config) {
 	}
 	swPath := filepath.Join(cfg.FrontendDir, "sw.js")
 	if fi, err := os.Stat(swPath); err == nil && !fi.IsDir() {
-		e.GET("/sw.js", func(c echo.Context) error {
+		e.GET("/sw.js", func(c *echo.Context) error {
 			c.Response().Header().Set("Cache-Control", "no-cache")
 			// Stamp the build version into the SW's cache name (CACHE_VERSION
 			// in sw.js) so each deploy retires the previous shell cache; the
 			// byte change is also what triggers the browser's SW update.
 			b, err := os.ReadFile(swPath)
 			if err != nil {
-				return c.File(swPath)
+				return api.ServeFile(c, swPath)
 			}
 			js := strings.ReplaceAll(string(b), "__BUILD_VERSION__", cfg.AppVersion)
 			return c.Blob(http.StatusOK, "text/javascript; charset=utf-8", []byte(js))
@@ -533,7 +536,7 @@ func registerPWARoutes(e *echo.Echo, cfg config.Config) {
 // registerSPAFallback serves the single-page app shell for every path no route
 // above claimed. MUST be registered last — it matches everything.
 func registerSPAFallback(e *echo.Echo, svcs *AppServices, fe frontendAssets, setupComplete func(context.Context) bool) {
-	e.GET("/*", func(c echo.Context) error {
+	e.GET("/*", func(c *echo.Context) error {
 		assets := fe.Assets.forShell()
 		if assets.Shell != "" {
 			path := c.Request().URL.Path

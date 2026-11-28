@@ -70,6 +70,12 @@
     --shadow-md: var(--shadow-md);
     --shadow-lg: var(--shadow-lg);
 
+    /* Warning text. The common --color-warning (#f59e0b) is 1.93:1 on
+       --color-warning-light (#fef3c7) and 2.15:1 on white, so admin warning
+       text (badges, toasts, notes) failed WCAG AA. Amber-800 is 6.37:1 on
+       #fef3c7 and 7.09:1 under white text (.sidebar-build-debug). */
+    --color-warning: var(--color-amber-800);
+    --color-on-warning: var(--color-white, #fff);
 
     color-scheme: light;
 }
@@ -108,7 +114,11 @@
     --color-danger-light: rgba(239, 68, 68, 0.2);
 
     --color-success: rgba(255, 255, 255, 0.8);
-    --color-warning: var(--text-inverted);
+    /* Warning text. --text-inverted (#121212) was 1.66:1 on the 20 % amber
+       --color-warning-light over the dark card. Amber-400 is 6.75:1 there
+       (5.61:1 over --surface-hover) and 11.2:1 under #121212 text. */
+    --color-warning: var(--color-amber-400);
+    --color-on-warning: #121212;
 
     /* Shadows */
     --shadow-sm: 0 var(--size-0-0625) var(--size-0-125) 0 rgba(0, 0, 0, 0.3);

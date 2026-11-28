@@ -9,7 +9,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const webauthnSessionCookie = "webauthn_session"
@@ -32,9 +32,9 @@ func NewWebAuthnHandler(webauthn *services.WebAuthnService, auth *services.AuthS
 
 // BeginRegistration starts the WebAuthn registration ceremony.
 // POST /api/auth/webauthn/register/begin
-func (h *WebAuthnHandler) BeginRegistration(c echo.Context) error {
+func (h *WebAuthnHandler) BeginRegistration(c *echo.Context) error {
 	if h.webauthn == nil {
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"message": "WebAuthn is not configured"})
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{"message": "WebAuthn is not configured"})
 	}
 
 	userID := extractUserID(c.Get("user"))
@@ -60,9 +60,9 @@ func (h *WebAuthnHandler) BeginRegistration(c echo.Context) error {
 
 // FinishRegistration completes the WebAuthn registration ceremony.
 // POST /api/auth/webauthn/register/finish
-func (h *WebAuthnHandler) FinishRegistration(c echo.Context) error {
+func (h *WebAuthnHandler) FinishRegistration(c *echo.Context) error {
 	if h.webauthn == nil {
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"message": "WebAuthn is not configured"})
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{"message": "WebAuthn is not configured"})
 	}
 
 	cookie, err := c.Cookie(webauthnSessionCookie)
@@ -83,9 +83,9 @@ func (h *WebAuthnHandler) FinishRegistration(c echo.Context) error {
 
 // BeginLogin starts the discoverable WebAuthn login ceremony.
 // POST /api/auth/webauthn/login/begin
-func (h *WebAuthnHandler) BeginLogin(c echo.Context) error {
+func (h *WebAuthnHandler) BeginLogin(c *echo.Context) error {
 	if h.webauthn == nil {
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"message": "WebAuthn is not configured"})
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{"message": "WebAuthn is not configured"})
 	}
 
 	options, sessionKey, err := h.webauthn.BeginLoginWithoutUser(c.Request().Context())
@@ -109,9 +109,9 @@ func (h *WebAuthnHandler) BeginLogin(c echo.Context) error {
 
 // FinishLogin completes the WebAuthn login ceremony and creates a session.
 // POST /api/auth/webauthn/login/finish
-func (h *WebAuthnHandler) FinishLogin(c echo.Context) error {
+func (h *WebAuthnHandler) FinishLogin(c *echo.Context) error {
 	if h.webauthn == nil {
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"message": "WebAuthn is not configured"})
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{"message": "WebAuthn is not configured"})
 	}
 
 	cookie, err := c.Cookie(webauthnSessionCookie)
@@ -159,9 +159,9 @@ func (h *WebAuthnHandler) FinishLogin(c echo.Context) error {
 	// offers no Point login to recover with.
 	IssueRemark42Cookies(c, h.repo, user.ID, user.DisplayName, user.Username, expiresAt, secure)
 
-	return c.JSON(http.StatusOK, echo.Map{
+	return c.JSON(http.StatusOK, map[string]any{
 		"message": "Login successful",
-		"user": echo.Map{
+		"user": map[string]any{
 			"id":           user.ID,
 			"username":     user.Username,
 			"display_name": user.DisplayName,
@@ -172,9 +172,9 @@ func (h *WebAuthnHandler) FinishLogin(c echo.Context) error {
 
 // DeleteCredential removes the user's WebAuthn credential.
 // DELETE /api/auth/webauthn/credential
-func (h *WebAuthnHandler) DeleteCredential(c echo.Context) error {
+func (h *WebAuthnHandler) DeleteCredential(c *echo.Context) error {
 	if h.webauthn == nil {
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"message": "WebAuthn is not configured"})
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{"message": "WebAuthn is not configured"})
 	}
 
 	userID := extractUserID(c.Get("user"))
@@ -188,9 +188,9 @@ func (h *WebAuthnHandler) DeleteCredential(c echo.Context) error {
 
 // GetStatus checks if the current user has a WebAuthn credential registered.
 // GET /api/auth/webauthn/status
-func (h *WebAuthnHandler) GetStatus(c echo.Context) error {
+func (h *WebAuthnHandler) GetStatus(c *echo.Context) error {
 	if h.webauthn == nil {
-		return c.JSON(http.StatusOK, echo.Map{"has_passkey": false, "configured": false})
+		return c.JSON(http.StatusOK, map[string]any{"has_passkey": false, "configured": false})
 	}
 
 	userID := extractUserID(c.Get("user"))
@@ -200,5 +200,5 @@ func (h *WebAuthnHandler) GetStatus(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Could not check credential status")
 	}
 
-	return c.JSON(http.StatusOK, echo.Map{"has_passkey": hasCredential, "configured": true})
+	return c.JSON(http.StatusOK, map[string]any{"has_passkey": hasCredential, "configured": true})
 }
