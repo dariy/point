@@ -7,7 +7,7 @@
 //
 // Only files that call launchFor follow E2E_DEVICE. All other files stay on
 // Chromium.
-import { chromium, webkit, devices, type Browser, type BrowserContext, type BrowserContextOptions } from 'playwright';
+import { chromium, webkit, devices, type Browser, type BrowserContext, type BrowserContextOptions, type Page } from 'playwright';
 
 export type DeviceName = 'chromium' | 'ipad';
 
@@ -37,4 +37,20 @@ export async function launchFor(
   const browser = name === 'ipad' ? await webkit.launch() : await chromium.launch();
   const context = await browser.newContext(contextOptions);
   return { browser, context, contextOptions };
+}
+
+/**
+ * Makes `page` a touch-only device. Chromium with touch emulation still has a
+ * mouse: at each page load it sends a trusted `pointermove` of type "mouse" at
+ * (0, 0), the hover update for the mouse position. When app.js has started
+ * before that event, pointerMode.ts marks the page `pointer-fine`, and the
+ * touch side layouts do not come (p-yao5z, p-6izja). This listener is on window
+ * before the listeners of the app, so it stops each mouse pointer event first.
+ * Do not use it on a page that the test drives with `page.mouse`.
+ */
+export async function touchOnly(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const noMouse = (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') e.stopImmediatePropagation(); };
+    for (const type of ['pointermove', 'pointerdown']) window.addEventListener(type, noMouse, { capture: true });
+  });
 }

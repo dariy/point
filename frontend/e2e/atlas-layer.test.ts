@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
 import crypto from 'node:crypto';
+import { touchOnly } from './devices.ts';
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:8001';
 const PW = crypto.createHash('sha256').update('devpassword').digest('hex');
@@ -235,12 +236,17 @@ describe('Atlas layer', () => {
           ctx = await browser!.newContext({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
           touch = await ctx.newPage();
           await touch.addInitScript(() => { localStorage.removeItem('atlasLayerState'); localStorage.removeItem('pointerFine'); });
+          await touchOnly(touch);
         });
         after(async () => { await ctx?.close(); });
 
         const openTouch = async (width: number, height: number, view: string) => {
           await touch.setViewportSize({ width, height });
           await touch.goto(`${BASE}/tags/atlas-strip?view=${view}`);
+          // The mouse move that Chromium sends at a page load, but always after app.js:
+          // without touchOnly() in before(), the side layout does not come.
+          await touch.mouse.move(5, 5);
+          await touch.mouse.move(0, 0);
           await touch.locator('.atlas-layer-handle').waitFor();
           if (view === 'list') return;
           await touch.waitForFunction(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).transform === 'none');

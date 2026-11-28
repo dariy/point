@@ -2,6 +2,7 @@ import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type CDPSession, type Page } from 'playwright';
 import crypto from 'node:crypto';
+import { touchOnly } from './devices.ts';
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:8001';
 const PW = crypto.createHash('sha256').update('devpassword').digest('hex');
@@ -300,6 +301,10 @@ describe('Atlas layer gestures', () => {
     };
     const open = async (view: string) => {
       await spage.goto(`${BASE}/tags/atlas-side?view=${view}`);
+      // The mouse move that Chromium sends at a page load, but always after app.js:
+      // without touchOnly() in before(), the side layout does not come.
+      await spage.mouse.move(5, 5);
+      await spage.mouse.move(0, 0);
       await spage.locator('.atlas-layer-handle').waitFor();
       await spage.waitForFunction(() => document.body.hasAttribute('data-atlas-side'));
       await spage.locator('#grid-mount .post-card').first().waitFor();
@@ -318,6 +323,7 @@ describe('Atlas layer gestures', () => {
       spage = await ctx.newPage();
       // A mouse event sets pointer-fine and ends the side layout: only touch input here.
       await spage.addInitScript(() => { localStorage.removeItem('atlasLayerState'); localStorage.removeItem('pointerFine'); });
+      await touchOnly(spage);
       scdp = await ctx.newCDPSession(spage);
     });
 
