@@ -11,7 +11,8 @@ targeted consistency and legibility.
    slide) is in the URL, restorable and shareable; Back always means "where I just was".
 2. **One mental model for tags** — a tag looks and clicks the same on every surface.
 3. **Click is for going; hover/long-press is for peeking** — no primary action behind
-   a second click or a hover-only control.
+   a second click or a hover-only control. A mouse peeks by hover; touch and pen peek by
+   long press.
 4. **Content leads, chrome recedes** — big screens get more content, never wider text.
 5. Every screen class (phone landscape, tablet, 21:9/32:9) is a designed state.
 
@@ -23,8 +24,9 @@ targeted consistency and legibility.
   the resulting URL change — components never talk to each other directly. Designed so
   `tag` can become `tags[]` later without rework.
 - **Tag interaction, unified**: one click/tap navigates everywhere. Hierarchy peek is
-  hover-intent on fine pointers and **long-press** on touch (`frontend/src/utils/
-  tags.js`), opening the shared family popover/bottom-sheet (ancestors above, children
+  hover-intent on a mouse and **long-press** on touch and pen
+  (`frontend/src/utils/tagFlyout.ts`, through `utils/helpers.ts::setupLongPress`, which
+  allows `PRESS_SLOP_PX` of travel during the hold), opening the shared family popover/bottom-sheet (ancestors above, children
   below, with counts — same `TagFamilyPopover` used in the admin). The old two-click
   flyout and 300 ms chip re-click patterns are gone.
 - **Header**: four-zone single row with the measured fold engine — see

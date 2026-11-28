@@ -10,11 +10,14 @@ import { Component } from "../../components/Component.ts";
 import { adminLayoutTemplate, setupAdminLayout } from "../../components/light/AdminLayout.ts";
 import { TagsInput } from "../../components/light/TagsInput.ts";
 import { MediaPickerDialog } from "../../components/light/MediaPickerDialog.ts";
+import { PostHistoryDialog } from "../../components/light/PostHistoryDialog.ts";
 import { CssEditor } from "../../components/light/CssEditor.ts";
 import { MarkdownEditor } from "../../components/light/MarkdownEditor.ts";
-import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender, type PostInput } from "../../api/posts.ts";
+import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender, restorePostRevision, type PostInput, type PostRevision } from "../../api/posts.ts";
+import { formatDatetime } from "../../utils/formatters.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
-import { uploadMedia } from "../../api/media.ts";
+import { uploadAskingOnDuplicate } from "../../utils/duplicateUpload.ts";
+import { saveShareDraft } from "../../utils/shareDrafts.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.ts";
 import {
@@ -26,7 +29,7 @@ import {
 } from "../../store.ts";
 import { html, setHTML, navigate, parseMarkup, raw, debounce } from "../../utils/helpers.ts";
 import { pluginHost } from "../../core/pluginHost.ts";
-import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG } from "../../utils/icons.ts";
+import { SPARKLE_SVG, STAR_SVG, STAR_OUTLINE_SVG, TRASH_SVG, LINK_SVG, CHEVRON_SVG, EXTERNAL_LINK_SVG, SETTINGS_SVG, GRIP_SVG, RESTORE_SVG } from "../../utils/icons.ts";
 import { VisualEditor } from "../../components/light/VisualEditor.ts";
 import { attachPointerReorder } from "../../utils/pointerReorder.ts";
 import { parseNodes, serializeNodes, firstImagePath } from "../../utils/postNodes.ts";
@@ -57,6 +60,14 @@ export default class PostEditPage extends Component<PageProps> {
   _detachReorder: ReturnType<typeof attachPointerReorder> | null;
   _detachFileDrop: ReturnType<typeof attachWindowFileDrop> | null;
   _mediaPicker: MediaPickerDialog | null;
+  /** The open History dialog, or null. */
+  _historyDialog: PostHistoryDialog | null;
+  /**
+   * Counts the revision restores. An autosave that was in flight when a
+   * restore happened must not keep its body as the last autosave: sent again
+   * on leave, it would undo the restore.
+   */
+  _restoreCount: number;
   _tagsInputRef: TagsInput | null;
   _cssEditorRef: CssEditor | null;
   _markdownEditorRef: MarkdownEditor | null;
@@ -110,6 +121,8 @@ export default class PostEditPage extends Component<PageProps> {
     this._detachReorder = null;
     this._detachFileDrop = null;
     this._mediaPicker = null;
+    this._historyDialog = null;
+    this._restoreCount = 0;
     this._tagsInputRef = null;
     this._cssEditorRef = null;
     this._markdownEditorRef = null;
@@ -142,6 +155,7 @@ export default class PostEditPage extends Component<PageProps> {
     // autosave idle window are still only in the form — so flush them first
     // and let the navigation follow the save.
     "view-on-site"(this: PostEditPage) { this._viewOnSite(); },
+    history(this: PostEditPage) { this._openHistory(); },
     schedule(this: PostEditPage) {
       const sel = this.$("#status-select") as HTMLSelectElement | null;
       if (sel) {
@@ -198,6 +212,7 @@ export default class PostEditPage extends Component<PageProps> {
           <button class="menu-item" type="button" data-action="preview-link" id="preview-link-btn">${raw(LINK_SVG)} Preview link</button>
           <button class="menu-item" type="button" data-action="arrange">${raw(GRIP_SVG)} Arrange fields</button>
           ${this._isWide() ? html`<button class="menu-item" type="button" data-action="toggle-preview">${this.state.showLivePreview ? 'Hide preview' : 'Show preview'}</button>` : ''}
+          ${!isNew ? html`<button class="menu-item" type="button" data-action="history" id="history-btn">${raw(RESTORE_SVG)} History</button>` : ''}
           ${!isNew ? html`<button class="menu-item" type="button" data-action="view-on-site">${raw(EXTERNAL_LINK_SVG)} View on site</button>` : ''}
           <hr>
           <button class="menu-item text-danger" type="button" data-action="delete" id="delete-btn">${raw(TRASH_SVG)} Delete</button>
@@ -813,6 +828,7 @@ export default class PostEditPage extends Component<PageProps> {
     setAutosaveStatus({
       status: 'saving'
     });
+    const restores = this._restoreCount;
     try {
       if (this.state.isNew) {
         const body: PostInput = { ...data, status: 'draft', save_kind: 'autosave' };
@@ -829,8 +845,12 @@ export default class PostEditPage extends Component<PageProps> {
       } else {
         const body: PostInput = { ...data, save_kind: 'autosave' };
         const result = await updatePost(this.state.postId, body);
-        this.state.post = result;
-        this._lastAutosave = body;
+        // A restore ran while this save was in flight: the editor shows the
+        // restored post now, not this body.
+        if (restores === this._restoreCount) {
+          this.state.post = result;
+          this._lastAutosave = body;
+        }
       }
       // The editor closed while this save was in flight: beforeUnmount found
       // nothing to send, so send it now.
@@ -962,9 +982,70 @@ export default class PostEditPage extends Component<PageProps> {
     this._detachFileDrop?.();
     this._mediaPicker?.destroy();
     this._mediaPicker = null;
+    this._historyDialog?.close();
     this._visualEditorRef = null;
     if (this._onKeyDown) document.removeEventListener("keydown", this._onKeyDown);
     if (this._onPreviewMqlChange) this._previewMql?.removeEventListener?.("change", this._onPreviewMqlChange);
+  }
+  /** Open the History dialog of a saved post. */
+  _openHistory() {
+    if (!this.state.postId || this._historyDialog) return;
+    this._historyDialog = new PostHistoryDialog({
+      postId: this.state.postId,
+      getCurrent: () => {
+        const { title, content, tags, css } = this._collectFormData();
+        return { title, content, tags, css };
+      },
+      onRestore: revision => this._confirmRestore(revision),
+      onClose: () => { this._historyDialog = null; },
+    });
+    this._historyDialog.open();
+  }
+  /** Ask before a restore; say that unsaved edits are saved first. */
+  _confirmRestore(revision: PostRevision) {
+    const when = formatDatetime(revision.created_at);
+    let message = `Restore the revision of ${when}? The title, body, tags and custom CSS change to this revision. Newer revisions stay in the history.`;
+    if (this.state.hasPendingEdits) message += " Your unsaved edits are saved first, so they also stay in the history.";
+    this._showConfirm("Restore revision", message, "Restore", "primary", () => this._restoreRevision(revision));
+  }
+  /**
+   * Restore a revision and reload the editor from the server. Unsaved edits
+   * are saved first, as a manual save, so the restore cannot lose them.
+   */
+  async _restoreRevision(revision: PostRevision) {
+    const id = this.state.postId;
+    if (!id || this.state.saving) return;
+    if (this.state.hasPendingEdits) {
+      await this._save();
+      // The save failed and its toast says why. Do not restore over the edits.
+      if (this.state.hasPendingEdits) return;
+    }
+    clearTimeout(this._idleTimer ?? undefined);
+    this._idleTimer = null;
+    clearTimeout(this._maxWaitTimer ?? undefined);
+    this._maxWaitTimer = null;
+    this._restoreCount++;
+    try {
+      await restorePostRevision(id, revision.id);
+    } catch (err) {
+      setToast({
+        message: (err as Error).message || "Restore failed.",
+        type: "error"
+      });
+      return;
+    }
+    if (this._unmounted) return;
+    this._lastAutosave = null;
+    this.state.hasPendingEdits = false;
+    this._historyDialog?.close();
+    this.setState({
+      loading: true
+    });
+    await this._loadPost(id);
+    setToast({
+      message: `Restored the revision of ${formatDatetime(revision.created_at)}.`,
+      type: "success"
+    });
   }
   _insertMediaPaths(items: Media[]) {
     if (!items.length) return;
@@ -1125,28 +1206,8 @@ export default class PostEditPage extends Component<PageProps> {
     }
     for (const entry of backlog) {
       try {
-        const title = entry.title || entry.files.map(f => f.name).join(", ") || "Shared photo";
-        const post = await createPost({
-          title,
-          status: "draft",
-          content: ""
-        });
-        let content = "";
-        for (const fileEntry of entry.files) {
-          const blob = new Blob([fileEntry.data], {
-            type: fileEntry.type
-          });
-          const file = new File([blob], fileEntry.name, {
-            type: fileEntry.type
-          });
-          const media = await uploadMedia(file, {
-            post_id: post.id
-          });
-          content += `${media.path}\n`;
-        }
-        await updatePost(post.id, {
-          content: content.trim()
-        });
+        // An exact duplicate asks once per draft, like the media library.
+        await saveShareDraft(entry);
       } catch (err) {
         setToast({
           message: `Failed to save offline share: ${(err as Error).message}`,
@@ -1381,9 +1442,12 @@ export default class PostEditPage extends Component<PageProps> {
   }
   async _uploadAndInsert(file: File) {
     try {
-      const result = await uploadMedia(file, {
+      // An exact duplicate asks first; "Use the existing file" inserts the
+      // existing media, and a closed question inserts nothing.
+      const result = await uploadAskingOnDuplicate(file, {
         post_id: this.state.postId || undefined
       });
+      if (!result) return;
       if (this.state.editorMode === "visual") this._insertMediaPaths([{
         path: result.path
       } as Media]);else if (this._markdownEditorRef) this._markdownEditorRef.insertAtEnd(result.path);

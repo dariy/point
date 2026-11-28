@@ -40,7 +40,7 @@ function fakePage(initial: 'list' | 'mapList' | 'map' = 'map', opts: { saveData?
     removeEventListener: (type: string, fn: (e: any) => void) => { listeners.get(type)?.delete(fn); },
   };
   /** Send a DOM event to the container's listeners. Returns what the listeners did to it. */
-  const dispatch = (type: string, init: Record<string, number> = {}) => {
+  const dispatch = (type: string, init: Record<string, number | string> = {}) => {
     const ev = {
       type, pointerId: 1, clientX: 0, clientY: 0, ...init,
       stopped: false, prevented: false,
@@ -391,6 +391,25 @@ describe('atlasOcean', () => {
       assert.equal(p.maps, 1, 'a window on a post with no list makes the map');
     });
 
+    test('a window goes to hidden with no slide (p-sheet-close-blink-dnq6l)', () => {
+      const p = fakePage('list');
+      p.ocean.present({ kind: 'window', rect: slot, center: paris });
+      const seen: string[] = [];
+      const style = p.container.style;
+      p.container.style = new Proxy(style, {
+        set(t, k, v) { if (k === 'transition') seen.push(v); (t as any)[k] = v; return true; },
+      });
+      p.ocean.present('hidden');
+      assert.equal(p.container.dataset.atlasOcean, 'hidden');
+      assert.equal(p.container.style.clipPath, '');
+      assert.deepEqual(seen, ['none', ''], 'no transition for the hide, then the transition comes back');
+      // A hide that is not from a window keeps the slide.
+      seen.length = 0;
+      p.ocean.present('full');
+      p.ocean.present('hidden');
+      assert.deepEqual(seen, [], 'full → hidden slides');
+    });
+
     test('a window with no centre moves the map with the slot (a sheet scroll)', () => {
       const p = fakePage('list');
       p.ocean.present({ kind: 'window', rect: slot, center: paris });
@@ -529,6 +548,22 @@ describe('atlasOcean', () => {
       const ev = p.dispatch('click');
       assert.equal(taps, 0);
       assert.equal(ev.stopped, true, 'the click after a drag selects nothing');
+    });
+
+    test('a pen tap that skids 7 px is a tap; a mouse press that moves 7 px is a drag', () => {
+      const p = fakePage('list');
+      let taps = 0;
+      p.ocean.present({ kind: 'window', rect: slot, center: paris, onTap: () => taps++ });
+      p.dispatch('pointerdown', { clientX: 100, clientY: 600, pointerType: 'pen' });
+      p.dispatch('pointermove', { clientX: 107, clientY: 600, pointerType: 'pen' });
+      p.dispatch('pointerup', { pointerType: 'pen' });
+      p.dispatch('click');
+      assert.equal(taps, 1);
+      p.dispatch('pointerdown', { clientX: 100, clientY: 600, pointerType: 'mouse' });
+      p.dispatch('pointermove', { clientX: 107, clientY: 600, pointerType: 'mouse' });
+      p.dispatch('pointerup', { pointerType: 'mouse' });
+      p.dispatch('click');
+      assert.equal(taps, 1);
     });
 
     test('a pinch in the window is not a tap', () => {

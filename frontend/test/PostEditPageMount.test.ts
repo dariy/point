@@ -511,6 +511,175 @@ describe('PostEditPage (mounted)', () => {
     });
   });
 
+  // ── History (NF-9) ────────────────────────────────────────────────────────
+
+  describe('history', () => {
+    const REVISIONS = () => ({
+      revisions: [
+        { id: 4, kind: 'publish', created_at: '2026-11-02T10:00:00Z', title: 'Harbour lights' },
+        { id: 3, kind: 'manual', created_at: '2026-11-01T09:30:00Z', title: 'Harbour' },
+      ],
+    });
+    const REVISION_3 = () => ({
+      id: 3, post_id: 7, kind: 'manual', created_at: '2026-11-01T09:30:00Z',
+      title: 'Harbour', content: '/2024/08/harbour.jpg\n\nThe water was calm.', tags: ['sea'], css: '',
+    });
+    const dialog = () => dom.document.querySelector<HTMLElement>('.post-history-overlay');
+    const inDialog = (sel: string) => must(dialog()?.querySelector<HTMLElement>(sel), sel);
+    const confirmOk = () => must(dom.document.querySelector<HTMLElement>('#confirm-ok-btn'), '#confirm-ok-btn');
+
+    beforeEach(() => {
+      routes['GET /api/posts/7/revisions'] = () => REVISIONS();
+      routes['GET /api/posts/7/revisions/3'] = () => REVISION_3();
+      routes['POST /api/posts/7/revisions/3/restore'] = () => ({ ...POST(), title: 'Harbour', content: REVISION_3().content, tags: [{ name: 'sea', slug: 'sea' }] });
+    });
+
+    /** Open History and the compare view of revision 3. */
+    async function openCompare() {
+      await mountPage({ params: { id: '7' } });
+      click(get('[data-action="history"]'));
+      await settle();
+      click(inDialog('[data-rev="3"]'));
+      await settle();
+    }
+
+    test('a new post has no History item', async () => {
+      await mountPage({});
+      assert.equal(q('[data-action="history"]'), null);
+    });
+
+    test('History lists the revisions with their date and kind', async () => {
+      await mountPage({ params: { id: '7' } });
+
+      click(get('[data-action="history"]'));
+      await settle();
+
+      assert.equal(sent('GET', '/api/posts/7/revisions').length, 1);
+      const items = must(dialog(), 'dialog').querySelectorAll('.post-history-item');
+      assert.equal(items.length, 2);
+      assert.match(items[0].textContent ?? '', /Published/);
+      assert.match(items[0].textContent ?? '', /2026/);
+      assert.match(items[1].textContent ?? '', /Saved/);
+    });
+
+    test('a post with no revisions says so', async () => {
+      routes['GET /api/posts/7/revisions'] = () => ({ revisions: [] });
+      await mountPage({ params: { id: '7' } });
+
+      click(get('[data-action="history"]'));
+      await settle();
+
+      assert.match(inDialog('.post-history-empty').textContent ?? '', /No revisions yet/);
+    });
+
+    test('compare shows the title, body and tag changes against the editor', async () => {
+      await openCompare();
+
+      const body = inDialog('.post-history-body').textContent ?? '';
+      assert.match(body, /Title/);
+      assert.equal(inDialog('.post-history-section .is-add').textContent, 'Harbour');
+      const dels = [...must(dialog(), 'dialog').querySelectorAll('.post-history-line.is-del')].map(e => e.textContent);
+      const adds = [...must(dialog(), 'dialog').querySelectorAll('.post-history-line.is-add')].map(e => e.textContent);
+      assert.ok(dels.includes('The water was still.'), 'the editor line is shown as removed');
+      assert.ok(adds.includes('The water was calm.'), 'the revision line is shown as added');
+      const tags = [...must(dialog(), 'dialog').querySelectorAll('.post-history-tag')].map(e => `${e.className} ${e.textContent}`);
+      assert.deepEqual(tags, ['post-history-tag is-del harbour', 'post-history-tag is-add sea']);
+    });
+
+    test('Back returns from the compare view to the list', async () => {
+      await openCompare();
+
+      click(inDialog('[data-action="back"]'));
+
+      assert.equal(must(dialog(), 'dialog').querySelectorAll('.post-history-item').length, 2);
+    });
+
+    test('Restore asks first, then restores and reloads the editor', async () => {
+      await openCompare();
+      const loads = sent('GET', '/api/posts/7').length;
+
+      click(inDialog('[data-action="restore"]'));
+      assert.equal(sent('POST', '/api/posts/7/revisions/3/restore').length, 0, 'nothing is restored before the confirmation');
+
+      routes['GET /api/posts/7'] = () => ({ ...POST(), title: 'Harbour' });
+      click(confirmOk());
+      await settle();
+      await settle();
+      await settle();
+
+      assert.equal(sent('POST', '/api/posts/7/revisions/3/restore').length, 1);
+      assert.equal(sent('PUT', '/api/posts/7').length, 0, 'no unsaved edits, so no save first');
+      assert.equal(sent('GET', '/api/posts/7').length, loads + 1, 'the editor reloads the post');
+      assert.equal(get('#title-input').value, 'Harbour');
+      assert.equal(dialog(), null, 'the dialog closes');
+      assert.match(getToast().message, /Restored/);
+    });
+
+    test('Restore saves unsaved edits first, as a manual save', async () => {
+      await openCompare();
+      type(get('#title-input'), 'Harbour lights at night');
+      page._onInput();
+
+      click(inDialog('[data-action="restore"]'));
+      assert.match(must(dom.document.querySelector('.confirm-dialog, #modal-body-mount'), 'confirm').textContent ?? '', /unsaved edits are saved first/);
+      click(confirmOk());
+      await settle();
+      await settle();
+      await settle();
+
+      const order = requests.filter(r => r.method !== 'GET').map(r => `${r.method} ${r.path}`);
+      assert.deepEqual(order, ['PUT /api/posts/7', 'POST /api/posts/7/revisions/3/restore']);
+      assert.equal(sent('PUT', '/api/posts/7')[0].body.save_kind, 'manual');
+      assert.equal(sent('PUT', '/api/posts/7')[0].body.title, 'Harbour lights at night');
+    });
+
+    test('a failed save of the unsaved edits stops the restore', async () => {
+      routes['PUT /api/posts/7'] = () => fail(500, 'disk full');
+      await openCompare();
+      type(get('#title-input'), 'Harbour lights at night');
+      page._onInput();
+
+      click(inDialog('[data-action="restore"]'));
+      click(confirmOk());
+      await settle();
+      await settle();
+
+      assert.equal(sent('POST', '/api/posts/7/revisions/3/restore').length, 0);
+      assert.equal(getToast().type, 'error');
+      assert.equal(get('#title-input').value, 'Harbour lights at night', 'the typed title stays in the form');
+      assert.equal(page.state.hasPendingEdits, true, 'the edits stay unsaved');
+    });
+
+    test('an autosave in flight during a restore is not sent again on leave', async () => {
+      await mountPage({ params: { id: '7' } });
+      let release: () => void = () => {};
+      routes['PUT /api/posts/7'] = ({ body }) => new Promise(r => { release = () => r({ ...POST(), ...body }); });
+      type(get('#title-input'), 'Harbour lights at night');
+      page._onInput();
+      const saving = page._autosave();
+      await settle();
+
+      page.state.hasPendingEdits = false;
+      await page._restoreRevision(REVISION_3() as Parameters<typeof page._restoreRevision>[0]);
+      release();
+      await saving;
+      page.unmount();
+      await settle();
+
+      assert.equal(sent('PUT', '/api/posts/7').filter(r => r.body.save_kind === 'autosave_last').length, 0);
+    });
+
+    test('leaving the editor closes the dialog', async () => {
+      await mountPage({ params: { id: '7' } });
+      click(get('[data-action="history"]'));
+      await settle();
+
+      page.unmount();
+
+      assert.equal(dialog(), null);
+    });
+  });
+
   // ── Preview link ──────────────────────────────────────────────────────────
 
   describe('preview link', () => {

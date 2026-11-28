@@ -174,7 +174,7 @@ describe('Immersive sheet in touch landscape', () => {
     assert.ok(Math.abs(l.close!.right - (size.width - 24)) <= 16, 'portrait: the close cross is at the right edge: ' + text);
   };
 
-  /** The ocean slides away after the panel slide: wait for its end, so a touch reaches the photo. */
+  /** The ocean hides after the panel slide: wait for it, so a touch reaches the photo. */
   const oceanGone = () => page.waitForFunction(() => {
     const map = document.querySelector('body > .atlas-layer-map');
     return !map || getComputedStyle(map).visibility === 'hidden';

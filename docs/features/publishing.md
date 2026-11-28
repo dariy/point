@@ -68,6 +68,15 @@ revisions. The revisions are deleted with the post (`ON DELETE CASCADE`), not wh
 it goes to the trash. `GET /api/posts/:id/revisions` lists them newest first,
 without the body; `GET /api/posts/:id/revisions/:rev` reads one in full.
 
+In the editor, **History** in the header menu (saved posts only) opens
+`PostHistoryDialog` (`frontend/src/components/light/PostHistoryDialog.ts`). The
+list shows the date and kind of each revision. A click on a revision opens the
+compare view: the title, the tags, the body and the custom CSS of the revision
+against the editor content, unsaved edits included (`frontend/src/utils/lineDiff.ts`
+diffs the body line by line). **Restore** asks for confirmation. If the editor has
+unsaved edits, it saves them first as a manual save, so they stay in the history.
+Then it restores and loads the post again (`PostEditPage._restoreRevision`).
+
 ## Lifecycle
 
 - **Statuses**: `draft`, `scheduled`, `published`, `hidden` — plus tag-driven hiding on

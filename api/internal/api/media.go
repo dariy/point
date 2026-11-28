@@ -84,15 +84,28 @@ func (h *MediaHandler) UploadFile(c *echo.Context) error {
 			postID = &id
 		}
 	}
+	onDuplicate, ok := services.ParseDuplicatePolicy(c.FormValue("on_duplicate"))
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "on_duplicate must be ask, new or existing")
+	}
 
 	media, err := h.mediaService.UploadFile(c.Request().Context(), services.UploadFileParams{
-		Content:  content,
-		Filename: file.Filename,
-		MimeType: mimeType,
-		AltText:  altText,
-		Caption:  caption,
-		PostID:   postID,
+		Content:     content,
+		Filename:    file.Filename,
+		MimeType:    mimeType,
+		AltText:     altText,
+		Caption:     caption,
+		PostID:      postID,
+		OnDuplicate: onDuplicate,
 	})
+	var dup *services.DuplicateMediaError
+	if errors.As(err, &dup) {
+		return c.JSON(http.StatusConflict, map[string]interface{}{
+			"message":  "the library already has this file",
+			"code":     "duplicate",
+			"existing": h.mediaResponse(c, dup.Existing),
+		})
+	}
 	if err != nil {
 		return MapError(err)
 	}
@@ -472,6 +485,36 @@ func (h *MediaHandler) ListTrashedMedia(c *echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaListEnvelope(c, media, total, page, perPage, pages))
 }
 
+// ListPossibleDuplicates lists the groups of images whose perceptual hashes
+// are near (NF-16). The envelope is the shape of ListMedia: media is flat, in
+// group order, and each item has duplicate_group, the index of its group on
+// this page. A page holds whole groups.
+// GET /api/media/duplicates
+func (h *MediaHandler) ListPossibleDuplicates(c *echo.Context) error {
+	page, perPage := ParsePaginationParams(c, 20)
+	res, err := h.mediaService.PossibleDuplicates(c.Request().Context(), int(page), int(perPage))
+	if err != nil {
+		return MapError(err)
+	}
+	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
+	items := []map[string]interface{}{}
+	for i, g := range res.Groups {
+		for _, m := range g.Media {
+			item := h.withVideoNote(mediaToResponse(m, gen), m)
+			item["duplicate_group"] = i
+			items = append(items, item)
+		}
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"media":    items,
+		"total":    res.Total,
+		"groups":   res.GroupCount,
+		"page":     res.Page,
+		"per_page": perPage,
+		"pages":    res.Pages,
+	})
+}
+
 func (h *MediaHandler) DeleteMedia(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
@@ -504,9 +547,17 @@ func (h *MediaHandler) UploadMultiple(c *echo.Context) error {
 		}
 	}
 
+	onDuplicate, ok := services.ParseDuplicatePolicy(c.FormValue("on_duplicate"))
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "on_duplicate must be ask, new or existing")
+	}
+
 	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	var uploaded []interface{}
 	var failed []interface{}
+	// With on_duplicate=ask, the matches go here and not into failed, so the
+	// client can ask once for all of them.
+	duplicates := []interface{}{}
 
 	for _, fh := range files {
 		src, err := fh.Open()
@@ -528,11 +579,20 @@ func (h *MediaHandler) UploadMultiple(c *echo.Context) error {
 		}
 
 		media, err := h.mediaService.UploadFile(c.Request().Context(), services.UploadFileParams{
-			Content:  content,
-			Filename: fh.Filename,
-			MimeType: mimeType,
-			PostID:   postID,
+			Content:     content,
+			Filename:    fh.Filename,
+			MimeType:    mimeType,
+			PostID:      postID,
+			OnDuplicate: onDuplicate,
 		})
+		var dup *services.DuplicateMediaError
+		if errors.As(err, &dup) {
+			duplicates = append(duplicates, map[string]interface{}{
+				"filename": fh.Filename,
+				"existing": mediaToResponse(dup.Existing, gen),
+			})
+			continue
+		}
 		if err != nil {
 			failed = append(failed, map[string]string{"filename": fh.Filename, "error": err.Error()})
 			continue
@@ -543,6 +603,7 @@ func (h *MediaHandler) UploadMultiple(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"uploaded":       uploaded,
 		"failed":         failed,
+		"duplicates":     duplicates,
 		"total_uploaded": len(uploaded),
 		"total_failed":   len(failed),
 	})
@@ -614,6 +675,25 @@ func (h *MediaHandler) RebuildThumbnails(c *echo.Context) error {
 			res.Purged+res.Legacy, res.Prewarming, res.VideoJobs),
 		"stats": res,
 	})
+}
+
+// RebuildDerivatives writes the missing derived files of the listed media
+// items only: the image rungs up to the upload size, and the video poster and
+// transcode jobs. It is the repair for the derivatives item of the site
+// health checks. It does not roll the thumbnail generation. The body is
+// {"ids": [...]}, with at most services.MaxDerivativeRebuild IDs.
+func (h *MediaHandler) RebuildDerivatives(c *echo.Context) error {
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+	res, err := h.mediaService.RebuildDerivatives(c.Request().Context(), req.IDs)
+	if err != nil {
+		return MapError(err)
+	}
+	return c.JSON(http.StatusOK, res)
 }
 
 func (h *MediaHandler) AnalyzeImage(c *echo.Context) error {

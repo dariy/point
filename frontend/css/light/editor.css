@@ -1325,3 +1325,177 @@ textarea.is-maximized,
         background: var(--surface-card);
     }
 }
+
+/* ===========================
+   PostHistoryDialog (NF-9)
+   =========================== */
+.post-history-modal {
+    width: 90vw;
+    max-width: 48rem;
+    height: 85vh;
+    height: 85dvh;
+}
+
+/* "Back" and the title share the header line; the padding leaves room for the
+   absolutely positioned close. */
+.post-history-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding-right: calc(var(--spacing-lg) + var(--spacing-2xl));
+}
+
+.post-history-header h3 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.post-history-empty {
+    color: var(--text-muted);
+}
+
+.post-history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.post-history-item {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: baseline;
+    gap: var(--spacing-md);
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: none;
+    border-bottom: var(--border-width) solid var(--border-primary);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.post-history-item:hover,
+.post-history-item:focus-visible {
+    background: var(--surface-hover);
+}
+
+.post-history-date {
+    white-space: nowrap;
+}
+
+.post-history-kind {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.post-history-kind--publish {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.post-history-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary);
+}
+
+/* .post-history-body in front: `.modal-body p` sets the margin to 0. */
+.post-history-body .post-history-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin: 0 0 var(--spacing-md);
+}
+
+.post-history-section + .post-history-section {
+    margin-top: var(--spacing-lg);
+}
+
+.post-history-section h4 {
+    margin: 0 0 var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.post-history-diff {
+    border: var(--border-width) solid var(--border-primary);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-sm);
+}
+
+.post-history-line {
+    padding: 0 var(--spacing-sm);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.post-history-line.is-del,
+.post-history-tag.is-del {
+    background: var(--color-danger-light);
+}
+
+.post-history-line.is-add,
+.post-history-tag.is-add {
+    background: var(--color-success-light);
+}
+
+.post-history-line.is-del::before { content: "− "; }
+.post-history-line.is-add::before { content: "+ "; }
+.post-history-line.is-same::before { content: "  "; }
+
+.post-history-line.is-fold {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+}
+
+.post-history-legend .post-history-line {
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-sm);
+}
+
+.post-history-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}
+
+.post-history-tag {
+    padding: 0 var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+}
+
+.post-history-tag.is-del {
+    text-decoration: line-through;
+}
+
+/* A phone: the dialog takes the whole screen, and the list row puts the title
+   on its own line under the date and kind. */
+@media (max-width: 40em) {
+    .post-history-modal {
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        border-radius: 0;
+    }
+
+    .post-history-item {
+        grid-template-columns: auto 1fr;
+    }
+
+    .post-history-title {
+        grid-column: 1 / -1;
+    }
+}

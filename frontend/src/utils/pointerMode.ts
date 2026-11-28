@@ -22,6 +22,13 @@
  */
 
 const CLASS = "pointer-fine";
+
+/**
+ * How far, in CSS px, a press can travel and still count as a press that is
+ * still: a tap or a hold. A finger and a stylus tip both report small moves
+ * during a hold. The iOS long-press default is 10 pt.
+ */
+export const PRESS_SLOP_PX = 10;
 const KEY = "pointerFine";
 
 // A tap also emits compatibility mouse events. Anything claiming to be a mouse
@@ -80,9 +87,11 @@ export function initPointerMode() {
   };
 
   // touchstart rather than pointerdown for the demotion: a pen also wants the
-  // coarse affordances, and it is the one coarse device that never emits it —
-  // so pointerdown carries the pen case and touchstart the finger, and the echo
+  // coarse affordances, and a Windows pen never emits touchstart — so
+  // pointerdown carries the pen case and touchstart the finger, and the echo
   // guard above keeps a tap's compatibility mouse events from promoting back.
+  // An Apple Pencil on iPad does emit touch events (`Touch.touchType` is
+  // "stylus"), so there both listeners see it; demoting twice is harmless.
   window.addEventListener("touchstart", demote, { capture: true, passive: true });
   window.addEventListener("pointerdown", (e) => {
     gestureType = e.pointerType || null;

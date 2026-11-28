@@ -521,6 +521,58 @@ describe('MediaBrowser', () => {
     });
   });
 
+  describe('possible duplicates', () => {
+    const A_JPEG = { ...IMAGE, id: 11, filename: 'a.jpg', path: '/2024/08/a.jpg', duplicate_group: 0 };
+    const A_WEBP = { ...IMAGE, id: 12, filename: 'a.webp', path: '/2024/08/a.webp', width: 800, height: 600, duplicate_group: 0 };
+    const B_JPEG = { ...IMAGE, id: 13, filename: 'b.jpg', path: '/2024/08/b.jpg', duplicate_group: 1 };
+    const B_SMALL = { ...IMAGE, id: 14, filename: 'b-small.jpg', path: '/2024/08/b-small.jpg', duplicate_group: 1 };
+
+    async function openDuplicates(media: object[] = [A_JPEG, A_WEBP, B_JPEG, B_SMALL]) {
+      routes['GET /api/media/duplicates'] = () => ({ media, page: 1, pages: 1, total: media.length, groups: 2 });
+      await mountBrowser();
+      const select = el<HTMLSelectElement>('.mb-type-filter');
+      select.value = 'duplicates';
+      fire(select, 'change');
+      await settle();
+    }
+
+    test('the standalone filter offers Possible duplicates; the picker does not', async () => {
+      await mountBrowser({ pickerMode: true });
+      assert.ok(!qa<HTMLOptionElement>('.mb-type-filter option').some(o => o.value === 'duplicates'));
+      browser?.unmount();
+      await mountBrowser();
+      const opt = qa<HTMLOptionElement>('.mb-type-filter option').find(o => o.value === 'duplicates');
+      assert.equal(opt?.textContent, 'Possible duplicates');
+    });
+
+    test('each set starts a new row and names its set and size', async () => {
+      await openDuplicates();
+
+      assert.ok(sent('GET', '/api/media/duplicates').length >= 1);
+      assert.deepEqual(qa('.media-item--group-start').map(i => i.dataset.id), ['11', '13']);
+      assert.match(el('.media-item[data-id="12"] .media-item-dup-set').textContent, /Set 1 · 800×600/);
+      assert.match(el('.media-item[data-id="14"] .media-item-dup-set').textContent, /Set 2/);
+    });
+
+    test('each copy opens and moves to the trash like any library item', async () => {
+      await openDuplicates();
+      const before = sent('GET', '/api/media/duplicates').length;
+
+      assert.ok(q('.media-item[data-id="12"] .media-item-preview--clickable'), 'the preview opens the image');
+      click(el('.delete-media-btn[data-id="12"]'));
+      acceptDialog();
+      await settle();
+
+      assert.equal(sent('DELETE', '/api/media/12').length, 1);
+      assert.ok(sent('GET', '/api/media/duplicates').length > before, 'the view reloads');
+    });
+
+    test('no possible duplicates says so', async () => {
+      await openDuplicates([]);
+      assert.match(el('.empty-state').textContent, /No possible duplicates/);
+    });
+  });
+
   describe('renaming', () => {
     test('a new name is sanitised and sent', async () => {
       await mountBrowser();

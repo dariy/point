@@ -196,4 +196,27 @@ describe('PluginsPage', () => {
     p._toggleEdit();
     assert.strictEqual(p.state.editingPreset, null);
   });
+  test('?plugin= reveals the row once, and opens the drawer of an enabled plugin', () => {
+    const loc = globalThis.window.location as { search: string };
+    const run = (search: string, plugins?: PluginView[]) => {
+      loc.search = search;
+      const p = page(plugins ? { plugins } : {});
+      const revealed: string[] = [];
+      const opened: string[] = [];
+      p._revealPlugin = (id: string) => { revealed.push(id); };
+      p._openPanel = async (id: string) => { opened.push(id); };
+      p._openDeepLink();
+      p._openDeepLink(); // a re-render does not reveal again
+      return { revealed, opened };
+    };
+    try {
+      assert.deepEqual(run(''), { revealed: [], opened: [] });
+      const off: PluginView[] = [{ id: 'backups', type: 'service', slot_rule: '0+', enabled: false, default_enabled: false }];
+      assert.deepEqual(run('?plugin=backups', off), { revealed: ['backups'], opened: [] });
+      const on = [{ ...off[0], enabled: true }];
+      assert.deepEqual(run('?plugin=backups', on), { revealed: ['backups'], opened: ['backups'] });
+    } finally {
+      loc.search = '';
+    }
+  });
 });

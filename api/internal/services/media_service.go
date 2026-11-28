@@ -163,6 +163,49 @@ func (s *MediaService) GetStorageUsage(ctx context.Context) (int64, error) {
 	return int64(usage.Float64), nil
 }
 
+// DuplicatePolicy says what UploadFile does when the library already holds
+// media with the same SHA-256 (media.checksum).
+type DuplicatePolicy int
+
+const (
+	// DuplicateReuse returns a live match and creates no row. A match that is
+	// only in the trash stays there, and the upload becomes a new row: only
+	// the user restores from the trash ("Use the existing file"). This is the
+	// default for callers with no user to ask: the Instagram import, the
+	// audio post, the MCP upload, a client that sends no on_duplicate.
+	DuplicateReuse DuplicatePolicy = iota
+	// DuplicateAsk returns a *DuplicateMediaError and changes nothing, so the
+	// client can offer "Use the existing file" or "Upload again".
+	DuplicateAsk
+	// DuplicateKeep stores the upload as a new row next to the existing one:
+	// the "Upload again" answer.
+	DuplicateKeep
+)
+
+// ParseDuplicatePolicy reads the on_duplicate form value of the upload
+// endpoints: "ask", "new", or "existing" (also the empty value).
+func ParseDuplicatePolicy(v string) (DuplicatePolicy, bool) {
+	switch v {
+	case "", "existing":
+		return DuplicateReuse, true
+	case "ask":
+		return DuplicateAsk, true
+	case "new":
+		return DuplicateKeep, true
+	}
+	return DuplicateReuse, false
+}
+
+// DuplicateMediaError is the DuplicateAsk result: the upload has the same
+// bytes as Existing, which can be in the trash.
+type DuplicateMediaError struct {
+	Existing models.Medium
+}
+
+func (e *DuplicateMediaError) Error() string {
+	return fmt.Sprintf("media %d has the same content", e.Existing.ID)
+}
+
 type UploadFileParams struct {
 	Content  []byte
 	Filename string
@@ -174,13 +217,14 @@ type UploadFileParams struct {
 	// ("originals/YYYY/MM/file"), as the portable import does. The upload
 	// then refuses a path that is not clean or that is already on disk.
 	OriginalPath string
+	// OnDuplicate applies when media with the same checksum exists.
+	OnDuplicate DuplicatePolicy
 }
 
 func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (models.Medium, error) {
 	checksum := CalculateChecksum(p.Content)
 
-	// Check duplicate
-	if existing, ok, err := s.findDuplicate(ctx, checksum); ok || err != nil {
+	if existing, ok, err := s.findDuplicate(ctx, checksum, p.OnDuplicate); ok || err != nil {
 		return existing, err
 	}
 
@@ -281,6 +325,7 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 		Height:           height,
 		PostID:           postID,
 		Checksum:         checksum,
+		Phash:            phashValue(decoded),
 		AltText:          sql.NullString{String: p.AltText, Valid: p.AltText != ""},
 		Caption:          sql.NullString{String: p.Caption, Valid: p.Caption != ""},
 		Metadata:         metadataJSON,
@@ -304,20 +349,26 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	return media, nil
 }
 
-// findDuplicate returns the media row with checksum, if there is one. A row
-// in the trash is restored first: an upload of the same bytes is a restore, or
-// the file would stay out of the library while its checksum blocks a copy.
-func (s *MediaService) findDuplicate(ctx context.Context, checksum string) (models.Medium, bool, error) {
+// findDuplicate applies policy to the media row with checksum, if there is
+// one. It returns ok when the caller must return existing (or err) and store
+// nothing. DuplicateKeep never looks. DuplicateAsk returns a
+// *DuplicateMediaError. DuplicateReuse returns a live match; a match that is
+// only in the trash is not restored, and the upload becomes a new row.
+func (s *MediaService) findDuplicate(ctx context.Context, checksum string, policy DuplicatePolicy) (models.Medium, bool, error) {
+	if policy == DuplicateKeep {
+		return models.Medium{}, false, nil
+	}
 	existing, err := s.repo.GetMediaByChecksum(ctx, checksum)
 	if err != nil {
 		return models.Medium{}, false, nil
 	}
+	if policy == DuplicateAsk {
+		return models.Medium{}, true, &DuplicateMediaError{Existing: existing}
+	}
+	// GetMediaByChecksum gives a live row first, so a trashed match means no
+	// live copy. No silent restore: store a new row.
 	if existing.DeletedAt.Valid {
-		if _, err := s.RestoreMedia(ctx, []int64{existing.ID}); err != nil {
-			return models.Medium{}, true, err
-		}
-		m, err := s.getMedia(ctx, existing.ID)
-		return m, true, err
+		return models.Medium{}, false, nil
 	}
 	return existing, true, nil
 }
@@ -342,6 +393,18 @@ func (s *MediaService) originalTarget(p UploadFileParams, now time.Time) (string
 	}
 	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
 	originalFullPath := filepath.Clean(filepath.Join(mediaBase, originalRelPath))
+	if p.OriginalPath == "" {
+		// A second copy of the same file in the same second ("Upload again")
+		// must not overwrite the first: add a counter until the name is free.
+		for n := 2; ; n++ {
+			if _, err := os.Stat(originalFullPath); err != nil {
+				break
+			}
+			uniqueFilename = fmt.Sprintf("%d_%d_%s", now.Unix(), n, safeFilename)
+			originalRelPath = filepath.Join("originals", datePath, uniqueFilename)
+			originalFullPath = filepath.Clean(filepath.Join(mediaBase, originalRelPath))
+		}
+	}
 	if !strings.HasPrefix(originalFullPath, mediaBase+string(filepath.Separator)) {
 		return "", "", fmt.Errorf("invalid media path")
 	}
@@ -405,7 +468,7 @@ func (s *MediaService) uploadLargeFile(ctx context.Context, srcPath string, size
 		return models.Medium{}, err
 	}
 	checksum := hex.EncodeToString(h.Sum(nil))
-	if existing, ok, err := s.findDuplicate(ctx, checksum); ok || err != nil {
+	if existing, ok, err := s.findDuplicate(ctx, checksum, p.OnDuplicate); ok || err != nil {
 		return existing, err
 	}
 
@@ -474,6 +537,10 @@ func (s *MediaService) uploadLargeFile(ctx context.Context, srcPath string, size
 		return models.Medium{}, err
 	}
 	s.tagPostFromGPS(ctx, p.PostID, metadata)
+	if fileType == "image" {
+		// The image is not decoded here: the phash job hashes it later.
+		s.enqueuePhash(ctx, media.ID)
+	}
 	s.enqueueTranscode(ctx, media)
 	return media, nil
 }
@@ -627,6 +694,7 @@ func (s *MediaService) ImportFromPath(ctx context.Context, srcPath string) (mode
 		Height:           height,
 		PostID:           sql.NullInt64{},
 		Checksum:         checksum,
+		Phash:            phashValue(decoded),
 		AltText:          sql.NullString{},
 		Caption:          sql.NullString{},
 		Metadata:         metadataJSON,
@@ -1634,6 +1702,110 @@ func (s *MediaService) RebuildThumbnails(ctx context.Context) (RebuildResult, er
 	}
 	res.VideoJobs = videoJobs
 	return res, nil
+}
+
+// MaxDerivativeRebuild bounds the media IDs that one RebuildDerivatives call
+// takes. Each image costs one decode on the request, so the bound keeps the
+// request short.
+const MaxDerivativeRebuild = 100
+
+// DerivativeRebuildResult reports what RebuildDerivatives did. Rebuilt counts
+// the images whose ladder it wrote. VideoJobs counts the poster and transcode
+// jobs it enqueued. Failed lists the IDs it could not repair: no live row, no
+// original file, or a file that does not decode.
+type DerivativeRebuildResult struct {
+	Rebuilt   int     `json:"rebuilt"`
+	VideoJobs int     `json:"video_jobs"`
+	Failed    []int64 `json:"failed"`
+}
+
+// RebuildDerivatives writes the missing derived files of the given media
+// items only. It is the repair for the derivatives item of the site health
+// checks, and it satisfies the same rule (derivativeMissing):
+//   - for an image, it writes each missing or stale rung up to
+//     UploadMaxVariantSize from one decode;
+//   - for a video, it enqueues the transcode job when no fresh transcode
+//     exists, and the poster job when the poster or its file is gone.
+//
+// It does not purge other files, roll the thumbnail generation or drop the
+// public pages: a rung that was missing has no copy in a cache. Images are
+// done in sequence on the caller's context, because the decode semaphore is
+// shared with live requests. Video jobs run behind it.
+func (s *MediaService) RebuildDerivatives(ctx context.Context, ids []int64) (DerivativeRebuildResult, error) {
+	res := DerivativeRebuildResult{Failed: []int64{}}
+	if len(ids) == 0 {
+		return res, wrapKind(ErrInvalidInput, errors.New("no media ids"))
+	}
+	if len(ids) > MaxDerivativeRebuild {
+		return res, wrapKind(ErrInvalidInput, fmt.Errorf("at most %d media ids per call", MaxDerivativeRebuild))
+	}
+	base := s.mediaBase()
+	seen := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if err := ctx.Err(); err != nil {
+			return res, err
+		}
+		m, err := s.getMedia(ctx, id)
+		if errors.Is(err, ErrMediaNotFound) || (err == nil && m.DeletedAt.Valid) {
+			res.Failed = append(res.Failed, id)
+			continue
+		}
+		if err != nil {
+			return res, err
+		}
+		srcFull := filepath.Clean(filepath.Join(base, m.OriginalPath))
+		if !strings.HasPrefix(srcFull, base+string(filepath.Separator)) || !fileExists(srcFull) {
+			res.Failed = append(res.Failed, id)
+			continue
+		}
+		switch {
+		case strings.EqualFold(m.FileType, "image"):
+			if err := s.rebuildImageLadder(ctx, m, srcFull); err != nil {
+				slog.Warn("derivative rebuild failed", "media_id", id, "error", err)
+				res.Failed = append(res.Failed, id)
+				continue
+			}
+			res.Rebuilt++
+		case s.canRunVideoJobs(m):
+			// The poster goes first. Storing a poster removes the derived
+			// files of the item, the transcode too, so a transcode job goes
+			// after each poster job. The worker runs jobs one at a time in
+			// order of their IDs.
+			poster := !s.posterOnDisk(m) && s.enqueueVideoJob(ctx, JobKindVideoPoster, id)
+			if poster {
+				res.VideoJobs++
+			}
+			if (poster || s.TranscodedVideo(m) == "") && s.enqueueVideoJob(ctx, JobKindVideoTranscode, id) {
+				res.VideoJobs++
+			}
+		}
+	}
+	return res, nil
+}
+
+// rebuildImageLadder decodes an image once and writes each missing or stale
+// rung up to UploadMaxVariantSize. It shares the Variant flight key, so a
+// request for the same image at the same time does not decode it again.
+// It stores the decoded size on a row with
+// none, so the health check then knows which rungs the image needs.
+func (s *MediaService) rebuildImageLadder(ctx context.Context, m models.Medium, srcFull string) error {
+	_, err, _ := s.variantFlight.Do(strconv.FormatInt(m.ID, 10), func() (any, error) {
+		data, err := os.ReadFile(srcFull)
+		if err != nil {
+			return nil, err
+		}
+		src, err := s.decodeImage(ctx, data)
+		if err != nil {
+			return nil, err
+		}
+		s.backfillDimensions(ctx, m, src)
+		return nil, s.writeLadder(ctx, m.OriginalPath, src, extractICC(data), srcFull, UploadMaxVariantSize)
+	})
+	return err
 }
 
 // OrientationFixSetting records that the one-time purge of variants cut

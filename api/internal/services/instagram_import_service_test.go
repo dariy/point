@@ -177,3 +177,42 @@ func TestAppendTagUnique(t *testing.T) {
 		})
 	}
 }
+
+// The import has no user to ask: bytes that match a trashed media row make a
+// new row, and the trashed row stays in the trash (no silent restore).
+func TestDownloadMediaURLDoesNotRestoreATrashedMatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("same-bytes-every-time"))
+	}))
+	defer srv.Close()
+
+	svc := newTestImportService(t)
+	ctx := context.Background()
+	first, err := svc.downloadMediaURL(ctx, srv.URL+"/a.mp4", "a.mp4")
+	if err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+	old, err := svc.media.repo.GetMediaByPath(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.media.DeleteMedia(ctx, old.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := svc.downloadMediaURL(ctx, srv.URL+"/a.mp4", "a.mp4")
+	if err != nil {
+		t.Fatalf("second import: %v", err)
+	}
+	if second == first {
+		t.Fatalf("second import reused the trashed file %q", first)
+	}
+	row, err := svc.media.GetMediaByID(ctx, old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !row.DeletedAt.Valid {
+		t.Error("the import restored the trashed row")
+	}
+}

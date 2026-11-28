@@ -12,10 +12,12 @@
  * dot (`onDrop`), then the hold collapses it.
  */
 
+import { PRESS_SLOP_PX } from '../../utils/pointerMode.ts';
+
 /** The press time that shows the peek, ms. */
 export const PEEK_DELAY = 450;
-/** The movement that cancels a press, px. */
-export const PEEK_SLOP = 6;
+/** The movement that cancels a press, px. A peek press is a touch or a pen. */
+export const PEEK_SLOP = PRESS_SLOP_PX;
 /** The time the peek stays after the release, ms. */
 export const PEEK_HOLD = 1500;
 /** The gap between the touch point and the lifted pill, px: clear of a fingertip. */

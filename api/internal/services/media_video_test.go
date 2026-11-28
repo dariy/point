@@ -481,3 +481,66 @@ func TestVideoPosterKeepsTranscode(t *testing.T) {
 		t.Error("the browser poster left a rung of the old poster")
 	}
 }
+
+// TestRebuildDerivatives_Video checks the repair of a video whose poster file
+// is gone: it enqueues the poster job and then the transcode job, and after
+// them the video has all its derived files.
+func TestRebuildDerivatives_Video(t *testing.T) {
+	ff := stubVideoFFmpeg(t, hevcProbe, false)
+	frame := filepath.Join(t.TempDir(), "frame.jpg")
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 16, 9)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(frame, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stub := "#!/bin/sh\nfor a; do last=$a; done\nif [ \"$last\" = pipe:1 ]; then cat '" + frame + "'; else printf mp4 > \"$last\"; fi\n"
+	if err := os.WriteFile(ff.FFmpegPath, []byte(stub), 0o700); err != nil { //nolint:gosec // test stub must be executable
+		t.Fatal(err)
+	}
+	svc, jobs, _ := newVideoMediaService(t, ff)
+	ctx := context.Background()
+	uploaded, err := svc.UploadFile(ctx, UploadFileParams{Filename: "a.mov", Content: []byte("mov"), MimeType: "video/quicktime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	drain := func() {
+		for {
+			ran, err := jobs.RunOnce(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !ran {
+				return
+			}
+		}
+	}
+	drain()
+	media, err := svc.getMedia(ctx, uploaded.ID)
+	if err != nil || !media.ThumbnailPath.Valid {
+		t.Fatalf("no poster after the upload jobs: %+v, %v", media.ThumbnailPath, err)
+	}
+	if err := os.Remove(filepath.Join(svc.mediaBase(), media.ThumbnailPath.String)); err != nil {
+		t.Fatal(err)
+	}
+	if !svc.derivativeMissing(media, svc.mediaBase()) {
+		t.Fatal("a video without its poster file is not reported")
+	}
+
+	res, err := svc.RebuildDerivatives(ctx, []int64{media.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.VideoJobs != 2 || res.Rebuilt != 0 || len(res.Failed) != 0 {
+		t.Fatalf("result = %+v, want 2 video jobs", res)
+	}
+	drain()
+	media, err = svc.getMedia(ctx, media.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if svc.derivativeMissing(media, svc.mediaBase()) {
+		t.Errorf("derivatives still missing after the repair: poster=%v transcode=%q", svc.posterOnDisk(media), svc.TranscodedVideo(media))
+	}
+}

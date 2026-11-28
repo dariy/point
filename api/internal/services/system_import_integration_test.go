@@ -707,3 +707,25 @@ func TestUploadFile_KeepsTheGivenPath(t *testing.T) {
 		t.Errorf("upload to an unsafe path = %v, want ErrInvalidInput", err)
 	}
 }
+
+// TestUploadFile_KeepsDuplicatesForImport checks that DuplicateKeep, the
+// import policy, stores the same bytes twice at two given paths: a library can
+// hold the same file twice since the checksum is not unique.
+func TestUploadFile_KeepsDuplicatesForImport(t *testing.T) {
+	imp, _, _ := newImportTarget(t)
+	ctx := context.Background()
+	var ids []int64
+	for _, path := range []string{"originals/2020/05/a.txt", "originals/2020/06/a.txt"} {
+		m, err := imp.media.UploadFile(ctx, UploadFileParams{
+			Content: []byte("same"), Filename: "a.txt", MimeType: "text/plain",
+			OriginalPath: path, OnDuplicate: DuplicateKeep,
+		})
+		if err != nil || m.OriginalPath != path {
+			t.Fatalf("UploadFile(%s) = %q, %v", path, m.OriginalPath, err)
+		}
+		ids = append(ids, m.ID)
+	}
+	if ids[0] == ids[1] {
+		t.Errorf("both uploads gave media %d, want two rows", ids[0])
+	}
+}

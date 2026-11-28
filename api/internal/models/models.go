@@ -62,6 +62,7 @@ type Medium struct {
 	OriginalMetadata sql.NullString `json:"original_metadata"`
 	IsPublic         int64          `json:"is_public"`
 	DeletedAt        sql.NullTime   `json:"deleted_at"`
+	Phash            sql.NullInt64  `json:"phash"`
 }
 
 type OauthClient struct {

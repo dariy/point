@@ -49,13 +49,15 @@ type videoTranscodePayload struct {
 
 // WithVideo attaches the job store and ffmpeg, and registers the transcode
 // handler. Without ffmpeg (the slim image) no job is enqueued and the original
-// is served.
+// is served. It also registers the perceptual hash backfill (JobKindMediaPhash),
+// which needs no ffmpeg.
 func (s *MediaService) WithVideo(jobs *JobService, ff *FFmpeg) *MediaService {
 	s.jobs, s.ffmpeg = jobs, ff
 	s.videoTimeout, s.videoThreads = defaultVideoTimeout, defaultVideoThreads
 	if jobs != nil {
 		jobs.Register(JobKindVideoTranscode, s.videoJob(s.TranscodeVideo))
 		jobs.Register(JobKindVideoPoster, s.videoJob(s.WriteServerPoster))
+		jobs.Register(JobKindMediaPhash, s.phashJob)
 	}
 	return s
 }
@@ -118,14 +120,22 @@ func (s *MediaService) BackfillVideos(ctx context.Context) (int, error) {
 	return queued, nil
 }
 
+// posterOnDisk reports whether a video item has a stored poster whose file
+// exists.
+func (s *MediaService) posterOnDisk(media models.Medium) bool {
+	return media.ThumbnailPath.Valid && media.ThumbnailPath.String != "" &&
+		fileExists(filepath.Join(s.mediaBase(), media.ThumbnailPath.String))
+}
+
 // WriteServerPoster stores a frame at 10 % of the duration as the poster of a
-// video item. It does nothing when the item already has a poster: a poster
-// from the browser always wins, and it replaces a server poster later.
+// video item. It does nothing when the item already has a poster on disk: a
+// poster from the browser always wins, and it replaces a server poster later.
+// A poster path whose file is gone counts as no poster.
 func (s *MediaService) WriteServerPoster(ctx context.Context, media models.Medium) error {
 	if !s.ffmpeg.Available() {
 		return ErrFFmpegMissing
 	}
-	if media.ThumbnailPath.Valid && media.ThumbnailPath.String != "" {
+	if s.posterOnDisk(media) {
 		return nil
 	}
 	base := s.mediaBase()
@@ -149,7 +159,7 @@ func (s *MediaService) WriteServerPoster(ctx context.Context, media models.Mediu
 	if err != nil {
 		return err
 	}
-	if current.ThumbnailPath.Valid && current.ThumbnailPath.String != "" {
+	if s.posterOnDisk(current) {
 		return nil
 	}
 	if _, err := s.storePoster(ctx, current, frame); err != nil {

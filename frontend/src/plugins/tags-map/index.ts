@@ -24,6 +24,7 @@ import {
   TILE_ATTR,
   TILE_MAX_NATIVE_ZOOM,
   loadLeaflet,
+  setPressTolerance,
 } from "../../utils/leaflet.ts";
 import type { LeafletRef } from "../../utils/leaflet.ts";
 import type { PageProps } from "../../router.ts";
@@ -288,6 +289,9 @@ export default class MapPage extends Component<PageProps> {
       ],
       maxBoundsViscosity: 1.0,
     }).setView([20, 0], 2);
+    // A pencil or a finger tap that skids a few px is still a tap (utils/leaflet.ts).
+    // The listener goes with #map when the page unmounts.
+    setPressTolerance(this._map);
 
     this._tileLayer = L.tileLayer(isDark ? TILE_DARK : TILE_LIGHT, {
       attribution: TILE_ATTR,

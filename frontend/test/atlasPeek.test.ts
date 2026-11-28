@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
+import { PRESS_SLOP_PX } from '../src/utils/pointerMode.ts';
 import { createLongPress, liftPill, PEEK_DELAY, PEEK_HOLD, PEEK_LIFT, PEEK_SLOP } from '../src/plugins/tags-atlas/atlasPeek.ts';
 
 /** A long press on fake timers; `tick(ms)` runs the timers that are due. */
@@ -34,9 +35,10 @@ function harness() {
 }
 
 describe('atlasPeek', () => {
-  test('the defaults: 450 ms, 6 px, 1.5 s', () => {
+  test('the defaults: 450 ms, PRESS_SLOP_PX (10 px), 1.5 s', () => {
     assert.equal(PEEK_DELAY, 450);
-    assert.equal(PEEK_SLOP, 6);
+    assert.equal(PEEK_SLOP, PRESS_SLOP_PX);
+    assert.equal(PEEK_SLOP, 10);
     assert.equal(PEEK_HOLD, 1500);
   });
 
@@ -77,16 +79,16 @@ describe('atlasPeek', () => {
     assert.equal(lp.consumeClick(), false);
   });
 
-  test('a movement of less than 6 px keeps the press; 6 px cancels it', () => {
+  test('a movement of less than 10 px keeps the press; 10 px cancels it', () => {
     const near = harness();
     near.lp.down(7, 1, 100, 100);
-    near.lp.move(1, 103, 104); // 5 px
+    near.lp.move(1, 106, 107); // 9.2 px: a stylus skid
     near.tick(PEEK_DELAY);
     assert.deepEqual(near.log, ['peek 7']);
 
     const far = harness();
     far.lp.down(7, 1, 100, 100);
-    far.lp.move(1, 100, 106); // 6 px: a drag
+    far.lp.move(1, 106, 108); // 10 px: a drag
     far.tick(PEEK_DELAY + PEEK_HOLD);
     assert.deepEqual(far.log, []);
     assert.equal(far.lp.consumeClick(), false);

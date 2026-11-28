@@ -1012,13 +1012,16 @@ func (w *importWriter) writeMedia(side exportMediaSidecar, src string) error {
 		AltText:      side.AltText,
 		Caption:      side.Caption,
 		OriginalPath: side.OriginalPath,
+		// The archive is a copy of a library, which can hold the same bytes
+		// twice ("Upload again"): each sidecar becomes its own row.
+		OnDuplicate: DuplicateKeep,
 	})
 	if err != nil {
 		w.res.addProblem("%s: %v", side.OriginalPath, err)
 		return nil
 	}
 	if m.OriginalPath != side.OriginalPath {
-		// UploadFile found the same bytes already in the library.
+		// Not expected with DuplicateKeep: the upload kept another path.
 		w.res.addProblem("%s: the same file as %s", side.OriginalPath, m.OriginalPath)
 		return nil
 	}

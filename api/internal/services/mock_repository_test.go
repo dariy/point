@@ -1529,3 +1529,19 @@ func (m *mockRepository) DeleteDoneJobsBefore(ctx context.Context, before time.T
 func (m *mockRepository) DeleteFailedJobs(ctx context.Context) (int64, error) {
 	return 0, fmt.Errorf("DeleteFailedJobs not implemented")
 }
+
+func (m *mockRepository) SetMediaPhash(ctx context.Context, arg models.SetMediaPhashParams) error {
+	return fmt.Errorf("SetMediaPhash not implemented")
+}
+
+func (m *mockRepository) ListMediaPhashes(ctx context.Context) ([]models.ListMediaPhashesRow, error) {
+	return nil, fmt.Errorf("ListMediaPhashes not implemented")
+}
+
+func (m *mockRepository) ListImagesWithoutPhash(ctx context.Context, arg models.ListImagesWithoutPhashParams) ([]models.ListImagesWithoutPhashRow, error) {
+	return nil, fmt.Errorf("ListImagesWithoutPhash not implemented")
+}
+
+func (m *mockRepository) ListLiveMediaByIDs(ctx context.Context, ids []int64) ([]models.Medium, error) {
+	return nil, fmt.Errorf("ListLiveMediaByIDs not implemented")
+}

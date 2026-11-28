@@ -19,8 +19,9 @@
  * the viewer and is clipped to the rect (`clip-path: inset(…)`, which also
  * clips hit-testing: a click outside the rect reaches the page below). The view
  * is offset so `center` sits at the rect centre. In a window, drag and pinch
- * move the map; a tap (no move past TAP_SLOP_PX) calls `onTap`, and a tap on a
- * place calls `onTap` too, not the place's tag page. `animateTo` tweens the
+ * move the map; a tap (no move past TAP_SLOP_PX for a mouse, PRESS_SLOP_PX for
+ * a pen or a touch) calls `onTap`, and a tap on a place calls `onTap` too, not
+ * the place's tag page. `animateTo` tweens the
  * clip (and the window centre) from one presentation to the next, at a fixed
  * zoom; under `prefers-reduced-motion: reduce` it is instant.
  *
@@ -29,6 +30,9 @@
  * container and the rect corner in `--atlas-window-top` and
  * `--atlas-window-right` (box px). The hint is off during a tween, so it fades
  * out when the window grows and comes back when the window is on its slot.
+ *
+ * A window that goes to `hidden` goes at once, with no slide: without its
+ * clip the whole map would slide up over the page.
  *
  * A box change (a rotation) puts the window on the new box at once: a new clip
  * and a new offset, and the point at the window centre stays there. A present
@@ -428,7 +432,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
    * a tap calls `onTap`, a click after a drag does nothing.
    */
   const listen = (el: HTMLElement) => {
-    const down = (e: PointerEvent) => gate.down(e.pointerId, e.clientX, e.clientY);
+    const down = (e: PointerEvent) => gate.down(e.pointerId, e.clientX, e.clientY, e.pointerType);
     const move = (e: PointerEvent) => gate.move(e.pointerId, e.clientX, e.clientY);
     const up = (e: PointerEvent) => gate.up(e.pointerId);
     const click = (e: MouseEvent) => {
@@ -607,10 +611,21 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
       presentWindow(req);
       return;
     }
+    const fromWindow = current === 'window';
     leaveWindow();
     const p = req;
     current = p;
     if (container) container.dataset.atlasOcean = p;
+    // A window goes at once. Without the clip the whole map is on screen, and
+    // the `hidden` rule would slide it up over the page for 0.28s: the blink
+    // after each shut of a post's sheet (p-sheet-close-blink-dnq6l). The style
+    // is computed with no transition, then the transition comes back, so the
+    // next slide of a list page still runs.
+    if (fromWindow && p === 'hidden' && container) {
+      container.style.transition = 'none';
+      void container.offsetHeight;
+      container.style.transition = '';
+    }
     // A hidden map keeps its view: its box changes size, and the next show
     // must not find a centre that `maxBounds` moved (atlasLayerMap.ts::park).
     if (p === 'hidden') map?.park();

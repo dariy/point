@@ -1068,3 +1068,12 @@ select.mb-type-filter:hover {
     font-size: var(--font-size-xs);
     color: var(--color-warning);
 }
+
+/* Possible duplicates view: each set of copies starts a new grid row. */
+.media-item--group-start {
+    grid-column-start: 1;
+}
+
+.media-item-dup-set {
+    font-weight: 600;
+}

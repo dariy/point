@@ -249,3 +249,35 @@ a.stat-card:hover {
 .version-update-dismiss:hover {
     opacity: 1;
 }
+
+/* Health dot — one dot in the header when a site health item needs action.
+   The link is a full touch target; the dot is drawn in its centre. */
+.health-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--header-action-btn-height, 2.5rem);
+    height: var(--header-action-btn-height, 2.5rem);
+    flex: 0 0 auto;
+    border-radius: 50%;
+}
+
+.health-dot::before {
+    content: "";
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    /* Not --color-warning: the dark theme maps it to the inverted text colour. */
+    background: var(--color-amber-500);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+}
+
+.health-dot--fail::before {
+    background: var(--color-danger);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+}
+
+.health-dot:hover,
+.health-dot:focus-visible {
+    background: var(--surface-hover);
+}

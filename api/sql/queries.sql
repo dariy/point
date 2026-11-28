@@ -394,8 +394,12 @@ SELECT * FROM media
 WHERE id = ? LIMIT 1;
 
 -- name: GetMediaByChecksum :one
+-- checksum is not unique: "Upload again" keeps a second copy. A live row
+-- wins over a trashed one, then the oldest.
 SELECT * FROM media
-WHERE checksum = ? LIMIT 1;
+WHERE checksum = ?
+ORDER BY (deleted_at IS NOT NULL), id
+LIMIT 1;
 
 -- name: ListMedia :many
 SELECT * FROM media
@@ -411,11 +415,33 @@ AND deleted_at IS NULL;
 
 -- name: CreateMedia :one
 INSERT INTO media (
-    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, original_metadata, uploaded_at
+    filename, original_path, thumbnail_path, file_type, mime_type, file_size, width, height, post_id, checksum, alt_text, caption, metadata, original_metadata, uploaded_at, phash
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
+
+-- name: SetMediaPhash :exec
+UPDATE media SET phash = ? WHERE id = ?;
+
+-- name: ListMediaPhashes :many
+-- The perceptual hash of each live image. services.PossibleDuplicates
+-- compares the hashes in Go: SQLite has no popcount.
+SELECT id, phash FROM media
+WHERE phash IS NOT NULL AND deleted_at IS NULL
+ORDER BY id;
+
+-- name: ListLiveMediaByIDs :many
+SELECT * FROM media
+WHERE id IN (sqlc.slice('ids')) AND deleted_at IS NULL;
+
+-- name: ListImagesWithoutPhash :many
+-- One batch of the perceptual hash backfill job. It includes trashed images,
+-- because a restore brings them back.
+SELECT id, original_path, mime_type FROM media
+WHERE file_type = 'image' AND phash IS NULL AND id > sqlc.arg('after_id')
+ORDER BY id
+LIMIT sqlc.arg('limit');
 
 -- name: UpdateMedia :one
 UPDATE media
