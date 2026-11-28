@@ -350,7 +350,9 @@ body:has(.light-layout) {
 
 .sidebar-build-debug {
     /* Loud — debug bundle is shipping debug logging; make it unmistakable. */
-    color: #fff;
+    /* --color-on-warning, not #fff: the dark theme's amber --color-warning
+       is light, so white text on it fails contrast. */
+    color: var(--color-on-warning, #fff);
     background: var(--color-warning, #d9822b);
     opacity: 1;
     font-weight: 600;
