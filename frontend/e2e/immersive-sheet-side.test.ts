@@ -33,6 +33,16 @@ describe('Immersive sheet in touch landscape', () => {
     ({ browser, context: ctx } = await launchFor(undefined, touch, { hasTouch: true }));
     page = await ctx.newPage();
     await page.addInitScript(() => { localStorage.removeItem('atlasLayerState'); localStorage.removeItem('pointerFine'); });
+    // A touch-only device. Chromium with touch emulation still has a mouse: at
+    // each page load it sends a trusted `pointermove` of type "mouse" at (0, 0),
+    // the hover update for the mouse position. When app.js has started before
+    // that event, pointerMode.ts marks the page `pointer-fine`, and the side
+    // layout does not come (p-yao5z). This listener is on window before the
+    // listeners of the app, so it stops each mouse pointer event first.
+    await page.addInitScript(() => {
+      const noMouse = (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') e.stopImmediatePropagation(); };
+      for (const type of ['pointermove', 'pointerdown']) window.addEventListener(type, noMouse, { capture: true });
+    });
     await page.route(/arcgisonline\.com/, (route) => route.abort());
 
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
@@ -66,6 +76,10 @@ describe('Immersive sheet in touch landscape', () => {
     // A new history entry: WebKit keeps the state of a goto to the same URL with a hash.
     await page.goto('about:blank');
     await page.goto(`${BASE}/posts/${slug}#1`);
+    // The mouse move that Chromium sends at a page load, but always after app.js:
+    // without the touch-only guard in before(), each test then fails.
+    await page.mouse.move(5, 5);
+    await page.mouse.move(0, 0);
     await page.locator('.immersive-sheet-mode').waitFor({ state: 'attached' });
   };
 
