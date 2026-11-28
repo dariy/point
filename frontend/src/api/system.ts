@@ -83,8 +83,12 @@ export function getHealth(): Promise<{
   return api.get('/api/system/health');
 }
 
-/** The status of one site health item, and of the report (its worst item). */
-export type SiteHealthStatus = 'ok' | 'warn' | 'fail';
+/**
+ * The status of one site health item, and of the report (its worst item).
+ * `info` is a choice of the admin, not a problem (scheduled backups are off):
+ * it shows no dashboard dot.
+ */
+export type SiteHealthStatus = 'ok' | 'info' | 'warn' | 'fail';
 
 /**
  * One site health check result — services.HealthItem in
@@ -99,7 +103,7 @@ export interface SiteHealthItem {
   ids?: number[];
   /** Media paths that a published post shows and that have no live media row. */
   samples?: string[];
-  /** A short English reason for warn and fail. */
+  /** A short English reason for info, warn and fail. */
   detail?: string;
   /** The time of the last backup or the last restore check. */
   at?: string;
@@ -398,7 +402,8 @@ export function auditPostLinks(): Promise<{
 
 /**
  * The status of the dashboard health dot: the worst site health item, and
- * `warn` for any failed job. Null when everything is ok or nothing is known.
+ * `warn` for any failed job. Null when every item is ok or info, or nothing is
+ * known.
  */
 export function healthDotStatus(
   report: SiteHealthReport | null,

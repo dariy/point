@@ -205,12 +205,13 @@ the checks again. The service is `services.SiteHealth` (`api/internal/services/s
 | `derivatives` | warn: an image has no rung that upload writes (up to `UploadMaxVariantSize`), or a video has no poster or transcode that the server can make | media |
 | `originals` | fail: the original file of a media row is gone | media |
 | `references` | fail: a published post shows a media path with no live media row (never uploaded, or in the trash); `samples` has example paths | posts |
-| `backup` | fail: no backup, or older than 7 days; warn: older than 2 days, or scheduled backups are off; ok when the host manages backups | — |
-| `restore_check` | fail: the last restore check failed; warn: none ran, or older than 14 days | — |
+| `backup` | fail: no backup, or older than 7 days; warn: older than 2 days; info: scheduled backups are off (the backups plugin or `enable_backup` is off); ok when the host manages backups | — |
+| `restore_check` | fail: the last restore check failed; warn: none ran, or older than 14 days; info: none ran or older than 14 days while scheduled backups are off | — |
 | `storage` | fail: free space under 1 GiB or 5 %; warn: under 10 % | — |
 
-Each item has `status` (`ok`, `warn`, `fail`), `count` and at most 100 `ids`. The report has
-`checked_at` and the worst `status`.
+Each item has `status` (`ok`, `info`, `warn`, `fail`), `count` and at most 100 `ids`. `info` is a
+choice of the admin, not a problem. The report has `checked_at` and the worst `status`
+(`ok` < `info` < `warn` < `fail`).
 
 - **Cached.** A GET returns the last report. It runs the checks only when no report exists in
   this process. The scheduler refreshes the report daily at 6 AM, after the backup.
@@ -232,9 +233,12 @@ Each item has `status` (`ok`, `warn`, `fail`), `count` and at most 100 `ids`. Th
 checks, the Job Queue, the Background Jobs and the disk. The site checks list one row per item,
 with its status and its repair action: **Retry job** for the newest failed job (failed jobs come
 first, from the job queue), **Rebuild derivatives** for the `derivatives` IDs, and **Open post**
-for the `references` IDs. **Check now** runs the checks again. The dashboard shows one dot in its
+for the `references` IDs. An `info` backup or restore check row has **Enable backups**, a link to
+`/light/plugins?plugin=backups`: the Plugins page shows the backups row and, when the plugin is
+on, opens its settings drawer. **Check now** runs the checks again. The dashboard shows one dot in its
 header when an item is `warn` or `fail`, or a job failed. The dot links to `/light/system#health`.
-There is no dot when all items are `ok` or when the report cannot be read.
+There is no dot when all items are `ok` or `info`, or when the report cannot be read. A fresh
+install has the backups plugin off, so it shows no dot.
 
 ## Log level
 

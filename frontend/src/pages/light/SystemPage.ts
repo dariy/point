@@ -248,13 +248,13 @@ export default class SystemPage extends Component {
         const text = item.at
           ? html`Last backup ${this._ago(item.at)}.${item.detail && item.status !== "ok" ? html` ${this._sentence(item.detail)}` : ""}`
           : html`${this._sentence(item.detail || "No backup exists.")}`;
-        return this._healthRow(item.key, item.status, "Backup", text, "");
+        return this._healthRow(item.key, item.status, "Backup", text, this._enableBackupsAction(item));
       }
       case "restore_check": {
         const text = item.at
           ? html`Last restore check ${this._ago(item.at)}.${item.detail && item.status !== "ok" ? html` ${this._sentence(item.detail)}` : ""}`
           : html`${this._sentence(item.detail || "No restore check has run.")}`;
-        return this._healthRow(item.key, item.status, "Restore check", text, "");
+        return this._healthRow(item.key, item.status, "Restore check", text, this._enableBackupsAction(item));
       }
       case "storage": {
         const text = item.total_bytes
@@ -267,12 +267,24 @@ export default class SystemPage extends Component {
     }
   }
 
+  /**
+   * The action of an `info` backup or restore check item: scheduled backups
+   * are off. The link opens the backups plugin on the Plugins page.
+   */
+  _enableBackupsAction(item: SiteHealthItem) {
+    return item.status === "info"
+      ? html`<a class="btn btn-secondary btn-sm" data-enable-backups href="/light/plugins?plugin=backups">Enable backups</a>`
+      : "";
+  }
+
   _healthRow(key: string, status: SiteHealthStatus, label: string, text: unknown, action: unknown) {
     const badge = status === "fail"
       ? html`<span class="badge badge-danger">Fail</span>`
       : status === "warn"
         ? html`<span class="badge badge-warning">Warn</span>`
-        : html`<span class="badge badge-success">OK</span>`;
+        : status === "info"
+          ? html`<span class="badge badge-primary">Info</span>`
+          : html`<span class="badge badge-success">OK</span>`;
     return html`
       <li class="health-item health-item--${status}" data-health-item="${key}" data-status="${status}">
         <div class="health-item-head">${badge}<strong>${label}</strong></div>

@@ -23,6 +23,9 @@ type HealthStatus string
 const (
 	// HealthOK means the item needs no action.
 	HealthOK HealthStatus = "ok"
+	// HealthInfo means the item is a choice of the admin, not a problem: for
+	// example, scheduled backups are off. It shows no dashboard dot.
+	HealthInfo HealthStatus = "info"
 	// HealthWarn means the item needs action, but visitors see no breakage yet.
 	HealthWarn HealthStatus = "warn"
 	// HealthFail means the item is broken now, or data is at risk.
@@ -83,7 +86,7 @@ type HealthItem struct {
 	// Samples are example media paths that a reference points to and that
 	// have no live media row.
 	Samples []string `json:"samples,omitempty"`
-	// Detail is a short reason for warn and fail.
+	// Detail is a short reason for info, warn and fail.
 	Detail string `json:"detail,omitempty"`
 	// At is the time of the last backup or the last restore check.
 	At *time.Time `json:"at,omitempty"`
@@ -198,7 +201,7 @@ func (h *SiteHealth) run(ctx context.Context) (SiteHealthReport, error) {
 		originals,
 		references,
 		h.checkBackup(ctx),
-		h.checkRestoreCheck(),
+		h.checkRestoreCheck(ctx),
 		h.checkStorage(),
 	}
 	r := SiteHealthReport{
@@ -214,7 +217,7 @@ func (h *SiteHealth) run(ctx context.Context) (SiteHealthReport, error) {
 }
 
 func worseStatus(a, b HealthStatus) HealthStatus {
-	rank := map[HealthStatus]int{HealthOK: 0, HealthWarn: 1, HealthFail: 2}
+	rank := map[HealthStatus]int{HealthOK: 0, HealthInfo: 1, HealthWarn: 2, HealthFail: 3}
 	if rank[b] > rank[a] {
 		return b
 	}
@@ -437,10 +440,8 @@ func (h *SiteHealth) checkBackup(ctx context.Context) HealthItem {
 	if h.system.BackupManaged() {
 		return it
 	}
-	all, _ := h.settings.Snapshot(ctx)
-	setting, _ := h.settings.GetSetting(ctx, "enable_backup", "true")
-	if !plugins.IsEnabled("backups", all) || !h.system.BackupEnabled(setting) {
-		it.Status, it.Detail = HealthWarn, "scheduled backups are off"
+	if !h.backupsScheduled(ctx) {
+		it.Status, it.Detail = HealthInfo, "scheduled backups are off"
 		return it
 	}
 	age := h.now().Sub(last)
@@ -455,6 +456,15 @@ func (h *SiteHealth) checkBackup(ctx context.Context) HealthItem {
 	return it
 }
 
+// backupsScheduled reports whether the daily backup task runs: the backups
+// plugin is on and the enable_backup setting is true. Managed mode always
+// schedules backups.
+func (h *SiteHealth) backupsScheduled(ctx context.Context) bool {
+	all, _ := h.settings.Snapshot(ctx)
+	setting, _ := h.settings.GetSetting(ctx, "enable_backup", "true")
+	return plugins.IsEnabled("backups", all) && h.system.BackupEnabled(setting)
+}
+
 // healthRestoreCheck is the part of the stored restore check result that the
 // health check reads.
 type healthRestoreCheck struct {
@@ -465,9 +475,17 @@ type healthRestoreCheck struct {
 }
 
 // checkRestoreCheck reports the age and result of the last restore check.
-func (h *SiteHealth) checkRestoreCheck() HealthItem {
+// The daily backup task runs the restore check, so when scheduled backups are
+// off, a missing or old restore check is info, not a problem. A failed restore
+// check stays fail.
+func (h *SiteHealth) checkRestoreCheck(ctx context.Context) HealthItem {
 	it := HealthItem{Key: HealthItemRestoreCheck, Status: HealthOK}
+	scheduled := h.system.BackupManaged() || h.backupsScheduled(ctx)
 	data, err := os.ReadFile(filepath.Join(h.system.dataPath, "backups", healthRestoreCheckFile))
+	if errors.Is(err, os.ErrNotExist) && !scheduled {
+		it.Status, it.Detail = HealthInfo, "scheduled backups are off"
+		return it
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		it.Status, it.Detail = HealthWarn, "no restore check has run"
 		return it
@@ -488,6 +506,8 @@ func (h *SiteHealth) checkRestoreCheck() HealthItem {
 		if rc.Error != "" {
 			it.Detail += ": " + rc.Error
 		}
+	case h.now().Sub(rc.CheckedAt) > restoreCheckWarnAge && !scheduled:
+		it.Status, it.Detail = HealthInfo, "scheduled backups are off"
 	case h.now().Sub(rc.CheckedAt) > restoreCheckWarnAge:
 		it.Status, it.Detail = HealthWarn, "the last restore check is older than 14 days"
 	}

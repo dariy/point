@@ -157,6 +157,8 @@ export default class PluginsPage extends Component {
   _mappedIds = new Set<string>();
   _settingsCache: Settings | null = null;
   _panel: PluginSettingsPanel | null = null;
+  /** The ?plugin= deep link is handled once, after the first render with data. */
+  _deepLinkDone = false;
 
   constructor(container: HTMLElement, props = {}) {
     super(container, props);
@@ -550,6 +552,24 @@ export default class PluginsPage extends Component {
     });
 
     this._wireMap();
+    this._openDeepLink();
+  }
+
+  /**
+   * `/light/plugins?plugin=<id>` (the Health section's "Enable backups" link)
+   * reveals the plugin's row. When the plugin is on and has a settings drawer,
+   * it opens the drawer too.
+   */
+  _openDeepLink() {
+    if (this._deepLinkDone) return;
+    this._deepLinkDone = true;
+    const id = new URLSearchParams(window.location.search).get("plugin");
+    if (!id) return;
+    const cards = new Map<string, HTMLElement>();
+    this.$$(".plugin-card").forEach((c) => cards.set(c.dataset.id || "", c));
+    this._revealPlugin(id, cards);
+    const plugin = (this.state.plugins as PluginView[]).find((p) => p.id === id);
+    if (plugin?.enabled && PLUGIN_SETTINGS[id]) void this._openPanel(id);
   }
 
   /**

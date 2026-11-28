@@ -115,6 +115,23 @@ describe('System page Health section', () => {
     assert.match(el.querySelector('[data-health-item="backup"]')!.textContent!, /No backup exists\./);
   });
 
+  test('backups off: the backup and restore check items are info with an Enable backups link', () => {
+    const items = okReport.items.map((i) => i.key === 'backup' || i.key === 'restore_check'
+      ? { key: i.key, status: 'info' as const, count: 0, detail: 'scheduled backups are off' }
+      : i);
+    const el = pageMarkup({ checks: { ...okReport, status: 'info', items } });
+    for (const k of ['backup', 'restore_check']) {
+      const row = el.querySelector(`[data-health-item="${k}"]`)!;
+      assert.equal(row.getAttribute('data-status'), 'info');
+      assert.match(row.textContent!, /Info/);
+      assert.match(row.textContent!, /Scheduled backups are off\./);
+      assert.equal(row.querySelector('[data-enable-backups]')?.getAttribute('href'), '/light/plugins?plugin=backups');
+    }
+    // An ok or a failed backup has no Enable backups link.
+    assert.equal(pageMarkup({}).querySelector('[data-enable-backups]'), null);
+    assert.equal(pageMarkup({ checks: badReport }).querySelector('[data-enable-backups]'), null);
+  });
+
   test('a partial check says that its count is not complete', () => {
     const report = { ...badReport, items: [{ key: 'derivatives' as const, status: 'ok' as const, count: 0, partial: true }] };
     const el = pageMarkup({ checks: report });
@@ -198,5 +215,16 @@ describe('Dashboard health dot', () => {
     const warn = { ...okReport, items: [{ key: 'backup' as const, status: 'warn' as const, count: 0 }] };
     assert.equal(healthDotStatus(warn, 0), 'warn');
     assert.equal(healthDotStatus(badReport, 0), 'fail');
+  });
+
+  test('backups off is info: no dot; a stale or failed backup shows the dot', () => {
+    const withBackup = (status: 'ok' | 'info' | 'warn' | 'fail') => ({
+      ...okReport,
+      items: okReport.items.map((i) => (i.key === 'backup' ? { ...i, status } : i)),
+    });
+    assert.equal(healthDotStatus(withBackup('info'), 0), null);
+    assert.equal(healthDotStatus(withBackup('ok'), 0), null);
+    assert.equal(healthDotStatus(withBackup('warn'), 0), 'warn');
+    assert.equal(healthDotStatus(withBackup('fail'), 0), 'fail');
   });
 });

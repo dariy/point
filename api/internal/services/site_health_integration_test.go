@@ -206,9 +206,56 @@ func TestSiteHealth_Backup(t *testing.T) {
 	if err := f.media.settingsService.SetSetting(ctx, "enable_backup", "false", "boolean"); err != nil {
 		t.Fatal(err)
 	}
-	check(HealthWarn)
+	if it := check(HealthInfo); it.Detail != "scheduled backups are off" {
+		t.Errorf("detail = %q, want the off reason", it.Detail)
+	}
 	f.system.WithManagedBackups(true)
 	check(HealthOK)
+}
+
+// A fresh install has the backups plugin off. The backup and restore check
+// items are info, not problems, so the report has no warn and no fail.
+func TestSiteHealth_BackupsOffIsInfo(t *testing.T) {
+	f := newSiteHealthFixture(t)
+	ctx := context.Background()
+	if err := f.media.settingsService.SetSetting(ctx, plugins.EnabledKey("backups"), "false", "boolean"); err != nil {
+		t.Fatal(err)
+	}
+	r, err := f.sh.Refresh(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{HealthItemBackup, HealthItemRestoreCheck} {
+		if it := item(t, r, k); it.Status != HealthInfo || it.Detail != "scheduled backups are off" {
+			t.Errorf("%s = %+v, want info with the off reason", k, it)
+		}
+	}
+	// An old restore check is info too; a failed one stays fail.
+	f.writeRestoreCheck(t, healthRestoreCheck{Backup: "b.tar.gz", CheckedAt: time.Now().Add(-20 * 24 * time.Hour), Passed: true})
+	r, _ = f.sh.Refresh(ctx)
+	if it := item(t, r, HealthItemRestoreCheck); it.Status != HealthInfo {
+		t.Errorf("old restore check with backups off = %+v, want info", it)
+	}
+	f.writeRestoreCheck(t, healthRestoreCheck{Backup: "b.tar.gz", CheckedAt: time.Now(), Passed: false})
+	r, _ = f.sh.Refresh(ctx)
+	if it := item(t, r, HealthItemRestoreCheck); it.Status != HealthFail {
+		t.Errorf("failed restore check with backups off = %+v, want fail", it)
+	}
+}
+
+func TestWorseStatus(t *testing.T) {
+	order := []HealthStatus{HealthOK, HealthInfo, HealthWarn, HealthFail}
+	for i, a := range order {
+		for j, b := range order {
+			want := a
+			if j > i {
+				want = b
+			}
+			if got := worseStatus(a, b); got != want {
+				t.Errorf("worseStatus(%s, %s) = %s, want %s", a, b, got, want)
+			}
+		}
+	}
 }
 
 func TestSiteHealth_RestoreCheck(t *testing.T) {
