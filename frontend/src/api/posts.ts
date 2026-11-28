@@ -267,3 +267,48 @@ export function publishPostToInstagram(id: number): Promise<Post> {
 export function previewRender(content: string): Promise<{ html: string }> {
   return api.post('/api/posts/preview-render', { content });
 }
+
+/**
+ * Revision kinds (post_revisions.kind): a manual save, a publish, the last
+ * autosave of an editor session, or a restore of an older revision.
+ */
+export type PostRevisionKind = 'manual' | 'publish' | 'autosave' | 'restore';
+
+/** One row of a post's history list — PostRevisionSummary, with no body. */
+export interface PostRevisionSummary {
+  id: number;
+  kind: PostRevisionKind;
+  created_at: string;
+  title: string;
+}
+
+/** One saved version of a post, in full — services.PostRevision. */
+export interface PostRevision extends PostRevisionSummary {
+  post_id: number;
+  /** Source markdown. */
+  content: string;
+  /** Tag names. */
+  tags: string[];
+  css: string;
+}
+
+/** List the revisions of a post, newest first. */
+export function listPostRevisions(id: number): Promise<{ revisions: PostRevisionSummary[] }> {
+  return api.get(`/api/posts/${id}/revisions`);
+}
+
+/** Get one revision of a post in full. */
+export function getPostRevision(id: number, revisionId: number): Promise<PostRevision> {
+  return api.get(`/api/posts/${id}/revisions/${revisionId}`);
+}
+
+/**
+ * Write a revision back to the post. The server keeps the newer revisions and
+ * records the restore as a new revision.
+ *
+ * @returns The post after the restore, as getPost returns it.
+ */
+export function restorePostRevision(id: number, revisionId: number): Promise<Post> {
+  clearPostReadCache();
+  return api.post(`/api/posts/${id}/revisions/${revisionId}/restore`);
+}
