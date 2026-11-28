@@ -893,15 +893,29 @@ export default class PostEditPage extends Component<PageProps> {
     };
   }
   async _save(overrides = {}) {
+    const form = this._collectFormData();
     const data = {
       ...this._applyPageType({
-        ...this._collectFormData(),
+        ...form,
         ...overrides
       }),
       save_kind: 'manual' as const
     };
+    // setState re-renders the form from state.post. Put the typed values in
+    // state.post first, so that the re-render here and the one after a failed
+    // save keep the edits. The overrides stay out: a failed "Publish now" must
+    // not show the post as published.
+    const typed = this._applyPageType(form);
     this.setState({
-      saving: true
+      saving: true,
+      post: {
+        ...(this.state.post || {}),
+        ...typed,
+        tags: (typed.tags || []).map(name => ({
+          name,
+          slug: name
+        }))
+      }
     });
     setAutosaveStatus({
       status: 'saving'

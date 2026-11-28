@@ -6,7 +6,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { type Browser, type BrowserContext, type Page } from 'playwright';
-import { launchFor } from './devices.ts';
+import { launchFor, touchOnly } from './devices.ts';
 import crypto from 'node:crypto';
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:8001';
@@ -33,16 +33,8 @@ describe('Immersive sheet in touch landscape', () => {
     ({ browser, context: ctx } = await launchFor(undefined, touch, { hasTouch: true }));
     page = await ctx.newPage();
     await page.addInitScript(() => { localStorage.removeItem('atlasLayerState'); localStorage.removeItem('pointerFine'); });
-    // A touch-only device. Chromium with touch emulation still has a mouse: at
-    // each page load it sends a trusted `pointermove` of type "mouse" at (0, 0),
-    // the hover update for the mouse position. When app.js has started before
-    // that event, pointerMode.ts marks the page `pointer-fine`, and the side
-    // layout does not come (p-yao5z). This listener is on window before the
-    // listeners of the app, so it stops each mouse pointer event first.
-    await page.addInitScript(() => {
-      const noMouse = (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') e.stopImmediatePropagation(); };
-      for (const type of ['pointermove', 'pointerdown']) window.addEventListener(type, noMouse, { capture: true });
-    });
+    // A touch-only device: see devices.ts::touchOnly (p-yao5z).
+    await touchOnly(page);
     await page.route(/arcgisonline\.com/, (route) => route.abort());
 
     const setup = await api('/api/setup', { name: PW, blog_title: 'E2E Blog', author_name: 'E2E User', email: 'e2e@example.com' });
@@ -77,7 +69,7 @@ describe('Immersive sheet in touch landscape', () => {
     await page.goto('about:blank');
     await page.goto(`${BASE}/posts/${slug}#1`);
     // The mouse move that Chromium sends at a page load, but always after app.js:
-    // without the touch-only guard in before(), each test then fails.
+    // without touchOnly() in before(), each test then fails.
     await page.mouse.move(5, 5);
     await page.mouse.move(0, 0);
     await page.locator('.immersive-sheet-mode').waitFor({ state: 'attached' });
@@ -182,7 +174,7 @@ describe('Immersive sheet in touch landscape', () => {
     assert.ok(Math.abs(l.close!.right - (size.width - 24)) <= 16, 'portrait: the close cross is at the right edge: ' + text);
   };
 
-  /** The ocean slides away after the panel slide: wait for its end, so a touch reaches the photo. */
+  /** The ocean hides after the panel slide: wait for it, so a touch reaches the photo. */
   const oceanGone = () => page.waitForFunction(() => {
     const map = document.querySelector('body > .atlas-layer-map');
     return !map || getComputedStyle(map).visibility === 'hidden';
