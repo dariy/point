@@ -180,47 +180,13 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	checksum := CalculateChecksum(p.Content)
 
 	// Check duplicate
-	existing, err := s.repo.GetMediaByChecksum(ctx, checksum)
-	if err == nil {
-		// The same bytes in the trash: an upload of them is a restore, or the
-		// file would stay out of the library while its checksum blocks a copy.
-		if existing.DeletedAt.Valid {
-			if _, err := s.RestoreMedia(ctx, []int64{existing.ID}); err != nil {
-				return models.Medium{}, err
-			}
-			return s.getMedia(ctx, existing.ID)
-		}
-		return existing, nil
+	if existing, ok, err := s.findDuplicate(ctx, checksum); ok || err != nil {
+		return existing, err
 	}
 
 	now := time.Now().UTC().Round(0)
-	datePath := fmt.Sprintf("%d/%02d", now.Year(), now.Month())
-
-	// Strip any directory components from the user-provided filename to
-	// prevent path traversal (e.g. "../../etc/passwd").
-	safeFilename := filepath.Base(filepath.Clean("/" + p.Filename))
-	uniqueFilename := fmt.Sprintf("%d_%s", now.Unix(), safeFilename)
-	originalRelPath := filepath.Join("originals", datePath, uniqueFilename)
-	if p.OriginalPath != "" {
-		rel, ok := exportMediaPath(p.OriginalPath)
-		if !ok {
-			return models.Medium{}, wrapKind(ErrInvalidInput, fmt.Errorf("invalid media path %q", p.OriginalPath))
-		}
-		originalRelPath = filepath.FromSlash(rel)
-	}
-	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
-	originalFullPath := filepath.Clean(filepath.Join(mediaBase, originalRelPath))
-	if !strings.HasPrefix(originalFullPath, mediaBase+string(filepath.Separator)) {
-		return models.Medium{}, fmt.Errorf("invalid media path")
-	}
-	if p.OriginalPath != "" {
-		if _, err := os.Lstat(originalFullPath); err == nil {
-			return models.Medium{}, wrapKind(ErrConflict, fmt.Errorf("media path %q is already on disk", p.OriginalPath))
-		}
-	}
-
-	// Create directories
-	if err := os.MkdirAll(filepath.Dir(originalFullPath), 0755); err != nil {
+	originalRelPath, originalFullPath, err := s.originalTarget(p, now)
+	if err != nil {
 		return models.Medium{}, err
 	}
 
@@ -336,6 +302,208 @@ func (s *MediaService) UploadFile(ctx context.Context, p UploadFileParams) (mode
 	s.enqueueTranscode(ctx, media)
 
 	return media, nil
+}
+
+// findDuplicate returns the media row with checksum, if there is one. A row
+// in the trash is restored first: an upload of the same bytes is a restore, or
+// the file would stay out of the library while its checksum blocks a copy.
+func (s *MediaService) findDuplicate(ctx context.Context, checksum string) (models.Medium, bool, error) {
+	existing, err := s.repo.GetMediaByChecksum(ctx, checksum)
+	if err != nil {
+		return models.Medium{}, false, nil
+	}
+	if existing.DeletedAt.Valid {
+		if _, err := s.RestoreMedia(ctx, []int64{existing.ID}); err != nil {
+			return models.Medium{}, true, err
+		}
+		m, err := s.getMedia(ctx, existing.ID)
+		return m, true, err
+	}
+	return existing, true, nil
+}
+
+// originalTarget returns the relative and the full path of a new original,
+// and makes its directory. It refuses a path outside the media directory, and
+// a given OriginalPath that is not clean or that is already on disk.
+func (s *MediaService) originalTarget(p UploadFileParams, now time.Time) (string, string, error) {
+	datePath := fmt.Sprintf("%d/%02d", now.Year(), now.Month())
+
+	// Strip any directory components from the user-provided filename to
+	// prevent path traversal (e.g. "../../etc/passwd").
+	safeFilename := filepath.Base(filepath.Clean("/" + p.Filename))
+	uniqueFilename := fmt.Sprintf("%d_%s", now.Unix(), safeFilename)
+	originalRelPath := filepath.Join("originals", datePath, uniqueFilename)
+	if p.OriginalPath != "" {
+		rel, ok := exportMediaPath(p.OriginalPath)
+		if !ok {
+			return "", "", wrapKind(ErrInvalidInput, fmt.Errorf("invalid media path %q", p.OriginalPath))
+		}
+		originalRelPath = filepath.FromSlash(rel)
+	}
+	mediaBase := filepath.Clean(filepath.Join(s.cfg.StoragePath, "media"))
+	originalFullPath := filepath.Clean(filepath.Join(mediaBase, originalRelPath))
+	if !strings.HasPrefix(originalFullPath, mediaBase+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("invalid media path")
+	}
+	if p.OriginalPath != "" {
+		if _, err := os.Lstat(originalFullPath); err == nil {
+			return "", "", wrapKind(ErrConflict, fmt.Errorf("media path %q is already on disk", p.OriginalPath))
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(originalFullPath), 0755); err != nil {
+		return "", "", err
+	}
+	return originalRelPath, originalFullPath, nil
+}
+
+// uploadMemoryLimit is the largest file that UploadFileFromPath reads into
+// memory: the upload limit (MAX_UPLOAD_SIZE_MB, 50 MB if not set). An upload
+// already holds a file of this size in memory.
+func (s *MediaService) uploadMemoryLimit() int64 {
+	mb := 50
+	if s.cfg != nil && s.cfg.MaxUploadSizeMB > 0 {
+		mb = s.cfg.MaxUploadSizeMB
+	}
+	return int64(mb) << 20
+}
+
+// uploadEXIFReadBytes is the part of a large file that UploadFileFromPath
+// reads for the EXIF. The EXIF block of a JPEG or TIFF is near the start.
+const uploadEXIFReadBytes = 4 << 20
+
+// UploadFileFromPath is UploadFile for the file at srcPath. p.Content is not
+// used. A file of uploadMemoryLimit or less goes through UploadFile in memory,
+// as an upload does. A larger file is not read into memory: the checksum, the
+// image size and the EXIF come from the file, and the file moves into the
+// media directory. Such an image gets its thumbnails on request, and a video
+// gets no HEVC flag. The caller removes srcPath if it is still there after
+// the call.
+func (s *MediaService) UploadFileFromPath(ctx context.Context, srcPath string, p UploadFileParams) (models.Medium, error) {
+	st, err := os.Stat(srcPath)
+	if err != nil {
+		return models.Medium{}, err
+	}
+	if st.Size() <= s.uploadMemoryLimit() {
+		content, err := os.ReadFile(srcPath)
+		if err != nil {
+			return models.Medium{}, err
+		}
+		p.Content = content
+		return s.UploadFile(ctx, p)
+	}
+	return s.uploadLargeFile(ctx, srcPath, st.Size(), p)
+}
+
+func (s *MediaService) uploadLargeFile(ctx context.Context, srcPath string, size int64, p UploadFileParams) (models.Medium, error) {
+	f, err := os.Open(srcPath)
+	if err != nil {
+		return models.Medium{}, err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return models.Medium{}, err
+	}
+	checksum := hex.EncodeToString(h.Sum(nil))
+	if existing, ok, err := s.findDuplicate(ctx, checksum); ok || err != nil {
+		return existing, err
+	}
+
+	var width, height sql.NullInt64
+	var metadata map[string]interface{}
+	fileType := "file"
+	switch {
+	case strings.HasPrefix(p.MimeType, "image/"):
+		fileType = "image"
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return models.Medium{}, err
+		}
+		cfg, err := s.checkPixelsReader(f)
+		if err != nil {
+			return models.Medium{}, err
+		}
+		width = sql.NullInt64{Int64: int64(cfg.Width), Valid: cfg.Width > 0}
+		height = sql.NullInt64{Int64: int64(cfg.Height), Valid: cfg.Height > 0}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return models.Medium{}, err
+		}
+		metadata = s.extractEXIF(io.LimitReader(f, uploadEXIFReadBytes))
+	case strings.HasPrefix(p.MimeType, "video/"):
+		fileType = "video"
+	case strings.HasPrefix(p.MimeType, "audio/"):
+		fileType = "audio"
+	}
+	var metadataJSON sql.NullString
+	if len(metadata) > 0 {
+		if mj, err := json.Marshal(metadata); err == nil {
+			metadataJSON = sql.NullString{String: string(mj), Valid: true}
+		}
+	}
+
+	now := time.Now().UTC().Round(0)
+	originalRelPath, originalFullPath, err := s.originalTarget(p, now)
+	if err != nil {
+		return models.Medium{}, err
+	}
+	if err := moveFile(srcPath, originalFullPath); err != nil {
+		return models.Medium{}, err
+	}
+
+	var postID sql.NullInt64
+	if p.PostID != nil {
+		postID = sql.NullInt64{Int64: *p.PostID, Valid: true}
+	}
+	media, err := s.repo.CreateMedia(ctx, models.CreateMediaParams{
+		Filename:         p.Filename,
+		OriginalPath:     originalRelPath,
+		FileType:         fileType,
+		MimeType:         p.MimeType,
+		FileSize:         size,
+		Width:            width,
+		Height:           height,
+		PostID:           postID,
+		Checksum:         checksum,
+		AltText:          sql.NullString{String: p.AltText, Valid: p.AltText != ""},
+		Caption:          sql.NullString{String: p.Caption, Valid: p.Caption != ""},
+		Metadata:         metadataJSON,
+		OriginalMetadata: metadataJSON,
+		UploadedAt:       now,
+	})
+	if err != nil {
+		_ = os.Remove(originalFullPath)
+		return models.Medium{}, err
+	}
+	s.tagPostFromGPS(ctx, p.PostID, metadata)
+	s.enqueueTranscode(ctx, media)
+	return media, nil
+}
+
+// moveFile moves src to dst. It copies the file when a rename cannot move it,
+// for example to another file system.
+func moveFile(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		_ = os.Remove(dst)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		_ = os.Remove(dst)
+		return err
+	}
+	_ = os.Remove(src)
+	return nil
 }
 
 // tagPostFromGPS reverse-geocodes the GPS coordinates found in EXIF metadata and
@@ -2211,7 +2379,13 @@ func (s *MediaService) decodeImage(ctx context.Context, data []byte) (image.Imag
 // The deferred AVIF and HEIC path calls it on its own, so the upload refuses
 // an oversized image before the slow decode starts.
 func (s *MediaService) checkPixels(data []byte) (image.Config, error) {
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	return s.checkPixelsReader(bytes.NewReader(data))
+}
+
+// checkPixelsReader is checkPixels for an image that r gives. It reads only
+// the header.
+func (s *MediaService) checkPixelsReader(r io.Reader) (image.Config, error) {
+	cfg, _, err := image.DecodeConfig(r)
 	if limit := s.maxImagePixels(); limit > 0 {
 		if err != nil {
 			// Unreadable header. Fall through to the full decode, which

@@ -164,7 +164,10 @@ included). Use it to move a site to a new instance.
   entry above it (`400`). An original, or a sidecar that comes alone, can have
   `MAX_IMPORT_ENTRY_MB` (2048 MB if not set). This limit is not the upload limit
   (`MAX_UPLOAD_SIZE_MB`): a folder import can add originals that are larger than
-  an upload, and the export of that site must import again. A post
+  an upload, and the export of that site must import again. Each original goes
+  to a temporary file in `<data>/backups/imports/`, not into memory. An original
+  above `MAX_UPLOAD_SIZE_MB` moves into the media directory from that file: it
+  gets its size, checksum and EXIF, and its thumbnails come on request. A post
   file, `tags.json` and a sidecar can have 8 MB. All decompressed data of the
   archive can have 20 times the size of the archive file, and 1 GiB at minimum.
   This stops a decompression bomb before it uses all memory or disk.

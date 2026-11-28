@@ -496,14 +496,27 @@ func TestImportSizeLimits_MediaFromImportEntryLimit(t *testing.T) {
 	}
 }
 
+// importEntryFiles returns the temporary files of originals that an import
+// left in its directory.
+func importEntryFiles(t *testing.T, imp *ImportService) []string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(imp.importDir(), importEntryPrefix+"*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
 // TestImport_EntryLimitAboveUploadLimit checks that an original larger than
 // MAX_UPLOAD_SIZE_MB imports when it is smaller than MAX_IMPORT_ENTRY_MB, and
-// that an original larger than MAX_IMPORT_ENTRY_MB stops the import.
+// that an original larger than MAX_IMPORT_ENTRY_MB stops the import. The
+// large original goes through the file path of the upload (a move, not a
+// buffer), and no temporary file stays.
 func TestImport_EntryLimitAboveUploadLimit(t *testing.T) {
 	ctx := context.Background()
 	manifest := [2]string{"manifest.json", fmt.Sprintf(`{"format":%q,"version":%d}`, ExportFormat, ExportFormatVersion)}
+	const rel = "originals/2024/02/big.txt"
 	original := func(size int) [][2]string {
-		rel := "originals/2024/02/big.txt"
 		side := fmt.Sprintf(`{"filename":"big.txt","original_path":%q,"file_type":"file","mime_type":"text/plain","file_size":%d}`, rel, size)
 		return [][2]string{manifest, {"media/" + rel, strings.Repeat("x", size)}, {"media/" + rel + ".json", side}}
 	}
@@ -513,31 +526,91 @@ func TestImport_EntryLimitAboveUploadLimit(t *testing.T) {
 		media int64
 	}{
 		{"above the upload limit, below the entry limit", 3 << 19, 1}, // 1.5 MiB
-		{"above the entry limit", 5 << 19, 0},                          // 2.5 MiB
+		{"above the entry limit", 5 << 19, 0},                         // 2.5 MiB
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			imp, _, repo := newImportTarget(t)
+			imp, dataPath, repo := newImportTarget(t)
 			imp.media.cfg.MaxUploadSizeMB = 1
 			imp.media.cfg.MaxImportEntryMB = 2
 			res, err := imp.Import(ctx, writeImportTestArchive(t, original(tc.size)...), 1)
 			_, media, _ := repo.CountContentRows(ctx)
-			if tc.media == 1 {
-				if err != nil {
-					t.Fatalf("Import: %v", err)
+			if left := importEntryFiles(t, imp); len(left) != 0 {
+				t.Errorf("the import left temporary files: %v", left)
+			}
+			if tc.media == 0 {
+				if !errors.Is(err, ErrInvalidInput) || !errors.Is(err, errImportTooLarge) || !strings.Contains(err.Error(), "media/"+rel+" is") {
+					t.Fatalf("Import error = %v, want a too-large error for the original", err)
 				}
-				if res.Counts.Media != 1 || len(res.Problems) != 0 || media != 1 {
-					t.Errorf("result = %+v, media rows = %d, want one media file and no problems", res, media)
+				if media != 0 {
+					t.Errorf("the refused import wrote %d media", media)
 				}
 				return
 			}
-			if !errors.Is(err, ErrInvalidInput) || !errors.Is(err, errImportTooLarge) || !strings.Contains(err.Error(), "media/originals/2024/02/big.txt is") {
-				t.Fatalf("Import error = %v, want a too-large error for the original", err)
+			if err != nil {
+				t.Fatalf("Import: %v", err)
 			}
-			if media != 0 {
-				t.Errorf("the refused import wrote %d media", media)
+			if res.Counts.Media != 1 || len(res.Problems) != 0 || media != 1 {
+				t.Errorf("result = %+v, media rows = %d, want one media file and no problems", res, media)
+			}
+			got, err := os.ReadFile(filepath.Join(dataPath, "media", filepath.FromSlash(rel)))
+			if err != nil || len(got) != tc.size {
+				t.Errorf("the original on disk has %d bytes (%v), want %d", len(got), err, tc.size)
 			}
 		})
+	}
+}
+
+// TestImport_EntryAboveTheRestOfTheTotal checks that an original that is
+// smaller than the media limit, but larger than the part of the total limit
+// that the entries before it did not use, stops the import.
+func TestImport_EntryAboveTheRestOfTheTotal(t *testing.T) {
+	ctx := context.Background()
+	imp, _, repo := newImportTarget(t)
+	imp.limits = importLimits{total: 64 << 10}
+	_, err := imp.Import(ctx, writeImportTestArchive(t,
+		[2]string{"manifest.json", fmt.Sprintf(`{"format":%q,"version":%d}`, ExportFormat, ExportFormatVersion)},
+		[2]string{"posts/a.md", "---\nslug: a\n---\n" + strings.Repeat("a", 40<<10)},
+		[2]string{"media/originals/2024/01/a.jpg", strings.Repeat("x", 30<<10)},
+	), 1)
+	if !errors.Is(err, errImportTooLarge) || !strings.Contains(err.Error(), "size of its files") {
+		t.Fatalf("Import error = %v, want a too-large error for the total", err)
+	}
+	if posts, media, _ := repo.CountContentRows(ctx); posts != 0 || media != 0 {
+		t.Errorf("the refused import wrote %d posts and %d media", posts, media)
+	}
+	if left := importEntryFiles(t, imp); len(left) != 0 {
+		t.Errorf("the import left temporary files: %v", left)
+	}
+}
+
+// TestUploadFileFromPath_LargeImage checks that an image above the upload
+// limit is moved into the store, not read into memory, and still gets its
+// size and checksum.
+func TestUploadFileFromPath_LargeImage(t *testing.T) {
+	ctx := context.Background()
+	imp, dataPath, _ := newImportTarget(t)
+	imp.media.cfg.MaxUploadSizeMB = 1
+	content := append(importTestJPEG(t, color.RGBA{R: 1, G: 2, B: 3, A: 255}), make([]byte, 3<<19)...)
+	src := filepath.Join(t.TempDir(), "big.jpg")
+	if err := os.WriteFile(src, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := imp.media.UploadFileFromPath(ctx, src, UploadFileParams{
+		Filename: "big.jpg", MimeType: "image/jpeg", OriginalPath: "originals/2024/03/big.jpg",
+	})
+	if err != nil {
+		t.Fatalf("UploadFileFromPath: %v", err)
+	}
+	if m.OriginalPath != "originals/2024/03/big.jpg" || m.FileSize != int64(len(content)) ||
+		m.Checksum != CalculateChecksum(content) || m.Width.Int64 != 200 || m.Height.Int64 != 150 {
+		t.Errorf("media = %+v", m)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Errorf("the source file is still there: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(dataPath, "media", "originals", "2024", "03", "big.jpg")); err != nil || !bytes.Equal(got, content) {
+		t.Errorf("the stored original is not the source (%v)", err)
 	}
 }
 

@@ -337,7 +337,7 @@ func (s *ImportService) removeStaged() {
 		return
 	}
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasPrefix(e.Name(), "upload-") {
+		if !e.IsDir() && (strings.HasPrefix(e.Name(), "upload-") || strings.HasPrefix(e.Name(), importEntryPrefix)) {
 			_ = os.Remove(filepath.Join(s.importDir(), e.Name()))
 		}
 	}
@@ -408,7 +408,7 @@ func (s *ImportService) importArchive(ctx context.Context, path string, authorID
 	var total repository.ExportCounts
 	slugs := map[string]bool{}
 	lim := s.sizeLimits()
-	if err := walkImportArchive(ctx, path, false, lim, importVisitor{
+	if err := walkImportArchive(ctx, path, "", lim, importVisitor{
 		tags: func(tags []exportTag) error {
 			total.Tags = int64(len(tags))
 			return nil
@@ -428,7 +428,7 @@ func (s *ImportService) importArchive(ctx context.Context, path string, authorID
 			}
 			return nil
 		},
-		media: func(exportMediaSidecar, []byte) error {
+		media: func(exportMediaSidecar, string) error {
 			total.Media++
 			return nil
 		},
@@ -439,7 +439,7 @@ func (s *ImportService) importArchive(ctx context.Context, path string, authorID
 
 	// Pass 2: write.
 	w := &importWriter{s: s, authorID: authorID, res: res, tagIDs: map[string]int64{}, postIDs: map[string]int64{}}
-	if err := walkImportArchive(ctx, path, true, lim, importVisitor{
+	if err := walkImportArchive(ctx, path, s.importDir(), lim, importVisitor{
 		tags:  w.writeTags,
 		post:  w.writePost,
 		media: w.writeMedia,
@@ -497,26 +497,33 @@ func readImportManifest(path string) (exportManifest, error) {
 }
 
 // importVisitor receives the content of an archive in archive order. media
-// gets data nil when the archive has only the sidecar (the original was
-// missing at export time).
+// gets src, the path of a temporary file with the original, or "" when the
+// archive has only the sidecar (the original was missing at export time) or
+// when the walk keeps no originals. The walk removes src after media returns;
+// media can move the file away.
 type importVisitor struct {
 	tags  func([]exportTag) error
 	post  func(fm exportFrontMatter, body string) error
-	media func(side exportMediaSidecar, data []byte) error
+	media func(side exportMediaSidecar, src string) error
 }
 
 // importPending is an original that waits for its sidecar, the next entry.
+// src is its temporary file, or "".
 type importPending struct {
-	rel  string
-	data []byte
+	rel string
+	src string
 }
 
+// importEntryPrefix is the name prefix of the temporary file of an original.
+const importEntryPrefix = "entry-"
+
 // walkImportArchive reads the archive at path after the manifest and calls v
-// for each item. With readData false, the originals are read but not kept.
-// An entry above its limit in lim, or a total decompressed size or a total
-// of entry sizes above lim.total, stops the walk with errImportTooLarge. A
-// sparse entry stops the walk.
-func walkImportArchive(ctx context.Context, path string, readData bool, lim importLimits, v importVisitor) error {
+// for each item. Each original goes to a temporary file in tmpDir, not into
+// memory. With tmpDir "", the originals are read but not kept. An entry above
+// its limit in lim or above the rest of lim.total, or a total decompressed
+// size or a total of entry sizes above lim.total, stops the walk with
+// errImportTooLarge. A sparse entry stops the walk.
+func walkImportArchive(ctx context.Context, path, tmpDir string, lim importLimits, v importVisitor) (err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -535,6 +542,11 @@ func walkImportArchive(ctx context.Context, path string, readData bool, lim impo
 	}
 	tr := tar.NewReader(&importTotalReader{r: gz, left: lim.total, max: lim.total})
 	var pending *importPending
+	defer func() {
+		if pending != nil {
+			removeImportEntry(pending.src)
+		}
+	}()
 	// logical is the sum of the entry sizes that the tar reader gives. For a
 	// sparse entry it is more than the bytes in the stream, so the
 	// importTotalReader alone does not see it.
@@ -553,6 +565,8 @@ func walkImportArchive(ctx context.Context, path string, readData bool, lim impo
 		if err != nil {
 			return fmt.Errorf("read archive: %w", err)
 		}
+		// This check also limits each entry to the part of lim.total that the
+		// entries before it did not use.
 		logical += max(h.Size, 0)
 		if logical > lim.total {
 			return fmt.Errorf("%w: the size of its files is more than %s, the maximum for this archive",
@@ -609,31 +623,44 @@ func walkImportArchive(ctx context.Context, path string, readData bool, lim impo
 				if side.OriginalPath != pending.rel {
 					return fmt.Errorf("%s: original_path is %q", name, side.OriginalPath)
 				}
-				if err := v.media(side, pending.data); err != nil {
-					return fmt.Errorf("%s: %w", pending.rel, err)
-				}
+				err = v.media(side, pending.src)
+				removeImportEntry(pending.src)
+				rel := pending.rel
 				pending = nil
+				if err != nil {
+					return fmt.Errorf("%s: %w", rel, err)
+				}
 				continue
 			}
 			if pending != nil {
 				return fmt.Errorf("media/%s has no sidecar", pending.rel)
 			}
-			data, err := readImportEntry(tr, h, lim.media)
+			limit := lim.media
+			// The sidecar of an original that was missing at export time comes
+			// alone. Any other entry is an original, and its sidecar is next.
+			if strings.HasSuffix(rel, ".json") && h.Size <= lim.text {
+				data, err := readImportEntry(tr, h, min(lim.text, limit))
+				if err != nil {
+					return err
+				}
+				if side, ok := missingSidecar(rel, data); ok {
+					if err := v.media(side, ""); err != nil {
+						return fmt.Errorf("%s: %w", side.OriginalPath, err)
+					}
+					continue
+				}
+				src, err := writeImportEntry(bytes.NewReader(data), h, limit, tmpDir)
+				if err != nil {
+					return err
+				}
+				pending = &importPending{rel: rel, src: src}
+				continue
+			}
+			src, err := writeImportEntry(tr, h, limit, tmpDir)
 			if err != nil {
 				return err
 			}
-			// The sidecar of an original that was missing at export time comes
-			// alone. Any other entry is an original, and its sidecar is next.
-			if side, ok := missingSidecar(rel, data); ok {
-				if err := v.media(side, nil); err != nil {
-					return fmt.Errorf("%s: %w", side.OriginalPath, err)
-				}
-				continue
-			}
-			if !readData {
-				data = nil
-			}
-			pending = &importPending{rel: rel, data: data}
+			pending = &importPending{rel: rel, src: src}
 		}
 	}
 	if pending != nil {
@@ -676,6 +703,55 @@ func readImportEntry(tr io.Reader, h *tar.Header, limit int64) ([]byte, error) {
 			errImportTooLarge, h.Name, humanizeBytes(limit))
 	}
 	return data, nil
+}
+
+// writeImportEntry copies the entry h from r to a new temporary file in dir
+// and returns its path. With dir "", it reads the entry, keeps nothing and
+// returns "". It refuses an entry that declares or gives more than limit
+// bytes, and then leaves no file.
+func writeImportEntry(r io.Reader, h *tar.Header, limit int64, dir string) (string, error) {
+	if h.Size > limit {
+		return "", fmt.Errorf("%w: %s is %s, and the maximum for this entry is %s",
+			errImportTooLarge, h.Name, humanizeBytes(h.Size), humanizeBytes(limit))
+	}
+	dst := io.Discard
+	var f *os.File
+	if dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", err
+		}
+		var err error
+		if f, err = os.CreateTemp(dir, importEntryPrefix+"*"); err != nil {
+			return "", err
+		}
+		dst = f
+	}
+	n, err := io.Copy(dst, io.LimitReader(r, limit+1))
+	if err == nil && n > limit {
+		err = fmt.Errorf("%w: %s is more than %s, the maximum for this entry",
+			errImportTooLarge, h.Name, humanizeBytes(limit))
+	} else if err != nil && !errors.Is(err, errImportTooLarge) {
+		err = fmt.Errorf("read %s: %w", h.Name, err)
+	}
+	if f == nil {
+		return "", err
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
+}
+
+// removeImportEntry removes the temporary file of an original, if there is
+// one and it is still there.
+func removeImportEntry(src string) {
+	if src != "" {
+		_ = os.Remove(src)
+	}
 }
 
 // importTotalReader gives at most max bytes of r. After that it returns
@@ -922,16 +998,15 @@ func (w *importWriter) writePost(fm exportFrontMatter, body string) error {
 	return nil
 }
 
-func (w *importWriter) writeMedia(side exportMediaSidecar, data []byte) error {
+func (w *importWriter) writeMedia(side exportMediaSidecar, src string) error {
 	ctx := context.Background()
 	w.s.setPhase("media")
 	defer w.s.updateProgress(func(p *ArchiveImportProgress) { p.Done.Media++ })
-	if data == nil {
+	if src == "" {
 		w.res.addProblem("%s: not in the archive (missing at export time)", side.OriginalPath)
 		return nil
 	}
-	m, err := w.s.media.UploadFile(ctx, UploadFileParams{
-		Content:      data,
+	m, err := w.s.media.UploadFileFromPath(ctx, src, UploadFileParams{
 		Filename:     side.Filename,
 		MimeType:     side.MimeType,
 		AltText:      side.AltText,
