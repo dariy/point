@@ -478,19 +478,66 @@ func TestImport_RefusesSparseEntries(t *testing.T) {
 	}
 }
 
-// TestImportSizeLimits_MediaFromUploadLimit checks that the media limit is
-// MAX_UPLOAD_SIZE_MB, with 50 MB when it is not set.
-func TestImportSizeLimits_MediaFromUploadLimit(t *testing.T) {
+// TestImportSizeLimits_MediaFromImportEntryLimit checks that the media limit is
+// MAX_IMPORT_ENTRY_MB, with 2048 MB when it is not set, and that
+// MAX_UPLOAD_SIZE_MB does not change it.
+func TestImportSizeLimits_MediaFromImportEntryLimit(t *testing.T) {
 	imp, _, _ := newImportTarget(t)
-	if got := imp.sizeLimits().media; got != 50<<20 {
-		t.Errorf("default media limit = %d, want %d", got, 50<<20)
+	if got := imp.sizeLimits().media; got != 2048<<20 {
+		t.Errorf("default media limit = %d, want %d", got, int64(2048)<<20)
 	}
-	imp.media.cfg.MaxUploadSizeMB = 200
+	imp.media.cfg.MaxUploadSizeMB = 10
+	imp.media.cfg.MaxImportEntryMB = 200
 	if got := imp.sizeLimits().media; got != 200<<20 {
 		t.Errorf("media limit = %d, want %d", got, 200<<20)
 	}
 	if got := imp.sizeLimits().text; got != importMaxTextBytes {
 		t.Errorf("text limit = %d, want %d", got, importMaxTextBytes)
+	}
+}
+
+// TestImport_EntryLimitAboveUploadLimit checks that an original larger than
+// MAX_UPLOAD_SIZE_MB imports when it is smaller than MAX_IMPORT_ENTRY_MB, and
+// that an original larger than MAX_IMPORT_ENTRY_MB stops the import.
+func TestImport_EntryLimitAboveUploadLimit(t *testing.T) {
+	ctx := context.Background()
+	manifest := [2]string{"manifest.json", fmt.Sprintf(`{"format":%q,"version":%d}`, ExportFormat, ExportFormatVersion)}
+	original := func(size int) [][2]string {
+		rel := "originals/2024/02/big.txt"
+		side := fmt.Sprintf(`{"filename":"big.txt","original_path":%q,"file_type":"file","mime_type":"text/plain","file_size":%d}`, rel, size)
+		return [][2]string{manifest, {"media/" + rel, strings.Repeat("x", size)}, {"media/" + rel + ".json", side}}
+	}
+	cases := []struct {
+		name  string
+		size  int
+		media int64
+	}{
+		{"above the upload limit, below the entry limit", 3 << 19, 1}, // 1.5 MiB
+		{"above the entry limit", 5 << 19, 0},                          // 2.5 MiB
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			imp, _, repo := newImportTarget(t)
+			imp.media.cfg.MaxUploadSizeMB = 1
+			imp.media.cfg.MaxImportEntryMB = 2
+			res, err := imp.Import(ctx, writeImportTestArchive(t, original(tc.size)...), 1)
+			_, media, _ := repo.CountContentRows(ctx)
+			if tc.media == 1 {
+				if err != nil {
+					t.Fatalf("Import: %v", err)
+				}
+				if res.Counts.Media != 1 || len(res.Problems) != 0 || media != 1 {
+					t.Errorf("result = %+v, media rows = %d, want one media file and no problems", res, media)
+				}
+				return
+			}
+			if !errors.Is(err, ErrInvalidInput) || !errors.Is(err, errImportTooLarge) || !strings.Contains(err.Error(), "media/originals/2024/02/big.txt is") {
+				t.Fatalf("Import error = %v, want a too-large error for the original", err)
+			}
+			if media != 0 {
+				t.Errorf("the refused import wrote %d media", media)
+			}
+		})
 	}
 }
 

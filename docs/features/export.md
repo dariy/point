@@ -162,7 +162,9 @@ included). Use it to move a site to a new instance.
   sidecar, or an unsafe path stops the import before it changes the site.
 - Each entry has a maximum size, and the first pass refuses an archive with an
   entry above it (`400`). An original, or a sidecar that comes alone, can have
-  `MAX_UPLOAD_SIZE_MB` (50 MB if not set): the same limit as an upload. A post
+  `MAX_IMPORT_ENTRY_MB` (2048 MB if not set). This limit is not the upload limit
+  (`MAX_UPLOAD_SIZE_MB`): a folder import can add originals that are larger than
+  an upload, and the export of that site must import again. A post
   file, `tags.json` and a sidecar can have 8 MB. All decompressed data of the
   archive can have 20 times the size of the archive file, and 1 GiB at minimum.
   This stops a decompression bomb before it uses all memory or disk.

@@ -62,8 +62,9 @@ const (
 	// the size of the archive file. Originals are already compressed, so a real
 	// export decompresses to little more than its own size.
 	importTotalRatio = 20
-	// importDefaultMediaMB is the media limit when MAX_UPLOAD_SIZE_MB is not set.
-	importDefaultMediaMB = 50
+	// importDefaultMediaMB is the media limit when MAX_IMPORT_ENTRY_MB is not
+	// set.
+	importDefaultMediaMB = 2048
 )
 
 // importLimits are the size limits of one import.
@@ -150,15 +151,16 @@ func (s *ImportService) WithHealth(h *HealthRegistry) *ImportService {
 	return s
 }
 
-// sizeLimits returns the size limits of an import. The media limit is the
-// upload limit (MAX_UPLOAD_SIZE_MB), so an archive cannot have a file that an
-// upload cannot have.
+// sizeLimits returns the size limits of an import. The media limit is
+// MAX_IMPORT_ENTRY_MB, not the upload limit (MAX_UPLOAD_SIZE_MB): a folder
+// import can add originals that are larger than an upload can be, and the
+// export of that site must import again.
 func (s *ImportService) sizeLimits() importLimits {
 	lim := s.limits
 	if lim.media == 0 {
 		mb := importDefaultMediaMB
-		if s.media != nil && s.media.cfg != nil && s.media.cfg.MaxUploadSizeMB > 0 {
-			mb = s.media.cfg.MaxUploadSizeMB
+		if s.media != nil && s.media.cfg != nil && s.media.cfg.MaxImportEntryMB > 0 {
+			mb = s.media.cfg.MaxImportEntryMB
 		}
 		lim.media = int64(mb) << 20
 	}

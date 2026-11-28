@@ -44,6 +44,11 @@ type Config struct {
 	JpegQuality     int `mapstructure:"JPEG_QUALITY"`
 	AvatarSize      int `mapstructure:"AVATAR_SIZE"`
 	MaxUploadSizeMB int `mapstructure:"MAX_UPLOAD_SIZE_MB"`
+	// MaxImportEntryMB is the maximum size of one original or one media
+	// sidecar in a portable import archive. It is separate from, and larger
+	// than, MaxUploadSizeMB: a folder import can add originals that are larger
+	// than the upload limit, and the export of that site must import again.
+	MaxImportEntryMB int `mapstructure:"MAX_IMPORT_ENTRY_MB"`
 	// StorageQuotaMB is the media storage allowance the dashboard reports usage
 	// against. Operator-set only (never a DB setting): on a hosted install the
 	// quota is a property of the plan, not something the blog's admin may raise.
@@ -214,6 +219,7 @@ func LoadConfig(path string) (config Config, err error) {
 	v.SetDefault("SESSION_EXPIRY_HOURS", 720)
 	v.SetDefault("SESSION_EXPIRY_PUBLIC_HOURS", 24)
 	v.SetDefault("MAX_UPLOAD_SIZE_MB", 50)
+	v.SetDefault("MAX_IMPORT_ENTRY_MB", 2048)
 	// ~80 MP: above any panorama a blog needs, far below the ~400 MB RGBA
 	// allocation a crafted header could otherwise force.
 	v.SetDefault("MAX_IMAGE_MEGAPIXELS", 80)
