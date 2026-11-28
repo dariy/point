@@ -551,7 +551,8 @@
 }
 
 .health-partial {
-    color: var(--color-amber-500);
+    /* --color-warning, not amber-500: amber-500 is 2.15:1 on white. */
+    color: var(--color-warning);
 }
 
 @media (max-width: 640px) {

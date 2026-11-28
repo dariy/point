@@ -120,6 +120,12 @@ export interface PostInput {
   /** Tag names. */
   tags?: string[];
   scheduled_at?: string | null;
+  /**
+   * Which save this is. It selects the revision the save makes (NF-9):
+   * "manual" makes one, "autosave" makes none, "autosave_last" (the last
+   * autosave of an editor session) makes one. Empty is "manual".
+   */
+  save_kind?: 'manual' | 'autosave' | 'autosave_last';
 }
 
 /**

@@ -8,7 +8,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type SettingsHandler struct {
@@ -109,7 +109,7 @@ func (h *SettingsHandler) addSecretIsSetFlags(ctx context.Context, settings map[
 	}
 }
 
-func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {
+func (h *SettingsHandler) GetPublicSettings(c *echo.Context) error {
 	all, err := h.settingsService.GetAllSettings(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -123,7 +123,7 @@ func (h *SettingsHandler) GetPublicSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, public)
 }
 
-func (h *SettingsHandler) GetSettings(c echo.Context) error {
+func (h *SettingsHandler) GetSettings(c *echo.Context) error {
 	ctx := c.Request().Context()
 	all, err := h.settingsService.GetAllSettings(ctx)
 	if err != nil {
@@ -133,7 +133,7 @@ func (h *SettingsHandler) GetSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, all)
 }
 
-func (h *SettingsHandler) GetSettingByKey(c echo.Context) error {
+func (h *SettingsHandler) GetSettingByKey(c *echo.Context) error {
 	ctx := c.Request().Context()
 	key := c.Param("key")
 	value, err := h.settingsService.GetSetting(ctx, key, "")
@@ -143,7 +143,7 @@ func (h *SettingsHandler) GetSettingByKey(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"key": key, "value": value})
 }
 
-func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
+func (h *SettingsHandler) UpdateSettings(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var updates map[string]string
 	if err := c.Bind(&updates); err != nil {

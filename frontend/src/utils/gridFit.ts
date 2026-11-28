@@ -604,22 +604,24 @@ function stripPerPage(gridEl: HTMLElement): number {
 }
 
 /**
- * per_page for a column of square cells `width` x `height` px: whole rows, as
- * many as it takes to fill the height. The last row can be cut by the column
- * end; the column scrolls. Returns 0 when the column has no size.
+ * per_page for a column of square cells `width` x `height` px: the whole rows
+ * that fit in the height. No row is cut by the column end, so the footer and
+ * its paginator never cover a card (p-kyo8m). A column shorter than one cell
+ * still gets one row. Returns 0 when the column has no size.
  */
 export function columnPerPage(width: number, height: number, cols: number, gap: number): number {
   if (width <= 0 || height <= 0) return 0;
   const n = Math.max(1, Math.round(cols) || 1);
   const cell = (width - (n - 1) * gap) / n;
   if (cell <= 0) return 0;
-  const rows = Math.max(1, Math.ceil((height + gap) / (cell + gap) - 0.01));
+  // The small tolerance keeps an exact fit whole when sub-pixel widths round up.
+  const rows = Math.max(1, Math.floor((height + gap) / (cell + gap) + 0.001));
   return Math.min(MAX_PER_PAGE, n * rows);
 }
 
 /**
  * per_page for the list column of the touch landscape layout (atlas.css,
- * body[data-atlas-side]): a scrolling grid of square cards in `#grid-mount`.
+ * body[data-atlas-side]): a grid of square cards in `#grid-mount`, whole rows only.
  * The size of the column only, never the count. Returns 0 when it has no size.
  */
 function sidePerPage(gridEl: HTMLElement): number {
@@ -629,9 +631,11 @@ function sidePerPage(gridEl: HTMLElement): number {
   const cs = window.getComputedStyle(gridEl);
   const cols = cs.gridTemplateColumns.split(/\s+/).filter(Boolean).length || 1;
   const gap = parseFloat(cs.rowGap) || parseFloat(cs.columnGap) || 0;
+  // The cells are as wide as the grid's content box, not its padding box.
+  const width = gridEl.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
   // The zoom row pin is for the full-width grid; the column has its own rows.
   applyRowsVar(0);
-  return columnPerPage(gridEl.clientWidth, height, cols, gap);
+  return columnPerPage(width, height, cols, gap);
 }
 
 /**

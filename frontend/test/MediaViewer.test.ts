@@ -198,31 +198,60 @@ describe('ImmersiveSheetViewer', () => {
     assert.strictEqual(viewer._sheetOpen, true);
   });
 
-  test('the side layout keeps the column open and gives the portrait state back', () => {
+  test('the side layout starts shut, slides the panel in and keeps one state across a rotation', () => {
     const items: MediaItem[] = [{ type: 'image', url: '/a.jpg' }];
     const viewer = new ImmersiveSheetViewer(dom.document.body, { items, post: mock<Post>({}), startIndex: 0 });
     viewer.mount();
     const wrapper = must(dom.document.querySelector('.media-viewer-wrapper'), '.media-viewer-wrapper');
     const sheet = must(dom.document.querySelector<HTMLElement>('.immersive-sheet'), '.immersive-sheet');
+    Object.defineProperty(sheet, 'offsetWidth', { configurable: true, get: () => 300 });
+    const full = dom.window.innerWidth;
     assert.strictEqual(viewer._side, false);
 
+    // The side layout starts shut: the photo is full screen.
     viewer._applySide(true);
     assert.ok(wrapper.classList.contains('immersive-sheet-side'));
-    assert.ok(wrapper.classList.contains('sheet-open'));
-    assert.strictEqual(viewer._sheetOpen, true);
-    assert.strictEqual(sheet.style.transform, '', 'no slide in the side layout');
+    assert.ok(!wrapper.classList.contains('sheet-open'));
+    assert.strictEqual(viewer._sheetOpen, false);
+    assert.strictEqual(viewer._sheetKept(), false);
+    assert.strictEqual(viewer._stageWidth(), full, 'shut: the stage is the full width');
     assert.strictEqual(viewer._gestureIgnoreSelector(), '.immersive-sheet-side .immersive-sheet');
 
-    // No swipe or grip closes the column.
-    viewer._closeSheet();
+    // A swipe up opens the panel. CSS slides it: no inline transform.
     viewer._onSwipeCommit('up');
     assert.strictEqual(viewer._sheetOpen, true);
-    assert.strictEqual(sheet.style.transform, '');
+    assert.ok(wrapper.classList.contains('sheet-open'));
+    assert.strictEqual(sheet.getAttribute('aria-hidden'), 'false');
+    assert.strictEqual(sheet.style.transform, '', 'no inline slide in the side layout');
+    assert.strictEqual(sheet.style.transition, '', 'the CSS slide runs');
+    assert.strictEqual(viewer._stageWidth(), full - 300, 'open: the stage is left of the panel');
+    assert.strictEqual(viewer._sheetKept(), true);
 
+    // A rotation keeps the open state, both ways, with no slide.
     viewer._applySide(false);
     assert.ok(!wrapper.classList.contains('immersive-sheet-side'));
-    assert.strictEqual(viewer._sheetOpen, false, 'the sheet was shut before the side layout');
+    assert.strictEqual(viewer._sheetOpen, true);
+    assert.ok(wrapper.classList.contains('sheet-open'));
+    viewer._applySide(true);
+    assert.strictEqual(viewer._sheetOpen, true);
+
+    // A swipe down shuts the panel; a second one closes the viewer.
+    let closed = 0;
+    viewer.props.onClose = () => { closed++; };
+    viewer._onSwipeCommit('down');
+    assert.strictEqual(viewer._sheetOpen, false);
     assert.ok(!wrapper.classList.contains('sheet-open'));
+    assert.strictEqual(sheet.getAttribute('aria-hidden'), 'true');
+    assert.strictEqual(closed, 0);
+    viewer._onSwipeCommit('down');
+    assert.strictEqual(closed, 1);
+
+    // A rotation keeps the shut state too.
+    viewer._applySide(false);
+    assert.strictEqual(viewer._sheetOpen, false);
+    viewer._applySide(true);
+    assert.strictEqual(viewer._sheetOpen, false);
+    assert.strictEqual(viewer._stageWidth(), full);
   });
 });
 

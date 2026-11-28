@@ -417,6 +417,44 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 	return i, err
 }
 
+const createPostRevision = `-- name: CreatePostRevision :one
+INSERT INTO post_revisions (post_id, kind, title, content, tags, css)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, post_id, kind, created_at, title, content, tags, css
+`
+
+type CreatePostRevisionParams struct {
+	PostID  int64  `json:"post_id"`
+	Kind    string `json:"kind"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Tags    string `json:"tags"`
+	Css     string `json:"css"`
+}
+
+func (q *Queries) CreatePostRevision(ctx context.Context, arg CreatePostRevisionParams) (PostRevision, error) {
+	row := q.db.QueryRowContext(ctx, createPostRevision,
+		arg.PostID,
+		arg.Kind,
+		arg.Title,
+		arg.Content,
+		arg.Tags,
+		arg.Css,
+	)
+	var i PostRevision
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.Kind,
+		&i.CreatedAt,
+		&i.Title,
+		&i.Content,
+		&i.Tags,
+		&i.Css,
+	)
+	return i, err
+}
+
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (
     user_id, token, ip_address, user_agent, expires_at, created_at, last_activity
@@ -933,6 +971,32 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.InstagramPublishedAt,
 		&i.InstagramError,
 		&i.InstagramID,
+	)
+	return i, err
+}
+
+const getPostRevision = `-- name: GetPostRevision :one
+SELECT id, post_id, kind, created_at, title, content, tags, css FROM post_revisions
+WHERE id = ? AND post_id = ?
+`
+
+type GetPostRevisionParams struct {
+	ID     int64 `json:"id"`
+	PostID int64 `json:"post_id"`
+}
+
+func (q *Queries) GetPostRevision(ctx context.Context, arg GetPostRevisionParams) (PostRevision, error) {
+	row := q.db.QueryRowContext(ctx, getPostRevision, arg.ID, arg.PostID)
+	var i PostRevision
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.Kind,
+		&i.CreatedAt,
+		&i.Title,
+		&i.Content,
+		&i.Tags,
+		&i.Css,
 	)
 	return i, err
 }
@@ -1555,6 +1619,52 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 	return items, nil
 }
 
+const listPostRevisions = `-- name: ListPostRevisions :many
+SELECT id, post_id, kind, created_at, title
+FROM post_revisions
+WHERE post_id = ?
+ORDER BY id DESC
+`
+
+type ListPostRevisionsRow struct {
+	ID        int64     `json:"id"`
+	PostID    int64     `json:"post_id"`
+	Kind      string    `json:"kind"`
+	CreatedAt time.Time `json:"created_at"`
+	Title     string    `json:"title"`
+}
+
+// The history list. It leaves out the body and the CSS, which can be large;
+// GetPostRevision reads one revision in full.
+func (q *Queries) ListPostRevisions(ctx context.Context, postID int64) ([]ListPostRevisionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostRevisions, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPostRevisionsRow
+	for rows.Next() {
+		var i ListPostRevisionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PostID,
+			&i.Kind,
+			&i.CreatedAt,
+			&i.Title,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSettings = `-- name: ListSettings :many
 SELECT "key", value, value_type, updated_at FROM blog_settings
 `
@@ -1794,6 +1904,31 @@ type MergeTagParentsParams struct {
 func (q *Queries) MergeTagParents(ctx context.Context, arg MergeTagParentsParams) error {
 	_, err := q.db.ExecContext(ctx, mergeTagParents, arg.WinnerID, arg.LoserID)
 	return err
+}
+
+const prunePostRevisions = `-- name: PrunePostRevisions :execrows
+DELETE FROM post_revisions
+WHERE post_revisions.post_id = ?1 AND post_revisions.kind != 'publish'
+AND post_revisions.id NOT IN (
+    SELECT newest.id FROM post_revisions AS newest
+    WHERE newest.post_id = ?1
+    ORDER BY newest.id DESC
+    LIMIT ?2
+)
+`
+
+type PrunePostRevisionsParams struct {
+	PostID int64 `json:"post_id"`
+	Keep   int64 `json:"keep"`
+}
+
+// Keep the newest `keep` revisions of a post and every publish revision.
+func (q *Queries) PrunePostRevisions(ctx context.Context, arg PrunePostRevisionsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, prunePostRevisions, arg.PostID, arg.Keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const publishPost = `-- name: PublishPost :one

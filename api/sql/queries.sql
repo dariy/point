@@ -197,6 +197,34 @@ WHERE deleted_at IS NOT NULL;
 DELETE FROM posts
 WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', '-30 days');
 
+-- name: CreatePostRevision :one
+INSERT INTO post_revisions (post_id, kind, title, content, tags, css)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: ListPostRevisions :many
+-- The history list. It leaves out the body and the CSS, which can be large;
+-- GetPostRevision reads one revision in full.
+SELECT id, post_id, kind, created_at, title
+FROM post_revisions
+WHERE post_id = ?
+ORDER BY id DESC;
+
+-- name: GetPostRevision :one
+SELECT * FROM post_revisions
+WHERE id = ? AND post_id = ?;
+
+-- name: PrunePostRevisions :execrows
+-- Keep the newest `keep` revisions of a post and every publish revision.
+DELETE FROM post_revisions
+WHERE post_revisions.post_id = sqlc.arg('post_id') AND post_revisions.kind != 'publish'
+AND post_revisions.id NOT IN (
+    SELECT newest.id FROM post_revisions AS newest
+    WHERE newest.post_id = sqlc.arg('post_id')
+    ORDER BY newest.id DESC
+    LIMIT sqlc.arg('keep')
+);
+
 -- name: SetPostPreviewToken :exec
 UPDATE posts
 SET preview_token = ?, preview_expires_at = ?

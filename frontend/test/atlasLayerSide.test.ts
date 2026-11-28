@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 
-import { atlasSide, onAtlasSide, watchAtlasSide, ATLAS_SIDE_ATTR, type AtlasSideEnv } from '../src/plugins/tags-atlas/atlasLayerLayout.ts';
+import { atlasSide, onAtlasSide, settledCall, watchAtlasSide, ATLAS_SIDE_ATTR, SIDE_SETTLE_MS, type AtlasSideEnv, type SettleClock } from '../src/plugins/tags-atlas/atlasLayerLayout.ts';
 
 function fakeBody() {
   const attrs = new Map<string, string>();
@@ -92,5 +92,61 @@ describe('onAtlasSide', () => {
     assert.deepEqual(calls, [true, false, true]);
     stop();
     assert.equal(state.stopped, true);
+  });
+});
+
+describe('settledCall', () => {
+  /** A clock that runs its jobs on demand: frames in order, timers by time. */
+  function fakeClock() {
+    let frames: (() => void)[] = [];
+    let timers: { ms: number; fn: () => void }[] = [];
+    const clock: SettleClock = {
+      frame(fn) { frames.push(fn); return () => { frames = frames.filter((f) => f !== fn); }; },
+      after(ms, fn) { const t = { ms, fn }; timers.push(t); return () => { timers = timers.filter((x) => x !== t); }; },
+    };
+    const nextFrame = () => { const run = frames; frames = []; for (const f of run) f(); };
+    const runTimers = () => { const run = timers; timers = []; for (const t of run) t.fn(); };
+    return { clock, nextFrame, runTimers, pending: () => frames.length + timers.length, timers: () => timers };
+  }
+
+  test('reads the verdict again after two frames and after the settle time', () => {
+    // A rotation on iOS: the event comes while the query still says landscape.
+    const { env, state } = fakeEnv(false, true);
+    const seen: boolean[] = [];
+    const c = fakeClock();
+    let late: ReturnType<typeof settledCall> | null = null;
+    onAtlasSide((side) => seen.push(side), {
+      ...env,
+      observe(fn) { late = settledCall(fn, c.clock); return env.observe(late.call); },
+    });
+    assert.deepEqual(seen, [true]);
+    state.fn!(); // the event, with the old viewport
+    assert.deepEqual(seen, [true], 'no change yet');
+    assert.equal(c.timers()[0]!.ms, SIDE_SETTLE_MS);
+    state.landscape = false; // the viewport settles
+    c.nextFrame();
+    assert.deepEqual(seen, [true], 'one frame is not enough');
+    c.nextFrame();
+    assert.deepEqual(seen, [true, false], 'portrait after two frames');
+    c.runTimers();
+    assert.deepEqual(seen, [true, false], 'no second call for the same verdict');
+
+    // And back to landscape, read only by the late timer.
+    state.fn!();
+    c.nextFrame();
+    c.nextFrame();
+    state.landscape = true;
+    c.runTimers();
+    assert.deepEqual(seen, [true, false, true], 'landscape after the settle time');
+  });
+
+  test('stop cancels the late calls', () => {
+    let n = 0;
+    const c = fakeClock();
+    const late = settledCall(() => { n++; }, c.clock);
+    late.call();
+    assert.equal(n, 1);
+    late.stop();
+    assert.equal(c.pending(), 0);
   });
 });

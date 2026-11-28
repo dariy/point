@@ -12,7 +12,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // TestPageCacheKey pins the two properties the key composition has to hold:

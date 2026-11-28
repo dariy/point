@@ -17,7 +17,7 @@ import (
 	"point-api/internal/config"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestSystemHandler_Restore_Error(t *testing.T) {
@@ -42,9 +42,7 @@ func TestSystemHandler_Restore_Error(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/system/restore/missing.tar.gz", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues("missing.tar.gz")
-
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: "missing.tar.gz"}})
 	err := handler.RestoreBackup(c)
 	if err == nil {
 		t.Error("expected error for non-existent backup restore")
@@ -54,8 +52,7 @@ func TestSystemHandler_Restore_Error(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/system/backups/missing.tar.gz", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues("missing.tar.gz")
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: "missing.tar.gz"}})
 	err = handler.DeleteBackup(c)
 	var he *echo.HTTPError
 	if err == nil {

@@ -109,6 +109,17 @@ type Post struct {
 	InstagramID          sql.NullString `json:"instagram_id"`
 }
 
+type PostRevision struct {
+	ID        int64     `json:"id"`
+	PostID    int64     `json:"post_id"`
+	Kind      string    `json:"kind"`
+	CreatedAt time.Time `json:"created_at"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	Tags      string    `json:"tags"`
+	Css       string    `json:"css"`
+}
+
 type PostTag struct {
 	PostID int64 `json:"post_id"`
 	TagID  int64 `json:"tag_id"`

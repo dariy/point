@@ -40,6 +40,51 @@ export interface AtlasSideEnv {
   observe(fn: () => void): () => void;
 }
 
+/** The timers that settledCall uses. Tests replace them. */
+export interface SettleClock {
+  frame(fn: () => void): () => void;
+  after(ms: number, fn: () => void): () => void;
+}
+
+const defaultClock: SettleClock = {
+  frame(fn) {
+    if (typeof requestAnimationFrame !== 'function') return defaultClock.after(16, fn);
+    const id = requestAnimationFrame(fn);
+    return () => cancelAnimationFrame(id);
+  },
+  after(ms, fn) {
+    const id = setTimeout(fn, ms);
+    return () => clearTimeout(id);
+  },
+};
+
+/** The late check after an event: the viewport of a real iPad can settle this long after a rotation. */
+export const SIDE_SETTLE_MS = 300;
+
+/**
+ * Wrap `fn` for a rotation event. The call runs `fn` at once, again after two
+ * frames, and again after SIDE_SETTLE_MS. On iOS the rotation events can come
+ * before the viewport has its new size, so the orientation query still gives
+ * the old answer, and no later event comes. The late calls read it again.
+ * `stop` cancels the late calls.
+ */
+export function settledCall(fn: () => void, clock: SettleClock = defaultClock): { call: () => void; stop: () => void } {
+  let cancels: (() => void)[] = [];
+  const stop = () => {
+    for (const c of cancels) c();
+    cancels = [];
+  };
+  const call = () => {
+    stop();
+    fn();
+    cancels.push(clock.frame(() => {
+      cancels.push(clock.frame(fn));
+    }));
+    cancels.push(clock.after(SIDE_SETTLE_MS, fn));
+  };
+  return { call, stop };
+}
+
 function defaultSideEnv(): AtlasSideEnv {
   return {
     fine: hasFinePointer,
@@ -49,13 +94,22 @@ function defaultSideEnv(): AtlasSideEnv {
       // A test DOM can lack MutationObserver: then only the queries and resize count.
       const mo = typeof MutationObserver === 'function' ? new MutationObserver(fn) : null;
       mo?.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      // A rotation: the query, resize, orientationchange and screen.orientation.
+      // Each one reads the verdict again when the viewport has settled.
+      const late = settledCall(fn);
       const queries = [LANDSCAPE_QUERY, FINE_QUERY].map((q) => window.matchMedia?.(q)).filter(Boolean) as MediaQueryList[];
-      for (const q of queries) q.addEventListener?.('change', fn);
-      window.addEventListener('resize', fn);
+      for (const q of queries) q.addEventListener?.('change', late.call);
+      window.addEventListener('resize', late.call);
+      window.addEventListener('orientationchange', late.call);
+      const orientation = window.screen?.orientation;
+      orientation?.addEventListener?.('change', late.call);
       return () => {
         mo?.disconnect();
-        for (const q of queries) q.removeEventListener?.('change', fn);
-        window.removeEventListener('resize', fn);
+        late.stop();
+        for (const q of queries) q.removeEventListener?.('change', late.call);
+        window.removeEventListener('resize', late.call);
+        window.removeEventListener('orientationchange', late.call);
+        orientation?.removeEventListener?.('change', late.call);
       };
     },
   };

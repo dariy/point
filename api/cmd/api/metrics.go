@@ -23,7 +23,7 @@ import (
 	"point-api/internal/metrics"
 	"point-api/internal/repository"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // metricsMiddleware records one series of observations per request.
@@ -39,7 +39,7 @@ import (
 // which is the sort of bug a metric can carry for a year.
 func metricsMiddleware(reg *metrics.Registry) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			start := time.Now()
 			reg.InFlight(1)
 			err := next(c)
@@ -58,13 +58,14 @@ func metricsMiddleware(reg *metrics.Registry) echo.MiddlewareFunc {
 }
 
 // statusOf is the status the client will actually receive.
-func statusOf(c echo.Context, err error) int {
+func statusOf(c *echo.Context, err error) int {
 	if err == nil {
-		return c.Response().Status
+		_, status := echo.ResolveResponseStatus(c.Response(), nil)
+		return status
 	}
-	var he *echo.HTTPError
-	if errors.As(err, &he) {
-		return he.Code
+	// echo.StatusCode covers *echo.HTTPError and the v5 predefined errors.
+	if code := echo.StatusCode(err); code != 0 {
+		return code
 	}
 	return http.StatusInternalServerError
 }
@@ -72,14 +73,10 @@ func statusOf(c echo.Context, err error) int {
 // countRateLimited returns a DenyHandler that records the rejection and then
 // answers exactly as Echo's default would. Wrapping rather than replacing
 // matters: the limiter's response body and status are part of the API.
-func countRateLimited(reg *metrics.Registry, l metrics.Limiter) func(echo.Context, string, error) error {
-	return func(c echo.Context, identifier string, err error) error {
+func countRateLimited(reg *metrics.Registry, l metrics.Limiter) func(*echo.Context, string, error) error {
+	return func(c *echo.Context, identifier string, err error) error {
 		reg.RateLimited(l)
-		return &echo.HTTPError{
-			Code:     http.StatusTooManyRequests,
-			Message:  "rate limit exceeded",
-			Internal: err,
-		}
+		return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded").Wrap(err)
 	}
 }
 

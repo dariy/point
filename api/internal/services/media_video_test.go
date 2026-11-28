@@ -420,6 +420,68 @@ func TestBackfillVideos(t *testing.T) {
 	}
 }
 
+// TestVideoPosterKeepsTranscode runs the upload jobs in their queue order
+// (transcode, then server poster) and then stores a browser poster. Neither
+// poster removes the transcode.
+func TestVideoPosterKeepsTranscode(t *testing.T) {
+	ff := stubVideoFFmpeg(t, hevcProbe, false)
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 16, 9)), nil); err != nil {
+		t.Fatal(err)
+	}
+	frame := filepath.Join(t.TempDir(), "frame.jpg")
+	if err := os.WriteFile(frame, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The poster job asks for a frame on pipe:1; the transcode job names an
+	// output file as its last argument.
+	stub := "#!/bin/sh\nfor a; do last=$a; done\nif [ \"$last\" = pipe:1 ]; then cat '" + frame + "'; else printf mp4 > \"$last\"; fi\n"
+	if err := os.WriteFile(ff.FFmpegPath, []byte(stub), 0o700); err != nil { //nolint:gosec // test stub must be executable
+		t.Fatal(err)
+	}
+	svc, jobs, _ := newVideoMediaService(t, ff)
+	ctx := context.Background()
+	media, err := svc.UploadFile(ctx, UploadFileParams{Filename: "a.mov", Content: []byte("mov"), MimeType: "video/quicktime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		ran, err := jobs.RunOnce(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ran {
+			break
+		}
+	}
+	got, err := svc.getMedia(ctx, media.ID)
+	if err != nil || !got.ThumbnailPath.Valid {
+		t.Fatalf("no server poster after the upload jobs: %+v, %v", got.ThumbnailPath, err)
+	}
+	if svc.TranscodedVideo(got) == "" {
+		t.Fatal("the server poster removed the transcode")
+	}
+
+	// A rung cut from the old poster goes; the transcode stays.
+	rung := svc.variantFullPath(got.OriginalPath, VariantSizes[0])
+	if err := os.MkdirAll(filepath.Dir(rung), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(rung, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	browser, err := svc.SaveVideoPoster(ctx, media.ID, buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if svc.TranscodedVideo(browser) == "" {
+		t.Error("the browser poster removed the transcode")
+	}
+	if _, err := os.Stat(rung); !os.IsNotExist(err) {
+		t.Error("the browser poster left a rung of the old poster")
+	}
+}
+
 // TestRebuildDerivatives_Video checks the repair of a video whose poster file
 // is gone: it enqueues the poster job and then the transcode job, and after
 // them the video has all its derived files.

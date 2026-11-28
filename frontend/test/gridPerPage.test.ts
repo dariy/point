@@ -124,12 +124,16 @@ describe('viewport fit measures the box the CSS sizes', () => {
 });
 
 describe('columnPerPage (the touch landscape list column)', () => {
-  test('fills the column height with whole rows of square cells', async () => {
+  test('fits only the whole rows of square cells in the column height', async () => {
     const { columnPerPage } = await import('../src/utils/gridFit.ts');
-    // 2 columns of 100px cells, 8px gap: 286px is 2.7 rows -> 3 rows.
-    assert.equal(columnPerPage(208, 286, 2, 8), 6);
-    // Exactly 2 rows (100 + 8 + 100) fill it: no third row.
+    // 2 columns of 100px cells, 8px gap: 286px is 2.7 rows -> 2 whole rows.
+    assert.equal(columnPerPage(208, 286, 2, 8), 4);
+    // Exactly 2 rows (100 + 8 + 100) fill it: 2 rows, no cut third row.
     assert.equal(columnPerPage(208, 208, 2, 8), 4);
+    // One px short of 2 rows: 1 row.
+    assert.equal(columnPerPage(208, 207, 2, 8), 2);
+    // iPad 1024x768 column (p-kyo8m): 2 cells of 148px, 607px tall is 3.9 rows -> 3.
+    assert.equal(columnPerPage(304, 607, 2, 8), 6);
   });
 
   test('a short column gets one row; no size gets 0', async () => {

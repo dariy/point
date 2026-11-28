@@ -22,7 +22,7 @@ import (
 	"point-api/internal/repository"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -81,8 +81,7 @@ func TestPostHandler_CRUD(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/posts/1", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	c.Set("user", session)
 
 	if err := handler.GetPostByID(c); err != nil {
@@ -109,8 +108,7 @@ func TestPostHandler_CRUD(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/posts/1", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(postID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(postID, 10)}})
 	c.Set("user", session)
 
 	if err := handler.DeletePost(c); err != nil {
@@ -155,8 +153,7 @@ func TestPostHandler_UpdatePostTags(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	c.Set("user", session)
 
 	if err := handler.UpdatePostTags(c); err != nil {
@@ -171,8 +168,7 @@ func TestPostHandler_UpdatePostTags(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	c.Set("user", session)
 	err := handler.UpdatePostTags(c)
 	if err == nil {
@@ -212,9 +208,7 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/posts/1/navigation", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	if err := handler.GetPostNavigation(c); err != nil {
 		t.Fatalf("GetPostNavigation failed: %v", err)
 	}
@@ -226,8 +220,7 @@ func TestPostHandler_GetPostNavigation(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/posts/abc/navigation", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	err := handler.GetPostNavigation(c)
 	if err == nil {
 		t.Error("expected error for invalid ID")
@@ -297,9 +290,7 @@ func TestPostHandler_GetPostNavigation_AnonymousSkipsHiddenByTag(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/posts/x/navigation", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(ids[2], 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(ids[2], 10)}})
 	if err := handler.GetPostNavigation(c); err != nil {
 		t.Fatalf("GetPostNavigation failed: %v", err)
 	}
@@ -340,8 +331,7 @@ func TestPostHandler_GetPostByID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/posts/abc", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	if handler.GetPostByID(c) == nil {
 		t.Error("expected error for invalid id")
 	}
@@ -350,8 +340,7 @@ func TestPostHandler_GetPostByID(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/posts/99999", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("99999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "99999"}})
 	if handler.GetPostByID(c) == nil {
 		t.Error("expected error for nonexistent post")
 	}
@@ -366,8 +355,7 @@ func TestPostHandler_GetPostByID(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/posts/1", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	if err := handler.GetPostByID(c); err != nil {
 		t.Fatalf("GetPostByID failed: %v", err)
 	}
@@ -389,8 +377,7 @@ func TestPostHandler_GeneratePreviewLink(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/posts/abc/preview", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	if handler.GeneratePreviewLink(c) == nil {
 		t.Error("expected error for invalid id")
 	}
@@ -405,8 +392,7 @@ func TestPostHandler_GeneratePreviewLink(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/posts/preview", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	if err := handler.GeneratePreviewLink(c); err != nil {
 		t.Fatalf("GeneratePreviewLink failed: %v", err)
 	}
@@ -456,9 +442,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("slug")
-		c.SetParamValues("post-12")
-
+		c.SetPathValues(echo.PathValues{{Name: "slug", Value: "post-12"}})
 		if err := handler.GetPostPage(c); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -473,9 +457,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("slug")
-		c.SetParamValues("post-1")
-
+		c.SetPathValues(echo.PathValues{{Name: "slug", Value: "post-1"}})
 		if err := handler.GetPostPage(c); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -490,9 +472,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("slug")
-		c.SetParamValues("no-such-post")
-
+		c.SetPathValues(echo.PathValues{{Name: "slug", Value: "no-such-post"}})
 		err := handler.GetPostPage(c)
 		if err == nil {
 			t.Fatal("expected error for unknown slug")
@@ -510,9 +490,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/?per_page=5", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("slug")
-		c.SetParamValues("post-1")
-
+		c.SetPathValues(echo.PathValues{{Name: "slug", Value: "post-1"}})
 		if err := handler.GetPostPage(c); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -534,9 +512,7 @@ func TestPostHandler_GetPostPage(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/?tag=travel", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("slug")
-		c.SetParamValues("post-1")
-
+		c.SetPathValues(echo.PathValues{{Name: "slug", Value: "post-1"}})
 		if err := handler.GetPostPage(c); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -639,8 +615,7 @@ func TestUpdatePost_Success(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 
 	if err := h.UpdatePost(c); err != nil {
@@ -672,8 +647,7 @@ func TestPostHandler_PublishWithdraw_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(idStr)
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: idStr}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 	if err := h.PublishPost(c); err != nil {
 		t.Fatalf("PublishPost failed: %v", err)
@@ -682,8 +656,7 @@ func TestPostHandler_PublishWithdraw_Success(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	c2.SetParamNames("id")
-	c2.SetParamValues(idStr)
+	c2.SetPathValues(echo.PathValues{{Name: "id", Value: idStr}})
 	c2.Set("user", models.GetSessionByTokenRow{UserID: 1})
 	if err := h.WithdrawPost(c2); err != nil {
 		t.Fatalf("WithdrawPost failed: %v", err)
@@ -714,8 +687,7 @@ func TestPostHandler_GeneratePreviewLink_Success(t *testing.T) {
 	req.Header.Set("X-Forwarded-Proto", "https")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 	if err := h.GeneratePreviewLink(c); err != nil {
 		t.Fatalf("GeneratePreviewLink failed: %v", err)
@@ -784,8 +756,7 @@ func TestUpdatePost_SlugConflict(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(postB.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(postB.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 
 	err = h.UpdatePost(c)
@@ -811,9 +782,7 @@ func TestUpdatePost_BadID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("notanint")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanint"}})
 	if err := h.UpdatePost(c); err == nil {
 		t.Error("expected error for bad ID")
 	}
@@ -919,8 +888,7 @@ func TestPostHandler_GetPostBySlug_NotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("no-such-post")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "no-such-post"}})
 	err := ph.GetPostBySlug(c)
 	if err == nil {
 		t.Error("expected 404")
@@ -937,9 +905,7 @@ func TestPostHandler_GetPostBySlug_DraftBlocked(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("draft-post")
-
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "draft-post"}})
 	err := ph.GetPostBySlug(c)
 	if err == nil {
 		t.Error("expected 404 for draft post to public")
@@ -956,9 +922,7 @@ func TestPostHandler_GetPostByID_Draft_Blocked(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("99")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "99"}})
 	err := ph.GetPostByID(c)
 	if err == nil {
 		t.Error("expected 404 for draft post to public")
@@ -975,8 +939,7 @@ func TestPostHandler_GetPostByID_Admin_HiddenFields(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 	if err := ph.GetPostByID(c); err != nil {
 		t.Fatalf("GetPostByID: %v", err)
@@ -1002,8 +965,7 @@ func TestPostHandler_UpdatePost_BadID(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	err := ph.UpdatePost(c)
 	if err == nil {
 		t.Error("expected bad id error")
@@ -1017,8 +979,7 @@ func TestPostHandler_DeletePost_DBError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 	err := ph.DeletePost(c)
 	if err == nil {
@@ -1033,8 +994,7 @@ func TestPostHandler_PublishPost_DBError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := ph.PublishPost(c)
 	if err == nil {
 		t.Error("expected error")
@@ -1048,8 +1008,7 @@ func TestPostHandler_WithdrawPost_DBError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := ph.WithdrawPost(c)
 	if err == nil {
 		t.Error("expected error")
@@ -1063,8 +1022,7 @@ func TestPostHandler_GetPostByPreviewToken_DBError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("token")
-	c.SetParamValues("sometoken")
+	c.SetPathValues(echo.PathValues{{Name: "token", Value: "sometoken"}})
 	err := ph.GetPostByPreviewToken(c)
 	if err == nil {
 		t.Error("expected error")
@@ -1075,8 +1033,7 @@ func TestPostHandler_UpdatePostTags_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodPut, "/", `{"tags":["a"]}`)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := ph.UpdatePostTags(c)
 	if err == nil {
 		t.Error("expected error")
@@ -1090,8 +1047,7 @@ func TestPostHandler_GetPostNavigation_DBError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := ph.GetPostNavigation(c)
 	if err == nil {
 		t.Error("expected error")
@@ -1138,8 +1094,7 @@ func TestPostHandler_UpdatePost_DBError(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodPut, "/", `{"title":"Updated"}`)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	c.Set("user", "admin")
 	_ = ph.UpdatePost(c)
 }
@@ -1186,8 +1141,7 @@ func TestPostHandler_GetPostNavigation_DBError2(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	_ = h.repo.Close()
 	c, _ := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := ph.GetPostNavigation(c)
 	if err == nil {
 		t.Error("expected error")
@@ -1208,8 +1162,7 @@ func TestPostHandler_PublishToInstagram_BadID(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	c, _ := echoCtx(http.MethodPost, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	err := ph.PublishToInstagram(c)
 	if err == nil {
 		t.Error("expected error for bad id")
@@ -1229,8 +1182,7 @@ func TestPostHandler_PublishToInstagram_Success(t *testing.T) {
 		Title: "IG Post", Slug: "ig-success", Status: "published", Formatter: "markdown", AuthorID: userID,
 	})
 	c, rec := echoCtx(http.MethodPost, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
 	if err := ph.PublishToInstagram(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1256,8 +1208,7 @@ func TestPostHandler_PublishToInstagram_NotConnected(t *testing.T) {
 		Formatter: "markdown", AuthorID: userID, InstagramShare: true,
 	})
 	c, _ := echoCtx(http.MethodPost, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
 	if err := ph.PublishToInstagram(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1277,8 +1228,7 @@ func TestPostHandler_UpdatePostStatus_Success(t *testing.T) {
 
 	body := `{"status":"published"}`
 	c, rec := echoCtx(http.MethodPatch, "/", body)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
 	if err := ph.UpdatePostStatus(c); err != nil {
 		t.Fatalf("UpdatePostStatus: %v", err)
@@ -1292,8 +1242,7 @@ func TestPostHandler_UpdatePostStatus_BadID(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	c, _ := echoCtx(http.MethodPatch, "/", `{"status":"published"}`)
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	err := ph.UpdatePostStatus(c)
 	if err == nil {
 		t.Error("expected error for bad id")
@@ -1304,8 +1253,7 @@ func TestPostHandler_UpdatePostStatus_MissingStatus(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	c, _ := echoCtx(http.MethodPatch, "/", `{"status":""}`)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := ph.UpdatePostStatus(c)
 	if err == nil {
 		t.Error("expected error for empty status")
@@ -1316,8 +1264,7 @@ func TestPostHandler_UpdatePostStatus_NotFound(t *testing.T) {
 	ph, h := setupPostHandler(t)
 	defer h.close()
 	c, _ := echoCtx(http.MethodPatch, "/", `{"status":"published"}`)
-	c.SetParamNames("id")
-	c.SetParamValues("9999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "9999"}})
 	err := ph.UpdatePostStatus(c)
 	if err == nil {
 		t.Error("expected error for non-existent post")
@@ -1361,8 +1308,7 @@ func TestPostHandler_PublishToInstagram_NoImage(t *testing.T) {
 		Formatter: "markdown", AuthorID: userID, InstagramShare: true,
 	})
 	c, rec := echoCtx(http.MethodPost, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
 	if err := ph.PublishToInstagram(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1401,8 +1347,7 @@ func TestPostHandler_GetPostBySlug_ViewCountHidden(t *testing.T) {
 
 	// show_view_counts defaults to false, so view_count should be absent for public users
 	c, rec := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("slug")
-	c.SetParamValues("view-count-post")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "view-count-post"}})
 	if err := ph.GetPostBySlug(c); err != nil {
 		t.Fatalf("GetPostBySlug: %v", err)
 	}
@@ -1486,8 +1431,7 @@ func TestPostHandler_PublishToInstagram_FailureIsLogged(t *testing.T) {
 	defer slog.SetDefault(prev)
 
 	c, rec := echoCtx(http.MethodPost, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(post.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: userID})
 	if err := ph.PublishToInstagram(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1583,12 +1527,10 @@ func TestPostHandler_GuestMediaMetadata(t *testing.T) {
 			c.Set("user", models.GetSessionByTokenRow{UserID: userID})
 		}
 		if bySlug {
-			c.SetParamNames("slug")
-			c.SetParamValues("geo-post")
+			c.SetPathValues(echo.PathValues{{Name: "slug", Value: "geo-post"}})
 			err = ph.GetPostBySlug(c)
 		} else {
-			c.SetParamNames("id")
-			c.SetParamValues(strconv.FormatInt(post.ID, 10))
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(post.ID, 10)}})
 			err = ph.GetPostByID(c)
 		}
 		if err != nil {
@@ -1708,5 +1650,123 @@ func TestListPosts_TrashSendsDeletedAtAsTime(t *testing.T) {
 	}
 	if _, err := time.Parse(time.RFC3339, s); err != nil {
 		t.Errorf("deleted_at %q is not RFC 3339: %v", s, err)
+	}
+}
+
+func TestPostHandler_Revisions(t *testing.T) {
+	repo := setupTestDB(t)
+	defer func() { _ = repo.Close() }()
+	ctx := context.Background()
+
+	postSvc := services.NewPostService(repo, nil, nil, nil, "")
+	tagSvc := services.NewTagService(repo)
+	settingsSvc := services.NewSettingsService(repo)
+	mediaSvc := services.NewMediaService(repo, &config.Config{StoragePath: t.TempDir()}, settingsSvc, tagSvc)
+	h := NewPostHandler(postSvc, settingsSvc, mediaSvc, tagSvc)
+	e := echo.New()
+
+	_, _ = repo.DB().Exec(`INSERT INTO users (id, username, email, password_hash, display_name) VALUES (1,'u','u@t.com','h','U')`)
+	post, _, err := postSvc.CreatePost(ctx, services.CreatePostParams{
+		Title: "First", Slug: "first", Content: "first body", Status: "draft", AuthorID: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	idStr := strconv.FormatInt(post.ID, 10)
+
+	call := func(method string, body any, handler echo.HandlerFunc, names []string, values []string) (*httptest.ResponseRecorder, error) {
+		var reader *bytes.Reader
+		if body != nil {
+			b, _ := json.Marshal(body)
+			reader = bytes.NewReader(b)
+		} else {
+			reader = bytes.NewReader(nil)
+		}
+		req := httptest.NewRequest(method, "/", reader)
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		pv := make(echo.PathValues, len(names))
+		for i := range names {
+			pv[i] = echo.PathValue{Name: names[i], Value: values[i]}
+		}
+		c.SetPathValues(pv)
+		c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+		return rec, handler(c)
+	}
+
+	// An autosave makes no revision; "restore" from a client is a manual save.
+	for _, kind := range []string{"autosave", "restore"} {
+		if _, err := call(http.MethodPut, UpdatePostRequest{Title: "Second", Content: "second body", SaveKind: kind}, h.UpdatePost, []string{"id"}, []string{idStr}); err != nil {
+			t.Fatalf("UpdatePost(%s): %v", kind, err)
+		}
+	}
+
+	rec, err := call(http.MethodGet, nil, h.ListPostRevisions, []string{"id"}, []string{idStr})
+	if err != nil {
+		t.Fatalf("ListPostRevisions: %v", err)
+	}
+	var list struct {
+		Revisions []services.PostRevisionSummary `json:"revisions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Revisions) != 2 || list.Revisions[0].Kind != "manual" || list.Revisions[1].Kind != "manual" {
+		t.Fatalf("revisions = %+v, want two manual", list.Revisions)
+	}
+	firstRev := strconv.FormatInt(list.Revisions[1].ID, 10)
+
+	rec, err = call(http.MethodGet, nil, h.GetPostRevision, []string{"id", "rev"}, []string{idStr, firstRev})
+	if err != nil {
+		t.Fatalf("GetPostRevision: %v", err)
+	}
+	var rev services.PostRevision
+	if err := json.Unmarshal(rec.Body.Bytes(), &rev); err != nil {
+		t.Fatal(err)
+	}
+	if rev.Content != "first body" {
+		t.Errorf("revision content = %q, want %q", rev.Content, "first body")
+	}
+
+	rec, err = call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{idStr, firstRev})
+	if err != nil {
+		t.Fatalf("RestorePostRevision: %v", err)
+	}
+	var restored map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored["title"] != "First" || restored["content"] != "first body" {
+		t.Errorf("restored post = title %v content %v", restored["title"], restored["content"])
+	}
+
+	// Bad and missing ids.
+	if _, err := call(http.MethodGet, nil, h.GetPostRevision, []string{"id", "rev"}, []string{idStr, "x"}); err == nil {
+		t.Error("GetPostRevision with a bad rev: expected an error")
+	}
+	if _, err := call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{idStr, "99999"}); err == nil {
+		t.Error("RestorePostRevision of a missing revision: expected an error")
+	}
+	if _, err := call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{"x", firstRev}); err == nil {
+		t.Error("RestorePostRevision with a bad id: expected an error")
+	}
+	if _, err := call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{idStr, "x"}); err == nil {
+		t.Error("RestorePostRevision with a bad rev: expected an error")
+	}
+	if _, err := call(http.MethodPost, nil, h.RestorePostRevision, []string{"id", "rev"}, []string{"99999", firstRev}); err == nil {
+		t.Error("RestorePostRevision of a missing post: expected an error")
+	}
+	if _, err := call(http.MethodGet, nil, h.ListPostRevisions, []string{"id"}, []string{"99999"}); err == nil {
+		t.Error("ListPostRevisions of a missing post: expected an error")
+	}
+	if _, err := call(http.MethodGet, nil, h.ListPostRevisions, []string{"id"}, []string{"x"}); err == nil {
+		t.Error("ListPostRevisions with a bad id: expected an error")
+	}
+	if _, err := call(http.MethodGet, nil, h.GetPostRevision, []string{"id", "rev"}, []string{"x", firstRev}); err == nil {
+		t.Error("GetPostRevision with a bad id: expected an error")
+	}
+	if _, err := call(http.MethodGet, nil, h.GetPostRevision, []string{"id", "rev"}, []string{idStr, "99999"}); err == nil {
+		t.Error("GetPostRevision of a missing revision: expected an error")
 	}
 }

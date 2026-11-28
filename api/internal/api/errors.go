@@ -7,7 +7,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // statusByKind gives the HTTP status for each kind in the service error

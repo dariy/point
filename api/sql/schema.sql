@@ -133,6 +133,23 @@ CREATE TABLE IF NOT EXISTS post_tags (
 -- instead of fetching each matching row from the table.
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id_post_id ON post_tags(tag_id, post_id);
 
+-- PostRevisions — one saved version of a post (NF-9). The editor makes one at
+-- each manual save, at publish, at a restore and at the last autosave of an
+-- editor session. Other autosaves make none. content carries the media order,
+-- because a post's media are the paths in its body. tags is a JSON array of tag
+-- names. The rows go with the post when it is permanently deleted.
+CREATE TABLE IF NOT EXISTS post_revisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '[]',
+    css TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_post_revisions_post_id ON post_revisions(post_id, id DESC);
+
 -- TagRelationships (Hierarchy)
 CREATE TABLE IF NOT EXISTS tag_relationships (
     parent_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,

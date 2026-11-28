@@ -13,7 +13,7 @@ import (
 	"point-api/internal/services"
 	"point-api/internal/services/pageview"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestTagHandler_CRUD(t *testing.T) {
@@ -52,9 +52,7 @@ func TestTagHandler_CRUD(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/tags/1", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	if err := handler.GetTagByID(c); err != nil {
 		t.Fatalf("GetTagByID failed: %v", err)
 	}
@@ -78,9 +76,7 @@ func TestTagHandler_CRUD(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/tags/1", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(tagID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(tagID, 10)}})
 	if err := handler.DeleteTag(c); err != nil {
 		t.Fatalf("DeleteTag failed: %v", err)
 	}
@@ -107,8 +103,7 @@ func TestTagHandler_GetTagBySlug(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/tags/slug/travel", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues(tag.Slug)
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: tag.Slug}})
 	if err := handler.GetTagBySlug(c); err != nil {
 		t.Fatalf("GetTagBySlug failed: %v", err)
 	}
@@ -120,8 +115,7 @@ func TestTagHandler_GetTagBySlug(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/tags/slug/no-such-tag", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("no-such-tag")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "no-such-tag"}})
 	err := handler.GetTagBySlug(c)
 	if err == nil {
 		t.Error("expected error for missing tag")
@@ -146,9 +140,7 @@ func TestTagHandler_UpdateTag(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(tag.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(tag.ID, 10)}})
 	if err := handler.UpdateTag(c); err != nil {
 		t.Fatalf("UpdateTag failed: %v", err)
 	}
@@ -161,8 +153,7 @@ func TestTagHandler_UpdateTag(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	err := handler.UpdateTag(c)
 	if err == nil {
 		t.Error("expected error for invalid ID")
@@ -174,8 +165,7 @@ func TestTagHandler_UpdateTag(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("9999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "9999"}})
 	err = handler.UpdateTag(c)
 	if err == nil {
 		t.Error("expected error for non-existent tag")
@@ -203,9 +193,7 @@ func TestTagHandler_ReorderTag(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(t1.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(t1.ID, 10)}})
 	if err := handler.ReorderTag(c); err != nil {
 		t.Fatalf("ReorderTag failed: %v", err)
 	}
@@ -218,8 +206,7 @@ func TestTagHandler_ReorderTag(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	err := handler.ReorderTag(c)
 	if err == nil {
 		t.Error("expected error for invalid ID")
@@ -244,8 +231,7 @@ func TestTagHandler_GetPostsByTag(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/tags/my-tag/posts", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues(tag.Slug)
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: tag.Slug}})
 	if err := handler.GetPostsByTag(c); err != nil {
 		t.Fatalf("GetPostsByTag failed: %v", err)
 	}
@@ -257,8 +243,7 @@ func TestTagHandler_GetPostsByTag(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/tags/no-such/posts", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("no-such")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "no-such"}})
 	err := handler.GetPostsByTag(c)
 	if err == nil {
 		t.Error("expected error for missing tag slug")
@@ -277,8 +262,7 @@ func TestTagHandler_GetTagByIDBoost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	if err := h.GetTagByID(c); err == nil {
 		t.Error("expected error for non-numeric ID")
 	}
@@ -286,8 +270,7 @@ func TestTagHandler_GetTagByIDBoost(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
-	c2.SetParamNames("id")
-	c2.SetParamValues("999")
+	c2.SetPathValues(echo.PathValues{{Name: "id", Value: "999"}})
 	if err := h.GetTagByID(c2); err == nil {
 		t.Error("expected error for non-existent tag ID")
 	}
@@ -305,8 +288,7 @@ func TestTagHandler_DeleteTagBoost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("notanumber")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "notanumber"}})
 	if err := h.DeleteTag(c); err == nil {
 		t.Error("expected error for non-numeric ID")
 	}
@@ -342,9 +324,7 @@ func TestTagHandler_GetTagByIDWithLocation(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	if err := h.GetTagByID(c); err != nil {
 		t.Fatalf("GetTagByID with location failed: %v", err)
 	}
@@ -416,8 +396,7 @@ func TestTagHandler_GetTagByID_NotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("9999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "9999"}})
 	err := th.GetTagByID(c)
 	if err == nil {
 		t.Error("expected error for non-existent tag")
@@ -443,8 +422,7 @@ func TestTagHandler_DeleteTag_DBError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := th.DeleteTag(c)
 	if err == nil {
 		t.Error("expected error")
@@ -459,8 +437,7 @@ func TestTagHandler_GeocodeTag_DBError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := th.GeocodeTag(c)
 	if err == nil {
 		t.Error("expected error")
@@ -475,8 +452,7 @@ func TestTagHandler_GetTagBySlug_NotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("no-such-tag")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "no-such-tag"}})
 	err := th.GetTagBySlug(c)
 	if err == nil {
 		t.Error("expected 404")
@@ -493,8 +469,7 @@ func TestTagHandler_ReorderTag_BadBind(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := th.ReorderTag(c)
 	if err == nil && rec.Code != http.StatusBadRequest {
 		t.Error("expected bind error")
@@ -509,8 +484,7 @@ func TestTagHandler_GetPostsByTag_DBError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	err := th.GetPostsByTag(c)
 	if err == nil {
 		t.Error("expected error")
@@ -535,16 +509,14 @@ func TestTagHandler_GetTagCloud_DBError(t *testing.T) {
 func TestTagHandler_GetTagByID_DBError(t *testing.T) {
 	th, _ := setupTagHandlerClosed(t)
 	c, _ := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	_ = th.GetTagByID(c)
 }
 
 func TestTagHandler_GetTagBySlug_DBError(t *testing.T) {
 	th, _ := setupTagHandlerClosed(t)
 	c, _ := echoCtx(http.MethodGet, "/", "")
-	c.SetParamNames("slug")
-	c.SetParamValues("sometag")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "sometag"}})
 	_ = th.GetTagBySlug(c)
 }
 
@@ -569,8 +541,7 @@ func TestTagHandler_GetTagByID_EffectivelyHidden(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strings.Trim(mustJSON(hiddenID), "\""))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strings.Trim(mustJSON(hiddenID), "\"")}})
 	err := th.GetTagByID(c)
 	if err == nil {
 		t.Error("expected 404 for hidden tag (public)")
@@ -579,8 +550,7 @@ func TestTagHandler_GetTagByID_EffectivelyHidden(t *testing.T) {
 	// Hidden is not inherited — the child of a hidden tag is publicly reachable.
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec2)
-	c2.SetParamNames("id")
-	c2.SetParamValues(strings.Trim(mustJSON(child.ID), "\""))
+	c2.SetPathValues(echo.PathValues{{Name: "id", Value: strings.Trim(mustJSON(child.ID), "\"")}})
 	if err := th.GetTagByID(c2); err != nil {
 		t.Errorf("expected child of hidden tag to be reachable (no inheritance), got error: %v", err)
 	}
@@ -600,8 +570,7 @@ func TestTagHandler_GetTagBySlug_EffectivelyHidden(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("hiddentag")
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "hiddentag"}})
 	err := th.GetTagBySlug(c)
 	if err == nil {
 		t.Error("expected 404 for hidden tag by slug (public)")
@@ -610,8 +579,7 @@ func TestTagHandler_GetTagBySlug_EffectivelyHidden(t *testing.T) {
 	// Hidden is not inherited — the child stays publicly reachable.
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec2)
-	c2.SetParamNames("slug")
-	c2.SetParamValues("secret2-hidden")
+	c2.SetPathValues(echo.PathValues{{Name: "slug", Value: "secret2-hidden"}})
 	if err := th.GetTagBySlug(c2); err != nil {
 		t.Errorf("expected child of hidden tag to be reachable (no inheritance), got error: %v", err)
 	}
@@ -629,8 +597,7 @@ func TestTagHandler_GetTagBySlug_AdminInjectHidden(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.Set("user", "admin")
-	c.SetParamNames("slug")
-	c.SetParamValues(tag.Slug)
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: tag.Slug}})
 	err := th.GetTagBySlug(c)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -648,8 +615,7 @@ func TestTagHandler_UpdateTag_BindError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strings.Trim(mustJSON(tag.ID), "\""))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strings.Trim(mustJSON(tag.ID), "\"")}})
 	err := th.UpdateTag(c)
 	if err == nil {
 		t.Error("expected error for bind failure")
@@ -659,8 +625,7 @@ func TestTagHandler_UpdateTag_BindError(t *testing.T) {
 func TestTagHandler_ReorderTag_DBError(t *testing.T) {
 	th, _ := setupTagHandlerClosed(t)
 	c, _ := echoCtx(http.MethodPut, "/", `{"position":"before"}`)
-	c.SetParamNames("id")
-	c.SetParamValues("1")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 	_ = th.ReorderTag(c)
 }
 
@@ -698,15 +663,14 @@ func TestTagHandler_SetRelations(t *testing.T) {
 	child, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Child"})
 	subject, _ := tagSvc.CreateTag(ctx, services.CreateTagParams{Name: "Subject"})
 
-	call := func(t *testing.T, fn func(echo.Context) error, id int64, body string) map[string]interface{} {
+	call := func(t *testing.T, fn func(*echo.Context) error, id int64, body string) map[string]interface{} {
 		t.Helper()
 		idStr := strconv.FormatInt(id, 10)
 		req := httptest.NewRequest(http.MethodPut, "/api/tags/"+idStr+"/parents", strings.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("id")
-		c.SetParamValues(idStr)
+		c.SetPathValues(echo.PathValues{{Name: "id", Value: idStr}})
 		if err := fn(c); err != nil {
 			t.Fatalf("handler failed: %v", err)
 		}
@@ -748,8 +712,7 @@ func TestTagHandler_SetRelations(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/api/tags/1/parents", strings.NewReader(`{"ids":`))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	c := e.NewContext(req, httptest.NewRecorder())
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(subject.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(subject.ID, 10)}})
 	if err := handler.SetTagParents(c); err == nil {
 		t.Error("expected an error for a malformed body")
 	}

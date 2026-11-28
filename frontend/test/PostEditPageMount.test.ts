@@ -282,6 +282,22 @@ describe('PostEditPage (mounted)', () => {
       assert.equal(getAutosaveStatus().status, 'failed');
       assert.equal(page.state.saving, false);
     });
+
+    test('a failed save keeps the values the user typed', async () => {
+      routes['PUT /api/posts/7'] = () => fail(500, 'Server error');
+      await mountPage({ params: { id: '7' } });
+      type(get('#title-input'), 'Typed, not saved');
+      type(get('#slug-input'), 'typed-not-saved');
+
+      await page._save({ status: 'hidden' });
+      await settle();
+
+      assert.equal(getToast().type, 'error');
+      assert.equal(get('#title-input').value, 'Typed, not saved');
+      assert.equal(get('#slug-input').value, 'typed-not-saved');
+      // The override was not saved, so the form does not show it.
+      assert.equal(get('#status-select').value, 'published');
+    });
   });
 
   describe('autosave', () => {
@@ -330,6 +346,56 @@ describe('PostEditPage (mounted)', () => {
       assert.equal(page.state.postId, 11);
       // The backend titles an untitled post after the day; show that back.
       assert.equal(get('#title-input').value, 'August 26');
+    });
+
+    test('tells the server it is an autosave; a manual save says manual', async () => {
+      await mountPage({ params: { id: '7' } });
+      type(get('#title-input'), 'Edited');
+      page._onInput();
+      await page._autosave();
+      await settle();
+      assert.equal(last(sent('PUT', '/api/posts/7')).body.save_kind, 'autosave');
+
+      await page._save();
+      await settle();
+      assert.equal(last(sent('PUT', '/api/posts/7')).body.save_kind, 'manual');
+    });
+
+    test('closing the editor sends the last autosave once as autosave_last', async () => {
+      await mountPage({ params: { id: '7' } });
+      type(get('#title-input'), 'First');
+      page._onInput();
+      await page._autosave();
+      type(get('#title-input'), 'Second');
+      page._onInput();
+      await page._autosave();
+      await settle();
+
+      page.unmount();
+      await settle();
+
+      const puts = sent('PUT', '/api/posts/7');
+      assert.equal(puts.length, 3);
+      assert.equal(last(puts).body.save_kind, 'autosave_last');
+      assert.equal(last(puts).body.title, 'Second');
+      page.unmount();
+      await settle();
+      assert.equal(sent('PUT', '/api/posts/7').length, 3, 'sent once only');
+    });
+
+    test('closing the editor after a manual save sends nothing more', async () => {
+      await mountPage({ params: { id: '7' } });
+      type(get('#title-input'), 'First');
+      page._onInput();
+      await page._autosave();
+      await page._save();
+      await settle();
+
+      page.unmount();
+      await settle();
+
+      assert.equal(sent('PUT', '/api/posts/7').length, 2);
+      assert.equal(last(sent('PUT', '/api/posts/7')).body.save_kind, 'manual');
     });
 
     test('a failure is recorded rather than thrown at the user mid-keystroke', async () => {

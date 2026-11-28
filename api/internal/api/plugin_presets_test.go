@@ -11,7 +11,7 @@ import (
 
 	"point-api/internal/plugins"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // GetPresets seeds the defaults on first read and reports the active preset.
@@ -56,9 +56,7 @@ func TestUpdatePreset_ReplacesMembershipAndDedups(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("standalone")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "standalone"}})
 	if err := h.UpdatePreset(c); err != nil {
 		t.Fatalf("UpdatePreset error: %v", err)
 	}
@@ -82,9 +80,7 @@ func TestUpdatePreset_UnknownPreset404(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("nope")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "nope"}})
 	var he *echo.HTTPError
 	ok := errors.As(h.UpdatePreset(c), &he)
 	if !ok || he.Code != http.StatusNotFound {
@@ -99,9 +95,7 @@ func TestUpdatePreset_UnknownPlugin400(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("standalone")
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "standalone"}})
 	var he *echo.HTTPError
 	ok := errors.As(h.UpdatePreset(c), &he)
 	if !ok || he.Code != http.StatusBadRequest {
@@ -120,8 +114,7 @@ func TestApplyPreset_SingleClaimSlotKeepsFirst(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/plugins/presets/fully-featured/apply", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("fully-featured")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "fully-featured"}})
 	if err := h.ApplyPreset(c); err != nil {
 		t.Fatalf("ApplyPreset error: %v", err)
 	}

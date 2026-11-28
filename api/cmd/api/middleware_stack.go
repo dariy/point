@@ -10,7 +10,7 @@ package main
 // they run in, and main_test.go pins the resulting header set.
 
 import (
-	"fmt"
+	"errors"
 	"log/slog"
 	"net/http"
 	"path"
@@ -22,8 +22,8 @@ import (
 	"point-api/internal/config"
 	"point-api/internal/metrics"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"golang.org/x/time/rate"
 )
 
@@ -44,7 +44,7 @@ var precompressedExt = map[string]bool{
 // uncompressed. Decided from the request path's extension because it is known
 // before the handler runs: media is served from /:year/:month/:filename and
 // backups from archive-named routes, both of which keep their real extension.
-func skipGzip(c echo.Context) bool {
+func skipGzip(c *echo.Context) bool {
 	return precompressedExt[strings.ToLower(filepath.Ext(c.Request().URL.Path))]
 }
 
@@ -97,9 +97,8 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 		LogURI:      true,
 		LogMethod:   true,
 		LogLatency:  true,
-		LogError:    true,
 		LogRemoteIP: true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			if v.Error != nil {
 				slog.Error("request error",
 					"method", v.Method,
@@ -121,29 +120,7 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 			return nil
 		},
 	}))
-	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
-		// The response is unchanged from middleware.Recover(): returning err
-		// from LogErrorFunc still hands it to the centralized error handler,
-		// so the client gets the same 500 it always did.
-		//
-		// What changes is where the panic is reported. Echo's default writes
-		// the stack through c.Logger(), which this server never points at slog
-		// — so panics went to stderr in Echo's own format and never reached
-		// app.log, which is the file the admin Logs page reads and the only one
-		// visible from inside a container. They land there now, and they are
-		// counted: a recovered panic is otherwise indistinguishable from a
-		// failed query, because both are a 500.
-		LogErrorFunc: func(c echo.Context, err error, stack []byte) error {
-			svcs.Metrics.Panic(metrics.PanicHTTP)
-			slog.Error("recovered panic",
-				"method", c.Request().Method,
-				"uri", c.Request().RequestURI,
-				"error", err,
-				"stack", string(stack),
-			)
-			return err
-		},
-	}))
+	e.Use(recoverToSlog(svcs.Metrics))
 	// Compress text payloads: the CSS/JS bundles and every JSON API response
 	// gzip to roughly a quarter of their size. Sits high in the chain so it
 	// wraps the static file routes as well as the handlers. Responses under
@@ -165,10 +142,10 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 		// The "move in" archive upload streams a multi-GB body straight to a temp
 		// file; the global limit would abort it. It's gated by a session cookie
 		// plus password re-entry instead of a size ceiling.
-		Skipper: func(c echo.Context) bool {
+		Skipper: func(c *echo.Context) bool {
 			return c.Request().Method == http.MethodPost && c.Path() == "/api/system/backups/upload"
 		},
-		Limit: fmt.Sprintf("%dM", uploadLimitMB),
+		LimitBytes: int64(uploadLimitMB) << 20,
 	}))
 	// Wildcard origin for the public read API. AllowCredentials is deliberately
 	// omitted: browsers reject `Access-Control-Allow-Origin: *` together with
@@ -212,7 +189,7 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 	}))
 	// Extra security headers not covered by middleware.Secure
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			c.Response().Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 			return next(c)
 		}
@@ -236,7 +213,7 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 	// /assets/css/ subtree from e.Static and take the files in it down with
 	// it, including the runtime-generated common/theme.css.
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			r := c.Request()
 			p := r.URL.Path
 			switch {
@@ -287,15 +264,51 @@ func installMiddleware(e *echo.Echo, cfg config.Config, svcs *AppServices, cssMa
 // Recover and Gzip.
 func newPublicLimiter(reg *metrics.Registry) echo.MiddlewareFunc {
 	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-		Skipper: func(c echo.Context) bool {
+		Skipper: func(c *echo.Context) bool {
 			p := c.Request().URL.Path
 			return strings.HasPrefix(p, "/assets/") || p == "/health"
 		},
-		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
-			Rate:      rate.Every(100 * time.Millisecond),
+		Store: api.QuietRateStore(middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      float64(rate.Every(100 * time.Millisecond)),
 			Burst:     200,
 			ExpiresIn: 3 * time.Minute,
-		}),
+		})),
 		DenyHandler: countRateLimited(reg, metrics.LimiterPublic),
 	})
+}
+
+// recoverToSlog is middleware.Recover with the panic reported to slog.
+//
+// The response is unchanged from middleware.Recover(): the recovered panic
+// goes to the centralized error handler as the panic's own error, so the
+// client gets the same 500 it always did. echo/v5 wraps that error in a
+// *middleware.PanicStackError whose message holds the stack; it is unwrapped
+// here, so the stack does not reach the response body.
+//
+// What changes is where the panic is reported. Echo's default writes the
+// stack through c.Logger(), which this server never points at slog — so
+// panics went to stderr in Echo's own format and never reached app.log, which
+// is the file the admin Logs page reads and the only one visible from inside
+// a container. They land there now, and they are counted: a recovered panic
+// is otherwise indistinguishable from a failed query, because both are a 500.
+func recoverToSlog(reg *metrics.Registry) echo.MiddlewareFunc {
+	recoverMW := middleware.Recover()
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		h := recoverMW(next)
+		return func(c *echo.Context) error {
+			err := h(c)
+			var pse *middleware.PanicStackError
+			if errors.As(err, &pse) {
+				reg.Panic(metrics.PanicHTTP)
+				slog.Error("recovered panic",
+					"method", c.Request().Method,
+					"uri", c.Request().RequestURI,
+					"error", pse.Err,
+					"stack", string(pse.Stack),
+				)
+				return pse.Err
+			}
+			return err
+		}
+	}
 }

@@ -12,7 +12,7 @@ import (
 
 	"point-api/internal/repository"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // isAdminPath reports whether p is served by the admin ("light") SPA section.
@@ -49,7 +49,7 @@ func newSetupGate(repo repository.Repository) func(context.Context) bool {
 // reads it back with no blog title and the wrong theme.
 func noStoreBeforeSetup(setupComplete func(context.Context) bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			if !setupComplete(c.Request().Context()) {
 				c.Response().Header().Set("Cache-Control", "private, no-store")
 			}
@@ -64,7 +64,7 @@ func noStoreBeforeSetup(setupComplete func(context.Context) bool) echo.Middlewar
 // the cookie's presence, not validity: a stale cookie merely costs one visitor
 // their analytics ping, never a security regression, and it avoids a DB lookup
 // on every HTML page load.
-func hasSession(c echo.Context) bool {
+func hasSession(c *echo.Context) bool {
 	ck, err := c.Cookie("session")
 	return err == nil && ck.Value != ""
 }
@@ -75,7 +75,7 @@ func hasSession(c echo.Context) bool {
 // It mirrors the guest test serveSimplifiedMedia already uses for media
 // (isAuthenticated := c.Get("user") != nil), but reads the request directly so
 // it does not depend on auth middleware having run first.
-func isGuestRequest(c echo.Context) bool {
+func isGuestRequest(c *echo.Context) bool {
 	if hasSession(c) {
 		return false
 	}
@@ -105,7 +105,7 @@ func isGuestRequest(c echo.Context) bool {
 // routes, which also stops a zone-wide default browser TTL from leaking a long
 // max-age downstream. So the origin just advertises the 60 s shared TTL here.
 func visibilityCache(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		if c.Request().Method == http.MethodGet && isGuestRequest(c) {
 			c.Response().Header().Set("Cache-Control", "public, max-age=60")
 			// Many shared caches refuse to store a response whose Vary lists

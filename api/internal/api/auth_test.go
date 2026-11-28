@@ -15,7 +15,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestAuthHandler_Login(t *testing.T) {
@@ -357,8 +357,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/auth/sessions/abc", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("abc")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "abc"}})
 	c.Set("user", session)
 	err := handler.DeleteSession(c)
 	if err == nil {
@@ -369,8 +368,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/auth/sessions/1", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(sess.ID, 10))
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(sess.ID, 10)}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: user.ID, ID: sess.ID})
 	if err := handler.DeleteSession(c); err != nil {
 		t.Fatalf("DeleteSession failed: %v", err)
@@ -383,8 +381,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/auth/sessions/999", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("999")
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: "999"}})
 	c.Set("user", session)
 	err = handler.DeleteSession(c)
 	if err == nil {

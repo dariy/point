@@ -127,6 +127,10 @@ type mockRepository struct {
 	MockCountTrashedMedia                    func(ctx context.Context) (int64, error)
 	MockListExpiredTrashedMediaIDs           func(ctx context.Context) ([]int64, error)
 	MockPurgeExpiredTrashedPosts             func(ctx context.Context) (int64, error)
+	MockCreatePostRevision                   func(ctx context.Context, arg models.CreatePostRevisionParams) (models.PostRevision, error)
+	MockListPostRevisions                    func(ctx context.Context, postID int64) ([]models.ListPostRevisionsRow, error)
+	MockGetPostRevision                      func(ctx context.Context, arg models.GetPostRevisionParams) (models.PostRevision, error)
+	MockPrunePostRevisions                   func(ctx context.Context, arg models.PrunePostRevisionsParams) (int64, error)
 	MockListOrphanedMediaByPage              func(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error)
 	MockListMediaFolders                     func(ctx context.Context, fileType string) ([]repository.MediaFolder, error)
 	MockListMediaFiltered                    func(ctx context.Context, fileType, folder string, limit, offset int64) ([]models.Medium, error)
@@ -960,6 +964,34 @@ func (m *mockRepository) PurgeExpiredTrashedPosts(ctx context.Context) (int64, e
 		return m.MockPurgeExpiredTrashedPosts(ctx)
 	}
 	return 0, fmt.Errorf("PurgeExpiredTrashedPosts not implemented")
+}
+
+func (m *mockRepository) CreatePostRevision(ctx context.Context, arg models.CreatePostRevisionParams) (models.PostRevision, error) {
+	if m.MockCreatePostRevision != nil {
+		return m.MockCreatePostRevision(ctx, arg)
+	}
+	return models.PostRevision{}, fmt.Errorf("CreatePostRevision not implemented")
+}
+
+func (m *mockRepository) ListPostRevisions(ctx context.Context, postID int64) ([]models.ListPostRevisionsRow, error) {
+	if m.MockListPostRevisions != nil {
+		return m.MockListPostRevisions(ctx, postID)
+	}
+	return nil, fmt.Errorf("ListPostRevisions not implemented")
+}
+
+func (m *mockRepository) GetPostRevision(ctx context.Context, arg models.GetPostRevisionParams) (models.PostRevision, error) {
+	if m.MockGetPostRevision != nil {
+		return m.MockGetPostRevision(ctx, arg)
+	}
+	return models.PostRevision{}, fmt.Errorf("GetPostRevision not implemented")
+}
+
+func (m *mockRepository) PrunePostRevisions(ctx context.Context, arg models.PrunePostRevisionsParams) (int64, error) {
+	if m.MockPrunePostRevisions != nil {
+		return m.MockPrunePostRevisions(ctx, arg)
+	}
+	return 0, fmt.Errorf("PrunePostRevisions not implemented")
 }
 
 func (m *mockRepository) ListOrphanedMediaByPage(ctx context.Context, limit, offset int64) ([]models.Medium, int64, error) {

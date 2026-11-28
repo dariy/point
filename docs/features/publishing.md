@@ -45,6 +45,29 @@ contextual — **Publish ▾** (now / schedule) for drafts, **Update** for publi
 Everything secondary (slug, excerpt, featured, schedule, immersive, CSS, Instagram)
 lives in the **Details** rail/sheet.
 
+## Revisions (NF-9)
+
+Each post keeps a history in `post_revisions`: the title, the body (which also
+holds the media order), the tag names and the per-post CSS. A save sends
+`save_kind` (`manual`, `autosave`, `autosave_last`); `revisionKindForSave`
+(`api/internal/services/post_revisions.go`) selects the revision it makes:
+
+- `manual` (also an empty or unknown `save_kind`): a `manual` revision. The editor
+  sends it for Ctrl+S, Update and the publish actions.
+- `autosave`: no revision. The editor sends `autosave_last` once when it closes,
+  if an autosave came after the last revision, and that save makes an `autosave`
+  revision.
+- A save, publish, status change or scheduled publish that moves the post to
+  `published` makes a `publish` revision.
+- `POST /api/posts/:id/revisions/:rev/restore` writes the title, body, tags and
+  CSS back through `UpdatePost` and makes a `restore` revision. The newer revisions
+  stay.
+
+A post keeps its 50 newest revisions (`PostRevisionLimit`) and all its `publish`
+revisions. The revisions are deleted with the post (`ON DELETE CASCADE`), not when
+it goes to the trash. `GET /api/posts/:id/revisions` lists them newest first,
+without the body; `GET /api/posts/:id/revisions/:rev` reads one in full.
+
 ## Lifecycle
 
 - **Statuses**: `draft`, `scheduled`, `published`, `hidden` — plus tag-driven hiding on

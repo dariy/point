@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // These tests pin the behaviour changes from migrating posts.go onto MapError.
@@ -34,59 +34,49 @@ func statusOf(t *testing.T, err error) (int, interface{}) {
 func TestPostHandlerDBFailureIsNot404(t *testing.T) {
 	cases := []struct {
 		name string
-		call func(*PostHandler, echo.Context) error
+		call func(*PostHandler, *echo.Context) error
 	}{
-		{"GetPostByID", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("1")
+		{"GetPostByID", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 			return ph.GetPostByID(c)
 		}},
-		{"GetPostBySlug", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("slug")
-			c.SetParamValues("anything")
+		{"GetPostBySlug", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "slug", Value: "anything"}})
 			return ph.GetPostBySlug(c)
 		}},
-		{"UpdatePostStatus", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("1")
+		{"UpdatePostStatus", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 			return ph.UpdatePostStatus(c)
 		}},
-		{"DeletePost", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("1")
+		{"DeletePost", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 			return ph.DeletePost(c)
 		}},
-		{"RestorePost", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("1")
+		{"RestorePost", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 			return ph.RestorePost(c)
 		}},
-		{"PermanentlyDeletePost", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("1")
+		{"PermanentlyDeletePost", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 			return ph.PermanentlyDeletePost(c)
 		}},
-		{"PublishPost", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("1")
+		{"PublishPost", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 			return ph.PublishPost(c)
 		}},
-		{"GeneratePreviewLink", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("1")
+		{"GeneratePreviewLink", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 			return ph.GeneratePreviewLink(c)
 		}},
-		{"GetPostByPreviewToken", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("token")
-			c.SetParamValues("sometoken")
+		{"GetPostByPreviewToken", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "token", Value: "sometoken"}})
 			return ph.GetPostByPreviewToken(c)
 		}},
-		{"GetPostNavigation", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("1")
+		{"GetPostNavigation", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 			return ph.GetPostNavigation(c)
 		}},
-		{"GetPostAnalytics", func(ph *PostHandler, c echo.Context) error {
+		{"GetPostAnalytics", func(ph *PostHandler, c *echo.Context) error {
 			return ph.GetPostAnalytics(c)
 		}},
 	}
@@ -118,39 +108,33 @@ func TestPostHandlerDBFailureIsNot404(t *testing.T) {
 func TestPostHandlerMissingPostStill404(t *testing.T) {
 	cases := []struct {
 		name string
-		call func(*PostHandler, echo.Context) error
+		call func(*PostHandler, *echo.Context) error
 	}{
-		{"GetPostByID", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("999999")
+		{"GetPostByID", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "999999"}})
 			return ph.GetPostByID(c)
 		}},
-		{"GetPostBySlug", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("slug")
-			c.SetParamValues("no-such-post")
+		{"GetPostBySlug", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "slug", Value: "no-such-post"}})
 			return ph.GetPostBySlug(c)
 		}},
-		{"UpdatePostStatus", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("999999")
+		{"UpdatePostStatus", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "999999"}})
 			return ph.UpdatePostStatus(c)
 		}},
-		{"PublishPost", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("999999")
+		{"PublishPost", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "999999"}})
 			return ph.PublishPost(c)
 		}},
-		{"UpdatePostTags", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("999999")
+		{"UpdatePostTags", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "999999"}})
 			return ph.UpdatePostTags(c)
 		}},
 		// GetPostNavigation reports a missing anchor post through the same
 		// sql.ErrNoRows as a read, from a lookup that is easy to mistake for a
 		// neighbour query. Having no neighbours is not an error.
-		{"GetPostNavigation", func(ph *PostHandler, c echo.Context) error {
-			c.SetParamNames("id")
-			c.SetParamValues("999999")
+		{"GetPostNavigation", func(ph *PostHandler, c *echo.Context) error {
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: "999999"}})
 			return ph.GetPostNavigation(c)
 		}},
 	}
@@ -181,9 +165,7 @@ func TestPreviewTokenStaysVague(t *testing.T) {
 
 	e := echo.New()
 	c := e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder())
-	c.SetParamNames("token")
-	c.SetParamValues("not-a-real-token")
-
+	c.SetPathValues(echo.PathValues{{Name: "token", Value: "not-a-real-token"}})
 	code, msg := statusOf(t, ph.GetPostByPreviewToken(c))
 	if code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", code)

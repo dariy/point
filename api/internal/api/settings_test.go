@@ -10,7 +10,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestSettingsHandler_GetPublicSettings(t *testing.T) {
@@ -129,8 +129,7 @@ func TestSettingsHandler_GetSettingByKey(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/settings/my_key", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("key")
-	c.SetParamValues("my_key")
+	c.SetPathValues(echo.PathValues{{Name: "key", Value: "my_key"}})
 	if err := h.GetSettingByKey(c); err != nil {
 		t.Fatalf("GetSettingByKey: %v", err)
 	}

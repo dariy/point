@@ -13,7 +13,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // maxPosterBytes bounds a video poster frame. Posters are downscaled to the
@@ -34,7 +34,7 @@ func NewMediaHandler(mediaService *services.MediaService, settingsService *servi
 
 // mediaResponse is mediaToResponse with the request's thumbnail generation
 // token already read off the settings cache.
-func (h *MediaHandler) mediaResponse(c echo.Context, m models.Medium) map[string]interface{} {
+func (h *MediaHandler) mediaResponse(c *echo.Context, m models.Medium) map[string]interface{} {
 	return h.withVideoNote(mediaToResponse(m, h.mediaService.ThumbnailGeneration(c.Request().Context())), m)
 }
 
@@ -47,7 +47,7 @@ func (h *MediaHandler) withVideoNote(resp map[string]interface{}, m models.Mediu
 	return resp
 }
 
-func (h *MediaHandler) UploadFile(c echo.Context) error {
+func (h *MediaHandler) UploadFile(c *echo.Context) error {
 	file, err := c.FormFile("file")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "file is required")
@@ -113,7 +113,7 @@ func (h *MediaHandler) UploadFile(c echo.Context) error {
 // posterFromForm reads the optional "poster" upload field and returns its bytes
 // once they have been confirmed to be an allowlisted image. It returns a nil
 // slice and no error when the field is absent.
-func posterFromForm(c echo.Context) ([]byte, error) {
+func posterFromForm(c *echo.Context) ([]byte, error) {
 	fh, err := c.FormFile("poster")
 	if err != nil {
 		return nil, nil
@@ -146,7 +146,7 @@ func posterFromForm(c echo.Context) ([]byte, error) {
 // SetVideoPoster stores a client-captured frame as an existing video's
 // thumbnail. It backfills videos that arrived without one — anything uploaded
 // before posters existed, or ingested over the API/MCP rather than the admin UI.
-func (h *MediaHandler) SetVideoPoster(c echo.Context) error {
+func (h *MediaHandler) SetVideoPoster(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -176,7 +176,7 @@ func (h *MediaHandler) SetVideoPoster(c echo.Context) error {
 // uploaded from the editor, so it misses anything picked out of the library,
 // and a page of the listing is ordered by upload time, which has nothing to do
 // with what a given post uses.
-func (h *MediaHandler) ListMedia(c echo.Context) error {
+func (h *MediaHandler) ListMedia(c *echo.Context) error {
 	if paths := c.QueryParams()["paths"]; len(paths) > 0 {
 		return h.listMediaByPaths(c, paths)
 	}
@@ -209,7 +209,7 @@ func (h *MediaHandler) ListMedia(c echo.Context) error {
 // the real bound; this only keeps an absurd URL from becoming an absurd query.
 const maxMediaPathLookup = 500
 
-func (h *MediaHandler) listMediaByPaths(c echo.Context, paths []string) error {
+func (h *MediaHandler) listMediaByPaths(c *echo.Context, paths []string) error {
 	if len(paths) > maxMediaPathLookup {
 		return echo.NewHTTPError(http.StatusBadRequest,
 			fmt.Sprintf("at most %d paths per request", maxMediaPathLookup))
@@ -229,7 +229,7 @@ func (h *MediaHandler) listMediaByPaths(c echo.Context, paths []string) error {
 
 // mediaListEnvelope renders media rows into the paged list response both
 // ListMedia branches return.
-func (h *MediaHandler) mediaListEnvelope(c echo.Context, media []models.Medium, total int64, page, perPage int32, pages int) map[string]interface{} {
+func (h *MediaHandler) mediaListEnvelope(c *echo.Context, media []models.Medium, total int64, page, perPage int32, pages int) map[string]interface{} {
 	gen := h.mediaService.ThumbnailGeneration(c.Request().Context())
 	items := make([]map[string]interface{}, len(media))
 	for i, m := range media {
@@ -244,7 +244,7 @@ func (h *MediaHandler) mediaListEnvelope(c echo.Context, media []models.Medium, 
 	}
 }
 
-func (h *MediaHandler) GetMediaFolders(c echo.Context) error {
+func (h *MediaHandler) GetMediaFolders(c *echo.Context) error {
 	fileType := c.QueryParam("file_type")
 	folders, err := h.mediaService.GetMediaFolders(c.Request().Context(), fileType)
 	if err != nil {
@@ -262,7 +262,7 @@ func (h *MediaHandler) GetMediaFolders(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{"folders": items})
 }
 
-func (h *MediaHandler) GetMedia(c echo.Context) error {
+func (h *MediaHandler) GetMedia(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -283,7 +283,7 @@ type UpdateMediaRequest struct {
 	Metadata *map[string]interface{} `json:"metadata"`
 }
 
-func (h *MediaHandler) UpdateMedia(c echo.Context) error {
+func (h *MediaHandler) UpdateMedia(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -308,7 +308,7 @@ func (h *MediaHandler) UpdateMedia(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
-func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
+func (h *MediaHandler) ReextractEXIF(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -324,7 +324,7 @@ func (h *MediaHandler) ReextractEXIF(c echo.Context) error {
 // Keys are EXIF field names; values must contain only [a-zA-Z0-9 ].
 type UpdateEXIFRequest map[string]string
 
-func (h *MediaHandler) UpdateEXIF(c echo.Context) error {
+func (h *MediaHandler) UpdateEXIF(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -345,7 +345,7 @@ func (h *MediaHandler) UpdateEXIF(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
-func (h *MediaHandler) RevertEXIF(c echo.Context) error {
+func (h *MediaHandler) RevertEXIF(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -358,7 +358,7 @@ func (h *MediaHandler) RevertEXIF(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
-func (h *MediaHandler) ListOrphanedMedia(c echo.Context) error {
+func (h *MediaHandler) ListOrphanedMedia(c *echo.Context) error {
 	page, perPage := ParsePaginationParams(c, 20)
 
 	media, total, err := h.mediaService.ListOrphanedMedia(c.Request().Context(), page, perPage)
@@ -389,7 +389,7 @@ type BulkDeleteRequest struct {
 	IDs []int64 `json:"ids"`
 }
 
-func (h *MediaHandler) BulkDeleteMedia(c echo.Context) error {
+func (h *MediaHandler) BulkDeleteMedia(c *echo.Context) error {
 	var req BulkDeleteRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
@@ -413,7 +413,7 @@ func (h *MediaHandler) BulkDeleteMedia(c echo.Context) error {
 
 // BulkRestoreMedia takes the given media files out of the trash.
 // POST /api/media/bulk-restore {"ids": [...]}
-func (h *MediaHandler) BulkRestoreMedia(c echo.Context) error {
+func (h *MediaHandler) BulkRestoreMedia(c *echo.Context) error {
 	var req BulkDeleteRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
@@ -433,7 +433,7 @@ func (h *MediaHandler) BulkRestoreMedia(c echo.Context) error {
 
 // RestoreMedia takes one media file out of the trash.
 // POST /api/media/:id/restore
-func (h *MediaHandler) RestoreMedia(c echo.Context) error {
+func (h *MediaHandler) RestoreMedia(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -446,7 +446,7 @@ func (h *MediaHandler) RestoreMedia(c echo.Context) error {
 
 // PermanentlyDeleteMedia removes a trashed media file and its row.
 // DELETE /api/media/:id/permanent. A file that is not in the trash is a 409.
-func (h *MediaHandler) PermanentlyDeleteMedia(c echo.Context) error {
+func (h *MediaHandler) PermanentlyDeleteMedia(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -459,7 +459,7 @@ func (h *MediaHandler) PermanentlyDeleteMedia(c echo.Context) error {
 
 // ListTrashedMedia lists the media trash, newest first.
 // GET /api/media/trash
-func (h *MediaHandler) ListTrashedMedia(c echo.Context) error {
+func (h *MediaHandler) ListTrashedMedia(c *echo.Context) error {
 	page, perPage := ParsePaginationParams(c, 20)
 	media, total, err := h.mediaService.ListTrashedMedia(c.Request().Context(), page, perPage)
 	if err != nil {
@@ -472,7 +472,7 @@ func (h *MediaHandler) ListTrashedMedia(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaListEnvelope(c, media, total, page, perPage, pages))
 }
 
-func (h *MediaHandler) DeleteMedia(c echo.Context) error {
+func (h *MediaHandler) DeleteMedia(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -486,7 +486,7 @@ func (h *MediaHandler) DeleteMedia(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *MediaHandler) UploadMultiple(c echo.Context) error {
+func (h *MediaHandler) UploadMultiple(c *echo.Context) error {
 	form, err := c.MultipartForm()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid multipart form")
@@ -548,7 +548,7 @@ func (h *MediaHandler) UploadMultiple(c echo.Context) error {
 	})
 }
 
-func (h *MediaHandler) GetStorageStats(c echo.Context) error {
+func (h *MediaHandler) GetStorageStats(c *echo.Context) error {
 	stats, err := h.mediaService.GetStorageStats(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -560,7 +560,7 @@ type RenameMediaRequest struct {
 	NewFilename string `json:"new_filename"`
 }
 
-func (h *MediaHandler) RenameMedia(c echo.Context) error {
+func (h *MediaHandler) RenameMedia(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -585,7 +585,7 @@ func (h *MediaHandler) RenameMedia(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.mediaResponse(c, media))
 }
 
-func (h *MediaHandler) DeleteOrphanedMedia(c echo.Context) error {
+func (h *MediaHandler) DeleteOrphanedMedia(c *echo.Context) error {
 	count, freed, err := h.mediaService.CleanupOrphaned(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -602,7 +602,7 @@ func (h *MediaHandler) DeleteOrphanedMedia(c echo.Context) error {
 // RebuildThumbnails rolls the thumbnail generation token and purges the derived
 // images. It takes no parameters: a rebuild is all-or-nothing now, and the old
 // only_missing flag has nothing left to mean once every file is discarded.
-func (h *MediaHandler) RebuildThumbnails(c echo.Context) error {
+func (h *MediaHandler) RebuildThumbnails(c *echo.Context) error {
 	res, err := h.mediaService.RebuildThumbnails(c.Request().Context())
 	if err != nil {
 		return MapError(err)
@@ -621,7 +621,7 @@ func (h *MediaHandler) RebuildThumbnails(c echo.Context) error {
 // transcode jobs. It is the repair for the derivatives item of the site
 // health checks. It does not roll the thumbnail generation. The body is
 // {"ids": [...]}, with at most services.MaxDerivativeRebuild IDs.
-func (h *MediaHandler) RebuildDerivatives(c echo.Context) error {
+func (h *MediaHandler) RebuildDerivatives(c *echo.Context) error {
 	var req struct {
 		IDs []int64 `json:"ids"`
 	}
@@ -635,7 +635,7 @@ func (h *MediaHandler) RebuildDerivatives(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *MediaHandler) AnalyzeImage(c echo.Context) error {
+func (h *MediaHandler) AnalyzeImage(c *echo.Context) error {
 	file, err := c.FormFile("image")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "image file is required")
@@ -662,7 +662,7 @@ func (h *MediaHandler) AnalyzeImage(c echo.Context) error {
 	return c.JSON(http.StatusOK, analysis)
 }
 
-func (h *MediaHandler) AnalyzeImageByPath(c echo.Context) error {
+func (h *MediaHandler) AnalyzeImageByPath(c *echo.Context) error {
 	var req struct {
 		Path string `json:"path"`
 	}
@@ -678,7 +678,7 @@ func (h *MediaHandler) AnalyzeImageByPath(c echo.Context) error {
 	return c.JSON(http.StatusOK, analysis)
 }
 
-func (h *MediaHandler) AnalyzeImageByID(c echo.Context) error {
+func (h *MediaHandler) AnalyzeImageByID(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
