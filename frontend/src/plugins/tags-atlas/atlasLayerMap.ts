@@ -8,7 +8,7 @@
  * The map is never rebuilt. It calls `invalidateSize` whenever its box changes.
  */
 
-import { loadLeaflet, TILE_ATTR, TILE_DARK, TILE_LIGHT, TILE_MAX_NATIVE_ZOOM } from '../../utils/leaflet.ts';
+import { loadLeaflet, setPressTolerance, TILE_ATTR, TILE_DARK, TILE_LIGHT, TILE_MAX_NATIVE_ZOOM } from '../../utils/leaflet.ts';
 import { navigate } from '../../utils/helpers.ts';
 import { ViewContext } from '../../utils/viewContext.ts';
 import { AtlasPlaces } from './AtlasPlaces.ts';
@@ -122,6 +122,7 @@ export function mountAtlasLayerMap(
   let loading = false;
   let dead = false;
   let ro: ResizeObserver | null = null;
+  let unpress: (() => void) | null = null;
   let parked: { center: unknown; zoom: number } | null = null;
   // The last call was show() (true) or park()/warm() (false).
   let shown = false;
@@ -205,6 +206,8 @@ export function mountAtlasLayerMap(
       maxBoundsViscosity: 1.0,
       zoomAnimation: false,
     });
+    // A pencil or a finger tap that skids a few px is still a tap (utils/leaflet.ts).
+    unpress = setPressTolerance(map);
     // A reload or a return from a post brings the viewport back from the URL.
     const view = viewFromSearch(location.search);
     map.setView(view ? [view.lat, view.lng] : [20, 0], view ? view.zoom : 2);
@@ -360,6 +363,8 @@ export function mountAtlasLayerMap(
       ro?.disconnect();
       document.removeEventListener('themechange', onTheme);
       places?.destroy();
+      unpress?.();
+      unpress = null;
       map?.remove();
       map = null;
     },

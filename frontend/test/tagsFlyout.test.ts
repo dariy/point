@@ -44,7 +44,7 @@ describe('tags flyout and UI', () => {
             return state;
           }
         },
-        style: {},
+        style: { setProperty: () => {} },
         appendChild: () => {},
         removeChild: () => {},
         firstChild: null,

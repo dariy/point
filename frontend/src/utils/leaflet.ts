@@ -1,4 +1,5 @@
 import { setScriptSrc } from "./helpers.ts";
+import { PRESS_SLOP_PX } from "./pointerMode.ts";
 
 export const LEAFLET_JS = "/assets/vendor/leaflet/leaflet.js";
 export const LEAFLET_CSS = "/assets/vendor/leaflet/leaflet.css";
@@ -48,4 +49,37 @@ export async function loadLeaflet(): Promise<LeafletRef> {
   });
 
   return window.L;
+}
+
+/** Leaflet's own drag start for a mouse, px (the `Draggable` default). */
+export const MOUSE_CLICK_TOLERANCE = 3;
+
+/** The part of a Leaflet map that `setPressTolerance` uses. */
+export interface PressMap {
+  getContainer(): HTMLElement;
+  dragging?: { _draggable?: { options?: { clickTolerance?: number } } };
+}
+
+/**
+ * Set the drag start of a map for each gesture, from the pointer type.
+ *
+ * Leaflet starts a drag when a press moves `clickTolerance` px (|dx| + |dy|),
+ * and a drag drops the click. A pencil tip or a fingertip skids more than 3 px
+ * during a tap, so a pen or a touch press gets `PRESS_SLOP_PX`. A mouse keeps 3.
+ * Leaflet has no public option for it: `Map.Drag` makes `dragging._draggable`
+ * once, and `Draggable._onMove` reads `options.clickTolerance` on each move.
+ * The capture `pointerdown` runs before Leaflet's own down handler.
+ * Returns a function that removes the listener.
+ */
+export function setPressTolerance(map: PressMap): () => void {
+  const el = map.getContainer();
+  const down = (e: PointerEvent) => {
+    const options = map.dragging?._draggable?.options;
+    if (!options) return;
+    const press = e.pointerType === "pen" || e.pointerType === "touch";
+    options.clickTolerance = press ? PRESS_SLOP_PX : MOUSE_CLICK_TOLERANCE;
+  };
+  const opts = { capture: true, passive: true };
+  el.addEventListener("pointerdown", down, opts);
+  return () => el.removeEventListener("pointerdown", down, opts);
 }

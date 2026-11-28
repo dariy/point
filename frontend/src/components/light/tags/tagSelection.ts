@@ -26,7 +26,7 @@
  * react to leaves through `onModeChange` / `onBulkDone`.
  */
 
-import { html, raw } from '../../../utils/helpers.ts';
+import { html, raw, setupLongPress } from '../../../utils/helpers.ts';
 import { CHECK_SVG, TRASH_SVG } from '../../../utils/icons.ts';
 import type { RawHtml } from '../../../utils/helpers.ts';
 import type { Tag } from '../../../api/tags.ts';
@@ -201,20 +201,10 @@ function bindRowGestures(
     const id = rowId(row);
     if (!Number.isInteger(id)) return;
 
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
-
-    row.addEventListener('pointerdown', e => {
-      if ((e.target as Element).closest(INTERACTIVE)) return;
-      if (state().selectMode) return;
-      timer = setTimeout(() => {
-        timer = null;
-        enterWith(id);
-      }, LONG_PRESS_MS);
+    setupLongPress(row, () => enterWith(id), {
+      delay: LONG_PRESS_MS,
+      accept: e => !(e.target as Element).closest(INTERACTIVE) && !state().selectMode,
     });
-    row.addEventListener('pointerup', cancel);
-    row.addEventListener('pointermove', cancel);
-    row.addEventListener('pointercancel', cancel);
 
     row.addEventListener('click', e => {
       if (!state().selectMode) return;

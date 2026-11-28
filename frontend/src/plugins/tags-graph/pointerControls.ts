@@ -73,9 +73,11 @@ export class PointerControls {
     this._onUp = (e: PointerEvent) => this.pointerUp(e);
     this._onWheel = (e: WheelEvent) => this.wheel(e);
     this._onLeave = (e: PointerEvent) => {
-      // On touch, lifting a finger fires pointerleave — don't wipe the
-      // tap-selected node (that highlight must persist until the next tap).
-      if (e && e.pointerType === 'touch') return;
+      // Lifting a finger fires pointerleave, and so does a pen: on lift when
+      // it cannot hover, on leaving the hover range when it can. Don't wipe
+      // the tap-selected node (that highlight must persist until the next
+      // tap). A pen takes the touch path; only a mouse leave clears it.
+      if (e && (e.pointerType === 'touch' || e.pointerType === 'pen')) return;
       this.host._setHover(null);
     };
 

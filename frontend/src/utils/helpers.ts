@@ -2,6 +2,8 @@
  * General DOM and string helpers.
  */
 
+import { PRESS_SLOP_PX } from './pointerMode.ts';
+
 /**
  * Escape a string for safe inclusion in an HTML attribute or text node.
  * MUST be called on any user-provided value interpolated into HTML templates.
@@ -262,43 +264,121 @@ export async function sharePost(data: { title: string, url: string }) {
   }
 }
 
+export interface LongPressOptions {
+  /** Hold this long, in ms, before the press fires. */
+  delay?: number;
+  /**
+   * Return false to ignore this pointerdown: no press starts. Use it to keep a
+   * mouse on its hover path, or to skip a press on a control.
+   */
+  accept?: (e: PointerEvent) => boolean;
+}
+
 /**
- * Setup a long-press listener on an element.
+ * Fire `callback` when a pointer is held still on `el` for `delay` ms.
+ *
+ * "Still" means less than PRESS_SLOP_PX of travel: a stylus tip and a finger
+ * report small moves during a hold, and those must not cancel it. A move past
+ * the slop, pointerup, pointercancel or pointerleave cancels the press. Only
+ * the pointer that started the press can move or end it.
+ *
+ * A press that fired is no tap: the click that ends it is cancelled in the
+ * document's capture phase, before any click handler runs, so a link does not
+ * navigate. A keyboard click (detail 0) is never cancelled, and the next
+ * pointerdown clears the state.
+ *
+ * For a touch or pen press the system context menu is blocked; a mouse
+ * right-click keeps it. The element gets `-webkit-touch-callout: none`, so iOS
+ * shows no link or image callout during the hold.
  *
  * @returns cleanup
  */
 export function setupLongPress(
   el: HTMLElement,
-  callback: (e: Event) => void,
-  duration: number = 400,
+  callback: (e: PointerEvent) => void,
+  { delay = 400, accept }: LongPressOptions = {},
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
-
-  const start = (e: Event) => {
-    if (timer) return;
-    timer = setTimeout(() => {
-      timer = null;
-      callback(e);
-    }, duration);
-  };
+  let press: { pointerId: number; x: number; y: number } | null = null;
+  // The device of the last pointerdown on el, for the contextmenu guard.
+  let lastType = '';
+  const doc = document;
 
   const cancel = () => {
     if (timer) clearTimeout(timer);
     timer = null;
+    press = null;
   };
 
-  el.addEventListener('touchstart', start, { passive: true });
-  el.addEventListener('touchend', cancel, { passive: true });
-  el.addEventListener('touchmove', cancel, { passive: true });
-  el.addEventListener('contextmenu', (e) => {
-    if (e.pointerType === 'touch') e.preventDefault();
-  });
+  // The press fired: the click that ends it is no tap. The guard sits on the
+  // document, because the callback can re-render el and the click then lands
+  // on the element that replaced it. The next pointerdown anywhere disarms it,
+  // so a lift that produced no click does not cost the next tap.
+  const onClick = (e: MouseEvent) => {
+    disarm();
+    if (e.detail === 0) return; // keyboard activation
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  };
+  const disarm = () => {
+    doc.removeEventListener('click', onClick, true);
+    doc.removeEventListener('pointerdown', disarm, true);
+  };
+  const arm = () => {
+    disarm();
+    doc.addEventListener('click', onClick, true);
+    doc.addEventListener('pointerdown', disarm, true);
+  };
+
+  const down = (e: PointerEvent) => {
+    cancel();
+    lastType = e.pointerType || '';
+    // A right-click or a pen eraser is not a press.
+    if ((e.button ?? 0) !== 0) return;
+    if (accept && !accept(e)) return;
+    press = { pointerId: e.pointerId, x: e.clientX ?? 0, y: e.clientY ?? 0 };
+    timer = setTimeout(() => {
+      timer = null;
+      press = null;
+      arm();
+      callback(e);
+    }, delay);
+  };
+
+  const move = (e: PointerEvent) => {
+    if (!press || e.pointerId !== press.pointerId) return;
+    const dx = (e.clientX ?? 0) - press.x;
+    const dy = (e.clientY ?? 0) - press.y;
+    if (Math.hypot(dx, dy) >= PRESS_SLOP_PX) cancel();
+  };
+
+  const end = (e: PointerEvent) => {
+    if (press && e.pointerId !== press.pointerId) return;
+    cancel();
+  };
+
+  const onContextMenu = (e: Event) => {
+    const type = (e as PointerEvent).pointerType || lastType;
+    if (type === 'touch' || type === 'pen') e.preventDefault();
+  };
+
+  el.style.setProperty('-webkit-touch-callout', 'none');
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('pointermove', move, { passive: true });
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('pointerleave', end);
+  el.addEventListener('contextmenu', onContextMenu);
 
   return () => {
     cancel();
-    el.removeEventListener('touchstart', start);
-    el.removeEventListener('touchend', cancel);
-    el.removeEventListener('touchmove', cancel);
+    el.removeEventListener('pointerdown', down);
+    el.removeEventListener('pointermove', move);
+    el.removeEventListener('pointerup', end);
+    el.removeEventListener('pointercancel', end);
+    el.removeEventListener('pointerleave', end);
+    disarm();
+    el.removeEventListener('contextmenu', onContextMenu);
   };
 }
 

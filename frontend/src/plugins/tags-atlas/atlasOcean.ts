@@ -19,8 +19,9 @@
  * the viewer and is clipped to the rect (`clip-path: inset(…)`, which also
  * clips hit-testing: a click outside the rect reaches the page below). The view
  * is offset so `center` sits at the rect centre. In a window, drag and pinch
- * move the map; a tap (no move past TAP_SLOP_PX) calls `onTap`, and a tap on a
- * place calls `onTap` too, not the place's tag page. `animateTo` tweens the
+ * move the map; a tap (no move past TAP_SLOP_PX for a mouse, PRESS_SLOP_PX for
+ * a pen or a touch) calls `onTap`, and a tap on a place calls `onTap` too, not
+ * the place's tag page. `animateTo` tweens the
  * clip (and the window centre) from one presentation to the next, at a fixed
  * zoom; under `prefers-reduced-motion: reduce` it is instant.
  *
@@ -431,7 +432,7 @@ export function createAtlasOcean(deps: AtlasOceanDeps): AtlasOcean {
    * a tap calls `onTap`, a click after a drag does nothing.
    */
   const listen = (el: HTMLElement) => {
-    const down = (e: PointerEvent) => gate.down(e.pointerId, e.clientX, e.clientY);
+    const down = (e: PointerEvent) => gate.down(e.pointerId, e.clientX, e.clientY, e.pointerType);
     const move = (e: PointerEvent) => gate.move(e.pointerId, e.clientX, e.clientY);
     const up = (e: PointerEvent) => gate.up(e.pointerId);
     const click = (e: MouseEvent) => {

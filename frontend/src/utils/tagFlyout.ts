@@ -458,11 +458,12 @@ export function setupTagFlyout(
       link.removeEventListener('mouseenter', onEnter);
     });
 
-    // Touch long-press
+    // Touch and pen long-press. A pen takes the touch path; a mouse keeps
+    // the hover path above.
     cleanups.push(setupLongPress(link, () => {
       _hideFlyout();
       _showFlyout(link, slug, tagIndex, excludeEl, navigateFn);
-    }, 350));
+    }, { delay: 350, accept: e => e.pointerType === 'touch' || e.pointerType === 'pen' }));
 
     // One click = navigate
     link.addEventListener('click', e => {
