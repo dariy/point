@@ -12,7 +12,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestTagHandler_MinPostsThreshold(t *testing.T) {
@@ -117,9 +117,7 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/posts/test-post", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("test-post")
-
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "test-post"}})
 	if err := postHandler.GetPostBySlug(c); err != nil {
 		t.Fatalf("GetPostBySlug failed: %v", err)
 	}
@@ -172,9 +170,7 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/tags/"+strconv.FormatInt(t2.ID, 10), nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.FormatInt(t2.ID, 10))
-
+	c.SetPathValues(echo.PathValues{{Name: "id", Value: strconv.FormatInt(t2.ID, 10)}})
 	if err := handler.GetTagByID(c); err == nil {
 		if rec.Code == http.StatusOK {
 			t.Error("FAIL: GetTagByID returned 200 for tag below threshold")
@@ -195,9 +191,7 @@ func TestTagHandler_MinPostsThreshold(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/tags/slug/tag-low", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("slug")
-	c.SetParamValues("tag-low")
-
+	c.SetPathValues(echo.PathValues{{Name: "slug", Value: "tag-low"}})
 	if err := handler.GetTagBySlug(c); err == nil {
 		if rec.Code == http.StatusOK {
 			t.Error("FAIL: GetTagBySlug returned 200 for tag below threshold")

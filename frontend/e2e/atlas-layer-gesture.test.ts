@@ -2,6 +2,7 @@ import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type CDPSession, type Page } from 'playwright';
 import crypto from 'node:crypto';
+import { touchOnly } from './devices.ts';
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:8001';
 const PW = crypto.createHash('sha256').update('devpassword').digest('hex');
@@ -300,6 +301,10 @@ describe('Atlas layer gestures', () => {
     };
     const open = async (view: string) => {
       await spage.goto(`${BASE}/tags/atlas-side?view=${view}`);
+      // The mouse move that Chromium sends at a page load, but always after app.js:
+      // without touchOnly() in before(), the side layout does not come.
+      await spage.mouse.move(5, 5);
+      await spage.mouse.move(0, 0);
       await spage.locator('.atlas-layer-handle').waitFor();
       await spage.waitForFunction(() => document.body.hasAttribute('data-atlas-side'));
       await spage.locator('#grid-mount .post-card').first().waitFor();
@@ -318,6 +323,7 @@ describe('Atlas layer gestures', () => {
       spage = await ctx.newPage();
       // A mouse event sets pointer-fine and ends the side layout: only touch input here.
       await spage.addInitScript(() => { localStorage.removeItem('atlasLayerState'); localStorage.removeItem('pointerFine'); });
+      await touchOnly(spage);
       scdp = await ctx.newCDPSession(spage);
     });
 
@@ -402,7 +408,16 @@ describe('Atlas layer gestures', () => {
     it('a swipe on the list column scrolls it, and a swipe on the map pans the map', async () => {
       await open('split');
       const g = await box('#grid-mount');
-      assert.ok(await spage.evaluate(() => { const gm = document.querySelector('#grid-mount')!; return gm.scrollHeight > gm.clientHeight; }), 'the column overflows');
+      // The page fits whole rows (p-kyo8m), so the column overflows only when it is
+      // shorter than one card. Add a spacer to make it overflow here: the test is
+      // about the gesture, not the fit.
+      assert.ok(await spage.evaluate(() => {
+        const gm = document.querySelector('#grid-mount')!;
+        const spacer = document.createElement('div');
+        spacer.style.height = `${gm.clientHeight}px`;
+        gm.appendChild(spacer);
+        return gm.scrollHeight > gm.clientHeight;
+      }), 'the column overflows');
       await sswipe(g.x + g.width / 2, g.y + g.height - 30, 0, -150);
       await spage.waitForFunction(() => document.querySelector('#grid-mount')!.scrollTop > 0);
       assert.equal(await sstate(), 'mapList');

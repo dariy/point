@@ -15,7 +15,7 @@ import (
 	"point-api/internal/services"
 	"point-api/internal/utils"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // instagramConnector is the subset of InstagramService used by this handler.
@@ -49,7 +49,7 @@ func NewInstagramHandler(ig *services.InstagramService, importer *services.Insta
 
 // Connect redirects the admin to Meta's OAuth dialog.
 // GET /api/instagram/connect
-func (h *InstagramHandler) Connect(c echo.Context) error {
+func (h *InstagramHandler) Connect(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	appID, _ := h.settings.GetSecret(ctx, "instagram_app_id")
@@ -85,7 +85,7 @@ func (h *InstagramHandler) Connect(c echo.Context) error {
 
 // Callback handles the OAuth redirect from Meta.
 // GET /api/instagram/callback
-func (h *InstagramHandler) Callback(c echo.Context) error {
+func (h *InstagramHandler) Callback(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	if errMsg := c.QueryParam("error"); errMsg != "" {
@@ -137,7 +137,7 @@ func (h *InstagramHandler) Callback(c echo.Context) error {
 
 // Disconnect clears all stored Instagram credentials.
 // POST /api/instagram/disconnect
-func (h *InstagramHandler) Disconnect(c echo.Context) error {
+func (h *InstagramHandler) Disconnect(c *echo.Context) error {
 	ctx := c.Request().Context()
 	for _, key := range []string{
 		"instagram_access_token",
@@ -148,7 +148,7 @@ func (h *InstagramHandler) Disconnect(c echo.Context) error {
 	} {
 		_ = h.settings.DeleteSecret(ctx, key)
 	}
-	return c.JSON(http.StatusOK, echo.Map{"message": "disconnected"})
+	return c.JSON(http.StatusOK, map[string]any{"message": "disconnected"})
 }
 
 type InstagramStatusResponse struct {
@@ -161,7 +161,7 @@ type InstagramStatusResponse struct {
 
 // Status returns the Instagram connection status.
 // GET /api/instagram/status
-func (h *InstagramHandler) Status(c echo.Context) error {
+func (h *InstagramHandler) Status(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	connected := h.settings.SecretIsSet(ctx, "instagram_access_token")
@@ -200,7 +200,7 @@ const triggerAuthorID int64 = 1
 
 // StartImport kicks off a background import goroutine (one at a time).
 // POST /api/instagram/import
-func (h *InstagramHandler) StartImport(c echo.Context) error {
+func (h *InstagramHandler) StartImport(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Guard: importer must be initialised.
@@ -215,7 +215,7 @@ func (h *InstagramHandler) StartImport(c echo.Context) error {
 	h.state.mu.Lock()
 	if h.state.running {
 		h.state.mu.Unlock()
-		return c.JSON(http.StatusConflict, echo.Map{"message": "import already running"})
+		return c.JSON(http.StatusConflict, map[string]any{"message": "import already running"})
 	}
 	h.state.running = true
 	h.state.result = nil
@@ -265,12 +265,12 @@ func (h *InstagramHandler) StartImport(c echo.Context) error {
 		}
 	}()
 
-	return c.JSON(http.StatusAccepted, echo.Map{"message": "import started"})
+	return c.JSON(http.StatusAccepted, map[string]any{"message": "import started"})
 }
 
 // GetImportStatus returns the current (or last) import state.
 // GET /api/instagram/import/status
-func (h *InstagramHandler) GetImportStatus(c echo.Context) error {
+func (h *InstagramHandler) GetImportStatus(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	h.state.mu.Lock()

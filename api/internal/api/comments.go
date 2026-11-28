@@ -12,8 +12,8 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 )
 
 // remarkSiteID must match SITE=remark set by entrypoint.sh for the sidecar.
@@ -47,7 +47,7 @@ func RegisterCommentsProxy(e *echo.Echo, settingsService *services.SettingsServi
 	// loopback, which must not be brute-forceable from the public internet.
 	// Widget auth (JWT cookie / X-JWT header) passes through untouched.
 	g.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			if auth := c.Request().Header.Get("Authorization"); len(auth) >= 5 && strings.EqualFold(auth[:5], "Basic") {
 				c.Request().Header.Del("Authorization")
 			}
@@ -155,7 +155,7 @@ func NewCommentsAdminHandler(base *url.URL, passwd string) *CommentsAdminHandler
 	return &CommentsAdminHandler{base: base, passwd: passwd, client: &http.Client{Timeout: 15 * time.Second}}
 }
 
-func (h *CommentsAdminHandler) forward(c echo.Context, method, path string, q url.Values) error {
+func (h *CommentsAdminHandler) forward(c *echo.Context, method, path string, q url.Values) error {
 	if h.passwd == "" {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "comments moderation unavailable: ADMIN_PASSWD not set")
 	}
@@ -177,7 +177,7 @@ func (h *CommentsAdminHandler) forward(c echo.Context, method, path string, q ur
 
 // Recent handles GET /api/admin/comments/recent?limit=N — the newest comments
 // across the site (remark42 GET /api/v1/last/{limit}).
-func (h *CommentsAdminHandler) Recent(c echo.Context) error {
+func (h *CommentsAdminHandler) Recent(c *echo.Context) error {
 	limit := c.QueryParam("limit")
 	if limit == "" {
 		limit = "50"
@@ -190,7 +190,7 @@ func (h *CommentsAdminHandler) Recent(c echo.Context) error {
 
 // DeleteComment handles DELETE /api/admin/comments/comment/:id?url=<post-url>.
 // remark42 locates a comment by (site, url, id), so url is required.
-func (h *CommentsAdminHandler) DeleteComment(c echo.Context) error {
+func (h *CommentsAdminHandler) DeleteComment(c *echo.Context) error {
 	postURL := c.QueryParam("url")
 	if postURL == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "url query param required")
@@ -202,7 +202,7 @@ func (h *CommentsAdminHandler) DeleteComment(c echo.Context) error {
 // SetBlock handles PUT /api/admin/comments/user/:id/block?block=1&ttl=24h.
 // block=1 with no ttl blocks permanently (remark42 also soft-deletes the
 // user's comments in that case); block=0 unblocks.
-func (h *CommentsAdminHandler) SetBlock(c echo.Context) error {
+func (h *CommentsAdminHandler) SetBlock(c *echo.Context) error {
 	block := c.QueryParam("block")
 	if block != "0" && block != "1" {
 		return echo.NewHTTPError(http.StatusBadRequest, "block must be 0 or 1")
@@ -218,6 +218,6 @@ func (h *CommentsAdminHandler) SetBlock(c echo.Context) error {
 }
 
 // Blocked handles GET /api/admin/comments/blocked — the blocked users list.
-func (h *CommentsAdminHandler) Blocked(c echo.Context) error {
+func (h *CommentsAdminHandler) Blocked(c *echo.Context) error {
 	return h.forward(c, http.MethodGet, "/api/v1/admin/blocked", url.Values{"site": {remarkSiteID}})
 }

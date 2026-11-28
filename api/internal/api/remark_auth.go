@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-pkgz/auth/v2/token"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // remark42Issuer is the iss claim go-pkgz/auth stamps on remark42's own tokens;
@@ -34,7 +34,7 @@ const remark42RefreshWindow = time.Hour
 // lists in ADMIN_SHARED_ID, which is what grants moderation rights in the widget.
 //
 // No-op when REMARK_SECRET is unset, i.e. comments are not configured.
-func IssueRemark42Cookies(c echo.Context, repo repository.Repository, userID int64, displayName, username string, expiresAt time.Time, secure bool) {
+func IssueRemark42Cookies(c *echo.Context, repo repository.Repository, userID int64, displayName, username string, expiresAt time.Time, secure bool) {
 	secret := os.Getenv("REMARK_SECRET")
 	if secret == "" {
 		return
@@ -103,7 +103,7 @@ func IssueRemark42Cookies(c echo.Context, repo repository.Repository, userID int
 
 // ClearRemark42Cookies expires the bridge cookie pair, so logging out of Point
 // also logs the owner out of comments.
-func ClearRemark42Cookies(c echo.Context, secure bool) {
+func ClearRemark42Cookies(c *echo.Context, secure bool) {
 	past := time.Now().Add(-1 * time.Hour).UTC().Round(0)
 	c.SetCookie(&http.Cookie{
 		Name:     "JWT",
@@ -131,7 +131,7 @@ func ClearRemark42Cookies(c echo.Context, secure bool) {
 // reissuing: absent, unreadable under the current REMARK_SECRET (so the engine
 // would reject it too — e.g. after a secret rotation), or about to expire.
 // Returns false when comments are not configured, so callers do no work.
-func remark42CookieStale(c echo.Context) bool {
+func remark42CookieStale(c *echo.Context) bool {
 	secret := os.Getenv("REMARK_SECRET")
 	if secret == "" {
 		return false

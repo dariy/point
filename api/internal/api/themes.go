@@ -5,7 +5,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type ThemeHandler struct {
@@ -16,7 +16,7 @@ func NewThemeHandler(themeService *services.ThemeService) *ThemeHandler {
 	return &ThemeHandler{themeService: themeService}
 }
 
-func (h *ThemeHandler) ListThemes(c echo.Context) error {
+func (h *ThemeHandler) ListThemes(c *echo.Context) error {
 	themes, err := h.themeService.ListThemes()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
@@ -24,7 +24,7 @@ func (h *ThemeHandler) ListThemes(c echo.Context) error {
 	return c.JSON(http.StatusOK, themes)
 }
 
-func (h *ThemeHandler) GetActiveTheme(c echo.Context) error {
+func (h *ThemeHandler) GetActiveTheme(c *echo.Context) error {
 	theme, err := h.themeService.GetActiveTheme(c.Request().Context())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"detail": err.Error()})
@@ -36,7 +36,7 @@ type updateActiveThemeRequest struct {
 	Name string `json:"name"`
 }
 
-func (h *ThemeHandler) SetActiveTheme(c echo.Context) error {
+func (h *ThemeHandler) SetActiveTheme(c *echo.Context) error {
 	var req updateActiveThemeRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request format"})
@@ -56,7 +56,7 @@ func (h *ThemeHandler) SetActiveTheme(c echo.Context) error {
 
 // GetThemeCSS serves a theme's CSS (with the system custom CSS) without
 // making it active, for the style picker's live preview.
-func (h *ThemeHandler) GetThemeCSS(c echo.Context) error {
+func (h *ThemeHandler) GetThemeCSS(c *echo.Context) error {
 	css, err := h.themeService.ThemeCSS(c.Request().Context(), c.Param("name"))
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"detail": "theme not found"})
@@ -64,7 +64,7 @@ func (h *ThemeHandler) GetThemeCSS(c echo.Context) error {
 	return c.Blob(http.StatusOK, "text/css; charset=utf-8", css)
 }
 
-func (h *ThemeHandler) GetCustomCSS(c echo.Context) error {
+func (h *ThemeHandler) GetCustomCSS(c *echo.Context) error {
 	// GetSetting always returns nil error (silently falls back to default on DB error),
 	// so we ignore the error here.
 	css, _ := h.themeService.GetCustomCSS(c.Request().Context())
@@ -75,7 +75,7 @@ type updateCustomCSSRequest struct {
 	CSS string `json:"css"`
 }
 
-func (h *ThemeHandler) UpdateCustomCSS(c echo.Context) error {
+func (h *ThemeHandler) UpdateCustomCSS(c *echo.Context) error {
 	var req updateCustomCSSRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"detail": "invalid request format"})

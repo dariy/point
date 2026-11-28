@@ -7,7 +7,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestFeedsHandler_Sitemap(t *testing.T) {

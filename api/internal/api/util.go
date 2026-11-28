@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // URL coordinate extraction patterns, applied in priority order.
@@ -127,14 +127,14 @@ func parseCoordsFromDegreeString(s string) (lat, lng float64, ok bool) {
 
 // parseIDParam parses the ":id" route parameter as an int64, returning a 400
 // with "invalid id" when it is absent or malformed.
-func parseIDParam(c echo.Context) (int64, error) {
+func parseIDParam(c *echo.Context) (int64, error) {
 	return parseNamedIDParam(c, "id")
 }
 
 // parseNamedIDParam is parseIDParam with a caller-supplied noun for the error
 // message, for routes where ":id" names something more specific than an id
 // (e.g. "tag id", "session id").
-func parseNamedIDParam(c echo.Context, name string) (int64, error) {
+func parseNamedIDParam(c *echo.Context, name string) (int64, error) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return 0, echo.NewHTTPError(http.StatusBadRequest, "invalid "+name)
@@ -143,7 +143,7 @@ func parseNamedIDParam(c echo.Context, name string) (int64, error) {
 }
 
 // ParsePaginationParams safely parses page and per_page query parameters as int32.
-func ParsePaginationParams(c echo.Context, defaultPerPage int) (int32, int32) {
+func ParsePaginationParams(c *echo.Context, defaultPerPage int) (int32, int32) {
 	p, err := strconv.ParseInt(c.QueryParam("page"), 10, 32)
 	if err != nil || p < 1 {
 		p = 1
@@ -164,7 +164,7 @@ func ParsePaginationParams(c echo.Context, defaultPerPage int) (int32, int32) {
 //
 // GET /api/util/parse-maps-coords?q=<input>
 // Response: { "lat": float64, "lng": float64 }
-func ParseMapsCoords(c echo.Context) error {
+func ParseMapsCoords(c *echo.Context) error {
 	q := strings.TrimSpace(c.QueryParam("q"))
 	if q == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "q query parameter is required")

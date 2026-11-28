@@ -15,29 +15,51 @@ See [Immersive Mode & Media Viewer](../features/immersive.md) for details.
 
 ## Touch landscape
 
-With touch input in landscape, the viewer uses a side layout: the photo is on
-the left, and the sheet is a column on the right. The test is the same as the
-map layer's side split ([`tags-atlas`](tags-atlas.md), Touch landscape): no
-fine pointer, and a landscape viewport (`atlasLayerLayout.ts::onAtlasSide`).
-The viewer wrapper then has the class `immersive-sheet-side`.
+With touch input in landscape, the viewer uses a side layout: the sheet is a
+panel at the right of the screen. The test is the same as the map layer's side
+split ([`tags-atlas`](tags-atlas.md), Touch landscape): no fine pointer, and a
+landscape viewport (`atlasLayerLayout.ts::onAtlasSide`). The viewer wrapper
+then has the class `immersive-sheet-side`.
 
-- The column is `clamp(18rem, 38vw, 26rem)` wide and as tall as the screen. It
-  is always open, and it scrolls. It has no grip and no "Details" hint.
-- The column has one flow: the text, then the map, then the camera data and
-  the comments. The map is a square, at most 18rem wide.
-- There is no sheet drag. A touch that starts in the column starts no swipe,
-  so the column scrolls. On the photo, a swipe left or right goes to the
-  next or the previous photo or post, and a swipe down closes the viewer.
-  Up and Down keys scroll the column.
-- The photo, the nav panels, the dots and the buttons at the top right (close,
-  share, slideshow) use the area on the left of the column.
-  `MediaViewer.ts::_stageWidth` gives the width of that area, so a slide moves by
-  the stage width, not the screen width.
-- A rotation changes the layout with no reload. A turn back to portrait gives
-  the sheet the state it had before the side layout (open or shut). The map
-  window follows the slot after a turn.
-- The full map round trip works the same way: the return shrinks the map
-  into the slot in the column.
+The panel has two states:
+
+- **Shut.** The photo fills the screen. The panel is off the screen on the
+  right. A "Details" tab shows at the right edge of the screen.
+- **Open.** The panel slides in from the right over the photo (0.34 s). In the
+  same time the photo stage shrinks to the area on the left of the panel. The
+  photo, the nav panels, the dots and the buttons at the top right (close,
+  share, slideshow) use that area. `MediaViewer.ts::_stageWidth` gives the
+  width of that area, so a slide moves by the stage width, not the screen
+  width.
+
+The inputs:
+
+- The tab, a swipe up on the photo, or ArrowUp opens the panel.
+- The grip (a bar on the left edge of the open panel), a tap on the photo, a
+  swipe down on the photo, or Escape shuts it. A swipe down on the full-screen
+  photo closes the viewer.
+- The keys work as in portrait: ArrowUp opens the panel and then scrolls it
+  up. ArrowDown scrolls it down, and at the end of the scroll it shuts the
+  panel.
+- A swipe left or right on the photo goes to the next or the previous photo or
+  post, with the panel open or shut.
+- The panel has no drag. A touch that starts in the panel starts no swipe, so
+  the panel scrolls.
+
+The panel is `clamp(18rem, 38vw, 26rem)` wide and as tall as the screen. It
+has one flow: the text, then the map, then the camera data and the comments.
+The map is a square, at most 18rem wide.
+
+The viewer keeps one sheet state for both orientations. A rotation changes the
+layout with no reload, and an open sheet stays open and a shut sheet stays
+shut, in both directions. The side test runs on each rotation event (the
+orientation query, `resize`, `orientationchange`, `screen.orientation`), and
+again two frames and 300 ms later (`atlasLayerLayout.ts::settledCall`). On iOS
+the events can come before the viewport has its new size, so the first read can
+give the old orientation. Prev/next and Back/Forward keep the state as in
+portrait (`sheetKept`). The map window follows the slot while the panel
+slides, and the ocean goes back to `hidden` when the panel shuts. The return
+from the full map opens the panel and shrinks the map into its slot.
 
 Portrait, and any device with a mouse or a trackpad, keep the bottom sheet.
 

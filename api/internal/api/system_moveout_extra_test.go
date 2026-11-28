@@ -16,7 +16,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // seedAdmin inserts a user whose password is the sha256-hex the client sends
@@ -36,13 +36,12 @@ func seedAdmin(t *testing.T, h *SystemHandler) string {
 	return pw
 }
 
-func newAuthorizeCtx(e *echo.Echo, filename, body string) (echo.Context, *httptest.ResponseRecorder) {
+func newAuthorizeCtx(e *echo.Echo, filename, body string) (*echo.Context, *httptest.ResponseRecorder) {
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues(filename)
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: filename}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 	return c, rec
 }
@@ -105,8 +104,7 @@ func TestDownloadBackup_AdvertisesChecksum(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/?token="+token, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues(filename)
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: filename}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 
 	if err := h.DownloadBackup(c); err != nil {
@@ -130,8 +128,7 @@ func TestDownloadBackup_FileVanished(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/?token="+token, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("filename")
-	c.SetParamValues(filename)
+	c.SetPathValues(echo.PathValues{{Name: "filename", Value: filename}})
 	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
 
 	if err := h.DownloadBackup(c); err == nil {
@@ -181,12 +178,11 @@ func TestDeleteBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newCtx := func(name string) (echo.Context, *httptest.ResponseRecorder) {
+	newCtx := func(name string) (*echo.Context, *httptest.ResponseRecorder) {
 		req := httptest.NewRequest(http.MethodDelete, "/", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		c.SetParamNames("filename")
-		c.SetParamValues(name)
+		c.SetPathValues(echo.PathValues{{Name: "filename", Value: name}})
 		return c, rec
 	}
 

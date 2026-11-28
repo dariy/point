@@ -119,6 +119,26 @@ describe('Atlas layer map', () => {
     await ctx.close();
   });
 
+  /**
+   * Wait until the map box and the Leaflet map pane stay the same for 5 polls,
+   * with no zoom animation. A show of the map fits the places and resizes the
+   * box. A click during that move can hit the map (which clears the selection)
+   * or a marker that the zoomend recluster takes off. Under load the move is
+   * slow (p-4tzw3, p-w5lht).
+   */
+  const waitMapStill = () => page.evaluate(() => { delete (window as { __atlasSettle?: unknown }).__atlasSettle; })
+    .then(() => page.waitForFunction(() => {
+      const box = document.querySelector<HTMLElement>('.atlas-layer-map');
+      const pane = box?.querySelector<HTMLElement>('.leaflet-map-pane');
+      if (!box || !pane || box.classList.contains('leaflet-zoom-anim')) return false;
+      const w = window as unknown as { __atlasSettle?: { key: string; n: number } };
+      const r = box.getBoundingClientRect();
+      const key = [r.x, r.y, r.width, r.height, pane.style.transform].join('|');
+      const prev = w.__atlasSettle;
+      w.__atlasSettle = { key, n: prev && prev.key === key ? prev.n + 1 : 0 };
+      return w.__atlasSettle.n >= 5;
+    }, undefined, { polling: 100 }));
+
   const openMap = async (state = 'map') => {
     await page.goto(BASE + '/');
     await page.locator('.atlas-layer-handle').waitFor();
@@ -160,21 +180,8 @@ describe('Atlas layer map', () => {
     await page.locator('#grid-mount .post-card').first().waitFor();
     await page.evaluate(() => document.body.setAttribute('data-atlas-layer', 'mapList'));
     // The warm map drew its markers while it was hidden. The show then fits the
-    // places and resizes the box. A click during that move can hit the map (which
-    // clears the selection) or a marker that the zoomend recluster takes off.
-    // Under load the move is slow, so wait until the box and the map pane stay
-    // still for a few frames, then click the Mapton marker by its name.
-    await page.waitForFunction(() => {
-      const box = document.querySelector<HTMLElement>('.atlas-layer-map');
-      const pane = box?.querySelector<HTMLElement>('.leaflet-map-pane');
-      if (!box || !pane || box.classList.contains('leaflet-zoom-anim')) return false;
-      const w = window as unknown as { __atlasSettle?: { key: string; n: number } };
-      const r = box.getBoundingClientRect();
-      const key = [r.x, r.y, r.width, r.height, pane.style.transform].join('|');
-      const prev = w.__atlasSettle;
-      w.__atlasSettle = { key, n: prev && prev.key === key ? prev.n + 1 : 0 };
-      return w.__atlasSettle.n >= 5;
-    }, undefined, { polling: 100 });
+    // places and resizes the box (see waitMapStill).
+    await waitMapStill();
     const marker = page.locator('.atlas-layer-map .atlas-marker:not(.atlas-cluster)[aria-label*="Mapton"]');
     await marker.waitFor();
     if (onIpad) await marker.tap();
@@ -276,7 +283,9 @@ describe('Atlas layer map', () => {
       await page.evaluate(() => { (window as any).__noReload = true; });
       await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
       await markMap();
-      await page.locator('.atlas-layer-map .atlas-marker').first().click();
+      // A click during the fit and resize move of the show gets no route.
+      await waitMapStill();
+      await page.locator('.atlas-layer-map .atlas-marker:not(.atlas-cluster)[aria-label*="Mapton"]').click();
       await page.waitForFunction(() => location.pathname === '/tags/mapton');
       await page.waitForFunction(() => document.querySelectorAll('#grid-mount .post-card').length === 1);
       await page.locator('.atlas-layer-map .atlas-node--center').waitFor();
@@ -375,7 +384,21 @@ describe('Atlas layer map', () => {
         await page.locator('.immersive-sheet-hint').click();
         await page.locator('.immersive-sheet-map').waitFor();
         await page.locator('.atlas-layer-map .atlas-marker').first().waitFor();
-        await page.waitForTimeout(800);
+        // The sheet slide moves the slot, and the ocean tweens its window onto
+        // it. A tap before both end can miss the slot, or come while the window
+        // takes no tap. Wait for the expand hint (on only with no tween) and a
+        // slot that stays the same for 5 polls.
+        await page.waitForFunction(() => {
+          const ocean = document.querySelector<HTMLElement>('body > .atlas-layer-map');
+          const slot = document.querySelector('.immersive-sheet-map');
+          if (!ocean || !slot || ocean.dataset.atlasOcean !== 'window' || ocean.dataset.atlasWindowHint !== 'on') return false;
+          const w = window as unknown as { __slotSettle?: { key: string; n: number } };
+          const r = slot.getBoundingClientRect();
+          const key = [r.x, r.y, r.width, r.height].join('|');
+          const prev = w.__slotSettle;
+          w.__slotSettle = { key, n: prev && prev.key === key ? prev.n + 1 : 0 };
+          return w.__slotSettle.n >= 5;
+        }, undefined, { polling: 100 });
         // A tap in the slot, away from the marker.
         const slot = (await page.locator('.immersive-sheet-map').boundingBox())!;
         const x = slot.x + slot.width / 2 + 30;

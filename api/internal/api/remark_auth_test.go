@@ -10,7 +10,7 @@ import (
 	"point-api/internal/models"
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const testRemarkSecret = "test-remark-secret-value"
@@ -25,7 +25,7 @@ func remarkTestCookie(rec *httptest.ResponseRecorder, name string) *http.Cookie 
 	return nil
 }
 
-func newRemarkTestContext(method string) (echo.Context, *httptest.ResponseRecorder) {
+func newRemarkTestContext(method string) (*echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
 	req := httptest.NewRequest(method, "/", nil)
 	rec := httptest.NewRecorder()

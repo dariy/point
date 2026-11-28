@@ -11,12 +11,12 @@ import (
 	"point-api/internal/services"
 	"point-api/internal/services/pageview"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // GetOfflineStats returns counts and sizes of posts and media for offline caching.
 // GET /api/offline/stats
-func (h *SystemHandler) GetOfflineStats(c echo.Context) error {
+func (h *SystemHandler) GetOfflineStats(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	stats, err := h.repo.GetSystemStats(ctx)
@@ -56,7 +56,7 @@ func (h *SystemHandler) GetOfflineStats(c echo.Context) error {
 
 // GetOfflineSnapshot returns all data needed for public offline reading.
 // GET /api/offline/snapshot
-func (h *SystemHandler) GetOfflineSnapshot(c echo.Context) error {
+func (h *SystemHandler) GetOfflineSnapshot(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	// 1. All published posts and pages

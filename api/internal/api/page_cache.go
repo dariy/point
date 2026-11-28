@@ -9,7 +9,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // pageCacheTTL is how long a rendered public page stays servable. It is short
@@ -80,7 +80,7 @@ func clampGridPageSize(perPage int32) int32 {
 // both errors discarded — which is how a tag-page key that could never be
 // stored stayed dead without anyone noticing. Here the key is named once, and
 // the miss path is CacheService's problem, coalescing included.
-func servePageJSON(c echo.Context, cache *services.CacheService, key string, cacheable bool, render func(context.Context) ([]byte, error)) error {
+func servePageJSON(c *echo.Context, cache *services.CacheService, key string, cacheable bool, render func(context.Context) ([]byte, error)) error {
 	ctx := c.Request().Context()
 
 	var data []byte

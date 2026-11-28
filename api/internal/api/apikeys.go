@@ -6,7 +6,7 @@ import (
 
 	"point-api/internal/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type ApiKeyHandler struct {
@@ -19,7 +19,7 @@ func NewApiKeyHandler(apiKeyService *services.ApiKeyService) *ApiKeyHandler {
 	}
 }
 
-func (h *ApiKeyHandler) ListKeys(c echo.Context) error {
+func (h *ApiKeyHandler) ListKeys(c *echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	keys, err := h.apiKeyService.ListKeys(c.Request().Context(), userID)
 	if err != nil {
@@ -43,7 +43,7 @@ type CreateApiKeyRequest struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 }
 
-func (h *ApiKeyHandler) CreateKey(c echo.Context) error {
+func (h *ApiKeyHandler) CreateKey(c *echo.Context) error {
 	userID := extractUserID(c.Get("user"))
 	var req CreateApiKeyRequest
 	if err := c.Bind(&req); err != nil {
@@ -69,7 +69,7 @@ func (h *ApiKeyHandler) CreateKey(c echo.Context) error {
 	})
 }
 
-func (h *ApiKeyHandler) RevokeKey(c echo.Context) error {
+func (h *ApiKeyHandler) RevokeKey(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (h *ApiKeyHandler) RevokeKey(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *ApiKeyHandler) DeleteKey(c echo.Context) error {
+func (h *ApiKeyHandler) DeleteKey(c *echo.Context) error {
 	id, err := parseIDParam(c)
 	if err != nil {
 		return err

@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium, type Browser, type Page } from 'playwright';
 import crypto from 'node:crypto';
+import { touchOnly } from './devices.ts';
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:8001';
 const PW = crypto.createHash('sha256').update('devpassword').digest('hex');
@@ -235,12 +236,17 @@ describe('Atlas layer', () => {
           ctx = await browser!.newContext({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 } });
           touch = await ctx.newPage();
           await touch.addInitScript(() => { localStorage.removeItem('atlasLayerState'); localStorage.removeItem('pointerFine'); });
+          await touchOnly(touch);
         });
         after(async () => { await ctx?.close(); });
 
         const openTouch = async (width: number, height: number, view: string) => {
           await touch.setViewportSize({ width, height });
           await touch.goto(`${BASE}/tags/atlas-strip?view=${view}`);
+          // The mouse move that Chromium sends at a page load, but always after app.js:
+          // without touchOnly() in before(), the side layout does not come.
+          await touch.mouse.move(5, 5);
+          await touch.mouse.move(0, 0);
           await touch.locator('.atlas-layer-handle').waitFor();
           if (view === 'list') return;
           await touch.waitForFunction(() => getComputedStyle(document.querySelector('.atlas-layer-map')!).transform === 'none');
@@ -269,18 +275,72 @@ describe('Atlas layer', () => {
           assert.ok(Math.abs(h.y) <= 1, 'the header is at the top of the column');
           assert.ok(Math.abs(f.y + f.height - height) <= 1, `the footer is at the bottom: ${f.y + f.height}`);
           assert.ok(g.y >= h.y + h.height - 1 && g.y + g.height <= f.y + 1, 'the list is between the header and the footer');
-          // The column fills: the last card reaches the column end (it scrolls).
+          // Whole rows only (p-kyo8m): every card is inside the column, and the
+          // room under the last row is less than one more row.
           const fill = await touch.evaluate(() => {
             const gm = document.querySelector<HTMLElement>('#grid-mount')!;
             const slots = [...gm.querySelectorAll('.post-card-slot')].map((s) => s.getBoundingClientRect()).filter((r) => r.width > 0);
             const r = gm.getBoundingClientRect();
-            return { overflowY: getComputedStyle(gm).overflowY, bottom: r.bottom, last: Math.max(...slots.map((s) => s.bottom)), n: slots.length };
+            const cs = getComputedStyle(gm);
+            return {
+              top: r.top + (parseFloat(cs.paddingTop) || 0), bottom: r.bottom - (parseFloat(cs.paddingBottom) || 0),
+              first: Math.min(...slots.map((s) => s.top)), last: Math.max(...slots.map((s) => s.bottom)),
+              cell: slots[0]?.height ?? 0, scroll: gm.scrollHeight - gm.clientHeight, n: slots.length,
+            };
           });
-          assert.equal(fill.overflowY, 'auto', 'the column scrolls');
-          assert.ok(fill.last >= fill.bottom - 8 - 1, `no empty column end: ${JSON.stringify(fill)}`);
+          assert.ok(fill.n > 0, 'cards show');
+          assert.ok(fill.first >= fill.top - 1, `the first row is whole: ${JSON.stringify(fill)}`);
+          assert.ok(fill.last <= fill.bottom + 1, `the last row is whole: ${JSON.stringify(fill)}`);
+          assert.ok(fill.scroll <= 1, `the column does not scroll: ${JSON.stringify(fill)}`);
+          assert.ok(fill.bottom - fill.last < fill.cell, `no room for one more row: ${JSON.stringify(fill)}`);
         };
 
-        for (const [width, height] of [[844, 390], [1180, 820]] as const) {
+        /**
+         * The next-page preview (core/gridPager.ts) in the column (p-8bo68): its
+         * cards have the same size and the same row grid as the current page,
+         * one swipe stride to the right.
+         */
+        const assertNextPeek = async (width: number, height: number) => {
+          const ghostSlot = '.grid-preview-placeholder[data-edge="next"] .post-card-slot';
+          await touch.locator(ghostSlot).first().waitFor({ state: 'attached' });
+          const peek = await touch.evaluate((sel) => {
+            const rects = (els: Element[]) => els.map((e) => {
+              const r = e.getBoundingClientRect();
+              return { x: r.x, y: r.y, w: r.width, h: r.height };
+            });
+            const ghost = document.querySelector<HTMLElement>('.grid-preview-placeholder[data-edge="next"]')!;
+            const dx = new DOMMatrix(getComputedStyle(ghost).transform).m41;
+            const live = rects([...document.querySelectorAll('#grid-mount .post-card-slot')]);
+            const next = rects([...document.querySelectorAll(sel)]).map((r) => ({ ...r, x: r.x - dx }));
+            const cards = rects([...document.querySelectorAll(`${sel} .post-card`)]).map((r) => ({ ...r, x: r.x - dx }));
+            const gm = document.querySelector<HTMLElement>('#grid-mount')!;
+            const g = gm.getBoundingClientRect();
+            // What a card shows: the title size and the parts of its content that are laid out.
+            const look = (root: Element | null) => {
+              const t = root?.querySelector('.post-card-title');
+              const shown = [...(root?.querySelectorAll('.post-card-content > *') ?? [])].filter((e) => (e as HTMLElement).offsetHeight > 0).length;
+              return `${t ? getComputedStyle(t).fontSize : '-'} ${shown}`;
+            };
+            return {
+              live, next, cards, gridRight: g.right, ghostLeft: ghost.getBoundingClientRect().x - dx, gridLeft: g.x,
+              liveLook: look(gm.querySelector('.post-card')), nextLook: look(ghost.querySelector('.post-card')),
+            };
+          }, ghostSlot);
+          const label = `${width}x${height}: ${JSON.stringify(peek)}`;
+          assert.ok(peek.next.length > 0, 'the next page has a preview: ' + label);
+          assert.ok(Math.abs(peek.ghostLeft - peek.gridLeft) <= 1, 'the preview is on the column: ' + label);
+          assert.equal(peek.nextLook, peek.liveLook, 'a preview card shows what a current card shows: ' + label);
+          const n = Math.min(peek.live.length, peek.next.length);
+          for (let i = 0; i < n; i++) {
+            const [a, b, c] = [peek.live[i], peek.next[i], peek.cards[i]];
+            for (const k of ['x', 'y', 'w', 'h'] as const) {
+              assert.ok(Math.abs(a[k] - b[k]) <= 1, `preview card ${i} ${k} is ${b[k]}, not ${a[k]}: ${label}`);
+              assert.ok(Math.abs(c[k] - b[k]) <= 1, `preview card ${i} fills its cell (${k}): ${label}`);
+            }
+          }
+        };
+
+        for (const [width, height] of [[844, 390], [1024, 768], [1180, 820]] as const) {
           it(`at ${width}x${height} mapList is the map on the left and the list column on the right`, async () => {
             await openTouch(width, height, 'list');
             await touch.locator('#grid-mount .post-card').first().waitFor();
@@ -291,6 +351,7 @@ describe('Atlas layer', () => {
             await touch.waitForTimeout(800);
             await assertSide(width, height);
             assert.equal(await firstTitle(), listFirst, 'the same first post as in list');
+            await assertNextPeek(width, height);
             // Paging works: page 2 shows other posts.
             const next = touch.locator('#footer-mount .footer-pagination .page-next');
             assert.ok(await next.isVisible(), 'the paginator is in the footer');
