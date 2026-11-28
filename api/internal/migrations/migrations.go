@@ -500,6 +500,78 @@ var schema = []struct{ name, sql string }{
 		"add_post_revisions_index",
 		`CREATE INDEX IF NOT EXISTS idx_post_revisions_post_id ON post_revisions(post_id, id DESC)`,
 	},
+	{
+		// Duplicate detection (NF-16). An exact match at upload asks the
+		// user, and "Upload again" keeps a second row with the same bytes,
+		// so media.checksum (the SHA-256 of the uploaded original) loses its
+		// UNIQUE constraint. SQLite cannot drop a constraint in place: the
+		// table is rebuilt. Foreign keys are off for the swap, or the DROP
+		// would cascade into media_visibility_log. The non-unique
+		// idx_media_checksum keeps the lookup fast.
+		"media_checksum_not_unique",
+		`PRAGMA foreign_keys = OFF;
+		DROP TABLE IF EXISTS media_rebuild;
+		CREATE TABLE media_rebuild (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			filename VARCHAR(500) NOT NULL,
+			original_path VARCHAR(1000) NOT NULL,
+			thumbnail_path VARCHAR(1000),
+			file_type TEXT NOT NULL,
+			mime_type VARCHAR(100) NOT NULL,
+			file_size INTEGER NOT NULL,
+			width INTEGER,
+			height INTEGER,
+			post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+			uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			checksum VARCHAR(64) NOT NULL,
+			alt_text VARCHAR(500),
+			caption VARCHAR(1000),
+			metadata TEXT,
+			original_metadata TEXT,
+			is_public INTEGER NOT NULL DEFAULT 0,
+			deleted_at DATETIME
+		);
+		INSERT INTO media_rebuild (id, filename, original_path, thumbnail_path, file_type, mime_type,
+			file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata,
+			original_metadata, is_public, deleted_at)
+		SELECT id, filename, original_path, thumbnail_path, file_type, mime_type,
+			file_size, width, height, post_id, uploaded_at, checksum, alt_text, caption, metadata,
+			original_metadata, is_public, deleted_at
+		FROM media;
+		-- Keep the AUTOINCREMENT high-water mark: an id of media deleted for
+		-- good must not come back on a new upload.
+		UPDATE sqlite_sequence SET seq = (SELECT seq FROM sqlite_sequence WHERE name = 'media')
+			WHERE name = 'media_rebuild'
+			AND seq < (SELECT seq FROM sqlite_sequence WHERE name = 'media');
+		INSERT INTO sqlite_sequence (name, seq)
+			SELECT 'media_rebuild', seq FROM sqlite_sequence WHERE name = 'media'
+			AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'media_rebuild');
+		DROP TABLE media;
+		ALTER TABLE media_rebuild RENAME TO media;
+		CREATE INDEX IF NOT EXISTS idx_media_post_id ON media(post_id);
+		CREATE INDEX IF NOT EXISTS idx_media_uploaded_at ON media(uploaded_at);
+		CREATE INDEX IF NOT EXISTS idx_media_checksum ON media(checksum);
+		CREATE INDEX IF NOT EXISTS idx_media_original_path ON media(original_path);
+		CREATE INDEX IF NOT EXISTS idx_media_trashed ON media(deleted_at DESC) WHERE deleted_at IS NOT NULL;
+		PRAGMA foreign_keys = ON;`,
+	},
+	{
+		// Possible duplicates (NF-16): the perceptual hash of each image.
+		// Must come after media_checksum_not_unique, whose rebuild lists the
+		// columns it keeps.
+		"add_media_phash",
+		`ALTER TABLE media ADD COLUMN phash INTEGER`,
+	},
+	{
+		// Queue one perceptual hash backfill (services.JobKindMediaPhash)
+		// for an install that already has images. Uploads compute the hash
+		// themselves, so a fresh install gets no job.
+		"enqueue_media_phash_backfill",
+		`INSERT INTO jobs (kind, payload, state, max_attempts, next_run_at, created_at, updated_at)
+			SELECT 'media.phash', '{}', 'queued', 5, CAST(strftime('%s', 'now') AS INTEGER),
+				CAST(strftime('%s', 'now') AS INTEGER), CAST(strftime('%s', 'now') AS INTEGER)
+			WHERE EXISTS (SELECT 1 FROM media WHERE file_type = 'image' AND phash IS NULL)`,
+	},
 }
 
 // step is one named unit of migration work. Every step gates on its own name in

@@ -255,7 +255,9 @@ func TestMediaTrash_PermanentDelete(t *testing.T) {
 	}
 }
 
-func TestMediaTrash_UploadOfTrashedBytesRestores(t *testing.T) {
+// The default policy has no user to ask, so a trashed match stays in the
+// trash and the upload is a new row: no silent restore.
+func TestMediaTrash_DefaultUploadOfTrashedBytesMakesANewRow(t *testing.T) {
 	f := newTrashFixture(t)
 	ctx := context.Background()
 	if err := f.svc.DeleteMedia(ctx, f.imageID); err != nil {
@@ -269,13 +271,63 @@ func TestMediaTrash_UploadOfTrashedBytesRestores(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UploadFile: %v", err)
 	}
-	if m.ID != f.imageID {
-		t.Fatalf("upload made row %d, want the trashed row %d", m.ID, f.imageID)
+	if m.ID == f.imageID {
+		t.Fatalf("upload returned the trashed row %d, want a new row", m.ID)
 	}
 	if m.DeletedAt.Valid {
-		t.Error("the upload returned a row that is still in the trash")
+		t.Error("the new row is in the trash")
 	}
-	if m.IsPublic == 0 {
-		t.Error("the restored row is not public; a published post shows it")
+	if m.OriginalPath == f.path {
+		t.Error("the new row shares the original file of the trashed row")
+	}
+	old, err := f.svc.GetMediaByID(ctx, f.imageID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !old.DeletedAt.Valid {
+		t.Error("a default upload restored the trashed row")
+	}
+
+	// A second default upload reuses the new live row.
+	again, err := f.svc.UploadFile(ctx, UploadFileParams{
+		Content:  jpegBytes(t, 800, 600),
+		Filename: "again.jpg",
+		MimeType: "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("second UploadFile: %v", err)
+	}
+	if again.ID != m.ID {
+		t.Errorf("second upload = row %d, want the live row %d", again.ID, m.ID)
+	}
+}
+
+// DuplicateAsk reports a trashed match like a live one and changes nothing:
+// the client decides between a restore and a second copy.
+func TestMediaTrash_AskOnTrashedBytesReportsTheTrashedRow(t *testing.T) {
+	f := newTrashFixture(t)
+	ctx := context.Background()
+	if err := f.svc.DeleteMedia(ctx, f.imageID); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.svc.UploadFile(ctx, UploadFileParams{
+		Content:     jpegBytes(t, 800, 600),
+		Filename:    "again.jpg",
+		MimeType:    "image/jpeg",
+		OnDuplicate: DuplicateAsk,
+	})
+	var dup *DuplicateMediaError
+	if !errors.As(err, &dup) {
+		t.Fatalf("UploadFile = %v, want a DuplicateMediaError", err)
+	}
+	if dup.Existing.ID != f.imageID || !dup.Existing.DeletedAt.Valid {
+		t.Errorf("existing = row %d (trashed %v), want the trashed row %d", dup.Existing.ID, dup.Existing.DeletedAt.Valid, f.imageID)
+	}
+	m, err := f.svc.GetMediaByID(ctx, f.imageID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.DeletedAt.Valid {
+		t.Error("an ask restored the trashed row; only Use the existing file may do that")
 	}
 }

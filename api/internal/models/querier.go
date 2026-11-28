@@ -40,6 +40,8 @@ type Querier interface {
 	GetFirstUser(ctx context.Context) (User, error)
 	// MEDIA
 	GetMedia(ctx context.Context, id int64) (Medium, error)
+	// checksum is not unique: "Upload again" keeps a second copy. A live row
+	// wins over a trashed one, then the oldest.
 	GetMediaByChecksum(ctx context.Context, checksum string) (Medium, error)
 	GetMediaByPostID(ctx context.Context, postID sql.NullInt64) ([]Medium, error)
 	// POSTS
@@ -69,7 +71,14 @@ type Querier interface {
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ApiKey, error)
 	// The trash keeps a media file for 30 days (services.TrashRetentionDays).
 	ListExpiredTrashedMediaIDs(ctx context.Context) ([]int64, error)
+	// One batch of the perceptual hash backfill job. It includes trashed images,
+	// because a restore brings them back.
+	ListImagesWithoutPhash(ctx context.Context, arg ListImagesWithoutPhashParams) ([]ListImagesWithoutPhashRow, error)
+	ListLiveMediaByIDs(ctx context.Context, ids []int64) ([]Medium, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
+	// The perceptual hash of each live image. services.PossibleDuplicates
+	// compares the hashes in Go: SQLite has no popcount.
+	ListMediaPhashes(ctx context.Context) ([]ListMediaPhashesRow, error)
 	// The history list. It leaves out the body and the CSS, which can be large;
 	// GetPostRevision reads one revision in full.
 	ListPostRevisions(ctx context.Context, postID int64) ([]ListPostRevisionsRow, error)
@@ -90,6 +99,7 @@ type Querier interface {
 	RemoveTagRelationship(ctx context.Context, arg RemoveTagRelationshipParams) error
 	RestorePost(ctx context.Context, arg RestorePostParams) error
 	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) error
+	SetMediaPhash(ctx context.Context, arg SetMediaPhashParams) error
 	SetPostPreviewToken(ctx context.Context, arg SetPostPreviewTokenParams) error
 	SoftDeletePost(ctx context.Context, arg SoftDeletePostParams) error
 	TouchAPIKeyLastUsed(ctx context.Context, id int64) error

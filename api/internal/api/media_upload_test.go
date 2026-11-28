@@ -458,3 +458,94 @@ func TestGetMediaFolders_Success(t *testing.T) {
 		t.Fatalf("GetMediaFolders failed: %v", err)
 	}
 }
+
+// postUpload sends one multipart request with the given file field, files and
+// on_duplicate value to the handler func, and returns the recorder.
+func postUpload(t *testing.T, e *echo.Echo, handle func(*echo.Context) error, field, onDuplicate string, files map[string][]byte) *httptest.ResponseRecorder {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	for name, content := range files {
+		p, _ := writer.CreateFormFile(field, name)
+		_, _ = p.Write(content)
+	}
+	if onDuplicate != "" {
+		_ = writer.WriteField("on_duplicate", onDuplicate)
+	}
+	_ = writer.Close()
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("user", models.GetSessionByTokenRow{UserID: 1})
+	if err := handle(c); err != nil {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
+			rec.Code = he.Code
+			return rec
+		}
+		t.Fatalf("handler: %v", err)
+	}
+	return rec
+}
+
+func TestUploadFile_OnDuplicate(t *testing.T) {
+	h, e := newMediaHandler(t)
+	png := makeTinyPNG(t)
+	files := map[string][]byte{"a.png": png}
+
+	first := postUpload(t, e, h.UploadFile, "file", "ask", files)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first upload: %d %s", first.Code, first.Body.String())
+	}
+	var created map[string]interface{}
+	_ = json.Unmarshal(first.Body.Bytes(), &created)
+
+	dup := postUpload(t, e, h.UploadFile, "file", "ask", files)
+	if dup.Code != http.StatusConflict {
+		t.Fatalf("match with ask: %d %s, want 409", dup.Code, dup.Body.String())
+	}
+	var conflict struct {
+		Code     string                 `json:"code"`
+		Existing map[string]interface{} `json:"existing"`
+	}
+	_ = json.Unmarshal(dup.Body.Bytes(), &conflict)
+	if conflict.Code != "duplicate" || conflict.Existing["id"] != created["id"] {
+		t.Errorf("409 body = %s, want code duplicate and the first row", dup.Body.String())
+	}
+
+	again := postUpload(t, e, h.UploadFile, "file", "new", files)
+	var second map[string]interface{}
+	_ = json.Unmarshal(again.Body.Bytes(), &second)
+	if again.Code != http.StatusCreated || second["id"] == created["id"] {
+		t.Errorf("upload again: %d %s, want 201 and a new row", again.Code, again.Body.String())
+	}
+
+	if rec := postUpload(t, e, h.UploadFile, "file", "replace", files); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown on_duplicate: %d, want 400", rec.Code)
+	}
+}
+
+func TestUploadMultiple_OnDuplicateAskListsMatches(t *testing.T) {
+	h, e := newMediaHandler(t)
+	png := makeTinyPNG(t)
+	if rec := postUpload(t, e, h.UploadFile, "file", "", map[string][]byte{"a.png": png}); rec.Code != http.StatusCreated {
+		t.Fatalf("seed: %d", rec.Code)
+	}
+	rec := postUpload(t, e, h.UploadMultiple, "files", "ask", map[string][]byte{
+		"again.png": png,
+		"new.jpg":   makeJPEGWithEXIF(t),
+	})
+	var resp struct {
+		TotalUploaded int `json:"total_uploaded"`
+		TotalFailed   int `json:"total_failed"`
+		Duplicates    []struct {
+			Filename string                 `json:"filename"`
+			Existing map[string]interface{} `json:"existing"`
+		} `json:"duplicates"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.TotalUploaded != 1 || resp.TotalFailed != 0 || len(resp.Duplicates) != 1 || resp.Duplicates[0].Filename != "again.png" {
+		t.Errorf("response = %s, want 1 uploaded, 0 failed, again.png in duplicates", rec.Body.String())
+	}
+}

@@ -16,7 +16,8 @@ import { MarkdownEditor } from "../../components/light/MarkdownEditor.ts";
 import { getPost, createPost, updatePost, deletePost, generatePreviewLink, publishPostToInstagram, previewRender, restorePostRevision, type PostInput, type PostRevision } from "../../api/posts.ts";
 import { formatDatetime } from "../../utils/formatters.ts";
 import { getInstagramStatus } from "../../api/instagram.ts";
-import { uploadMedia } from "../../api/media.ts";
+import { uploadAskingOnDuplicate } from "../../utils/duplicateUpload.ts";
+import { saveShareDraft } from "../../utils/shareDrafts.ts";
 import { ConfirmDialog } from "../../components/shared/ConfirmDialog.ts";
 import { getAllShareEntries, clearShareEntries } from "../../utils/idb.ts";
 import {
@@ -1205,28 +1206,8 @@ export default class PostEditPage extends Component<PageProps> {
     }
     for (const entry of backlog) {
       try {
-        const title = entry.title || entry.files.map(f => f.name).join(", ") || "Shared photo";
-        const post = await createPost({
-          title,
-          status: "draft",
-          content: ""
-        });
-        let content = "";
-        for (const fileEntry of entry.files) {
-          const blob = new Blob([fileEntry.data], {
-            type: fileEntry.type
-          });
-          const file = new File([blob], fileEntry.name, {
-            type: fileEntry.type
-          });
-          const media = await uploadMedia(file, {
-            post_id: post.id
-          });
-          content += `${media.path}\n`;
-        }
-        await updatePost(post.id, {
-          content: content.trim()
-        });
+        // An exact duplicate asks once per draft, like the media library.
+        await saveShareDraft(entry);
       } catch (err) {
         setToast({
           message: `Failed to save offline share: ${(err as Error).message}`,
@@ -1461,9 +1442,12 @@ export default class PostEditPage extends Component<PageProps> {
   }
   async _uploadAndInsert(file: File) {
     try {
-      const result = await uploadMedia(file, {
+      // An exact duplicate asks first; "Use the existing file" inserts the
+      // existing media, and a closed question inserts nothing.
+      const result = await uploadAskingOnDuplicate(file, {
         post_id: this.state.postId || undefined
       });
+      if (!result) return;
       if (this.state.editorMode === "visual") this._insertMediaPaths([{
         path: result.path
       } as Media]);else if (this._markdownEditorRef) this._markdownEditorRef.insertAtEnd(result.path);

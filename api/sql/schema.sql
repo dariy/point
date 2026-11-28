@@ -171,7 +171,9 @@ CREATE TABLE IF NOT EXISTS media (
     height INTEGER,
     post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL,
     uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    checksum VARCHAR(64) NOT NULL UNIQUE,
+    -- SHA-256 of the uploaded original. Not unique: "Upload again" at a
+    -- duplicate prompt keeps a second row with the same bytes (NF-16).
+    checksum VARCHAR(64) NOT NULL,
     alt_text VARCHAR(500),
     caption VARCHAR(1000),
     metadata TEXT,
@@ -179,7 +181,13 @@ CREATE TABLE IF NOT EXISTS media (
     is_public INTEGER NOT NULL DEFAULT 0,
     -- Set when the media is moved to the trash. A trashed row keeps its files
     -- on disk and is never public. NULL means the media is live.
-    deleted_at DATETIME
+    deleted_at DATETIME,
+    -- 64-bit difference hash (dHash) of the decoded image, as a signed
+    -- integer. Two images with a small Hamming distance between their hashes
+    -- are "possible duplicates" (NF-16). NULL for a file that is not an image,
+    -- an image that did not decode, and an old image the backfill job has not
+    -- reached yet.
+    phash INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_media_post_id ON media(post_id);
 CREATE INDEX IF NOT EXISTS idx_media_uploaded_at ON media(uploaded_at);

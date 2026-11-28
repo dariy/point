@@ -7,9 +7,38 @@ by upload date (`/YYYY/MM/…`).
 ## What is implemented
 
 - **Upload**: multi-format (JPEG/PNG/WebP/…, video, audio) with MIME sniffing
-  (`media_mime.go`), size limit (`MAX_UPLOAD_SIZE_MB`), and **SHA256 dedup** — the same
-  bytes uploaded twice resolve to one stored file (this is what makes Instagram import
-  re-runs cheap).
+  (`media_mime.go`), size limit (`MAX_UPLOAD_SIZE_MB`), and **SHA256 dedup**.
+  `media.checksum` holds the SHA-256 of the uploaded original. It has a non-unique index
+  (migration `media_checksum_not_unique` removed the old UNIQUE constraint). The
+  `on_duplicate` form value of `/api/media/upload` and `/api/media/upload/multiple` sets
+  what an exact match does (`MediaService.UploadFile`, `DuplicatePolicy`):
+  - `existing` (the default): return a live match and make no row. A match that is only in
+    the trash stays there, and the upload becomes a new row: no silent restore. Instagram
+    import, the audio post and the MCP upload use it, so their re-runs are cheap.
+  - `ask`: change nothing. The single upload answers 409 with `code: "duplicate"` and the
+    `existing` media; the multiple upload lists the matches in `duplicates`.
+  - `new`: store a second row with the same checksum and its own original file.
+
+  The admin UI sends `ask` (`frontend/src/utils/duplicateUpload.ts`). The media library,
+  the editor picker, and a file dropped or shared into the editor ask "Use the existing file"
+  or "Upload again", and so do the first-post page and the offline shares that the editor
+  saves as drafts (one question for each draft). A batch asks one question for all of its
+  matches. "Use the existing file" restores a trashed match, and in the editor it inserts
+  the existing media. Folder import from the photo library skips exact matches, trashed
+  ones too, and reports them in one summary line; it does not restore them.
+- **Possible duplicates**: the same picture at another size or in another format has other
+  bytes, so its checksum differs. `media.phash` holds a 64-bit difference hash (dHash) of
+  the decoded, oriented image (`api/internal/services/phash.go::perceptualHash`). Upload
+  and folder import compute it from the decode they already do; a HEIC or AVIF gets it
+  from its deferred decode. Two live images whose hashes differ in 10 bits or fewer
+  (`PhashMaxDistance`) are possible duplicates, and the groups are transitive
+  (`MediaService.PossibleDuplicates`, `GET /api/media/duplicates`). A possible duplicate
+  never blocks an upload: only an exact match asks. The "Possible duplicates" entry of the
+  type filter in the media library shows each group as a set that starts a new row, with
+  the size of each copy. Open a copy to compare, and use "Move to Trash" on the copy to
+  remove. The migration `enqueue_media_phash_backfill` queues one `media.phash` job when
+  old images exist. The job hashes 50 images, then queues the next batch; an image that
+  does not decode keeps no hash and is not listed.
 - **Thumbnails**: a fixed ladder of six rungs — 128/256/512/1024/1600/2048 px on the
   **longest side**, aspect-preserving (`fitImage`, Catmull-Rom from `golang.org/x/image/draw`), JPEG only (the binary is CGO-free,
   so no WebP/AVIF encoder). Upload and import write the rungs up to 1024
@@ -70,8 +99,8 @@ by upload date (`/YYYY/MM/…`).
   lists the trash, with "Restore" and "Delete now" on each file. "Delete now"
   (`DELETE /api/media/:id/permanent`) removes the files and the row, and it refuses a
   file that is not in the trash. Restore is `POST /api/media/:id/restore` or
-  `POST /api/media/bulk-restore`. An upload of bytes that are in the trash restores
-  that row. The library, the picker, the folders and the orphan list do not show a
+  `POST /api/media/bulk-restore`. An upload of bytes that are in the trash does not
+  restore that row with no question: see `on_duplicate` above. The library, the picker, the folders and the orphan list do not show a
   trashed file.
 - **Trash purge and Undo**: the trash keeps posts and media for 30 days
   (`services.TrashRetentionDays`). The daily "trash purge" task (2 AM,

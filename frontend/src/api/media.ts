@@ -35,6 +35,8 @@ export interface Media {
   deleted_at?: string | null;
   /** Admin responses only: set on an HEVC video that this install cannot convert. */
   hevc_note?: boolean;
+  /** listPossibleDuplicates only: the index of the item's group on the page. */
+  duplicate_group?: number;
 }
 
 /**
@@ -99,6 +101,25 @@ export function getMedia(id: number): Promise<Media> {
 }
 
 /**
+ * What the server does when the library already has a file with the same
+ * SHA-256. 'existing' (also the default when none is sent) returns a live
+ * match, and stores a new row when the only match is in the trash (no silent
+ * restore); 'ask' answers 409 with the
+ * existing media and changes nothing; 'new' stores a second copy.
+ */
+export type OnDuplicate = 'ask' | 'new' | 'existing';
+
+/**
+ * The existing media of an `on_duplicate: 'ask'` 409, or null for any other
+ * error.
+ */
+export function duplicateOf(err: unknown): Media | null {
+  const e = err as { status?: number, body?: { code?: string, existing?: Media } } | null;
+  if (e?.status !== 409 || e.body?.code !== 'duplicate' || !e.body.existing) return null;
+  return e.body.existing;
+}
+
+/**
  * Upload a single file.
  *
  * A video is accompanied by a poster frame captured here in the browser — the
@@ -108,12 +129,14 @@ export function getMedia(id: number): Promise<Media> {
 export async function uploadMedia(
   file: File,
   meta: { alt_text?: string, caption?: string, post_id?: number } = {},
+  onDuplicate?: OnDuplicate,
 ): Promise<Media> {
   const form = new FormData();
   form.append('file', file);
   if (meta.alt_text) form.append('alt_text', meta.alt_text);
   if (meta.caption)  form.append('caption', meta.caption);
   if (meta.post_id)  form.append('post_id', String(meta.post_id));
+  if (onDuplicate)   form.append('on_duplicate', onDuplicate);
 
   if (isVideoFile(file)) {
     const poster = await captureVideoPoster(file);
@@ -136,19 +159,25 @@ export function setVideoPoster(id: number, poster: Blob): Promise<Media> {
   return api.upload(`/api/media/${id}/poster`, form);
 }
 
-/** Upload multiple files. */
+/**
+ * Upload multiple files. With `onDuplicate: 'ask'` the exact matches come
+ * back in `duplicates`, not in `uploaded` or `failed`.
+ */
 export function uploadMultiple(
   files: File[],
   postId?: number,
+  onDuplicate?: OnDuplicate,
 ): Promise<{
   uploaded: Media[];
   failed: Array<{ filename: string, error: string }>;
+  duplicates: Array<{ filename: string, existing: Media }>;
   total_uploaded: number;
   total_failed: number;
 }> {
   const form = new FormData();
   files.forEach((f) => form.append('files', f));
   if (postId) form.append('post_id', String(postId));
+  if (onDuplicate) form.append('on_duplicate', onDuplicate);
   return api.upload('/api/media/upload/multiple', form);
 }
 
@@ -186,6 +215,18 @@ export function listTrashedMedia(params: { page?: number; per_page?: number } = 
   media: Media[], total: number, page: number, per_page: number, pages: number,
 }> {
   return api.get('/api/media/trash', params);
+}
+
+/**
+ * List the possible duplicates: groups of live images whose perceptual hashes
+ * are near (the same picture at another size or in another format). `media` is
+ * flat, in group order, and each item has `duplicate_group`. A page holds
+ * whole groups, so it can hold fewer than `per_page` items.
+ */
+export function listPossibleDuplicates(params: { page?: number; per_page?: number } = {}): Promise<{
+  media: Media[], total: number, groups: number, page: number, per_page: number, pages: number,
+}> {
+  return api.get('/api/media/duplicates', params);
 }
 
 /** Take a media item out of the trash. The server calculates its visibility again. */

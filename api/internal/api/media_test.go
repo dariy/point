@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -1325,5 +1326,48 @@ func TestMediaHandler_UpdateMedia_MetadataOnly_PreservesOtherFields(t *testing.T
 	meta, ok := resp["metadata"].(map[string]interface{})
 	if !ok || meta["ISO"] != "400" {
 		t.Errorf("metadata not saved: got %v", resp["metadata"])
+	}
+}
+
+// The possible duplicates list: one group of the same picture as JPEG and as
+// WebP, each item with its group index. The other picture is not listed.
+func TestMediaHandler_ListPossibleDuplicates(t *testing.T) {
+	handler, cleanup := setupMediaHandler(t)
+	defer cleanup()
+	ctx := context.Background()
+	fixtures := filepath.Join("..", "services", "testdata", "phash")
+	for _, f := range []struct{ name, mime string }{{"a.jpg", "image/jpeg"}, {"c.jpg", "image/jpeg"}, {"a.webp", "image/webp"}} {
+		data, err := os.ReadFile(filepath.Join(fixtures, f.name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := handler.mediaService.UploadFile(ctx, services.UploadFileParams{Content: data, Filename: f.name, MimeType: f.mime}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/media/duplicates?per_page=10", nil)
+	rec := httptest.NewRecorder()
+	if err := handler.ListPossibleDuplicates(echo.New().NewContext(req, rec)); err != nil {
+		t.Fatalf("ListPossibleDuplicates: %v", err)
+	}
+	var body struct {
+		Media []struct {
+			Filename       string `json:"filename"`
+			DuplicateGroup int    `json:"duplicate_group"`
+		} `json:"media"`
+		Total  int `json:"total"`
+		Groups int `json:"groups"`
+		Pages  int `json:"pages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Total != 2 || body.Groups != 1 || body.Pages != 1 || len(body.Media) != 2 {
+		t.Fatalf("body = %+v, want one group of 2", body)
+	}
+	for _, m := range body.Media {
+		if m.DuplicateGroup != 0 || (m.Filename != "a.jpg" && m.Filename != "a.webp") {
+			t.Errorf("item %+v, want a.jpg or a.webp in group 0", m)
+		}
 	}
 }

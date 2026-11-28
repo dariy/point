@@ -17,6 +17,8 @@ export interface ApiError {
   status: number;
   /** Human-readable error message */
   message: string;
+  /** The parsed response body, for an endpoint that sends more than a message (e.g. the upload 409). */
+  body?: unknown;
 }
 
 class ApiClient {
@@ -88,7 +90,7 @@ class ApiClient {
         (body && typeof body === 'object' && (body.detail || body.message)) ||
         (typeof body === 'string' && body) ||
         `HTTP ${response.status}`;
-      throw { status: response.status, message };
+      throw { status: response.status, message, body };
     }
 
     return body;

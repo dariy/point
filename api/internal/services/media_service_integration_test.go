@@ -98,6 +98,83 @@ func TestMediaService_MetadataExtraction(t *testing.T) {
 	_ = media.Metadata.Valid
 }
 
+// An exact match under DuplicateAsk returns the existing row and writes
+// nothing; DuplicateKeep then stores a second row with its own file; other
+// bytes are no match.
+func TestMediaService_UploadDuplicatePolicies(t *testing.T) {
+	service, tmpDir := setupMediaService(t)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+		_ = service.repo.Close()
+	}()
+	ctx := context.Background()
+	content := []byte("same bytes")
+
+	first, err := service.UploadFile(ctx, UploadFileParams{Content: content, Filename: "a.txt", MimeType: "text/plain"})
+	if err != nil {
+		t.Fatalf("first upload: %v", err)
+	}
+
+	t.Run("match asks", func(t *testing.T) {
+		_, err := service.UploadFile(ctx, UploadFileParams{
+			Content: content, Filename: "b.txt", MimeType: "text/plain", OnDuplicate: DuplicateAsk,
+		})
+		var dup *DuplicateMediaError
+		if !errors.As(err, &dup) {
+			t.Fatalf("UploadFile = %v, want a DuplicateMediaError", err)
+		}
+		if dup.Existing.ID != first.ID {
+			t.Errorf("existing = %d, want %d", dup.Existing.ID, first.ID)
+		}
+		if _, total, _ := service.ListMedia(ctx, ListMediaParams{Page: 1, PerPage: 10}); total != 1 {
+			t.Errorf("library has %d rows after an ask, want 1", total)
+		}
+	})
+
+	t.Run("no match uploads", func(t *testing.T) {
+		m, err := service.UploadFile(ctx, UploadFileParams{
+			Content: []byte("other bytes"), Filename: "c.txt", MimeType: "text/plain", OnDuplicate: DuplicateAsk,
+		})
+		if err != nil {
+			t.Fatalf("UploadFile: %v", err)
+		}
+		if m.ID == first.ID {
+			t.Error("other bytes returned the first row")
+		}
+	})
+
+	t.Run("upload again keeps a second copy", func(t *testing.T) {
+		again, err := service.UploadFile(ctx, UploadFileParams{
+			Content: content, Filename: "a.txt", MimeType: "text/plain", OnDuplicate: DuplicateKeep,
+		})
+		if err != nil {
+			t.Fatalf("UploadFile: %v", err)
+		}
+		if again.ID == first.ID || again.Checksum != first.Checksum {
+			t.Fatalf("again = row %d checksum %s, want a new row with checksum %s", again.ID, again.Checksum, first.Checksum)
+		}
+		if again.OriginalPath == first.OriginalPath {
+			t.Errorf("both copies share %s; the second write replaced the first file", again.OriginalPath)
+		}
+		for _, m := range []models.Medium{first, again} {
+			if _, err := os.Stat(filepath.Join(tmpDir, "media", m.OriginalPath)); err != nil {
+				t.Errorf("original of row %d: %v", m.ID, err)
+			}
+		}
+	})
+}
+
+func TestParseDuplicatePolicy(t *testing.T) {
+	for in, want := range map[string]DuplicatePolicy{"": DuplicateReuse, "existing": DuplicateReuse, "ask": DuplicateAsk, "new": DuplicateKeep} {
+		if got, ok := ParseDuplicatePolicy(in); !ok || got != want {
+			t.Errorf("ParseDuplicatePolicy(%q) = %v, %v; want %v", in, got, ok, want)
+		}
+	}
+	if _, ok := ParseDuplicatePolicy("replace"); ok {
+		t.Error("an unknown value parsed")
+	}
+}
+
 func TestMediaService_Upload(t *testing.T) {
 	service, tmpDir := setupMediaService(t)
 	defer func() {
